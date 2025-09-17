@@ -499,7 +499,7 @@
                     <h3 class="section-header">🔥 Popular Right Now</h3>
                 </div>
 
-                <div class="listing-item" onclick="showScreen('detail-screen')">
+                <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div class="listing-image">
                         <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #8b5cf6, #3b82f6); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; border-radius: 8px;">🍽️</div>
                     </div>
@@ -529,7 +529,7 @@
                     </div>
                 </div>
 
-                <div class="listing-item" onclick="showScreen('detail-screen')">
+                <div class="listing-item" onclick="showVenueDetail('White Spot')">
                     <div class="listing-image">
                         <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #10b981, #3b82f6); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; border-radius: 8px;">🍔</div>
                     </div>
@@ -564,7 +564,7 @@
                     <h3 class="section-header">All Venues</h3>
                 </div>
 
-                <div class="listing-item" onclick="showScreen('detail-screen')">
+                <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
                     <div class="listing-image">
                         <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #ef4444, #f97316); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; border-radius: 8px;">⚽</div>
                     </div>
@@ -594,7 +594,7 @@
                     </div>
                 </div>
 
-                <div class="listing-item" onclick="showScreen('detail-screen')">
+                <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div class="listing-image">
                         <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #a855f7, #ec4899); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; border-radius: 8px;">🍸</div>
                     </div>
@@ -630,7 +630,7 @@
                 <div style="font-size: 14px; color: #6b7280; margin-bottom: 20px;">4 venues found nearby</div>
                 
                 <!-- Listing below map -->
-                <div class="listing-item" onclick="showScreen('detail-screen')">
+                <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div style="font-weight: bold; font-size: 16px;">The Keg Kelowna</div>
                         <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
@@ -675,7 +675,7 @@
             </div>
 
             <div class="content">
-                <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;" onclick="showScreen('detail-screen')">
+                <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;" onclick="showVenueDetail('White Spot')">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div style="font-weight: bold; font-size: 16px;">White Spot</div>
                         <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
@@ -729,7 +729,7 @@
 
             <div class="content">
                 <!-- NFL Event -->
-                <div class="event-item" onclick="showScreen('event-detail-screen')">
+                <div class="event-item" onclick="showEventDetail('NFL Game Night')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                             <div class="event-title">NFL Game Night Specials</div>
@@ -741,17 +741,219 @@
                 </div>
 
                 <!-- Wine Tasting Event -->
-                <div class="event-item" onclick="showScreen('event-detail-screen')">
+                <div class="event-item" onclick="showEventDetail('Wine Tasting')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                             <div class="event-title">Wine Tasting Thursday</div>
                             <div class="event-venue">The Keg Kelowna</div>
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="
-</div>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                    </div>
+                </div>
 
-                <div id="detail-map" style="height: 150px; width: 100%; border-radius: 8px; border: 3px solid #10b981;"></div>
+                <!-- Trivia Event -->
+                <div class="event-item" onclick="showEventDetail('Trivia Night')">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div class="event-title">Trivia Night</div>
+                            <div class="event-venue">White Spot</div>
+                            <div class="event-time">Wednesday 7:00 PM - 10:00 PM</div>
+                        </div>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Banner -->
+            <div class="banner" onclick="showScreen('create-ask-screen')">
+                📍 Missing your favorite spot? Help us add it!
+            </div>
+
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('search-screen')">
+                    <span class="nav-icon">🔍</span>
+                    Search
+                </div>
+                <div class="nav-item" onclick="showScreen('favorites-screen')">
+                    <span class="nav-icon">♥</span>
+                    Favourites
+                </div>
+                <div class="nav-item active" onclick="showScreen('events-screen')">
+                    <span class="nav-icon">🎉</span>
+                    Specials & Events
+                </div>
+            </div>
+        </div>
+
+        <!-- Venue Detail Screen -->
+        <div class="screen" id="detail-screen">
+            <div class="header">
+                <button class="back-btn" onclick="goBack()">← Back</button>
+                <h1 id="venue-detail-title">Venue Details</h1>
+            </div>
+            <div class="content">
+                <div class="hero" id="venue-hero">
+                    <div class="hero-icon" id="venue-hero-icon">🍽️</div>
+                    <div class="hero-title" id="venue-hero-title">Venue Name</div>
+                    <div class="hero-subtitle" id="venue-hero-subtitle">Restaurant Type</div>
+                </div>
+                <div class="venue-info">
+                    <div class="venue-title" id="venue-info-title">Venue Name</div>
+                    <div class="venue-address" id="venue-info-address">
+                        📍 Address will appear here<br>
+                        📞 Phone number
+                    </div>
+                </div>
+                <div class="info-box" id="venue-info-box">
+                    <strong>Happy Hour Times</strong><br>
+                    Details will appear here<br><br>
+                    <strong>Current Specials</strong><br>
+                    • Specials will be listed here
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary">Make Reservation</button>
+                    <button class="btn btn-secondary">♡ Save</button>
+                </div>
+                <div id="detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
+            </div>
+
+            <!-- Banner -->
+            <div class="banner" onclick="showScreen('create-ask-screen')">
+                📍 Missing your favorite spot? Help us add it!
+            </div>
+
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('search-screen')">
+                    <span class="nav-icon">🔍</span>
+                    Search
+                </div>
+                <div class="nav-item" onclick="showScreen('favorites-screen')">
+                    <span class="nav-icon">♥</span>
+                    Favourites
+                </div>
+                <div class="nav-item" onclick="showScreen('events-screen')">
+                    <span class="nav-icon">🎉</span>
+                    Specials & Events
+                </div>
+            </div>
+        </div>
+
+        <!-- Event Detail Screen -->
+        <div class="screen" id="event-detail-screen">
+            <div class="header">
+                <button class="back-btn" onclick="goBack()">← Back</button>
+                <h1 id="event-detail-title">Event Details</h1>
+            </div>
+            <div class="content">
+                <div class="hero" id="event-hero" style="background: linear-gradient(135deg, #ef4444, #f97316);">
+                    <div class="hero-icon" id="event-hero-icon">🎉</div>
+                    <div class="hero-title" id="event-hero-title">Event Name</div>
+                    <div class="hero-subtitle" id="event-hero-subtitle">Event Type</div>
+                </div>
+                <div class="venue-info">
+                    <div class="venue-title" id="event-info-title">Event Title</div>
+                    <div class="venue-address" id="event-info-details">
+                        <span style="color: #3b82f6;" id="event-venue-name">Venue Name</span><br>
+                        📅 <span id="event-schedule">Schedule</span><br>
+                        🕒 <span id="event-time">Time</span>
+                    </div>
+                </div>
+                <div class="info-box" id="event-info-box">
+                    <strong>Event Description</strong><br>
+                    Event description will appear here<br><br>
+                    <strong>Special Offers</strong><br>
+                    • Offers will be listed here
+                </div>
+                <div style="color: #6b7280; margin-bottom: 20px; line-height: 1.4;" id="event-contact">
+                    📍 Address<br>
+                    📞 Phone number
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary">Make Reservation</button>
+                    <button class="btn btn-secondary">♡ Save</button>
+                </div>
+                <div id="event-detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
+            </div>
+
+            <!-- Banner -->
+            <div class="banner" onclick="showScreen('create-ask-screen')">
+                📍 Missing your favorite spot? Help us add it!
+            </div>
+
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('search-screen')">
+                    <span class="nav-icon">🔍</span>
+                    Search
+                </div>
+                <div class="nav-item" onclick="showScreen('favorites-screen')">
+                    <span class="nav-icon">♥</span>
+                    Favourites
+                </div>
+                <div class="nav-item active" onclick="showScreen('events-screen')">
+                    <span class="nav-icon">🎉</span>
+                    Specials & Events
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Ask Screen -->
+        <div class="screen" id="create-ask-screen">
+            <div class="header">
+                <button class="back-btn" onclick="goBack()">← Back</button>
+                <h1>Add a Venue</h1>
+            </div>
+            <div class="content">
+                <div class="info-box">
+                    <strong>Help us grow!</strong><br>
+                    Don't see your favorite venue listed? Tell us about it and we'll reach out to them to get their deals added to the app.
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Venue Name *</label>
+                    <input type="text" class="form-input" placeholder="e.g., Jimmy's Sports Bar">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Location (optional)</label>
+                    <input type="text" class="form-input" placeholder="e.g., Downtown Kelowna, Westbank">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Additional Details (optional)</label>
+                    <textarea class="form-textarea" placeholder="Tell us what makes this place special or what deals they usually have..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="showScreen('success-screen')">Submit Request</button>
+            </div>
+
+            <!-- Banner -->
+            <div class="banner" onclick="showScreen('create-ask-screen')">
+                📍 Missing your favorite spot? Help us add it!
+            </div>
+
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('search-screen')">
+                    <span class="nav-icon">🔍</span>
+                    Search
+                </div>
+                <div class="nav-item" onclick="showScreen('favorites-screen')">
+                    <span class="nav-icon">♥</span>
+                    Favourites
+                </div>
+                <div class="nav-item active" onclick="showScreen('events-screen')">
+                    <span class="nav-icon">🎉</span>
+                    Specials & Events
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Screen -->
+        <div class="screen" id="success-screen">
+            <div class="header">
+                <h1>Request Submitted!</h1>
+            </div>
+            <div class="content success-screen">
+                <div class="success-icon">✅</div>
+                <h2>Thanks for your suggestion!</h2>
+                <p>We've received your venue request and will reach out to them soon. You'll be notified when they're added to the app.</p>
+                <button class="btn btn-primary" onclick="showScreen('search-screen')">Back to Search</button>
             </div>
 
             <!-- Banner -->
@@ -777,11 +979,91 @@
     </div>
 
     <script>
+        let currentScreen = 'search-screen';
+        let previousScreen = 'search-screen';
+
+        // Store venue data
+        const venues = {
+            'The Keg Kelowna': {
+                icon: '🍽️',
+                type: 'Upscale Restaurant',
+                address: '532 Bernard Ave, Kelowna, BC',
+                phone: '(250) 763-1442',
+                hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
+                specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails'
+            },
+            'White Spot': {
+                icon: '🍔',
+                type: 'Family Restaurant',
+                address: '1405 Harvey Ave, Kelowna, BC',
+                phone: '(250) 860-7768',
+                hours: 'Monday - Friday: 2:00 PM - 5:00 PM<br>Saturday - Sunday: 1:00 PM - 4:00 PM',
+                specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails'
+            },
+            'Anfield Restaurant': {
+                icon: '⚽',
+                type: 'Sports Bar',
+                address: '1620 Dickson Ave, Kelowna, BC',
+                phone: '(250) 717-5687',
+                hours: 'Monday - Sunday: 4:00 PM - 7:00 PM',
+                specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters'
+            },
+            'Moxies Kelowna': {
+                icon: '🍸',
+                type: 'Casual Dining',
+                address: '551 Bernard Ave, Kelowna, BC',
+                phone: '(250) 763-7771',
+                hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday - Sunday: 2:00 PM - 5:00 PM',
+                specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass'
+            }
+        };
+
+        // Store event data
+        const events = {
+            'NFL Game Night': {
+                icon: '🏈',
+                type: 'Sports Bar Event',
+                venue: 'Anfield Restaurant',
+                schedule: 'Every Sunday',
+                time: '5:00 PM - 11:00 PM',
+                description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks. Perfect for groups!',
+                offers: '• $0.50 wings (minimum 10)<br>• $5 beer buckets<br>• $12 nachos for two<br>• $15 pitcher specials',
+                address: '1620 Dickson Ave, Kelowna, BC',
+                phone: '(250) 717-5687'
+            },
+            'Wine Tasting': {
+                icon: '🍷',
+                type: 'Fine Dining Event',
+                venue: 'The Keg Kelowna',
+                schedule: 'Every Thursday',
+                time: '6:00 PM - 9:00 PM',
+                description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.',
+                offers: '• 5 wine tastings for $25<br>• Paired appetizers included<br>• 20% off featured wines<br>• Sommelier-guided experience',
+                address: '532 Bernard Ave, Kelowna, BC',
+                phone: '(250) 763-1442'
+            },
+            'Trivia Night': {
+                icon: '🧠',
+                type: 'Family Event',
+                venue: 'White Spot',
+                schedule: 'Every Wednesday',
+                time: '7:00 PM - 10:00 PM',
+                description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.',
+                offers: '• $3 appetizers during trivia<br>• $2.50 beer<br>• Prize for winning team<br>• Family-friendly atmosphere',
+                address: '1405 Harvey Ave, Kelowna, BC',
+                phone: '(250) 860-7768'
+            }
+        };
+
         function showScreen(screenId) {
             // Hide all screens
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
+            
+            // Store previous screen for back navigation
+            previousScreen = currentScreen;
+            currentScreen = screenId;
             
             // Show target screen
             document.getElementById(screenId).classList.add('active');
@@ -852,6 +1134,45 @@
             
             // Update nav highlighting
             updateNavHighlighting(screenId);
+        }
+
+        function showVenueDetail(venueName) {
+            const venue = venues[venueName];
+            if (!venue) return;
+
+            // Update venue detail screen
+            document.getElementById('venue-detail-title').textContent = venueName;
+            document.getElementById('venue-hero-title').textContent = venueName;
+            document.getElementById('venue-hero-subtitle').textContent = venue.type;
+            document.getElementById('venue-hero-icon').textContent = venue.icon;
+            document.getElementById('venue-info-title').textContent = venueName;
+            document.getElementById('venue-info-address').innerHTML = `📍 ${venue.address}<br>📞 ${venue.phone}`;
+            document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
+
+            showScreen('detail-screen');
+        }
+
+        function showEventDetail(eventName) {
+            const event = events[eventName];
+            if (!event) return;
+
+            // Update event detail screen
+            document.getElementById('event-detail-title').textContent = eventName;
+            document.getElementById('event-hero-title').textContent = eventName;
+            document.getElementById('event-hero-subtitle').textContent = event.type;
+            document.getElementById('event-hero-icon').textContent = event.icon;
+            document.getElementById('event-info-title').textContent = eventName + ' Specials';
+            document.getElementById('event-venue-name').textContent = event.venue;
+            document.getElementById('event-schedule').textContent = event.schedule;
+            document.getElementById('event-time').textContent = event.time;
+            document.getElementById('event-info-box').innerHTML = `<strong>Event Description</strong><br>${event.description}<br><br><strong>Special Offers</strong><br>${event.offers}`;
+            document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
+
+            showScreen('event-detail-screen');
+        }
+
+        function goBack() {
+            showScreen(previousScreen);
         }
 
         function updateNavHighlighting(screenId) {
