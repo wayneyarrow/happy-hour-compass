@@ -520,8 +520,8 @@
                             <div class="listing-name">The Keg Kelowna</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
+                        <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                         <div>
-                            <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                             <div style="color: #6b7280; font-size: 14px;">$6 appetizers, $5 drinks</div>
                             <div class="time-remaining">Ends in 2 hours 15 minutes</div>
                         </div>
@@ -544,8 +544,8 @@
                             <div class="listing-name">White Spot</div>
                             <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
                         </div>
+                        <div class="price-highlight">From $3.50 • Happy Hour: 2:00 PM - 5:00 PM</div>
                         <div>
-                            <div class="price-highlight">From $3.50 • Happy Hour: 2:00 PM - 5:00 PM</div>
                             <div style="color: #6b7280; font-size: 14px;">$4 wings, $3.50 beer</div>
                             <div class="time-remaining">Ends in 1 hour 45 minutes</div>
                         </div>
@@ -570,8 +570,8 @@
                             <div class="listing-name">Anfield Restaurant</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
+                        <div class="price-highlight">From $4 • Happy Hour: 4:00 PM - 7:00 PM</div>
                         <div>
-                            <div class="price-highlight">From $4 • Happy Hour: 4:00 PM - 7:00 PM</div>
                             <div style="color: #6b7280; font-size: 14px;">$8 burgers, $4 cocktails</div>
                             <div class="time-remaining">Starts in 45 minutes</div>
                         </div>
@@ -594,8 +594,8 @@
                             <div class="listing-name">Moxie's Kelowna</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
+                        <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                         <div>
-                            <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                             <div style="color: #6b7280; font-size: 14px;">$5 appetizers, $6 cocktails</div>
                             <div class="time-remaining">Starts in 1 hour 30 minutes</div>
                         </div>
@@ -985,15 +985,6 @@
             
             document.getElementById(screenId).classList.add('active');
             
-            // Initialize detail maps when showing detail screens
-            if (screenId === 'detail-screen') {
-                setTimeout(initializeVenueDetailMap, 100);
-            }
-            
-            if (screenId === 'event-detail-screen') {
-                setTimeout(initializeEventDetailMap, 100);
-            }
-            
             updateNavHighlighting(screenId);
         }
 
@@ -1074,6 +1065,8 @@
             document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
             showScreen('detail-screen');
+            // Initialize map immediately after screen is shown
+            setTimeout(initializeVenueDetailMap, 50);
         }
 
         function showEventDetail(eventName) {
@@ -1092,6 +1085,8 @@
             document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
 
             showScreen('event-detail-screen');
+            // Initialize map immediately after screen is shown
+            setTimeout(initializeEventDetailMap, 50);
         }
 
         function goBack() {
