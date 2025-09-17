@@ -173,12 +173,13 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 4px;
+            margin-bottom: 0;
         }
 
         .listing-name {
             font-weight: bold;
             font-size: 16px;
+            margin-bottom: 0;
         }
 
         .heart-icon {
@@ -224,6 +225,7 @@
             color: #ea580c;
             font-weight: bold;
             font-size: 16px;
+            margin-top: 0;
         }
 
         .distance-prominent {
@@ -260,7 +262,7 @@
         .banner {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
-            padding: 14px 20px;
+            padding: 14px 0;
             text-align: center;
             font-size: 14px;
             font-weight: 500;
@@ -269,11 +271,11 @@
             bottom: 80px;
             left: 50%;
             transform: translateX(-50%);
-            width: calc(100% - 40px);
-            max-width: 335px;
+            width: 100%;
+            max-width: 375px;
             z-index: 100;
-            border-radius: 8px;
             transition: background 0.2s;
+            white-space: nowrap;
         }
 
         .banner:hover {
@@ -301,6 +303,9 @@
             cursor: pointer;
             font-size: 12px;
             color: #6b7280;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .nav-item.active {
@@ -311,6 +316,7 @@
             display: block;
             margin-bottom: 4px;
             font-size: 20px;
+            line-height: 1;
         }
 
         .action-buttons {
@@ -993,7 +999,10 @@
 
         function initializeVenueDetailMap() {
             const container = document.getElementById('detail-map');
-            if (!container || container.innerHTML.trim() !== '') return;
+            if (!container) return;
+            
+            // Clear existing content first
+            container.innerHTML = '';
             
             // Create static map visualization for venue
             container.innerHTML = `
@@ -1022,7 +1031,10 @@
 
         function initializeEventDetailMap() {
             const container = document.getElementById('event-detail-map');
-            if (!container || container.innerHTML.trim() !== '') return;
+            if (!container) return;
+            
+            // Clear existing content first
+            container.innerHTML = '';
             
             // Create static map visualization for event
             container.innerHTML = `
@@ -1062,7 +1074,6 @@
             document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
             showScreen('detail-screen');
-            setTimeout(initializeVenueDetailMap, 50);
         }
 
         function showEventDetail(eventName) {
@@ -1081,7 +1092,6 @@
             document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
 
             showScreen('event-detail-screen');
-            setTimeout(initializeEventDetailMap, 50);
         }
 
         function goBack() {
