@@ -511,9 +511,7 @@
                             <span class="distance-prominent">0.3 km</span>
                         </div>
                         <div class="listing-header">
-                            <div>
-                                <div class="listing-name">The Keg Kelowna</div>
-                            </div>
+                            <div class="listing-name">The Keg Kelowna</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
                         <div>
@@ -537,9 +535,7 @@
                             <span class="distance-prominent">0.5 km</span>
                         </div>
                         <div class="listing-header">
-                            <div>
-                                <div class="listing-name">White Spot</div>
-                            </div>
+                            <div class="listing-name">White Spot</div>
                             <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
                         </div>
                         <div>
@@ -565,9 +561,7 @@
                             <span class="distance-prominent">0.8 km</span>
                         </div>
                         <div class="listing-header">
-                            <div>
-                                <div class="listing-name">Anfield Restaurant</div>
-                            </div>
+                            <div class="listing-name">Anfield Restaurant</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
                         <div>
@@ -591,9 +585,7 @@
                             <span class="distance-prominent">1.2 km</span>
                         </div>
                         <div class="listing-header">
-                            <div>
-                                <div class="listing-name">Moxie's Kelowna</div>
-                            </div>
+                            <div class="listing-name">Moxie's Kelowna</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
                         <div>
@@ -762,7 +754,12 @@
                 </div>
                 <div class="action-buttons">
                     <button class="btn btn-primary">Make Reservation</button>
-                    <button class="btn btn-secondary">♡ Save</button>
+                    <button class="btn btn-secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                        Save
+                    </button>
                     <button class="btn btn-share">
                         <svg width="14" height="14" viewBox="0 0 100 100" fill="currentColor" style="margin-right: 6px;">
                             <circle cx="20" cy="20" r="12"/>
@@ -811,7 +808,12 @@
                 </div>
                 <div class="action-buttons">
                     <button class="btn btn-primary">Make Reservation</button>
-                    <button class="btn btn-secondary">♡ Save</button>
+                    <button class="btn btn-secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                        Save
+                    </button>
                     <button class="btn btn-share">
                         <svg width="14" height="14" viewBox="0 0 100 100" fill="currentColor" style="margin-right: 6px;">
                             <circle cx="20" cy="20" r="12"/>
@@ -1060,6 +1062,7 @@
             document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
             showScreen('detail-screen');
+            setTimeout(initializeVenueDetailMap, 50);
         }
 
         function showEventDetail(eventName) {
@@ -1078,6 +1081,7 @@
             document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
 
             showScreen('event-detail-screen');
+            setTimeout(initializeEventDetailMap, 50);
         }
 
         function goBack() {
