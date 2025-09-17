@@ -37,6 +37,10 @@
             display: none;
             height: 100%;
             flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
         }
 
         .screen.active {
@@ -49,9 +53,9 @@
             padding: 50px 20px 20px;
             text-align: center;
             position: relative;
+            flex-shrink: 0;
         }
 
-        /* Logo Integration - Centered, Larger */
         .logo-container {
             display: flex;
             align-items: center;
@@ -65,9 +69,10 @@
         }
 
         .tagline {
-            font-size: 14px;
+            font-size: 18px;
             opacity: 0.9;
             margin-top: 8px;
+            font-weight: 500;
         }
 
         .back-btn {
@@ -96,6 +101,7 @@
             gap: 10px;
             padding: 15px 20px;
             overflow-x: auto;
+            flex-shrink: 0;
         }
 
         .filter-chip {
@@ -117,6 +123,7 @@
             display: flex;
             padding: 10px 20px;
             gap: 10px;
+            flex-shrink: 0;
         }
 
         .toggle-btn {
@@ -135,9 +142,9 @@
 
         .content {
             flex: 1;
-            padding: 0 20px;
+            padding: 20px;
             overflow-y: auto;
-            padding-bottom: 80px; /* Space for banner */
+            margin-bottom: 160px;
         }
 
         .listing-item {
@@ -147,7 +154,6 @@
             margin-bottom: 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             cursor: pointer;
-            position: relative;
             display: flex;
             gap: 12px;
         }
@@ -157,7 +163,6 @@
             height: 80px;
             border-radius: 8px;
             flex-shrink: 0;
-            overflow: hidden;
         }
 
         .listing-content {
@@ -230,12 +235,6 @@
             font-weight: 500;
         }
 
-        .rating-stars {
-            color: #fbbf24;
-            font-size: 14px;
-            margin-right: 4px;
-        }
-
         .category-tag {
             background: #f3f4f6;
             color: #6b7280;
@@ -255,11 +254,9 @@
             color: #374151;
             font-size: 16px;
             margin-bottom: 12px;
-            display: flex;
-            align-items: center;
+            font-weight: bold;
         }
 
-        /* Add Venue Banner - Exact from final version */
         .banner {
             background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
@@ -268,18 +265,14 @@
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
             position: fixed;
             bottom: 80px;
             left: 50%;
             transform: translateX(-50%);
-            width: 100%;
-            max-width: 375px;
+            width: calc(100% - 40px);
+            max-width: 335px;
             z-index: 100;
-        }
-
-        .banner:hover {
-            background: linear-gradient(135deg, #d97706, #b45309);
+            border-radius: 8px;
         }
 
         .bottom-nav {
@@ -293,6 +286,7 @@
             background: white;
             border-top: 1px solid #e5e7eb;
             padding: 12px 0;
+            z-index: 101;
         }
 
         .nav-item {
@@ -314,23 +308,32 @@
             font-size: 20px;
         }
 
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
         .btn {
-            flex: 1;
-            padding: 12px;
+            padding: 12px 16px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
+            font-size: 14px;
+            text-align: center;
         }
 
         .btn-primary {
             background: #ea580c;
             color: white;
+            flex: 2;
         }
 
-        .btn-secondary {
+        .btn-secondary, .btn-share {
             background: #3b82f6;
             color: white;
+            flex: 1;
         }
 
         .event-item {
@@ -357,40 +360,6 @@
         .event-time {
             color: #6b7280;
             font-size: 14px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #374151;
-        }
-
-        .form-input, .form-textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 16px;
-        }
-
-        .form-textarea {
-            height: 100px;
-            resize: vertical;
-        }
-
-        .info-box {
-            background: #dbeafe;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            color: #1e40af;
-            line-height: 1.5;
         }
 
         .hero {
@@ -422,10 +391,54 @@
             opacity: 0.9;
         }
 
-        .action-buttons {
-            display: flex;
-            gap: 12px;
+        .venue-info {
             margin-bottom: 20px;
+        }
+
+        .venue-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .venue-address {
+            color: #6b7280;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .info-box {
+            background: #dbeafe;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #1e40af;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-input, .form-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-textarea {
+            height: 100px;
+            resize: vertical;
         }
 
         .success-screen {
@@ -448,27 +461,11 @@
             line-height: 1.5;
             padding: 0 20px;
         }
-
-        .venue-info {
-            margin-bottom: 20px;
-        }
-
-        .venue-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .venue-address {
-            color: #6b7280;
-            margin-bottom: 12px;
-            line-height: 1.4;
-        }
     </style>
 </head>
 <body>
     <div class="phone-frame">
-        <!-- Search/Home Screen -->
+        <!-- Search Screen -->
         <div class="screen active" id="search-screen">
             <div class="header">
                 <div class="logo-container">
@@ -476,16 +473,16 @@
                         <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
                     </div>
                 </div>
-                <div class="tagline">Find the best happy hours in Kelowna</div>
+                <div class="tagline">Find your direction. Find your drink.</div>
                 <input type="text" class="search-bar" placeholder="Search venues..." id="search-input">
             </div>
             
             <div class="filters">
-                <button class="filter-chip active" onclick="toggleFilter(this)">Happening Now</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Open Now</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Sports Bars</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Fine Dining</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Under $10</button>
+                <button class="filter-chip active">Happening Now</button>
+                <button class="filter-chip">Open Now</button>
+                <button class="filter-chip">Sports Bars</button>
+                <button class="filter-chip">Fine Dining</button>
+                <button class="filter-chip">Under $10</button>
             </div>
 
             <div class="view-toggle">
@@ -494,10 +491,7 @@
             </div>
 
             <div class="content" id="list-content">
-                <!-- Popular Section -->
-                <div style="margin-bottom: 20px;">
-                    <h3 class="section-header">🔥 Popular Right Now</h3>
-                </div>
+                <h3 class="section-header">🔥 Popular Right Now</h3>
 
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div class="listing-image">
@@ -514,10 +508,6 @@
                         <div class="listing-header">
                             <div>
                                 <div class="listing-name">The Keg Kelowna</div>
-                                <div style="display: flex; align-items: center; margin: 2px 0;">
-                                    <span class="rating-stars">⭐⭐⭐⭐☆</span>
-                                    <span style="font-size: 12px; color: #6b7280;">4.2 (89)</span>
-                                </div>
                             </div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
@@ -544,10 +534,6 @@
                         <div class="listing-header">
                             <div>
                                 <div class="listing-name">White Spot</div>
-                                <div style="display: flex; align-items: center; margin: 2px 0;">
-                                    <span class="rating-stars">⭐⭐⭐⭐⭐</span>
-                                    <span style="font-size: 12px; color: #6b7280;">4.6 (124)</span>
-                                </div>
                             </div>
                             <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
                         </div>
@@ -559,10 +545,7 @@
                     </div>
                 </div>
 
-                <!-- All Venues Section -->
-                <div style="margin: 30px 0 20px 0;">
-                    <h3 class="section-header">All Venues</h3>
-                </div>
+                <h3 class="section-header">All Venues</h3>
 
                 <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
                     <div class="listing-image">
@@ -579,10 +562,6 @@
                         <div class="listing-header">
                             <div>
                                 <div class="listing-name">Anfield Restaurant</div>
-                                <div style="display: flex; align-items: center; margin: 2px 0;">
-                                    <span class="rating-stars">⭐⭐⭐⭐☆</span>
-                                    <span style="font-size: 12px; color: #6b7280;">4.1 (67)</span>
-                                </div>
                             </div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
@@ -609,10 +588,6 @@
                         <div class="listing-header">
                             <div>
                                 <div class="listing-name">Moxie's Kelowna</div>
-                                <div style="display: flex; align-items: center; margin: 2px 0;">
-                                    <span class="rating-stars">⭐⭐⭐⭐☆</span>
-                                    <span style="font-size: 12px; color: #6b7280;">4.3 (201)</span>
-                                </div>
                             </div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                         </div>
@@ -629,10 +604,9 @@
                 <div id="map" style="height: 300px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
                 <div style="font-size: 14px; color: #6b7280; margin-bottom: 20px;">4 venues found nearby</div>
                 
-                <!-- Listing below map -->
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="font-weight: bold; font-size: 16px;">The Keg Kelowna</div>
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>The Keg Kelowna</span>
                         <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
@@ -640,25 +614,38 @@
                         <span style="color: #3b82f6; font-weight: 500;">0.3 km away</span>
                     </div>
                 </div>
-            </div>
 
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
+                <div class="listing-item" onclick="showVenueDetail('White Spot')">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>White Spot</span>
+                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
+                    </div>
+                    <div style="color: #6b7280; font-size: 14px;">
+                        Happy Hour: 2:00 PM - 5:00 PM<br>
+                        <span style="color: #3b82f6; font-weight: 500;">0.5 km away</span>
+                    </div>
+                </div>
 
-            <div class="bottom-nav">
-                <div class="nav-item active" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
+                <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>Anfield Restaurant</span>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                    </div>
+                    <div style="color: #6b7280; font-size: 14px;">
+                        Happy Hour: 4:00 PM - 7:00 PM<br>
+                        <span style="color: #3b82f6; font-weight: 500;">0.8 km away</span>
+                    </div>
                 </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
+
+                <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>Moxie's Kelowna</span>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                    </div>
+                    <div style="color: #6b7280; font-size: 14px;">
+                        Happy Hour: 3:00 PM - 6:00 PM<br>
+                        <span style="color: #3b82f6; font-weight: 500;">1.2 km away</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -671,13 +658,13 @@
                         <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
                     </div>
                 </div>
-                <div class="tagline">Your favorite happy hour spots</div>
+                <div class="tagline">Find your direction. Find your drink.</div>
             </div>
 
             <div class="content">
-                <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;" onclick="showVenueDetail('White Spot')">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="font-weight: bold; font-size: 16px;">White Spot</div>
+                <div class="listing-item" onclick="showVenueDetail('White Spot')">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                        <span>White Spot</span>
                         <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
@@ -685,26 +672,6 @@
                         $4 wings, $3.50 beer<br>
                         <span style="color: #3b82f6; font-weight: 500;">0.5 km away</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item active" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
                 </div>
             </div>
         </div>
@@ -717,18 +684,17 @@
                         <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
                     </div>
                 </div>
-                <div class="tagline">Special events & promotions</div>
+                <div class="tagline">Find your direction. Find your drink.</div>
             </div>
 
             <div class="filters">
-                <button class="filter-chip active" onclick="toggleFilter(this)">Happening Today</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Monday</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Tuesday</button>
-                <button class="filter-chip" onclick="toggleFilter(this)">Weekend</button>
+                <button class="filter-chip active">Happening Today</button>
+                <button class="filter-chip">Monday</button>
+                <button class="filter-chip">Tuesday</button>
+                <button class="filter-chip">Weekend</button>
             </div>
 
             <div class="content">
-                <!-- NFL Event -->
                 <div class="event-item" onclick="showEventDetail('NFL Game Night')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
@@ -740,7 +706,6 @@
                     </div>
                 </div>
 
-                <!-- Wine Tasting Event -->
                 <div class="event-item" onclick="showEventDetail('Wine Tasting')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
@@ -752,7 +717,6 @@
                     </div>
                 </div>
 
-                <!-- Trivia Event -->
                 <div class="event-item" onclick="showEventDetail('Trivia Night')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
@@ -762,26 +726,6 @@
                         </div>
                         <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
                     </div>
-                </div>
-            </div>
-
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item active" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
                 </div>
             </div>
         </div>
@@ -814,28 +758,9 @@
                 <div class="action-buttons">
                     <button class="btn btn-primary">Make Reservation</button>
                     <button class="btn btn-secondary">♡ Save</button>
+                    <button class="btn btn-share">📤 Share</button>
                 </div>
                 <div id="detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
-            </div>
-
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
-                </div>
             </div>
         </div>
 
@@ -872,28 +797,9 @@
                 <div class="action-buttons">
                     <button class="btn btn-primary">Make Reservation</button>
                     <button class="btn btn-secondary">♡ Save</button>
+                    <button class="btn btn-share">📤 Share</button>
                 </div>
                 <div id="event-detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
-            </div>
-
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item active" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
-                </div>
             </div>
         </div>
 
@@ -922,26 +828,6 @@
                 </div>
                 <button class="btn btn-primary" onclick="showScreen('success-screen')">Submit Request</button>
             </div>
-
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
-            </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item active" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
-                </div>
-            </div>
         </div>
 
         <!-- Success Screen -->
@@ -955,25 +841,26 @@
                 <p>We've received your venue request and will reach out to them soon. You'll be notified when they're added to the app.</p>
                 <button class="btn btn-primary" onclick="showScreen('search-screen')">Back to Search</button>
             </div>
+        </div>
 
-            <!-- Banner -->
-            <div class="banner" onclick="showScreen('create-ask-screen')">
-                📍 Missing your favorite spot? Help us add it!
+        <!-- Banner -->
+        <div class="banner" onclick="showScreen('create-ask-screen')">
+            📍 Missing your favorite spot? Help us add it!
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="showScreen('search-screen')">
+                <span class="nav-icon">🔍</span>
+                Search
             </div>
-
-            <div class="bottom-nav">
-                <div class="nav-item" onclick="showScreen('search-screen')">
-                    <span class="nav-icon">🔍</span>
-                    Search
-                </div>
-                <div class="nav-item" onclick="showScreen('favorites-screen')">
-                    <span class="nav-icon">♥</span>
-                    Favourites
-                </div>
-                <div class="nav-item" onclick="showScreen('events-screen')">
-                    <span class="nav-icon">🎉</span>
-                    Specials & Events
-                </div>
+            <div class="nav-item" onclick="showScreen('favorites-screen')">
+                <span class="nav-icon">♥</span>
+                Favourites
+            </div>
+            <div class="nav-item" onclick="showScreen('events-screen')">
+                <span class="nav-icon">🎉</span>
+                Specials & Events
             </div>
         </div>
     </div>
@@ -1056,83 +943,14 @@
         };
 
         function showScreen(screenId) {
-            // Hide all screens
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
             
-            // Store previous screen for back navigation
             previousScreen = currentScreen;
             currentScreen = screenId;
             
-            // Show target screen
             document.getElementById(screenId).classList.add('active');
-            
-            // Initialize detail map directly for restaurant detail page
-            if (screenId === 'detail-screen') {
-                setTimeout(() => {
-                    if (document.getElementById('detail-map') && !window.detailMapInitialized) {
-                        const detailMap = L.map('detail-map').setView([49.8854, -119.4937], 16);
-                        
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors'
-                        }).addTo(detailMap);
-                        
-                        const detailMarker = L.marker([49.8854, -119.4937], {
-                            icon: createCustomMarker()
-                        }).addTo(detailMap);
-                        
-                        detailMarker.bindTooltip(`
-                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
-                                <strong>The Keg Kelowna</strong><br>
-                                <span style="color: #6b7280;">532 Bernard Ave</span>
-                            </div>
-                        `, {
-                            permanent: false,
-                            direction: 'top',
-                            offset: [0, -20]
-                        });
-                        
-                        detailMarker.bindPopup('<strong>The Keg Kelowna</strong><br>532 Bernard Ave, Kelowna, BC');
-                        
-                        window.detailMapInitialized = true;
-                    }
-                }, 100);
-            }
-            
-            // Initialize event detail map for event detail page
-            if (screenId === 'event-detail-screen') {
-                setTimeout(() => {
-                    if (document.getElementById('event-detail-map') && !window.eventDetailMapInitialized) {
-                        const eventDetailMap = L.map('event-detail-map').setView([49.8833, -119.4789], 16);
-                        
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors'
-                        }).addTo(eventDetailMap);
-                        
-                        const eventMarker = L.marker([49.8833, -119.4789], {
-                            icon: createCustomMarker()
-                        }).addTo(eventDetailMap);
-                        
-                        eventMarker.bindTooltip(`
-                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
-                                <strong>Anfield Restaurant</strong><br>
-                                <span style="color: #6b7280;">NFL Game Night</span>
-                            </div>
-                        `, {
-                            permanent: false,
-                            direction: 'top',
-                            offset: [0, -20]
-                        });
-                        
-                        eventMarker.bindPopup('<strong>Anfield Restaurant</strong><br>NFL Game Night Specials');
-                        
-                        window.eventDetailMapInitialized = true;
-                    }
-                }, 100);
-            }
-            
-            // Update nav highlighting
             updateNavHighlighting(screenId);
         }
 
@@ -1140,7 +958,6 @@
             const venue = venues[venueName];
             if (!venue) return;
 
-            // Update venue detail screen
             document.getElementById('venue-detail-title').textContent = venueName;
             document.getElementById('venue-hero-title').textContent = venueName;
             document.getElementById('venue-hero-subtitle').textContent = venue.type;
@@ -1156,7 +973,6 @@
             const event = events[eventName];
             if (!event) return;
 
-            // Update event detail screen
             document.getElementById('event-detail-title').textContent = eventName;
             document.getElementById('event-hero-title').textContent = eventName;
             document.getElementById('event-hero-subtitle').textContent = event.type;
@@ -1176,12 +992,10 @@
         }
 
         function updateNavHighlighting(screenId) {
-            // Remove active class from all nav items
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
             });
             
-            // Add active class based on screen
             let activeNavIndex;
             switch(screenId) {
                 case 'search-screen':
@@ -1200,123 +1014,25 @@
                     activeNavIndex = 0;
             }
             
-            // Apply active class to all matching nav items
-            document.querySelectorAll('.bottom-nav').forEach(nav => {
-                const navItems = nav.querySelectorAll('.nav-item');
-                if (navItems[activeNavIndex]) {
-                    navItems[activeNavIndex].classList.add('active');
-                }
-            });
+            const navItems = document.querySelectorAll('.nav-item');
+            if (navItems[activeNavIndex]) {
+                navItems[activeNavIndex].classList.add('active');
+            }
         }
 
         function toggleView(viewType) {
-            // Update toggle buttons
             document.querySelectorAll('.toggle-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
             
-            // Show/hide content
             if (viewType === 'list') {
                 document.getElementById('list-content').style.display = 'block';
                 document.getElementById('map-content').style.display = 'none';
             } else {
                 document.getElementById('list-content').style.display = 'none';
                 document.getElementById('map-content').style.display = 'block';
-                
-                setTimeout(() => {
-                    initializeMap();
-                    if (map) {
-                        map.invalidateSize();
-                    }
-                }, 100);
             }
-        }
-
-        // Map functionality
-        let map;
-        let mapInitialized = false;
-
-        function createCustomMarker() {
-            return L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">📍</div>',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -15]
-            });
-        }
-
-        function initializeMap() {
-            if (mapInitialized) return;
-            
-            map = L.map('map').setView([49.8880, -119.4960], 14);
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-            
-            const venues = [
-                {
-                    name: "The Keg Kelowna",
-                    coords: [49.8854, -119.4937],
-                    hours: "3:00 PM - 6:00 PM",
-                    deals: "$6 appetizers, $5 drinks"
-                },
-                {
-                    name: "White Spot",
-                    coords: [49.8901, -119.4851],
-                    hours: "2:00 PM - 5:00 PM", 
-                    deals: "$4 wings, $3.50 beer"
-                },
-                {
-                    name: "Anfield Restaurant",
-                    coords: [49.8833, -119.4789],
-                    hours: "4:00 PM - 7:00 PM",
-                    deals: "$8 burgers, $4 cocktails"
-                },
-                {
-                    name: "Moxie's Kelowna",
-                    coords: [49.8812, -119.4702],
-                    hours: "3:00 PM - 6:00 PM",
-                    deals: "$5 appetizers, $6 cocktails"
-                }
-            ];
-            
-            venues.forEach(venue => {
-                const marker = L.marker(venue.coords, {
-                    icon: createCustomMarker()
-                }).addTo(map);
-                
-                const tooltipContent = `
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
-                        <strong>${venue.name}</strong><br>
-                        <span style="color: #6b7280;">${venue.hours}</span>
-                    </div>
-                `;
-                
-                marker.bindTooltip(tooltipContent, {
-                    permanent: false,
-                    direction: 'top',
-                    offset: [0, -20]
-                });
-                
-                marker.bindPopup(`
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
-                        <strong>${venue.name}</strong><br>
-                        <div style="color: #6b7280; font-size: 14px; margin: 4px 0;">
-                            Happy Hour: ${venue.hours}<br>
-                            ${venue.deals}
-                        </div>
-                    </div>
-                `);
-            });
-            
-            mapInitialized = true;
-        }
-
-        function toggleFilter(element) {
-            element.classList.toggle('active');
         }
 
         function toggleHeart(element) {
@@ -1328,6 +1044,45 @@
                 element.innerHTML = '♥';
             }
         }
+
+        // Search functionality
+        function performSearch() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const venueNames = Object.keys(venues);
+            
+            if (searchTerm.length === 0) {
+                document.querySelectorAll('.listing-item').forEach(item => {
+                    item.style.display = 'flex';
+                });
+                return;
+            }
+
+            const matchingVenues = venueNames.filter(venue => 
+                venue.toLowerCase().includes(searchTerm)
+            );
+
+            document.querySelectorAll('.listing-item').forEach(item => {
+                const venueName = item.querySelector('.listing-name')?.textContent;
+                if (venueName && matchingVenues.includes(venueName)) {
+                    item.style.display = 'flex';
+                } else if (venueName) {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Add search event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', performSearch);
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        performSearch();
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
