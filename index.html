@@ -749,3 +749,264 @@
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
                         <button class="heart-icon" onclick="
+</div>
+
+                <div id="detail-map" style="height: 150px; width: 100%; border-radius: 8px; border: 3px solid #10b981;"></div>
+            </div>
+
+            <!-- Banner -->
+            <div class="banner" onclick="showScreen('create-ask-screen')">
+                📍 Missing your favorite spot? Help us add it!
+            </div>
+
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('search-screen')">
+                    <span class="nav-icon">🔍</span>
+                    Search
+                </div>
+                <div class="nav-item" onclick="showScreen('favorites-screen')">
+                    <span class="nav-icon">♥</span>
+                    Favourites
+                </div>
+                <div class="nav-item" onclick="showScreen('events-screen')">
+                    <span class="nav-icon">🎉</span>
+                    Specials & Events
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showScreen(screenId) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // Show target screen
+            document.getElementById(screenId).classList.add('active');
+            
+            // Initialize detail map directly for restaurant detail page
+            if (screenId === 'detail-screen') {
+                setTimeout(() => {
+                    if (document.getElementById('detail-map') && !window.detailMapInitialized) {
+                        const detailMap = L.map('detail-map').setView([49.8854, -119.4937], 16);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors'
+                        }).addTo(detailMap);
+                        
+                        const detailMarker = L.marker([49.8854, -119.4937], {
+                            icon: createCustomMarker()
+                        }).addTo(detailMap);
+                        
+                        detailMarker.bindTooltip(`
+                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
+                                <strong>The Keg Kelowna</strong><br>
+                                <span style="color: #6b7280;">532 Bernard Ave</span>
+                            </div>
+                        `, {
+                            permanent: false,
+                            direction: 'top',
+                            offset: [0, -20]
+                        });
+                        
+                        detailMarker.bindPopup('<strong>The Keg Kelowna</strong><br>532 Bernard Ave, Kelowna, BC');
+                        
+                        window.detailMapInitialized = true;
+                    }
+                }, 100);
+            }
+            
+            // Initialize event detail map for event detail page
+            if (screenId === 'event-detail-screen') {
+                setTimeout(() => {
+                    if (document.getElementById('event-detail-map') && !window.eventDetailMapInitialized) {
+                        const eventDetailMap = L.map('event-detail-map').setView([49.8833, -119.4789], 16);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors'
+                        }).addTo(eventDetailMap);
+                        
+                        const eventMarker = L.marker([49.8833, -119.4789], {
+                            icon: createCustomMarker()
+                        }).addTo(eventDetailMap);
+                        
+                        eventMarker.bindTooltip(`
+                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
+                                <strong>Anfield Restaurant</strong><br>
+                                <span style="color: #6b7280;">NFL Game Night</span>
+                            </div>
+                        `, {
+                            permanent: false,
+                            direction: 'top',
+                            offset: [0, -20]
+                        });
+                        
+                        eventMarker.bindPopup('<strong>Anfield Restaurant</strong><br>NFL Game Night Specials');
+                        
+                        window.eventDetailMapInitialized = true;
+                    }
+                }, 100);
+            }
+            
+            // Update nav highlighting
+            updateNavHighlighting(screenId);
+        }
+
+        function updateNavHighlighting(screenId) {
+            // Remove active class from all nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class based on screen
+            let activeNavIndex;
+            switch(screenId) {
+                case 'search-screen':
+                    activeNavIndex = 0;
+                    break;
+                case 'favorites-screen':
+                    activeNavIndex = 1;
+                    break;
+                case 'events-screen':
+                case 'create-ask-screen':
+                case 'success-screen':
+                case 'event-detail-screen':
+                    activeNavIndex = 2;
+                    break;
+                default:
+                    activeNavIndex = 0;
+            }
+            
+            // Apply active class to all matching nav items
+            document.querySelectorAll('.bottom-nav').forEach(nav => {
+                const navItems = nav.querySelectorAll('.nav-item');
+                if (navItems[activeNavIndex]) {
+                    navItems[activeNavIndex].classList.add('active');
+                }
+            });
+        }
+
+        function toggleView(viewType) {
+            // Update toggle buttons
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide content
+            if (viewType === 'list') {
+                document.getElementById('list-content').style.display = 'block';
+                document.getElementById('map-content').style.display = 'none';
+            } else {
+                document.getElementById('list-content').style.display = 'none';
+                document.getElementById('map-content').style.display = 'block';
+                
+                setTimeout(() => {
+                    initializeMap();
+                    if (map) {
+                        map.invalidateSize();
+                    }
+                }, 100);
+            }
+        }
+
+        // Map functionality
+        let map;
+        let mapInitialized = false;
+
+        function createCustomMarker() {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">📍</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+        }
+
+        function initializeMap() {
+            if (mapInitialized) return;
+            
+            map = L.map('map').setView([49.8880, -119.4960], 14);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            const venues = [
+                {
+                    name: "The Keg Kelowna",
+                    coords: [49.8854, -119.4937],
+                    hours: "3:00 PM - 6:00 PM",
+                    deals: "$6 appetizers, $5 drinks"
+                },
+                {
+                    name: "White Spot",
+                    coords: [49.8901, -119.4851],
+                    hours: "2:00 PM - 5:00 PM", 
+                    deals: "$4 wings, $3.50 beer"
+                },
+                {
+                    name: "Anfield Restaurant",
+                    coords: [49.8833, -119.4789],
+                    hours: "4:00 PM - 7:00 PM",
+                    deals: "$8 burgers, $4 cocktails"
+                },
+                {
+                    name: "Moxie's Kelowna",
+                    coords: [49.8812, -119.4702],
+                    hours: "3:00 PM - 6:00 PM",
+                    deals: "$5 appetizers, $6 cocktails"
+                }
+            ];
+            
+            venues.forEach(venue => {
+                const marker = L.marker(venue.coords, {
+                    icon: createCustomMarker()
+                }).addTo(map);
+                
+                const tooltipContent = `
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px;">
+                        <strong>${venue.name}</strong><br>
+                        <span style="color: #6b7280;">${venue.hours}</span>
+                    </div>
+                `;
+                
+                marker.bindTooltip(tooltipContent, {
+                    permanent: false,
+                    direction: 'top',
+                    offset: [0, -20]
+                });
+                
+                marker.bindPopup(`
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
+                        <strong>${venue.name}</strong><br>
+                        <div style="color: #6b7280; font-size: 14px; margin: 4px 0;">
+                            Happy Hour: ${venue.hours}<br>
+                            ${venue.deals}
+                        </div>
+                    </div>
+                `);
+            });
+            
+            mapInitialized = true;
+        }
+
+        function toggleFilter(element) {
+            element.classList.toggle('active');
+        }
+
+        function toggleHeart(element) {
+            if (element.classList.contains('favorited')) {
+                element.classList.remove('favorited');
+                element.innerHTML = '♡';
+            } else {
+                element.classList.add('favorited');
+                element.innerHTML = '♥';
+            }
+        }
+    </script>
+</body>
+</html>
