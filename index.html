@@ -982,68 +982,84 @@
         }
 
         function initializeVenueDetailMap() {
-            const container = document.getElementById('detail-map');
-            if (!container) return;
+    const container = document.getElementById('detail-map');
+    if (!container) {
+        console.log('detail-map container not found');
+        return;
+    }
+    
+    // Check if map already exists
+    if (container.innerHTML.trim() !== '') {
+        console.log('venue map already initialized');
+        return;
+    }
+    
+    console.log('Initializing venue detail map');
+    
+    // Create static map visualization for venue
+    container.innerHTML = `
+        <div style="height: 100%; background: linear-gradient(135deg, #e0f2fe, #b3e5fc); border-radius: 8px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.1; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
             
-            // Clear existing content first
-            container.innerHTML = '';
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                <div style="position: absolute; top: 25%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 75%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+            </div>
             
-            // Create static map visualization for venue
-            container.innerHTML = `
-                <div style="height: 100%; background: linear-gradient(135deg, #e0f2fe, #b3e5fc); border-radius: 8px; position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.1; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
-                    
-                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
-                        <div style="position: absolute; top: 25%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 75%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                    </div>
-                    
-                    <div style="position: absolute; top: 45%; left: 48%; transform: translate(-50%, -50%); background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">📍</div>
-                    
-                    <div style="position: absolute; bottom: 15px; left: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;">
-                        <div style="font-weight: bold; color: #0277bd; margin-bottom: 4px;">Venue Location</div>
-                        <div style="font-size: 12px; color: #666; margin-bottom: 6px;">Click to open in maps</div>
-                        <div style="font-size: 11px; color: #0277bd; font-weight: 500;">🗺️ Open in Maps App</div>
-                    </div>
-                </div>
-            `;
-        }
+            <div style="position: absolute; top: 45%; left: 48%; transform: translate(-50%, -50%); background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">📍</div>
+            
+            <div style="position: absolute; bottom: 15px; left: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;">
+                <div style="font-weight: bold; color: #0277bd; margin-bottom: 4px;">Venue Location</div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 6px;">Click to open in maps</div>
+                <div style="font-size: 11px; color: #0277bd; font-weight: 500;">🗺️ Open in Maps App</div>
+            </div>
+        </div>
+    `;
+}
 
-        function initializeEventDetailMap() {
-            const container = document.getElementById('event-detail-map');
-            if (!container) return;
+       function initializeEventDetailMap() {
+    const container = document.getElementById('event-detail-map');
+    if (!container) {
+        console.log('event-detail-map container not found');
+        return;
+    }
+    
+    // Check if map already exists
+    if (container.innerHTML.trim() !== '') {
+        console.log('event map already initialized');
+        return;
+    }
+    
+    console.log('Initializing event detail map');
+    
+    // Create static map visualization for event
+    container.innerHTML = `
+        <div style="height: 100%; background: linear-gradient(135deg, #e0f2fe, #b3e5fc); border-radius: 8px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.1; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
             
-            // Clear existing content first
-            container.innerHTML = '';
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                <div style="position: absolute; top: 25%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 75%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+                <div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 1px; background: rgba(255,255,255,0.3);"></div>
+            </div>
             
-            // Create static map visualization for event
-            container.innerHTML = `
-                <div style="height: 100%; background: linear-gradient(135deg, #e0f2fe, #b3e5fc); border-radius: 8px; position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.1; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
-                    
-                    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
-                        <div style="position: absolute; top: 25%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 75%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                        <div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 1px; background: rgba(255,255,255,0.3);"></div>
-                    </div>
-                    
-                    <div style="position: absolute; top: 55%; left: 52%; transform: translate(-50%, -50%); background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">📍</div>
-                    
-                    <div style="position: absolute; bottom: 15px; left: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;">
-                        <div style="font-weight: bold; color: #0277bd; margin-bottom: 4px;">Event Location</div>
-                        <div style="font-size: 12px; color: #666; margin-bottom: 6px;">Click to open in maps</div>
-                        <div style="font-size: 11px; color: #0277bd; font-weight: 500;">🗺️ Open in Maps App</div>
-                    </div>
-                </div>
-            `;
-        }
+            <div style="position: absolute; top: 55%; left: 52%; transform: translate(-50%, -50%); background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">📍</div>
+            
+            <div style="position: absolute; bottom: 15px; left: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer;">
+                <div style="font-weight: bold; color: #0277bd; margin-bottom: 4px;">Event Location</div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 6px;">Click to open in maps</div>
+                <div style="font-size: 11px; color: #0277bd; font-weight: 500;">🗺️ Open in Maps App</div>
+            </div>
+        </div>
+    `;
+}
 
         function showVenueDetail(venueName) {
     const venue = venues[venueName];
