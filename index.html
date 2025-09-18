@@ -1058,8 +1058,10 @@
             document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
             showScreen('detail-screen');
-            // Initialize map immediately after screen is shown
-            setTimeout(initializeVenueDetailMap, 50);
+            setTimeout(() => {
+                initializeVenueDetailMap();
+                setTimeout(initializeVenueDetailMap, 100);
+            }, 100);
         }
 
         function showEventDetail(eventName) {
@@ -1078,8 +1080,10 @@
             document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
 
             showScreen('event-detail-screen');
-            // Initialize map immediately after screen is shown
-            setTimeout(initializeEventDetailMap, 50);
+            setTimeout(() => {
+                initializeEventDetailMap();
+                setTimeout(initializeEventDetailMap, 100);
+            }, 100);
         }
 
         function goBack() {
