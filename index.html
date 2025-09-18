@@ -1046,44 +1046,52 @@
         }
 
         function showVenueDetail(venueName) {
-            const venue = venues[venueName];
-            if (!venue) return;
+    const venue = venues[venueName];
+    if (!venue) return;
 
-            document.getElementById('venue-detail-title').textContent = venueName;
-            document.getElementById('venue-hero-title').textContent = venueName;
-            document.getElementById('venue-hero-subtitle').textContent = venue.type;
-            document.getElementById('venue-hero-icon').textContent = venue.icon;
-            document.getElementById('venue-info-title').textContent = venueName;
-            document.getElementById('venue-info-address').innerHTML = `📍 ${venue.address}<br>📞 ${venue.phone}`;
-            document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
+    document.getElementById('venue-detail-title').textContent = venueName;
+    document.getElementById('venue-hero-title').textContent = venueName;
+    document.getElementById('venue-hero-subtitle').textContent = venue.type;
+    document.getElementById('venue-hero-icon').textContent = venue.icon;
+    document.getElementById('venue-info-title').textContent = venueName;
+    document.getElementById('venue-info-address').innerHTML = `📍 ${venue.address}<br>📞 ${venue.phone}`;
+    document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
-            showScreen('detail-screen');
-            setTimeout(() => {
-                initializeVenueDetailMap();
-                setTimeout(initializeVenueDetailMap, 100);
-            }, 100);
+    showScreen('detail-screen');
+    
+    // Force map initialization with multiple attempts
+    requestAnimationFrame(() => {
+        initializeVenueDetailMap();
+        setTimeout(initializeVenueDetailMap, 100);
+        setTimeout(initializeVenueDetailMap, 300);
+        setTimeout(initializeVenueDetailMap, 500);
+    });
         }
 
         function showEventDetail(eventName) {
-            const event = events[eventName];
-            if (!event) return;
+    const event = events[eventName];
+    if (!event) return;
 
-            document.getElementById('event-detail-title').textContent = eventName;
-            document.getElementById('event-hero-title').textContent = eventName;
-            document.getElementById('event-hero-subtitle').textContent = event.type;
-            document.getElementById('event-hero-icon').textContent = event.icon;
-            document.getElementById('event-info-title').textContent = eventName + ' Specials';
-            document.getElementById('event-venue-name').textContent = event.venue;
-            document.getElementById('event-schedule').textContent = event.schedule;
-            document.getElementById('event-time').textContent = event.time;
-            document.getElementById('event-info-box').innerHTML = `<strong>Event Description</strong><br>${event.description}<br><br><strong>Special Offers</strong><br>${event.offers}`;
-            document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
+    document.getElementById('event-detail-title').textContent = eventName;
+    document.getElementById('event-hero-title').textContent = eventName;
+    document.getElementById('event-hero-subtitle').textContent = event.type;
+    document.getElementById('event-hero-icon').textContent = event.icon;
+    document.getElementById('event-info-title').textContent = eventName + ' Specials';
+    document.getElementById('event-venue-name').textContent = event.venue;
+    document.getElementById('event-schedule').textContent = event.schedule;
+    document.getElementById('event-time').textContent = event.time;
+    document.getElementById('event-info-box').innerHTML = `<strong>Event Description</strong><br>${event.description}<br><br><strong>Special Offers</strong><br>${event.offers}`;
+    document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
 
-            showScreen('event-detail-screen');
-            setTimeout(() => {
-                initializeEventDetailMap();
-                setTimeout(initializeEventDetailMap, 100);
-            }, 100);
+    showScreen('event-detail-screen');
+    
+    // Force map initialization with multiple attempts
+    requestAnimationFrame(() => {
+        initializeEventDetailMap();
+        setTimeout(initializeEventDetailMap, 100);
+        setTimeout(initializeEventDetailMap, 300);
+        setTimeout(initializeEventDetailMap, 500);
+    });
         }
 
         function goBack() {
