@@ -479,16 +479,10 @@
     <div class="phone-frame">
         <!-- Search Screen -->
         <div class="screen active" id="search-screen">
-            <div class="header">
-                <div class="logo-container">
-                    <div class="logo-icon">
-                        <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
-                    </div>
-                </div>
-                <div class="tagline">Find your direction. Find your drink.</div>
-                <input type="text" class="search-bar" placeholder="Search venues..." id="search-input">
+            <div style="padding: 20px 20px 0;">
+                <input type="text" class="search-bar" placeholder="Search venues..." id="search-input" style="margin-top: 0;">
             </div>
-            
+
             <div class="filters">
                 <button class="filter-chip active">Happening Now</button>
                 <button class="filter-chip">Open Now</button>
@@ -648,13 +642,8 @@
 
         <!-- Favorites Screen -->
         <div class="screen" id="favorites-screen">
-            <div class="header">
-                <div class="logo-container">
-                    <div class="logo-icon">
-                        <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
-                    </div>
-                </div>
-                <div class="tagline">Find your direction. Find your drink.</div>
+            <div style="padding: 20px 20px 0;">
+                <input type="text" class="search-bar" placeholder="Search favorites..." id="favorites-search-input" style="margin-top: 0;">
             </div>
 
             <div class="content">
@@ -674,16 +663,7 @@
 
         <!-- Events Screen -->
         <div class="screen" id="events-screen">
-            <div class="header">
-                <div class="logo-container">
-                    <div class="logo-icon">
-                        <img src="logo.png" alt="Happy Hour Compass" style="width: 100%; height: 100%; object-fit: contain;">
-                    </div>
-                </div>
-                <div class="tagline">Find your direction. Find your drink.</div>
-            </div>
-
-            <div class="filters">
+            <div class="filters" style="padding-top: 20px;">
                 <button class="filter-chip active">Happening Today</button>
                 <button class="filter-chip">Monday</button>
                 <button class="filter-chip">Tuesday</button>
@@ -1271,6 +1251,29 @@
             });
         }
 
+        // Favorites search functionality
+        function performFavoritesSearch() {
+            const searchTerm = document.getElementById('favorites-search-input').value.toLowerCase();
+            const favoritesScreen = document.getElementById('favorites-screen');
+            const listingItems = favoritesScreen.querySelectorAll('.listing-item');
+
+            if (searchTerm.length === 0) {
+                listingItems.forEach(item => {
+                    item.style.display = 'flex';
+                });
+                return;
+            }
+
+            listingItems.forEach(item => {
+                const venueName = item.querySelector('span')?.textContent.toLowerCase() || '';
+                if (venueName.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
         // Add search event listener
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('search-input');
@@ -1279,6 +1282,17 @@
                 searchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         performSearch();
+                    }
+                });
+            }
+
+            // Favorites search listener
+            const favoritesSearchInput = document.getElementById('favorites-search-input');
+            if (favoritesSearchInput) {
+                favoritesSearchInput.addEventListener('input', performFavoritesSearch);
+                favoritesSearchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        performFavoritesSearch();
                     }
                 });
             }
