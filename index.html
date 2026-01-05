@@ -473,6 +473,62 @@
             line-height: 1.5;
             padding: 0 20px;
         }
+
+        .page-header {
+            background: white;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-header.sticky {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .page-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #111827;
+            margin: 0;
+        }
+
+        .search-toggle-btn {
+            background: none;
+            border: none;
+            color: #3b82f6;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .search-toggle-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .search-container {
+            display: none;
+            background: white;
+            padding: 0 20px 16px;
+            position: sticky;
+            top: 57px;
+            z-index: 49;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .search-container.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -642,7 +698,14 @@
 
         <!-- Favorites Screen -->
         <div class="screen" id="favorites-screen">
-            <div style="padding: 20px 20px 0;">
+            <div class="page-header sticky">
+                <h1 class="page-title">Favorites</h1>
+                <button class="search-toggle-btn" id="favorites-search-toggle" onclick="toggleFavoritesSearch()">
+                    🔍
+                </button>
+            </div>
+
+            <div class="search-container" id="favorites-search-container">
                 <input type="text" class="search-bar" placeholder="Search favorites..." id="favorites-search-input" style="margin-top: 0;">
             </div>
 
@@ -663,7 +726,11 @@
 
         <!-- Events Screen -->
         <div class="screen" id="events-screen">
-            <div class="filters" style="padding-top: 20px;">
+            <div class="page-header">
+                <h1 class="page-title">Specials & Events</h1>
+            </div>
+
+            <div class="filters">
                 <button class="filter-chip active">Happening Today</button>
                 <button class="filter-chip">Monday</button>
                 <button class="filter-chip">Tuesday</button>
@@ -1249,6 +1316,27 @@
                     item.style.display = 'none';
                 }
             });
+        }
+
+        // Toggle favorites search visibility
+        function toggleFavoritesSearch() {
+            const searchContainer = document.getElementById('favorites-search-container');
+            const searchToggleBtn = document.getElementById('favorites-search-toggle');
+            const searchInput = document.getElementById('favorites-search-input');
+
+            if (searchContainer.classList.contains('active')) {
+                // Close search
+                searchContainer.classList.remove('active');
+                searchToggleBtn.textContent = '🔍';
+                searchInput.value = '';
+                performFavoritesSearch(); // Reset filter
+            } else {
+                // Open search
+                searchContainer.classList.add('active');
+                searchToggleBtn.textContent = '✕';
+                // Focus input after a brief delay to ensure it's visible
+                setTimeout(() => searchInput.focus(), 100);
+            }
         }
 
         // Favorites search functionality
