@@ -1160,7 +1160,8 @@
                 description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks. Perfect for groups!',
                 offers: '• $0.50 wings (minimum 10)<br>• $5 beer buckets<br>• $12 nachos for two<br>• $15 pitcher specials',
                 address: '1620 Dickson Ave, Kelowna, BC',
-                phone: '(250) 717-5687'
+                phone: '(250) 717-5687',
+                image: 'images/event-nfl.jpg'
             },
             'Wine Tasting': {
                 icon: '🍷',
@@ -1171,7 +1172,8 @@
                 description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.',
                 offers: '• 5 wine tastings for $25<br>• Paired appetizers included<br>• 20% off featured wines<br>• Sommelier-guided experience',
                 address: '532 Bernard Ave, Kelowna, BC',
-                phone: '(250) 763-1442'
+                phone: '(250) 763-1442',
+                image: 'images/event-wine.jpg'
             },
             'Trivia Night': {
                 icon: '🧠',
@@ -1182,7 +1184,8 @@
                 description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.',
                 offers: '• $3 appetizers during trivia<br>• $2.50 beer<br>• Prize for winning team<br>• Family-friendly atmosphere',
                 address: '1405 Harvey Ave, Kelowna, BC',
-                phone: '(250) 860-7768'
+                phone: '(250) 860-7768',
+                image: 'images/event-trivia.jpg'
             }
         };
 
@@ -1310,6 +1313,14 @@
             document.getElementById('event-time').textContent = event.time;
             document.getElementById('event-info-box').innerHTML = `<strong>Event Description</strong><br>${event.description}<br><br><strong>Special Offers</strong><br>${event.offers}`;
             document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
+
+            // Set event hero background image
+            const eventHero = document.getElementById('event-hero');
+            if (event.image) {
+                eventHero.style.background = `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('${event.image}') center/cover`;
+            } else {
+                eventHero.style.background = 'linear-gradient(135deg, #ef4444, #f97316)';
+            }
 
             showScreen('event-detail-screen');
             
