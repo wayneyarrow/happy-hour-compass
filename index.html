@@ -133,6 +133,7 @@
 
         .search-wrapper {
             position: relative;
+            flex: 1;
         }
 
         .search-icon {
@@ -145,12 +146,48 @@
             pointer-events: none;
         }
 
+        .search-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .view-toggle-btn {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #3b82f6;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .view-toggle-btn:hover {
+            background: #f9fafb;
+        }
+
         .filters {
             display: flex;
             gap: 10px;
             padding: 15px 20px;
             overflow-x: auto;
             flex-shrink: 0;
+            max-height: 100px;
+            opacity: 1;
+            transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+        }
+
+        .filters.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            overflow: hidden;
         }
 
         .filter-chip {
@@ -168,26 +205,6 @@
             color: white;
         }
 
-        .view-toggle {
-            display: flex;
-            padding: 10px 20px;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .toggle-btn {
-            flex: 1;
-            padding: 10px;
-            background: #e5e7eb;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        .toggle-btn.active {
-            background: #3b82f6;
-            color: white;
-        }
 
         .content {
             flex: 1;
@@ -597,23 +614,23 @@
         <!-- Search Screen -->
         <div class="screen active" id="search-screen">
             <div style="padding: 20px 20px 0;">
-                <div class="search-wrapper">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" class="search-bar" placeholder="Search venues..." id="search-input" style="margin-top: 0;">
+                <div class="search-controls">
+                    <div class="search-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-bar" placeholder="Search venues..." id="search-input" style="margin-top: 0;">
+                    </div>
+                    <button class="view-toggle-btn" id="view-toggle-btn" onclick="toggleViewInline()">
+                        <span id="toggle-icon">🗺️</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="filters">
+            <div class="filters" id="search-filters">
                 <button class="filter-chip active">Happening Now</button>
                 <button class="filter-chip">Open Now</button>
                 <button class="filter-chip">Sports Bars</button>
                 <button class="filter-chip">Fine Dining</button>
                 <button class="filter-chip">Under $10</button>
-            </div>
-
-            <div class="view-toggle">
-                <button class="toggle-btn active" onclick="toggleView('list')">List</button>
-                <button class="toggle-btn" onclick="toggleView('map')">Map</button>
             </div>
 
             <div class="content" id="list-content">
@@ -1299,25 +1316,33 @@
             }
         }
 
-        function toggleView(viewType) {
-            document.querySelectorAll('.toggle-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            if (viewType === 'list') {
-                document.getElementById('list-content').style.display = 'block';
-                document.getElementById('map-content').style.display = 'none';
-            } else {
-                document.getElementById('list-content').style.display = 'none';
-                document.getElementById('map-content').style.display = 'block';
-                
+        // Current view state
+        let currentView = 'list';
+
+        function toggleViewInline() {
+            const toggleIcon = document.getElementById('toggle-icon');
+            const listContent = document.getElementById('list-content');
+            const mapContent = document.getElementById('map-content');
+
+            if (currentView === 'list') {
+                // Switch to map
+                currentView = 'map';
+                toggleIcon.textContent = '📋';
+                listContent.style.display = 'none';
+                mapContent.style.display = 'block';
+
                 setTimeout(() => {
                     initializeMap();
                     if (map) {
                         map.invalidateSize();
                     }
                 }, 100);
+            } else {
+                // Switch to list
+                currentView = 'list';
+                toggleIcon.textContent = '🗺️';
+                listContent.style.display = 'block';
+                mapContent.style.display = 'none';
             }
         }
 
@@ -1471,8 +1496,45 @@
             });
         }
 
+        // Filter collapse on scroll
+        let lastScrollTop = 0;
+        const searchScreen = document.getElementById('search-screen');
+        const filters = document.getElementById('search-filters');
+
+        function handleSearchScroll() {
+            const listContent = document.getElementById('list-content');
+            const mapContent = document.getElementById('map-content');
+
+            // Determine which content area is visible
+            const activeContent = currentView === 'list' ? listContent : mapContent;
+
+            if (!activeContent) return;
+
+            const scrollTop = activeContent.scrollTop;
+
+            // If scrolled to top (or very close), show filters
+            if (scrollTop <= 10) {
+                filters.classList.remove('collapsed');
+            } else {
+                // If scrolling down, hide filters
+                filters.classList.add('collapsed');
+            }
+
+            lastScrollTop = scrollTop;
+        }
+
         // Add search event listener
         document.addEventListener('DOMContentLoaded', function() {
+            // Attach scroll listeners to both content areas
+            const listContent = document.getElementById('list-content');
+            const mapContent = document.getElementById('map-content');
+
+            if (listContent) {
+                listContent.addEventListener('scroll', handleSearchScroll);
+            }
+            if (mapContent) {
+                mapContent.addEventListener('scroll', handleSearchScroll);
+            }
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
                 searchInput.addEventListener('input', performSearch);
