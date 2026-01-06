@@ -234,26 +234,29 @@
         .heart-icon {
             background: none;
             border: none;
-            font-size: 22px;
             cursor: pointer;
-            color: #d1d5db;
             padding: 4px;
             border-radius: 50%;
-            min-width: 32px;
-            min-height: 32px;
+            width: 32px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: color 0.2s, transform 0.1s;
-            line-height: 1;
+            flex-shrink: 0;
         }
 
-        .heart-icon:hover {
-            transform: scale(1.1);
+        .heart-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: #d1d5db;
+            stroke-width: 2;
+            transition: fill 0.2s, stroke 0.2s;
         }
 
-        .heart-icon.favorited {
-            color: #ef4444;
+        .heart-icon.favorited svg {
+            fill: #ef4444;
+            stroke: #ef4444;
         }
 
         .status-badge {
@@ -630,7 +633,11 @@
                         </div>
                         <div class="listing-header">
                             <div class="listing-name">The Keg Kelowna</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                </svg>
+                            </button>
                         </div>
                         <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                         <div style="color: #6b7280; font-size: 14px;">$6 appetizers, $5 drinks</div>
@@ -652,7 +659,11 @@
                         </div>
                         <div class="listing-header">
                             <div class="listing-name">White Spot</div>
-                            <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
+                            <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                </svg>
+                            </button>
                         </div>
                         <div class="price-highlight">From $3.50 • Happy Hour: 2:00 PM - 5:00 PM</div>
                         <div style="color: #6b7280; font-size: 14px;">$4 wings, $3.50 beer</div>
@@ -676,7 +687,11 @@
                         </div>
                         <div class="listing-header">
                             <div class="listing-name">Anfield Restaurant</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                </svg>
+                            </button>
                         </div>
                         <div class="price-highlight">From $4 • Happy Hour: 4:00 PM - 7:00 PM</div>
                         <div style="color: #6b7280; font-size: 14px;">$8 burgers, $4 cocktails</div>
@@ -698,7 +713,11 @@
                         </div>
                         <div class="listing-header">
                             <div class="listing-name">Moxie's Kelowna</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                </svg>
+                            </button>
                         </div>
                         <div class="price-highlight">From $5 • Happy Hour: 3:00 PM - 6:00 PM</div>
                         <div style="color: #6b7280; font-size: 14px;">$5 appetizers, $6 cocktails</div>
@@ -714,7 +733,11 @@
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                         <span>The Keg Kelowna</span>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
                         Happy Hour: 3:00 PM - 6:00 PM<br>
@@ -725,7 +748,11 @@
                 <div class="listing-item" onclick="showVenueDetail('White Spot')">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                         <span>White Spot</span>
-                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
+                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
                         Happy Hour: 2:00 PM - 5:00 PM<br>
@@ -736,7 +763,11 @@
                 <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                         <span>Anfield Restaurant</span>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
                         Happy Hour: 4:00 PM - 7:00 PM<br>
@@ -747,7 +778,11 @@
                 <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                         <span>Moxie's Kelowna</span>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
                         Happy Hour: 3:00 PM - 6:00 PM<br>
@@ -777,7 +812,11 @@
                 <div class="listing-item" onclick="showVenueDetail('White Spot')">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                         <span>White Spot</span>
-                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">♥</button>
+                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div style="color: #6b7280; font-size: 14px;">
                         Happy Hour: 2:00 PM - 5:00 PM<br>
@@ -809,7 +848,11 @@
                             <div class="event-venue">Anfield Restaurant</div>
                             <div class="event-time">Every Sunday 5:00 PM - 11:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -820,7 +863,11 @@
                             <div class="event-venue">The Keg Kelowna</div>
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -831,7 +878,11 @@
                             <div class="event-venue">White Spot</div>
                             <div class="event-time">Wednesday 7:00 PM - 10:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">♡</button>
+                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1347,13 +1398,7 @@
         }
 
         function toggleHeart(element) {
-            if (element.classList.contains('favorited')) {
-                element.classList.remove('favorited');
-                element.innerHTML = '♡';
-            } else {
-                element.classList.add('favorited');
-                element.innerHTML = '♥';
-            }
+            element.classList.toggle('favorited');
         }
 
         // Search functionality
