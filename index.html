@@ -299,6 +299,105 @@
             gap: 6px;
         }
 
+        /* Action rows - tappable with chevron affordance */
+        .info-row-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            margin: 0 -16px; /* Extend to edges for full-width tap target */
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .info-row-action:hover {
+            background: #f9fafb;
+        }
+
+        .info-row-action:active {
+            background: #f3f4f6;
+        }
+
+        .info-row-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-row-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-row-value {
+            font-size: 15px;
+            color: #111827;
+            font-weight: 500;
+        }
+
+        .info-row-chevron {
+            font-size: 18px;
+            color: #9ca3af;
+            margin-left: 8px;
+        }
+
+        /* Hours expansion toggle */
+        .hours-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: #3b82f6;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 8px;
+            user-select: none;
+        }
+
+        .hours-toggle:hover {
+            color: #2563eb;
+        }
+
+        .hours-disclosure {
+            transition: transform 0.2s;
+        }
+
+        .hours-disclosure.expanded {
+            transform: rotate(180deg);
+        }
+
+        .hours-weekly {
+            margin-top: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hours-weekly.visible {
+            display: flex;
+        }
+
+        .hours-day-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .hours-day-name {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .hours-day-time {
+            color: #6b7280;
+        }
+
         .info-row.clickable {
             cursor: pointer;
             padding: 8px;
@@ -1334,30 +1433,23 @@
                     <div class="venue-section" id="section-info">
                         <div class="scroll-anchor" id="anchor-info" aria-hidden="true"></div>
                         <h3 class="section-title">Info</h3>
-                        <div class="venue-info-details">
-                            <div class="info-row">
-                                <strong>Hours</strong>
-                                <div id="venue-hours-text">Monday - Friday: 3:00 PM - 6:00 PM</div>
-                            </div>
-                            <div class="info-row clickable" onclick="openMapApp()">
-                                <strong>Address</strong>
-                                <div id="venue-address-text">
-                                    📍 532 Bernard Ave, Kelowna, BC
-                                </div>
-                            </div>
-                            <div class="info-row">
-                                <strong>Phone</strong>
-                                <div id="venue-phone-text">
-                                    📞 (250) 763-1442
-                                </div>
-                            </div>
+
+                        <!-- Info rows container - populated by renderVenueInfo() -->
+                        <div class="venue-info-details" id="venue-info-container">
+                            <!-- Conditionally rendered rows will appear here -->
                         </div>
 
                         <!-- Map inside Info section -->
-                        <div class="venue-info-details" style="margin-top: 24px;">
+                        <div class="venue-info-details" style="margin-top: 24px;" id="venue-map-container">
                             <div class="info-row">
-                                <strong>Location</strong>
+                                <strong style="font-size: 14px; color: #6b7280; margin-bottom: 8px; display: block;">Location</strong>
                                 <div id="detail-map" class="venue-map-embed" onclick="expandMap()" style="margin-top: 8px;"></div>
+                                <button class="info-row-action" onclick="openMapApp()" style="margin-top: 12px;">
+                                    <div class="info-row-content">
+                                        <div class="info-row-value">Open in Maps</div>
+                                    </div>
+                                    <div class="info-row-chevron">›</div>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1495,6 +1587,8 @@
         let previousScreen = 'search-screen';
 
         // Store venue data
+        // TODO: Alpha uses placeholder data for Info section fields.
+        // Future: These fields may be missing/null - Info rendering is conditional.
         const venues = {
             'The Keg Kelowna': {
                 icon: '🍽️',
@@ -1502,7 +1596,21 @@
                 address: '532 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-1442',
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
-                specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails'
+                specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails',
+                // Alpha placeholder data for complete Info section
+                hoursToday: 'Mon - Fri: 3:00 PM - 6:00 PM',
+                hoursWeekly: {
+                    'Monday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
+                    'Tuesday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
+                    'Wednesday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
+                    'Thursday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
+                    'Friday': '11:00 AM - 12:00 AM (Happy Hour: 3:00 PM - 6:00 PM)',
+                    'Saturday': '10:00 AM - 12:00 AM (Happy Hour: 2:00 PM - 5:00 PM)',
+                    'Sunday': '10:00 AM - 10:00 PM'
+                },
+                menuUrl: 'https://kegsteakhouse.com/menu',
+                websiteUrl: 'https://kegsteakhouse.com',
+                paymentMethods: 'Credit cards, Debit, Cash'
             },
             'White Spot': {
                 icon: '🍔',
@@ -1661,6 +1769,107 @@
         let currentVenue = null;
         let currentVenueName = null;
 
+        // TODO: Alpha uses placeholder data. Future: fields may be missing/null.
+        // Render venue Info section with conditional display of rows
+        function renderVenueInfo(venue) {
+            const container = document.getElementById('venue-info-container');
+            if (!container) return;
+
+            let html = '';
+
+            // 1) Hours (with expand/collapse for weekly hours)
+            if (venue.hoursToday || venue.hours) {
+                const todayHours = venue.hoursToday || 'See details';
+                const hasWeekly = venue.hoursWeekly && Object.keys(venue.hoursWeekly).length > 0;
+
+                html += `
+                    <div class="info-row">
+                        <div class="info-row-label">Hours</div>
+                        <div class="info-row-value">${todayHours}</div>
+                        ${hasWeekly ? `
+                            <div class="hours-toggle" onclick="toggleWeeklyHours()">
+                                <span class="hours-disclosure" id="hours-disclosure">▾</span>
+                                <span id="hours-toggle-text">Show full hours</span>
+                            </div>
+                            <div class="hours-weekly" id="hours-weekly">
+                                ${Object.entries(venue.hoursWeekly).map(([day, time]) => `
+                                    <div class="hours-day-row">
+                                        <span class="hours-day-name">${day}</span>
+                                        <span class="hours-day-time">${time}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            // 2) Address (tappable → open in Maps)
+            if (venue.address) {
+                html += `
+                    <button class="info-row-action" onclick="openMapApp()">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Address</div>
+                            <div class="info-row-value">${venue.address}</div>
+                        </div>
+                        <div class="info-row-chevron">›</div>
+                    </button>
+                `;
+            }
+
+            // 3) Menu (tappable → open menu URL or website)
+            if (venue.menuUrl || venue.websiteUrl) {
+                const menuTarget = venue.menuUrl || venue.websiteUrl;
+                html += `
+                    <button class="info-row-action" onclick="openVenueMenu('${menuTarget}')">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Menu</div>
+                            <div class="info-row-value">View menu</div>
+                        </div>
+                        <div class="info-row-chevron">›</div>
+                    </button>
+                `;
+            }
+
+            // 4) Phone (tappable → click-to-call)
+            if (venue.phone) {
+                html += `
+                    <button class="info-row-action" onclick="callVenue()">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Phone</div>
+                            <div class="info-row-value">${venue.phone}</div>
+                        </div>
+                        <div class="info-row-chevron">›</div>
+                    </button>
+                `;
+            }
+
+            // 5) Payment Methods (text display, not tappable)
+            if (venue.paymentMethods) {
+                html += `
+                    <div class="info-row">
+                        <div class="info-row-label">Payment</div>
+                        <div class="info-row-value">${venue.paymentMethods}</div>
+                    </div>
+                `;
+            }
+
+            // 6) Website (tappable → open externally)
+            if (venue.websiteUrl) {
+                html += `
+                    <button class="info-row-action" onclick="openVenueWebsiteExternal('${venue.websiteUrl}')">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Website</div>
+                            <div class="info-row-value">${venue.websiteUrl.replace('https://', '').replace('http://', '')}</div>
+                        </div>
+                        <div class="info-row-chevron">›</div>
+                    </button>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
         function showVenueDetail(venueName) {
             const venue = venues[venueName];
             if (!venue) return;
@@ -1693,10 +1902,8 @@
             document.getElementById('venue-happy-hour-box').innerHTML =
                 `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
 
-            // Update Info section
-            document.getElementById('venue-hours-text').innerHTML = venue.hours;
-            document.getElementById('venue-address-text').innerHTML = `📍 ${venue.address}`;
-            document.getElementById('venue-phone-text').innerHTML = `📞 ${venue.phone}`;
+            // Render Info section with conditional rows
+            renderVenueInfo(venue);
 
             // Get scroll container reference
             const scrollContainer = document.getElementById('venue-detail-scroll');
@@ -1833,9 +2040,48 @@
             }
         }
 
-        // Open venue website
+        // Open venue website (legacy - kept for backward compatibility)
         function openVenueWebsite() {
-            alert('Website feature coming soon!');
+            if (currentVenue && currentVenue.websiteUrl) {
+                window.open(currentVenue.websiteUrl, '_blank');
+            } else {
+                alert('Website not available');
+            }
+        }
+
+        // Open venue website externally (new - for Info section)
+        function openVenueWebsiteExternal(url) {
+            if (url) {
+                window.open(url, '_blank');
+            }
+        }
+
+        // Open venue menu
+        function openVenueMenu(url) {
+            if (url) {
+                window.open(url, '_blank');
+            }
+        }
+
+        // Toggle weekly hours expansion
+        function toggleWeeklyHours() {
+            const weeklyDiv = document.getElementById('hours-weekly');
+            const disclosure = document.getElementById('hours-disclosure');
+            const toggleText = document.getElementById('hours-toggle-text');
+
+            if (!weeklyDiv || !disclosure || !toggleText) return;
+
+            const isVisible = weeklyDiv.classList.contains('visible');
+
+            if (isVisible) {
+                weeklyDiv.classList.remove('visible');
+                disclosure.classList.remove('expanded');
+                toggleText.textContent = 'Show full hours';
+            } else {
+                weeklyDiv.classList.add('visible');
+                disclosure.classList.add('expanded');
+                toggleText.textContent = 'Hide full hours';
+            }
         }
 
         // Open map app with venue address
