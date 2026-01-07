@@ -1550,11 +1550,6 @@
             document.getElementById(screenId).classList.add('active');
 
             updateNavHighlighting(screenId);
-
-            // Stop venue tab tracker when leaving detail screen
-            if (screenId !== 'detail-screen') {
-                stopVenueTabTracker();
-            }
         }
 
         function initializeVenueDetailMap() {
@@ -1687,127 +1682,74 @@
                 setTimeout(initializeVenueDetailMap, 500);
             });
 
-            // Setup 2-tab tracker AFTER render (CRITICAL)
-            setTimeout(() => {
-                setupVenueDetailTwoTabTracker();
-            }, 150);
+            // Setup tabs (click-only, no scroll tracking)
+            setupVenueDetailTabs();
         }
 
         // ========================================
-        // BULLETPROOF VIEWPORT-BASED 2-TAB TRACKER
+        // VENUE DETAIL TABS - CLICK-ONLY (ALPHA)
         // ========================================
-        let venueTabUpdateLoop = null;
+        // Tabs act as jump links only - NO scroll tracking
+        // Active tab reflects last clicked tab, NOT scroll position
 
-        function setupVenueDetailTwoTabTracker() {
-            // Stop any existing loop
-            stopVenueTabTracker();
-
-            // Get elements by explicit IDs
-            const scroller = document.getElementById('venue-detail-scroll');
+        function setupVenueDetailTabs() {
+            // Get tab elements
             const tabHappyHour = document.getElementById('tab-happyhour');
             const tabInfo = document.getElementById('tab-info');
-            const sectionHappyHour = document.getElementById('section-happyhour');
-            const sectionInfo = document.getElementById('section-info');
-            const tabsContainer = document.getElementById('venue-tabs');
-            const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
-            if (!scroller || !tabHappyHour || !tabInfo || !sectionHappyHour || !sectionInfo || !tabsContainer) {
-                console.error('VENUE TAB TRACKER FAILED: Missing elements', {
-                    scroller: !!scroller,
-                    tabHappyHour: !!tabHappyHour,
-                    tabInfo: !!tabInfo,
-                    sectionHappyHour: !!sectionHappyHour,
-                    sectionInfo: !!sectionInfo,
-                    tabsContainer: !!tabsContainer
-                });
+            if (!tabHappyHour || !tabInfo) {
+                console.error('Venue tabs not found');
                 return;
             }
 
-            // Set initial state (Happy Hour active)
-            activateTab(tabHappyHour, tabInfo);
-
-            // Update function using VIEWPORT-BASED VISIBILITY
-            const updateActiveTab = function() {
-                // Collapse header based on scroll position
-                const scrollTop = scroller.scrollTop;
-                if (collapsibleHeader) {
-                    if (scrollTop > 180) {
-                        collapsibleHeader.classList.add('collapsed');
-                    } else {
-                        collapsibleHeader.classList.remove('collapsed');
-                    }
-                }
-
-                // Get viewport positions (what user actually sees)
-                const tabsRect = tabsContainer.getBoundingClientRect();
-                const infoRect = sectionInfo.getBoundingClientRect();
-
-                // Calculate activation line (bottom of tabs + small buffer)
-                const activationY = tabsRect.bottom + 8;
-
-                // Determine active tab based on what's visible
-                // If Info section top is at or above activation line -> Info is visible
-                if (infoRect.top <= activationY) {
-                    activateTab(tabInfo, tabHappyHour);
-                } else {
-                    activateTab(tabHappyHour, tabInfo);
-                }
-            };
-
-            // Start rAF loop for resilient updates
-            const loop = function() {
-                updateActiveTab();
-                venueTabUpdateLoop = requestAnimationFrame(loop);
-            };
-
-            // Start the loop
-            loop();
+            // Set default active tab (Happy Hour)
+            setActiveVenueTab('happyhour');
         }
 
-        function stopVenueTabTracker() {
-            if (venueTabUpdateLoop !== null) {
-                cancelAnimationFrame(venueTabUpdateLoop);
-                venueTabUpdateLoop = null;
+        // Set active tab state (visual only - inline styles)
+        function setActiveVenueTab(tabName) {
+            const tabHappyHour = document.getElementById('tab-happyhour');
+            const tabInfo = document.getElementById('tab-info');
+
+            if (!tabHappyHour || !tabInfo) return;
+
+            // Reset both tabs to inactive state
+            tabHappyHour.style.borderBottom = '2px solid transparent';
+            tabHappyHour.style.fontWeight = '500';
+            tabHappyHour.style.color = '#6b7280';
+
+            tabInfo.style.borderBottom = '2px solid transparent';
+            tabInfo.style.fontWeight = '500';
+            tabInfo.style.color = '#6b7280';
+
+            // Activate the selected tab
+            if (tabName === 'happyhour') {
+                tabHappyHour.style.borderBottom = '2px solid #1a73e8';
+                tabHappyHour.style.fontWeight = '600';
+                tabHappyHour.style.color = '#1a73e8';
+            } else if (tabName === 'info') {
+                tabInfo.style.borderBottom = '2px solid #1a73e8';
+                tabInfo.style.fontWeight = '600';
+                tabInfo.style.color = '#1a73e8';
             }
         }
 
-        // Activate tab using INLINE STYLES (brute-force reliable)
-        function activateTab(activeTab, inactiveTab) {
-            if (!activeTab || !inactiveTab) return;
-
-            // Active tab
-            activeTab.style.borderBottom = '2px solid #1a73e8';
-            activeTab.style.fontWeight = '600';
-            activeTab.style.color = '#1a73e8';
-
-            // Inactive tab
-            inactiveTab.style.borderBottom = '2px solid transparent';
-            inactiveTab.style.fontWeight = '500';
-            inactiveTab.style.color = '#6b7280';
-        }
-
-        // Click-to-scroll handler
+        // Click handler - scrolls to section AND sets active tab
         function scrollToVenueSection(sectionName) {
-            const scroller = document.getElementById('venue-detail-scroll');
-            const tabsContainer = document.getElementById('venue-tabs');
             const section = document.getElementById(`section-${sectionName}`);
 
-            if (!scroller || !tabsContainer || !section) return;
+            if (!section) {
+                console.error(`Section not found: section-${sectionName}`);
+                return;
+            }
 
-            // Calculate activation line
-            const tabsHeight = tabsContainer.offsetHeight || 47;
-            const activationLine = tabsHeight + 8;
+            // Update active tab state
+            setActiveVenueTab(sectionName);
 
-            // Get section position
-            const scrollTop = scroller.scrollTop;
-            const scrollerRect = scroller.getBoundingClientRect();
-            const sectionRect = section.getBoundingClientRect();
-            const sectionTop = (sectionRect.top - scrollerRect.top) + scrollTop;
-
-            // Scroll inside scroller
-            scroller.scrollTo({
-                top: sectionTop - activationLine,
-                behavior: 'smooth'
+            // Scroll to section using scrollIntoView
+            section.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
             });
         }
 
