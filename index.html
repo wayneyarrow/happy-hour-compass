@@ -398,6 +398,68 @@
             color: #6b7280;
         }
 
+        /* Location card - replaces embedded map */
+        .location-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 24px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .location-card-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .location-card-address {
+            font-size: 16px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .location-card-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .location-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: white;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .location-action-btn:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            color: #3b82f6;
+        }
+
+        .location-action-btn:active {
+            transform: scale(0.98);
+        }
+
+        .location-btn-icon {
+            font-size: 18px;
+        }
+
         .info-row.clickable {
             cursor: pointer;
             padding: 8px;
@@ -1439,16 +1501,18 @@
                             <!-- Conditionally rendered rows will appear here -->
                         </div>
 
-                        <!-- Map inside Info section -->
-                        <div class="venue-info-details" style="margin-top: 24px;" id="venue-map-container">
-                            <div class="info-row">
-                                <strong style="font-size: 14px; color: #6b7280; margin-bottom: 8px; display: block;">Location</strong>
-                                <div id="detail-map" class="venue-map-embed" onclick="expandMap()" style="margin-top: 8px;"></div>
-                                <button class="info-row-action" onclick="openMapApp()" style="margin-top: 12px;">
-                                    <div class="info-row-content">
-                                        <div class="info-row-value">Open in Maps</div>
-                                    </div>
-                                    <div class="info-row-chevron">›</div>
+                        <!-- Location card - TODO: Replace with full Google Maps integration post-Alpha -->
+                        <div class="location-card" id="venue-location-card">
+                            <div class="location-card-label">Location</div>
+                            <div class="location-card-address" id="location-card-address">Address loading...</div>
+                            <div class="location-card-actions">
+                                <button class="location-action-btn" onclick="openGoogleMaps()">
+                                    <span class="location-btn-icon">🗺️</span>
+                                    <span>Google Maps</span>
+                                </button>
+                                <button class="location-action-btn" onclick="openAppleMaps()">
+                                    <span class="location-btn-icon">🍎</span>
+                                    <span>Apple Maps</span>
                                 </button>
                             </div>
                         </div>
@@ -1598,19 +1662,19 @@
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
                 specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails',
                 // Alpha placeholder data for complete Info section
-                hoursToday: 'Mon - Fri: 3:00 PM - 6:00 PM',
+                hoursToday: 'Open today: 11:00 AM - 11:00 PM',
                 hoursWeekly: {
-                    'Monday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
-                    'Tuesday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
-                    'Wednesday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
-                    'Thursday': '11:00 AM - 11:00 PM (Happy Hour: 3:00 PM - 6:00 PM)',
-                    'Friday': '11:00 AM - 12:00 AM (Happy Hour: 3:00 PM - 6:00 PM)',
-                    'Saturday': '10:00 AM - 12:00 AM (Happy Hour: 2:00 PM - 5:00 PM)',
+                    'Monday': '11:00 AM - 11:00 PM',
+                    'Tuesday': '11:00 AM - 11:00 PM',
+                    'Wednesday': '11:00 AM - 11:00 PM',
+                    'Thursday': '11:00 AM - 11:00 PM',
+                    'Friday': '11:00 AM - 12:00 AM',
+                    'Saturday': '10:00 AM - 12:00 AM',
                     'Sunday': '10:00 AM - 10:00 PM'
                 },
                 menuUrl: 'https://kegsteakhouse.com/menu',
                 websiteUrl: 'https://kegsteakhouse.com',
-                paymentMethods: 'Credit cards, Debit, Cash'
+                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
             'White Spot': {
                 icon: '🍔',
@@ -1618,7 +1682,21 @@
                 address: '1405 Harvey Ave, Kelowna, BC',
                 phone: '(250) 860-7768',
                 hours: 'Monday - Friday: 2:00 PM - 5:00 PM<br>Saturday - Sunday: 1:00 PM - 4:00 PM',
-                specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails'
+                specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails',
+                // Alpha placeholder data for complete Info section
+                hoursToday: 'Open today: 7:00 AM - 11:00 PM',
+                hoursWeekly: {
+                    'Monday': '7:00 AM - 11:00 PM',
+                    'Tuesday': '7:00 AM - 11:00 PM',
+                    'Wednesday': '7:00 AM - 11:00 PM',
+                    'Thursday': '7:00 AM - 11:00 PM',
+                    'Friday': '7:00 AM - 12:00 AM',
+                    'Saturday': '7:00 AM - 12:00 AM',
+                    'Sunday': '7:00 AM - 11:00 PM'
+                },
+                menuUrl: 'https://whitespot.ca/menu',
+                websiteUrl: 'https://whitespot.ca',
+                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
             'Anfield Restaurant': {
                 icon: '⚽',
@@ -1626,7 +1704,21 @@
                 address: '1620 Dickson Ave, Kelowna, BC',
                 phone: '(250) 717-5687',
                 hours: 'Monday - Sunday: 4:00 PM - 7:00 PM',
-                specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters'
+                specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters',
+                // Alpha placeholder data for complete Info section
+                hoursToday: 'Open today: 11:00 AM - 1:00 AM',
+                hoursWeekly: {
+                    'Monday': '11:00 AM - 1:00 AM',
+                    'Tuesday': '11:00 AM - 1:00 AM',
+                    'Wednesday': '11:00 AM - 1:00 AM',
+                    'Thursday': '11:00 AM - 1:00 AM',
+                    'Friday': '11:00 AM - 2:00 AM',
+                    'Saturday': '10:00 AM - 2:00 AM',
+                    'Sunday': '10:00 AM - 12:00 AM'
+                },
+                menuUrl: 'https://anfieldkelowna.com/menu',
+                websiteUrl: 'https://anfieldkelowna.com',
+                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
             'Moxies Kelowna': {
                 icon: '🍸',
@@ -1634,7 +1726,21 @@
                 address: '551 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-7771',
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday - Sunday: 2:00 PM - 5:00 PM',
-                specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass'
+                specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass',
+                // Alpha placeholder data for complete Info section
+                hoursToday: 'Open today: 11:00 AM - 12:00 AM',
+                hoursWeekly: {
+                    'Monday': '11:00 AM - 12:00 AM',
+                    'Tuesday': '11:00 AM - 12:00 AM',
+                    'Wednesday': '11:00 AM - 12:00 AM',
+                    'Thursday': '11:00 AM - 12:00 AM',
+                    'Friday': '11:00 AM - 1:00 AM',
+                    'Saturday': '10:00 AM - 1:00 AM',
+                    'Sunday': '10:00 AM - 12:00 AM'
+                },
+                menuUrl: 'https://moxies.com/menu',
+                websiteUrl: 'https://moxies.com',
+                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             }
         };
 
@@ -1777,14 +1883,14 @@
 
             let html = '';
 
-            // 1) Hours (with expand/collapse for weekly hours)
+            // 1) Business Hours (with expand/collapse for weekly hours)
             if (venue.hoursToday || venue.hours) {
                 const todayHours = venue.hoursToday || 'See details';
                 const hasWeekly = venue.hoursWeekly && Object.keys(venue.hoursWeekly).length > 0;
 
                 html += `
                     <div class="info-row">
-                        <div class="info-row-label">Hours</div>
+                        <div class="info-row-label">Business Hours</div>
                         <div class="info-row-value">${todayHours}</div>
                         ${hasWeekly ? `
                             <div class="hours-toggle" onclick="toggleWeeklyHours()">
@@ -1904,6 +2010,12 @@
 
             // Render Info section with conditional rows
             renderVenueInfo(venue);
+
+            // Update location card address
+            const locationAddress = document.getElementById('location-card-address');
+            if (locationAddress && venue.address) {
+                locationAddress.textContent = venue.address;
+            }
 
             // Get scroll container reference
             const scrollContainer = document.getElementById('venue-detail-scroll');
@@ -2084,12 +2196,25 @@
             }
         }
 
-        // Open map app with venue address
-        function openMapApp() {
+        // Open Google Maps with venue address
+        function openGoogleMaps() {
             if (currentVenue && currentVenue.address) {
                 const address = encodeURIComponent(currentVenue.address);
                 window.open(`https://maps.google.com/?q=${address}`, '_blank');
             }
+        }
+
+        // Open Apple Maps with venue address
+        function openAppleMaps() {
+            if (currentVenue && currentVenue.address) {
+                const address = encodeURIComponent(currentVenue.address);
+                window.open(`https://maps.apple.com/?q=${address}`, '_blank');
+            }
+        }
+
+        // Legacy - kept for backward compatibility with Address row
+        function openMapApp() {
+            openGoogleMaps();
         }
 
         // Expand map to full view
