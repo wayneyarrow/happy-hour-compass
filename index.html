@@ -242,7 +242,7 @@
 
         .venue-sections {
             background: white;
-            padding-bottom: 40px;
+            padding-bottom: 60px;
         }
 
         .venue-section {
@@ -251,7 +251,7 @@
         }
 
         .venue-section:last-child {
-            padding-bottom: 60px;
+            padding-bottom: 100px;
         }
 
         .section-title {
@@ -1695,14 +1695,12 @@
 
         // Venue Detail Scroll Behavior
         let venueScrollListenerInitialized = false;
-        let sectionObserver = null;
 
         function initializeVenueDetailScroll() {
             if (venueScrollListenerInitialized) return;
 
             const scrollContainer = document.getElementById('venue-detail-scroll');
             const collapsibleHeader = document.getElementById('venue-header-collapsible');
-            const sectionNav = document.getElementById('venue-section-nav');
 
             let lastScrollTop = 0;
             const collapseThreshold = 180; // Increased from 100 to 180 for smoother feel
@@ -1717,96 +1715,70 @@
                     collapsibleHeader.classList.remove('collapsed');
                 }
 
+                // Update active section indicator based on scroll position
+                updateActiveSectionByScroll();
+
                 lastScrollTop = scrollTop;
             });
-
-            // Initialize IntersectionObserver for section detection
-            initializeSectionObserver();
 
             venueScrollListenerInitialized = true;
         }
 
-        // Initialize IntersectionObserver for robust section detection
-        function initializeSectionObserver() {
+        // Robust scroll-position based active section detection
+        function updateActiveSectionByScroll() {
             const scrollContainer = document.getElementById('venue-detail-scroll');
-            const sections = document.querySelectorAll('.venue-section');
             const sectionNav = document.getElementById('venue-section-nav');
+            const sections = [
+                { id: 'happy-hour', element: document.getElementById('section-happy-hour') },
+                { id: 'info', element: document.getElementById('section-info') },
+                { id: 'map', element: document.getElementById('section-map') }
+            ];
 
-            if (!sections.length || !sectionNav) return;
+            if (!scrollContainer || !sectionNav) return;
 
-            // Disconnect existing observer if any
-            if (sectionObserver) {
-                sectionObserver.disconnect();
+            const scrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+
+            // Calculate the activation line (sticky header + sticky nav + small padding)
+            const detailHeaderHeight = 57; // detail-page-header height
+            const sectionNavHeight = sectionNav.offsetHeight || 47;
+            const activationLine = sectionNavHeight + 20; // 20px padding below nav
+
+            // Bottom-of-page fallback: if within 80px of bottom, force Map active
+            const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+            if (distanceFromBottom <= 80) {
+                setActiveTab('map');
+                return;
             }
 
-            // Calculate sticky header height (sticky nav bar)
-            const stickyOffset = sectionNav.offsetHeight;
-
-            // Track which sections are currently intersecting
-            const intersectingSections = new Set();
-
-            // Use IntersectionObserver with rootMargin to account for sticky nav
-            const observerOptions = {
-                root: scrollContainer,
-                // Negative top margin accounts for sticky nav, creates detection line just below it
-                // Bottom margin ensures we detect when approaching the end
-                rootMargin: `-${stickyOffset + 10}px 0px -50% 0px`,
-                threshold: [0, 0.25, 0.5, 0.75, 1.0]
-            };
-
-            sectionObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    const sectionId = entry.target.id.replace('section-', '');
-
-                    if (entry.isIntersecting) {
-                        intersectingSections.add(sectionId);
-                    } else {
-                        intersectingSections.delete(sectionId);
-                    }
-                });
-
-                // Update active indicator based on intersecting sections
-                updateActiveSectionIndicator(intersectingSections);
-            }, observerOptions);
-
-            // Observe all sections
-            sections.forEach(section => {
-                sectionObserver.observe(section);
-            });
-        }
-
-        // Update active section indicator based on intersecting sections
-        function updateActiveSectionIndicator(intersectingSections) {
-            const navItems = document.querySelectorAll('.section-nav-item');
-
-            // Determine active section based on what's visible
+            // Find the last section whose top is at or above the activation line
             let activeSection = 'happy-hour'; // Default
 
-            if (intersectingSections.size === 0) {
-                // Nothing intersecting, keep current or default to happy-hour
-                activeSection = 'happy-hour';
-            } else if (intersectingSections.size === 1) {
-                // Only one section visible - activate it
-                activeSection = Array.from(intersectingSections)[0];
-            } else {
-                // Multiple sections visible - use priority order
-                // When scrolling down: happy-hour -> info -> map
-                // Activate the "later" section in the priority order
-                if (intersectingSections.has('map')) {
-                    // Map has highest scroll priority when visible
-                    activeSection = 'map';
-                } else if (intersectingSections.has('info')) {
-                    // Info is second priority
-                    activeSection = 'info';
-                } else if (intersectingSections.has('happy-hour')) {
-                    // Happy hour is default/first
-                    activeSection = 'happy-hour';
+            for (let i = sections.length - 1; i >= 0; i--) {
+                const section = sections[i];
+                if (!section.element) continue;
+
+                // Get section's position relative to scroll container
+                const sectionTop = section.element.offsetTop;
+                const sectionScrollPosition = sectionTop - scrollTop;
+
+                // If section top is at or above activation line, it's the active one
+                if (sectionScrollPosition <= activationLine) {
+                    activeSection = section.id;
+                    break;
                 }
             }
 
-            // Update nav items
+            setActiveTab(activeSection);
+        }
+
+        // Helper function to set active tab
+        function setActiveTab(sectionId) {
+            const navItems = document.querySelectorAll('.section-nav-item');
+
             navItems.forEach(item => {
-                if (item.dataset.section === activeSection) {
+                if (item.dataset.section === sectionId) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
