@@ -1284,7 +1284,6 @@
                 <div class="venue-section-nav" id="venue-tabs">
                     <button class="section-nav-item venue-tab active" data-tab="happyhour" onclick="scrollToSection('happyhour')">Happy Hour</button>
                     <button class="section-nav-item venue-tab" data-tab="info" onclick="scrollToSection('info')">Info</button>
-                    <button class="section-nav-item venue-tab" data-tab="map" onclick="scrollToSection('map')">Map</button>
                 </div>
 
                 <!-- Content Sections -->
@@ -1322,12 +1321,14 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Map Section -->
-                    <div class="venue-section" id="section-map">
-                        <h3 class="section-title">Map</h3>
-                        <div id="detail-map" class="venue-map-embed" onclick="expandMap()"></div>
+                        <!-- Map inside Info section -->
+                        <div class="venue-info-details" style="margin-top: 24px;">
+                            <div class="info-row">
+                                <strong>Location</strong>
+                                <div id="detail-map" class="venue-map-embed" onclick="expandMap()" style="margin-top: 8px;"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1733,63 +1734,37 @@
             venueScrollListenerInitialized = true;
         }
 
-        // Robust scroll-position based active section detection with explicit boundary logic
+        // Simple 2-section active tab detection
         function updateActiveSectionByScroll() {
-            // Try both possible scroll containers
+            // Find the actual scroll container
             const scroller = document.getElementById('list-content') || document.getElementById('venue-detail-scroll');
             const tabsEl = document.getElementById('venue-tabs');
             const detailHeader = document.getElementById('venue-detail-header');
 
-            // Get section elements with both naming conventions
+            // Get section elements (only 2 sections now)
             const happyHourSection = document.getElementById('section-happyhour') || document.getElementById('section-happy-hour');
             const infoSection = document.getElementById('section-info');
-            const mapSection = document.getElementById('section-map');
 
-            if (!scroller || !tabsEl || !happyHourSection || !infoSection || !mapSection) return;
+            if (!scroller || !tabsEl || !happyHourSection || !infoSection) return;
 
             const scrollTop = scroller.scrollTop;
-            const scrollHeight = scroller.scrollHeight;
-            const clientHeight = scroller.clientHeight;
 
-            // Calculate activation line: headerHeight + tabsHeight + 8px
+            // Calculate activation line: stickyHeaderHeight + stickyTabsHeight + 8px
             const headerHeight = detailHeader ? detailHeader.offsetHeight : 57;
             const tabsHeight = tabsEl.offsetHeight || 47;
             const activationLine = tabsHeight + 8;
 
-            // Compute section positions relative to scroll container using getBoundingClientRect
+            // Compute infoTop relative to scroll container using getBoundingClientRect
             const scrollerRect = scroller.getBoundingClientRect();
-            const hhRect = happyHourSection.getBoundingClientRect();
             const infoRect = infoSection.getBoundingClientRect();
-            const mapRect = mapSection.getBoundingClientRect();
-
-            // Calculate positions relative to scroll container
-            const hhTop = hhRect.top - scrollerRect.top + scrollTop;
             const infoTop = infoRect.top - scrollerRect.top + scrollTop;
-            const mapTop = mapRect.top - scrollerRect.top + scrollTop;
 
-            // Current scroll position adjusted for activation line
+            // Simple logic: y = scroller.scrollTop + activationLine
             const y = scrollTop + activationLine;
 
-            // Bottom fallback: if within 40px of bottom, force Map active
-            const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-            const nearBottom = distanceFromBottom <= 40;
-
-            // Explicit scroll boundary logic
-            let activeTab = 'happyhour'; // Default
-
-            if (nearBottom) {
-                // Near bottom: force Map active (but only if not in Info range)
-                activeTab = 'map';
-            } else if (y >= mapTop) {
-                // Scrolled past Map section top
-                activeTab = 'map';
-            } else if (y >= infoTop) {
-                // Scrolled past Info section top
-                activeTab = 'info';
-            } else {
-                // Before Info section: Happy Hour is active
-                activeTab = 'happyhour';
-            }
+            // if y >= infoTop => active = "info"
+            // else => active = "happyhour"
+            let activeTab = (y >= infoTop) ? 'info' : 'happyhour';
 
             setActiveTab(activeTab);
         }
