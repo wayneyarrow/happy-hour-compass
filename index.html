@@ -1282,8 +1282,8 @@
 
                 <!-- Sticky Section Nav -->
                 <div class="venue-section-nav venue-tabs" id="venue-tabs">
-                    <button class="section-nav-item venue-tab active" data-tab="happyhour" onclick="scrollToSection('happyhour')">Happy Hour</button>
-                    <button class="section-nav-item venue-tab" data-tab="info" onclick="scrollToSection('info')">Info</button>
+                    <button id="tab-happyhour" class="section-nav-item venue-tab" onclick="scrollToVenueSection('happyhour')">Happy Hour</button>
+                    <button id="tab-info" class="section-nav-item venue-tab" onclick="scrollToVenueSection('info')">Info</button>
                 </div>
 
                 <!-- Content Sections -->
@@ -1672,22 +1672,7 @@
             scrollContainer.scrollTop = 0;
             document.getElementById('venue-header-collapsible').classList.remove('collapsed');
 
-            // Reset section nav
-            const tabsEl = document.getElementById('venue-tabs');
-            if (tabsEl) {
-                tabsEl.querySelectorAll('.venue-tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                const firstTab = tabsEl.querySelector('.venue-tab[data-tab="happyhour"]');
-                if (firstTab) firstTab.classList.add('active');
-            }
-
             showScreen('detail-screen');
-
-            // Initialize scroll listener
-            setTimeout(() => {
-                initializeVenueDetailScroll();
-            }, 100);
 
             // Force map initialization with multiple attempts
             requestAnimationFrame(() => {
@@ -1696,117 +1681,116 @@
                 setTimeout(initializeVenueDetailMap, 300);
                 setTimeout(initializeVenueDetailMap, 500);
             });
+
+            // Setup 2-tab tracker AFTER render (CRITICAL)
+            setTimeout(() => {
+                setupVenueDetailTwoTabTracker();
+            }, 150);
         }
 
-        // Venue Detail Scroll Behavior
-        let venueScrollListenerInitialized = false;
+        // ========================================
+        // BRUTE-FORCE RELIABLE 2-TAB TRACKER
+        // ========================================
+        let twoTabTrackerActive = false;
 
-        function initializeVenueDetailScroll() {
-            if (venueScrollListenerInitialized) return;
-
-            // Use venue-detail-scroll as the scroller (confirmed by user)
-            const scrollContainer = document.getElementById('venue-detail-scroll');
+        function setupVenueDetailTwoTabTracker() {
+            // Get elements by explicit IDs
+            const scroller = document.getElementById('venue-detail-scroll');
+            const tabHappyHour = document.getElementById('tab-happyhour');
+            const tabInfo = document.getElementById('tab-info');
+            const sectionHappyHour = document.getElementById('section-happyhour');
+            const sectionInfo = document.getElementById('section-info');
+            const tabsContainer = document.getElementById('venue-tabs');
             const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
-            if (!scrollContainer) return;
+            if (!scroller || !tabHappyHour || !tabInfo || !sectionHappyHour || !sectionInfo || !tabsContainer) {
+                console.error('2-Tab Tracker: Missing elements');
+                return;
+            }
 
-            let lastScrollTop = 0;
-            const collapseThreshold = 180;
+            // Mark tracker as active
+            twoTabTrackerActive = true;
 
-            scrollContainer.addEventListener('scroll', function() {
-                const scrollTop = scrollContainer.scrollTop;
+            // Set initial state (Happy Hour active)
+            activateTab(tabHappyHour, tabInfo);
 
-                // Collapse/expand header based on scroll position (if header exists)
+            // Remove any existing listeners by cloning
+            if (scroller._venueTabScrollListener) {
+                scroller.removeEventListener('scroll', scroller._venueTabScrollListener);
+            }
+
+            // Create scroll handler
+            const scrollHandler = function() {
+                const scrollTop = scroller.scrollTop;
+
+                // Collapse header logic
                 if (collapsibleHeader) {
-                    if (scrollTop > collapseThreshold) {
+                    if (scrollTop > 180) {
                         collapsibleHeader.classList.add('collapsed');
                     } else {
                         collapsibleHeader.classList.remove('collapsed');
                     }
                 }
 
-                // Update active section indicator based on scroll position
-                updateActiveSectionByScroll();
+                // Calculate activation line
+                const tabsHeight = tabsContainer.offsetHeight || 47;
+                const activationLine = tabsHeight + 8;
 
-                lastScrollTop = scrollTop;
-            });
+                // Get Info section position relative to scroller
+                const scrollerRect = scroller.getBoundingClientRect();
+                const infoRect = sectionInfo.getBoundingClientRect();
+                const infoTop = (infoRect.top - scrollerRect.top) + scrollTop;
 
-            venueScrollListenerInitialized = true;
-        }
-
-        // Simple 2-section active tab detection
-        function updateActiveSectionByScroll() {
-            // Use venue-detail-scroll as the scroller (confirmed by user)
-            const scroller = document.getElementById('venue-detail-scroll');
-            const tabsEl = document.getElementById('venue-tabs');
-
-            // Get section elements (only 2 sections now)
-            const happyHourSection = document.getElementById('section-happyhour');
-            const infoSection = document.getElementById('section-info');
-
-            if (!scroller || !tabsEl || !happyHourSection || !infoSection) {
-                return;
-            }
-
-            const scrollTop = scroller.scrollTop;
-
-            // Calculate activation line: tabsHeight + 8px
-            const tabsHeight = tabsEl.offsetHeight || 47;
-            const activationLine = tabsHeight + 8;
-
-            // Compute infoTop relative to scroll container using getBoundingClientRect
-            const scrollerRect = scroller.getBoundingClientRect();
-            const infoRect = infoSection.getBoundingClientRect();
-            const infoTop = (infoRect.top - scrollerRect.top) + scrollTop;
-
-            // Active logic: if (scroller.scrollTop + activationLine >= infoTop) => Info active, else Happy Hour
-            let activeTab = (scrollTop + activationLine >= infoTop) ? 'info' : 'happyhour';
-
-            setActiveTab(activeTab);
-        }
-
-        // Helper function to set active tab using new .venue-tab selector
-        function setActiveTab(tabId) {
-            const tabsEl = document.getElementById('venue-tabs');
-            if (!tabsEl) return;
-
-            const tabButtons = tabsEl.querySelectorAll('.venue-tab');
-
-            tabButtons.forEach(button => {
-                if (button.dataset.tab === tabId) {
-                    button.classList.add('active');
+                // Determine active tab
+                if (scrollTop + activationLine >= infoTop) {
+                    activateTab(tabInfo, tabHappyHour);
                 } else {
-                    button.classList.remove('active');
+                    activateTab(tabHappyHour, tabInfo);
                 }
-            });
+            };
+
+            // Store reference and attach
+            scroller._venueTabScrollListener = scrollHandler;
+            scroller.addEventListener('scroll', scrollHandler);
+
+            // Run once immediately
+            scrollHandler();
         }
 
-        // Scroll to specific section
-        function scrollToSection(sectionName) {
-            // Use venue-detail-scroll as the scroller (confirmed by user)
+        // Activate tab using INLINE STYLES (brute-force reliable)
+        function activateTab(activeTab, inactiveTab) {
+            // Active tab
+            activeTab.style.borderBottom = '2px solid #1a73e8';
+            activeTab.style.fontWeight = '600';
+            activeTab.style.color = '#1a73e8';
+
+            // Inactive tab
+            inactiveTab.style.borderBottom = '2px solid transparent';
+            inactiveTab.style.fontWeight = '500';
+            inactiveTab.style.color = '#6b7280';
+        }
+
+        // Click-to-scroll handler
+        function scrollToVenueSection(sectionName) {
             const scroller = document.getElementById('venue-detail-scroll');
-            const tabsEl = document.getElementById('venue-tabs');
+            const tabsContainer = document.getElementById('venue-tabs');
             const section = document.getElementById(`section-${sectionName}`);
 
-            if (!section || !tabsEl || !scroller) return;
+            if (!scroller || !tabsContainer || !section) return;
 
-            // Calculate activation line: tabsHeight + 8px
-            const tabsHeight = tabsEl.offsetHeight || 47;
+            // Calculate activation line
+            const tabsHeight = tabsContainer.offsetHeight || 47;
             const activationLine = tabsHeight + 8;
 
-            // Get current scroll position
+            // Get section position
             const scrollTop = scroller.scrollTop;
-
-            // Calculate section position relative to scroll container using getBoundingClientRect
             const scrollerRect = scroller.getBoundingClientRect();
             const sectionRect = section.getBoundingClientRect();
             const sectionTop = (sectionRect.top - scrollerRect.top) + scrollTop;
 
-            // Scroll to: sectionTop - activationLine
-            const targetScrollTop = sectionTop - activationLine;
-
+            // Scroll inside scroller
             scroller.scrollTo({
-                top: targetScrollTop,
+                top: sectionTop - activationLine,
                 behavior: 'smooth'
             });
         }
