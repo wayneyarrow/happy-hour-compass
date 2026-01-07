@@ -13,6 +13,20 @@
             box-sizing: border-box;
         }
 
+        /* CSS variable for sticky header + tabs offset */
+        :root {
+            --sticky-offset: 104px; /* detail-page-header (56px) + venue-tabs (~48px) */
+        }
+
+        /* Scroll anchor for section jumps - positions section titles below sticky UI */
+        .scroll-anchor {
+            position: relative;
+            top: calc(-1 * var(--sticky-offset));
+            height: 1px;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             background-color: #f5f5f5;
@@ -1290,6 +1304,7 @@
                 <div class="venue-sections">
                     <!-- Happy Hour Section -->
                     <div class="venue-section" id="section-happyhour">
+                        <div class="scroll-anchor" id="anchor-happyhour" aria-hidden="true"></div>
                         <h3 class="section-title">Happy Hour</h3>
                         <div class="info-box" id="venue-happy-hour-box">
                             <strong>Happy Hour Times</strong><br>
@@ -1302,6 +1317,7 @@
 
                     <!-- Info Section -->
                     <div class="venue-section" id="section-info">
+                        <div class="scroll-anchor" id="anchor-info" aria-hidden="true"></div>
                         <h3 class="section-title">Info</h3>
                         <div class="venue-info-details">
                             <div class="info-row">
@@ -1734,20 +1750,22 @@
             }
         }
 
-        // Click handler - scrolls to section AND sets active tab
+        // Click handler - scrolls to anchor AND sets active tab
         function scrollToVenueSection(sectionName) {
-            const section = document.getElementById(`section-${sectionName}`);
+            // Target the scroll anchor (not the section) for proper positioning
+            const anchor = document.getElementById(`anchor-${sectionName}`);
 
-            if (!section) {
-                console.error(`Section not found: section-${sectionName}`);
+            if (!anchor) {
+                console.error(`Anchor not found: anchor-${sectionName}`);
                 return;
             }
 
             // Update active tab state
             setActiveVenueTab(sectionName);
 
-            // Scroll to section using scrollIntoView
-            section.scrollIntoView({
+            // Scroll to anchor using scrollIntoView
+            // This positions the section title below sticky header + tabs
+            anchor.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
             });
