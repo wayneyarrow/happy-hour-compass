@@ -1683,15 +1683,30 @@
             document.getElementById('venue-address-text').innerHTML = `📍 ${venue.address}`;
             document.getElementById('venue-phone-text').innerHTML = `📞 ${venue.phone}`;
 
-            // Reset scroll position and collapsible state
+            // Get scroll container reference
             const scrollContainer = document.getElementById('venue-detail-scroll');
-            scrollContainer.scrollTop = 0;
-            document.getElementById('venue-header-collapsible').classList.remove('collapsed');
+            const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
+            // Reset scroll position BEFORE showing screen
+            scrollContainer.scrollTop = 0;
+            collapsibleHeader.classList.remove('collapsed');
+
+            // Show screen
             showScreen('detail-screen');
 
-            // Force map initialization with multiple attempts
+            // CRITICAL: Force scroll reset AFTER screen is visible
+            // This prevents browser history restoration from overriding our reset
             requestAnimationFrame(() => {
+                scrollContainer.scrollTop = 0;
+                collapsibleHeader.classList.remove('collapsed');
+
+                // Also reset after a short delay to catch any delayed browser restore
+                setTimeout(() => {
+                    scrollContainer.scrollTop = 0;
+                    collapsibleHeader.classList.remove('collapsed');
+                }, 0);
+
+                // Initialize map
                 initializeVenueDetailMap();
                 setTimeout(initializeVenueDetailMap, 100);
                 setTimeout(initializeVenueDetailMap, 300);
@@ -1699,6 +1714,7 @@
             });
 
             // Setup tabs (click-only, no scroll tracking)
+            // This also resets active tab to Happy Hour default
             setupVenueDetailTabs();
         }
 
