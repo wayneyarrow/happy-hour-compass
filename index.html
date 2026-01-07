@@ -1281,16 +1281,16 @@
                 </div>
 
                 <!-- Sticky Section Nav -->
-                <div class="venue-section-nav" id="venue-section-nav">
-                    <button class="section-nav-item active" data-section="happy-hour" onclick="scrollToSection('happy-hour')">Happy Hour</button>
-                    <button class="section-nav-item" data-section="info" onclick="scrollToSection('info')">Info</button>
-                    <button class="section-nav-item" data-section="map" onclick="scrollToSection('map')">Map</button>
+                <div class="venue-section-nav" id="venue-tabs">
+                    <button class="section-nav-item venue-tab active" data-tab="happyhour" onclick="scrollToSection('happyhour')">Happy Hour</button>
+                    <button class="section-nav-item venue-tab" data-tab="info" onclick="scrollToSection('info')">Info</button>
+                    <button class="section-nav-item venue-tab" data-tab="map" onclick="scrollToSection('map')">Map</button>
                 </div>
 
                 <!-- Content Sections -->
                 <div class="venue-sections">
                     <!-- Happy Hour Section -->
-                    <div class="venue-section" id="section-happy-hour">
+                    <div class="venue-section" id="section-happyhour">
                         <h3 class="section-title">Happy Hour</h3>
                         <div class="info-box" id="venue-happy-hour-box">
                             <strong>Happy Hour Times</strong><br>
@@ -1672,10 +1672,14 @@
             document.getElementById('venue-header-collapsible').classList.remove('collapsed');
 
             // Reset section nav
-            document.querySelectorAll('.section-nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            document.querySelector('.section-nav-item[data-section="happy-hour"]').classList.add('active');
+            const tabsEl = document.getElementById('venue-tabs');
+            if (tabsEl) {
+                tabsEl.querySelectorAll('.venue-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                const firstTab = tabsEl.querySelector('.venue-tab[data-tab="happyhour"]');
+                if (firstTab) firstTab.classList.add('active');
+            }
 
             showScreen('detail-screen');
 
@@ -1699,20 +1703,25 @@
         function initializeVenueDetailScroll() {
             if (venueScrollListenerInitialized) return;
 
-            const scrollContainer = document.getElementById('venue-detail-scroll');
+            // Try both possible scroll containers
+            const scrollContainer = document.getElementById('list-content') || document.getElementById('venue-detail-scroll');
             const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
+            if (!scrollContainer) return;
+
             let lastScrollTop = 0;
-            const collapseThreshold = 180; // Increased from 100 to 180 for smoother feel
+            const collapseThreshold = 180;
 
             scrollContainer.addEventListener('scroll', function() {
                 const scrollTop = scrollContainer.scrollTop;
 
-                // Collapse/expand header based on scroll position
-                if (scrollTop > collapseThreshold) {
-                    collapsibleHeader.classList.add('collapsed');
-                } else {
-                    collapsibleHeader.classList.remove('collapsed');
+                // Collapse/expand header based on scroll position (if header exists)
+                if (collapsibleHeader) {
+                    if (scrollTop > collapseThreshold) {
+                        collapsibleHeader.classList.add('collapsed');
+                    } else {
+                        collapsibleHeader.classList.remove('collapsed');
+                    }
                 }
 
                 // Update active section indicator based on scroll position
@@ -1726,27 +1735,29 @@
 
         // Robust scroll-position based active section detection with explicit boundary logic
         function updateActiveSectionByScroll() {
-            const scrollContainer = document.getElementById('venue-detail-scroll');
+            // Try both possible scroll containers
+            const scroller = document.getElementById('list-content') || document.getElementById('venue-detail-scroll');
+            const tabsEl = document.getElementById('venue-tabs');
             const detailHeader = document.getElementById('venue-detail-header');
-            const sectionNav = document.getElementById('venue-section-nav');
 
-            // Get section elements
-            const happyHourSection = document.getElementById('section-happy-hour');
+            // Get section elements with both naming conventions
+            const happyHourSection = document.getElementById('section-happyhour') || document.getElementById('section-happy-hour');
             const infoSection = document.getElementById('section-info');
             const mapSection = document.getElementById('section-map');
 
-            if (!scrollContainer || !sectionNav || !happyHourSection || !infoSection || !mapSection) return;
+            if (!scroller || !tabsEl || !happyHourSection || !infoSection || !mapSection) return;
 
-            const scrollTop = scrollContainer.scrollTop;
-            const scrollHeight = scrollContainer.scrollHeight;
-            const clientHeight = scrollContainer.clientHeight;
+            const scrollTop = scroller.scrollTop;
+            const scrollHeight = scroller.scrollHeight;
+            const clientHeight = scroller.clientHeight;
 
-            // Calculate activation line: stickyTabsHeight + 8px
-            const sectionNavHeight = sectionNav.offsetHeight || 47;
-            const activationLine = sectionNavHeight + 8;
+            // Calculate activation line: headerHeight + tabsHeight + 8px
+            const headerHeight = detailHeader ? detailHeader.offsetHeight : 57;
+            const tabsHeight = tabsEl.offsetHeight || 47;
+            const activationLine = tabsHeight + 8;
 
             // Compute section positions relative to scroll container using getBoundingClientRect
-            const scrollerRect = scrollContainer.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
             const hhRect = happyHourSection.getBoundingClientRect();
             const infoRect = infoSection.getBoundingClientRect();
             const mapRect = mapSection.getBoundingClientRect();
@@ -1764,65 +1775,71 @@
             const nearBottom = distanceFromBottom <= 40;
 
             // Explicit scroll boundary logic
-            let activeSection = 'happy-hour'; // Default
+            let activeTab = 'happyhour'; // Default
 
             if (nearBottom) {
-                // Near bottom: force Map active
-                activeSection = 'map';
+                // Near bottom: force Map active (but only if not in Info range)
+                activeTab = 'map';
             } else if (y >= mapTop) {
                 // Scrolled past Map section top
-                activeSection = 'map';
+                activeTab = 'map';
             } else if (y >= infoTop) {
                 // Scrolled past Info section top
-                activeSection = 'info';
+                activeTab = 'info';
             } else {
                 // Before Info section: Happy Hour is active
-                activeSection = 'happy-hour';
+                activeTab = 'happyhour';
             }
 
-            setActiveTab(activeSection);
+            setActiveTab(activeTab);
         }
 
-        // Helper function to set active tab
-        function setActiveTab(sectionId) {
-            const navItems = document.querySelectorAll('.section-nav-item');
+        // Helper function to set active tab using new .venue-tab selector
+        function setActiveTab(tabId) {
+            const tabsEl = document.getElementById('venue-tabs');
+            if (!tabsEl) return;
 
-            navItems.forEach(item => {
-                if (item.dataset.section === sectionId) {
-                    item.classList.add('active');
+            const tabButtons = tabsEl.querySelectorAll('.venue-tab');
+
+            tabButtons.forEach(button => {
+                if (button.dataset.tab === tabId) {
+                    button.classList.add('active');
                 } else {
-                    item.classList.remove('active');
+                    button.classList.remove('active');
                 }
             });
         }
 
         // Scroll to specific section
         function scrollToSection(sectionName) {
-            const scrollContainer = document.getElementById('venue-detail-scroll');
+            // Try both possible scroll containers
+            const scroller = document.getElementById('list-content') || document.getElementById('venue-detail-scroll');
+            const tabsEl = document.getElementById('venue-tabs');
+            const detailHeader = document.getElementById('venue-detail-header');
             const section = document.getElementById(`section-${sectionName}`);
-            const sectionNav = document.getElementById('venue-section-nav');
 
-            if (section && sectionNav && scrollContainer) {
-                // Calculate activation line: sticky tabs + 8px
-                const sectionNavHeight = sectionNav.offsetHeight || 47;
-                const activationLine = sectionNavHeight + 8;
+            if (!section || !tabsEl || !scroller) return;
 
-                // Get current scroll position
-                const scrollTop = scrollContainer.scrollTop;
+            // Calculate activation line: headerHeight + tabsHeight + 8px
+            const headerHeight = detailHeader ? detailHeader.offsetHeight : 57;
+            const tabsHeight = tabsEl.offsetHeight || 47;
+            const activationLine = tabsHeight + 8;
 
-                // Calculate section position relative to scroll container using getBoundingClientRect
-                const scrollerRect = scrollContainer.getBoundingClientRect();
-                const sectionRect = section.getBoundingClientRect();
-                const sectionTop = sectionRect.top - scrollerRect.top + scrollTop;
+            // Get current scroll position
+            const scrollTop = scroller.scrollTop;
 
-                // Scroll to sectionTop - activationLine
-                const targetScrollTop = sectionTop - activationLine;
+            // Calculate section position relative to scroll container using getBoundingClientRect
+            const scrollerRect = scroller.getBoundingClientRect();
+            const sectionRect = section.getBoundingClientRect();
+            const sectionTop = sectionRect.top - scrollerRect.top + scrollTop;
 
-                scrollContainer.scrollTo({
-                    top: targetScrollTop,
-                    behavior: 'smooth'
-                });
-            }
+            // Scroll to sectionTop - activationLine
+            const targetScrollTop = sectionTop - activationLine;
+
+            scroller.scrollTo({
+                top: targetScrollTop,
+                behavior: 'smooth'
+            });
         }
 
         // Toggle venue favorite
