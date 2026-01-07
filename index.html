@@ -1741,22 +1741,27 @@
             const scrollHeight = scrollContainer.scrollHeight;
             const clientHeight = scrollContainer.clientHeight;
 
-            // Calculate activation line: sticky header + sticky tabs + 8px
-            const detailHeaderHeight = detailHeader ? detailHeader.offsetHeight : 57;
+            // Calculate activation line: stickyTabsHeight + 8px
             const sectionNavHeight = sectionNav.offsetHeight || 47;
             const activationLine = sectionNavHeight + 8;
 
-            // Compute absolute top offsets for each section (relative to scroll container)
-            const hhTop = happyHourSection.offsetTop;
-            const infoTop = infoSection.offsetTop;
-            const mapTop = mapSection.offsetTop;
+            // Compute section positions relative to scroll container using getBoundingClientRect
+            const scrollerRect = scrollContainer.getBoundingClientRect();
+            const hhRect = happyHourSection.getBoundingClientRect();
+            const infoRect = infoSection.getBoundingClientRect();
+            const mapRect = mapSection.getBoundingClientRect();
+
+            // Calculate positions relative to scroll container
+            const hhTop = hhRect.top - scrollerRect.top + scrollTop;
+            const infoTop = infoRect.top - scrollerRect.top + scrollTop;
+            const mapTop = mapRect.top - scrollerRect.top + scrollTop;
 
             // Current scroll position adjusted for activation line
             const y = scrollTop + activationLine;
 
-            // Bottom fallback: if within 80px of bottom, force Map active
+            // Bottom fallback: if within 40px of bottom, force Map active
             const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-            const nearBottom = distanceFromBottom <= 80;
+            const nearBottom = distanceFromBottom <= 40;
 
             // Explicit scroll boundary logic
             let activeSection = 'happy-hour'; // Default
@@ -1802,8 +1807,15 @@
                 const sectionNavHeight = sectionNav.offsetHeight || 47;
                 const activationLine = sectionNavHeight + 8;
 
+                // Get current scroll position
+                const scrollTop = scrollContainer.scrollTop;
+
+                // Calculate section position relative to scroll container using getBoundingClientRect
+                const scrollerRect = scrollContainer.getBoundingClientRect();
+                const sectionRect = section.getBoundingClientRect();
+                const sectionTop = sectionRect.top - scrollerRect.top + scrollTop;
+
                 // Scroll to sectionTop - activationLine
-                const sectionTop = section.offsetTop;
                 const targetScrollTop = sectionTop - activationLine;
 
                 scrollContainer.scrollTo({
