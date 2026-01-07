@@ -87,6 +87,277 @@
             margin-left: 12px;
         }
 
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .header-icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .header-icon-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .header-icon-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: none;
+            stroke: #374151;
+            stroke-width: 2;
+        }
+
+        .header-icon-btn.favorited svg {
+            fill: #ef4444;
+            stroke: #ef4444;
+        }
+
+        .venue-detail-scroll {
+            height: calc(100vh - 57px);
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .venue-header-collapsible {
+            background: white;
+            transition: opacity 0.3s ease, max-height 0.3s ease;
+        }
+
+        .venue-header-collapsible.collapsed {
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .venue-hero-image {
+            width: 100%;
+            height: 240px;
+            background-size: cover;
+            background-position: center;
+            background-color: #e5e7eb;
+        }
+
+        .venue-name-section {
+            padding: 20px 20px 12px;
+        }
+
+        .venue-name-large {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 8px 0;
+            line-height: 1.2;
+        }
+
+        .venue-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        .venue-action-buttons {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px 20px;
+        }
+
+        .venue-action-btn {
+            flex: 1;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .venue-action-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        .venue-action-btn svg {
+            flex-shrink: 0;
+        }
+
+        .venue-section-nav {
+            position: sticky;
+            top: 0;
+            background: white;
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 10;
+        }
+
+        .section-nav-item {
+            flex: 1;
+            background: none;
+            border: none;
+            padding: 14px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .section-nav-item:hover {
+            color: #374151;
+        }
+
+        .section-nav-item.active {
+            color: #3b82f6;
+        }
+
+        .section-nav-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #3b82f6;
+        }
+
+        .venue-sections {
+            background: white;
+        }
+
+        .venue-section {
+            padding: 20px;
+            min-height: 200px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 16px 0;
+        }
+
+        .venue-info-details {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .info-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-row.clickable {
+            cursor: pointer;
+            padding: 8px;
+            margin: -8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .info-row.clickable:hover {
+            background: #f9fafb;
+        }
+
+        .info-row strong {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .info-row div {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .venue-map-embed {
+            height: 200px;
+            width: 100%;
+            border-radius: 8px;
+            border: 3px solid #10b981;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .venue-map-embed:hover {
+            transform: scale(1.01);
+        }
+
+        .map-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-modal-header {
+            background: white;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .map-modal-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0;
+        }
+
+        .map-modal-close {
+            background: none;
+            border: none;
+            color: #3b82f6;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .map-modal-close:hover {
+            background: #f3f4f6;
+        }
+
+        .map-modal-content {
+            flex: 1;
+            position: relative;
+        }
+
         .logo-container {
             display: flex;
             align-items: center;
@@ -946,39 +1217,17 @@
 
         <!-- Venue Detail Screen -->
         <div class="screen" id="detail-screen">
-            <div class="detail-page-header">
+            <div class="detail-page-header" id="venue-detail-header">
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="venue-detail-title">Venue Details</h1>
-            </div>
-            <div class="content">
-                <div class="hero" id="venue-hero">
-                    <div class="hero-icon" id="venue-hero-icon">🍽️</div>
-                    <div class="hero-title" id="venue-hero-title">Venue Name</div>
-                    <div class="hero-subtitle" id="venue-hero-subtitle">Restaurant Type</div>
-                </div>
-                <div class="venue-info">
-                    <div class="venue-title" id="venue-info-title">Venue Name</div>
-                    <div class="venue-address" id="venue-info-address">
-                        📍 Address will appear here<br>
-                        📞 Phone number
-                    </div>
-                </div>
-                <div class="info-box" id="venue-info-box">
-                    <strong>Happy Hour Times</strong><br>
-                    Details will appear here<br><br>
-                    <strong>Current Specials</strong><br>
-                    • Specials will be listed here
-                </div>
-                <div class="action-buttons">
-                    <button class="btn btn-primary">Make Reservation</button>
-                    <button class="btn btn-secondary">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                <div class="header-actions">
+                    <button class="header-icon-btn" id="venue-favorite-btn" onclick="toggleVenueFavorite(event)">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                         </svg>
-                        Save
                     </button>
-                    <button class="btn btn-share">
-                        <svg width="14" height="14" viewBox="0 0 100 100" fill="currentColor" style="margin-right: 6px;">
+                    <button class="header-icon-btn" onclick="shareVenue()">
+                        <svg viewBox="0 0 100 100" fill="currentColor">
                             <circle cx="20" cy="20" r="12"/>
                             <circle cx="80" cy="20" r="12"/>
                             <circle cx="50" cy="80" r="12"/>
@@ -986,10 +1235,108 @@
                             <line x1="26" y1="32" x2="44" y2="68" stroke="currentColor" stroke-width="6"/>
                             <line x1="74" y1="32" x2="56" y2="68" stroke="currentColor" stroke-width="6"/>
                         </svg>
-                        Share
                     </button>
                 </div>
-                <div id="detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
+            </div>
+
+            <div class="venue-detail-scroll" id="venue-detail-scroll">
+                <!-- Collapsible Header Content -->
+                <div class="venue-header-collapsible" id="venue-header-collapsible">
+                    <div class="venue-hero-image" id="venue-hero-image"></div>
+                    <div class="venue-name-section">
+                        <h2 class="venue-name-large" id="venue-name-large">Venue Name</h2>
+                        <div class="venue-meta-row" id="venue-meta-row">
+                            <span class="status-badge status-open" id="venue-status">Open Now</span>
+                            <span class="distance-prominent" id="venue-distance">0.3 km</span>
+                            <span class="category-tag" id="venue-category">• Category</span>
+                        </div>
+                    </div>
+                    <div class="venue-action-buttons" id="venue-action-buttons">
+                        <button class="venue-action-btn" id="venue-btn-reservation">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span>Reserve</span>
+                        </button>
+                        <button class="venue-action-btn" id="venue-btn-call" onclick="callVenue()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Call</span>
+                        </button>
+                        <button class="venue-action-btn" id="venue-btn-website" onclick="openVenueWebsite()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            <span>Website</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sticky Section Nav -->
+                <div class="venue-section-nav" id="venue-section-nav">
+                    <button class="section-nav-item active" data-section="happy-hour" onclick="scrollToSection('happy-hour')">Happy Hour</button>
+                    <button class="section-nav-item" data-section="info" onclick="scrollToSection('info')">Info</button>
+                    <button class="section-nav-item" data-section="map" onclick="scrollToSection('map')">Map</button>
+                </div>
+
+                <!-- Content Sections -->
+                <div class="venue-sections">
+                    <!-- Happy Hour Section -->
+                    <div class="venue-section" id="section-happy-hour">
+                        <h3 class="section-title">Happy Hour</h3>
+                        <div class="info-box" id="venue-happy-hour-box">
+                            <strong>Happy Hour Times</strong><br>
+                            Monday - Friday: 3:00 PM - 6:00 PM<br><br>
+                            <strong>Current Specials</strong><br>
+                            • $6 appetizers<br>
+                            • $5 house wine & beer
+                        </div>
+                    </div>
+
+                    <!-- Info Section -->
+                    <div class="venue-section" id="section-info">
+                        <h3 class="section-title">Info</h3>
+                        <div class="venue-info-details">
+                            <div class="info-row">
+                                <strong>Hours</strong>
+                                <div id="venue-hours-text">Monday - Friday: 3:00 PM - 6:00 PM</div>
+                            </div>
+                            <div class="info-row clickable" onclick="openMapApp()">
+                                <strong>Address</strong>
+                                <div id="venue-address-text">
+                                    📍 532 Bernard Ave, Kelowna, BC
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <strong>Phone</strong>
+                                <div id="venue-phone-text">
+                                    📞 (250) 763-1442
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map Section -->
+                    <div class="venue-section" id="section-map">
+                        <h3 class="section-title">Map</h3>
+                        <div id="detail-map" class="venue-map-embed" onclick="expandMap()"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expanded Map Modal -->
+            <div class="map-modal" id="map-modal" style="display: none;">
+                <div class="map-modal-header">
+                    <h2 id="map-modal-title">Venue Location</h2>
+                    <button class="map-modal-close" onclick="closeExpandedMap()">✕</button>
+                </div>
+                <div id="detail-map-expanded" class="map-modal-content"></div>
             </div>
         </div>
 
@@ -1276,20 +1623,65 @@
             `;
         }
 
+        // Store current venue for actions
+        let currentVenue = null;
+        let currentVenueName = null;
+
         function showVenueDetail(venueName) {
             const venue = venues[venueName];
             if (!venue) return;
 
+            currentVenue = venue;
+            currentVenueName = venueName;
+
+            // Update header
             document.getElementById('venue-detail-title').textContent = venueName;
-            document.getElementById('venue-hero-title').textContent = venueName;
-            document.getElementById('venue-hero-subtitle').textContent = venue.type;
-            document.getElementById('venue-hero-icon').textContent = venue.icon;
-            document.getElementById('venue-info-title').textContent = venueName;
-            document.getElementById('venue-info-address').innerHTML = `📍 ${venue.address}<br>📞 ${venue.phone}`;
-            document.getElementById('venue-info-box').innerHTML = `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
+
+            // Update hero image - use category-based images like listings
+            const heroImage = document.getElementById('venue-hero-image');
+            let imagePath = 'images/default-1.jpg';
+            if (venue.type.includes('Fine Dining') || venue.type.includes('Upscale')) {
+                imagePath = 'images/fine-dining-1.jpg';
+            } else if (venue.type.includes('Sports Bar')) {
+                imagePath = 'images/sports-bar-1.jpg';
+            } else if (venue.type.includes('Casual') || venue.type.includes('Family')) {
+                imagePath = 'images/casual-dining-1.jpg';
+            }
+            heroImage.style.backgroundImage = `url('${imagePath}')`;
+
+            // Update venue name and meta
+            document.getElementById('venue-name-large').textContent = venueName;
+            document.getElementById('venue-status').textContent = 'Open Now';
+            document.getElementById('venue-distance').textContent = '0.3 km';
+            document.getElementById('venue-category').textContent = `• ${venue.type}`;
+
+            // Update Happy Hour section
+            document.getElementById('venue-happy-hour-box').innerHTML =
+                `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
+
+            // Update Info section
+            document.getElementById('venue-hours-text').innerHTML = venue.hours;
+            document.getElementById('venue-address-text').innerHTML = `📍 ${venue.address}`;
+            document.getElementById('venue-phone-text').innerHTML = `📞 ${venue.phone}`;
+
+            // Reset scroll position and collapsible state
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            scrollContainer.scrollTop = 0;
+            document.getElementById('venue-header-collapsible').classList.remove('collapsed');
+
+            // Reset section nav
+            document.querySelectorAll('.section-nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector('.section-nav-item[data-section="happy-hour"]').classList.add('active');
 
             showScreen('detail-screen');
-            
+
+            // Initialize scroll listener
+            setTimeout(() => {
+                initializeVenueDetailScroll();
+            }, 100);
+
             // Force map initialization with multiple attempts
             requestAnimationFrame(() => {
                 initializeVenueDetailMap();
@@ -1297,6 +1689,172 @@
                 setTimeout(initializeVenueDetailMap, 300);
                 setTimeout(initializeVenueDetailMap, 500);
             });
+        }
+
+        // Venue Detail Scroll Behavior
+        let venueScrollListenerInitialized = false;
+
+        function initializeVenueDetailScroll() {
+            if (venueScrollListenerInitialized) return;
+
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            const collapsibleHeader = document.getElementById('venue-header-collapsible');
+            const sectionNav = document.getElementById('venue-section-nav');
+
+            let lastScrollTop = 0;
+            const collapseThreshold = 100;
+
+            scrollContainer.addEventListener('scroll', function() {
+                const scrollTop = scrollContainer.scrollTop;
+
+                // Collapse/expand header based on scroll position
+                if (scrollTop > collapseThreshold) {
+                    collapsibleHeader.classList.add('collapsed');
+                } else {
+                    collapsibleHeader.classList.remove('collapsed');
+                }
+
+                // Update active section indicator
+                updateActiveSectionNav();
+
+                lastScrollTop = scrollTop;
+            });
+
+            venueScrollListenerInitialized = true;
+        }
+
+        // Update section nav indicator based on scroll position
+        function updateActiveSectionNav() {
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            const sections = document.querySelectorAll('.venue-section');
+            const navItems = document.querySelectorAll('.section-nav-item');
+
+            let currentSection = 'happy-hour';
+            const scrollTop = scrollContainer.scrollTop;
+            const sectionNavHeight = document.getElementById('venue-section-nav').offsetHeight;
+
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - sectionNavHeight - 10;
+                const sectionBottom = sectionTop + section.offsetHeight;
+
+                if (scrollTop >= sectionTop && scrollTop < sectionBottom) {
+                    currentSection = section.id.replace('section-', '');
+                }
+            });
+
+            navItems.forEach(item => {
+                if (item.dataset.section === currentSection) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        // Scroll to specific section
+        function scrollToSection(sectionName) {
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            const section = document.getElementById(`section-${sectionName}`);
+            const sectionNav = document.getElementById('venue-section-nav');
+
+            if (section) {
+                const sectionTop = section.offsetTop - sectionNav.offsetHeight;
+                scrollContainer.scrollTo({
+                    top: sectionTop,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        // Toggle venue favorite
+        function toggleVenueFavorite(event) {
+            event.stopPropagation();
+            const btn = document.getElementById('venue-favorite-btn');
+            btn.classList.toggle('favorited');
+        }
+
+        // Share venue
+        function shareVenue() {
+            if (currentVenueName && navigator.share) {
+                navigator.share({
+                    title: currentVenueName,
+                    text: `Check out ${currentVenueName} on Happy Hour Compass!`,
+                    url: window.location.href
+                }).catch(err => console.log('Error sharing:', err));
+            } else {
+                alert(`Share: ${currentVenueName}`);
+            }
+        }
+
+        // Call venue
+        function callVenue() {
+            if (currentVenue && currentVenue.phone) {
+                window.location.href = `tel:${currentVenue.phone}`;
+            }
+        }
+
+        // Open venue website
+        function openVenueWebsite() {
+            alert('Website feature coming soon!');
+        }
+
+        // Open map app with venue address
+        function openMapApp() {
+            if (currentVenue && currentVenue.address) {
+                const address = encodeURIComponent(currentVenue.address);
+                window.open(`https://maps.google.com/?q=${address}`, '_blank');
+            }
+        }
+
+        // Expand map to full view
+        function expandMap() {
+            const modal = document.getElementById('map-modal');
+            modal.style.display = 'flex';
+            document.getElementById('map-modal-title').textContent = currentVenueName || 'Venue Location';
+
+            // Initialize expanded map
+            setTimeout(() => {
+                initializeExpandedMap();
+            }, 100);
+        }
+
+        // Close expanded map
+        function closeExpandedMap() {
+            const modal = document.getElementById('map-modal');
+            modal.style.display = 'none';
+        }
+
+        // Initialize expanded map
+        let expandedMap = null;
+        function initializeExpandedMap() {
+            const container = document.getElementById('detail-map-expanded');
+
+            if (!container) return;
+
+            if (expandedMap) {
+                expandedMap.remove();
+            }
+
+            expandedMap = L.map('detail-map-expanded').setView([49.8880, -119.4960], 15);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(expandedMap);
+
+            const customIcon = L.divIcon({
+                className: 'custom-marker',
+                html: createCustomMarker(),
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+
+            L.marker([49.8880, -119.4960], { icon: customIcon }).addTo(expandedMap);
+
+            setTimeout(() => {
+                if (expandedMap) {
+                    expandedMap.invalidateSize();
+                }
+            }, 100);
         }
 
         function showEventDetail(eventName) {
