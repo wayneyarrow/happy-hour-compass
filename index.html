@@ -1695,6 +1695,7 @@
 
         // Venue Detail Scroll Behavior
         let venueScrollListenerInitialized = false;
+        let sectionObserver = null;
 
         function initializeVenueDetailScroll() {
             if (venueScrollListenerInitialized) return;
@@ -1716,38 +1717,96 @@
                     collapsibleHeader.classList.remove('collapsed');
                 }
 
-                // Update active section indicator
-                updateActiveSectionNav();
-
                 lastScrollTop = scrollTop;
             });
+
+            // Initialize IntersectionObserver for section detection
+            initializeSectionObserver();
 
             venueScrollListenerInitialized = true;
         }
 
-        // Update section nav indicator based on scroll position
-        function updateActiveSectionNav() {
+        // Initialize IntersectionObserver for robust section detection
+        function initializeSectionObserver() {
             const scrollContainer = document.getElementById('venue-detail-scroll');
             const sections = document.querySelectorAll('.venue-section');
+            const sectionNav = document.getElementById('venue-section-nav');
+
+            if (!sections.length || !sectionNav) return;
+
+            // Disconnect existing observer if any
+            if (sectionObserver) {
+                sectionObserver.disconnect();
+            }
+
+            // Calculate sticky header height (sticky nav bar)
+            const stickyOffset = sectionNav.offsetHeight;
+
+            // Track which sections are currently intersecting
+            const intersectingSections = new Set();
+
+            // Use IntersectionObserver with rootMargin to account for sticky nav
+            const observerOptions = {
+                root: scrollContainer,
+                // Negative top margin accounts for sticky nav, creates detection line just below it
+                // Bottom margin ensures we detect when approaching the end
+                rootMargin: `-${stickyOffset + 10}px 0px -50% 0px`,
+                threshold: [0, 0.25, 0.5, 0.75, 1.0]
+            };
+
+            sectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const sectionId = entry.target.id.replace('section-', '');
+
+                    if (entry.isIntersecting) {
+                        intersectingSections.add(sectionId);
+                    } else {
+                        intersectingSections.delete(sectionId);
+                    }
+                });
+
+                // Update active indicator based on intersecting sections
+                updateActiveSectionIndicator(intersectingSections);
+            }, observerOptions);
+
+            // Observe all sections
+            sections.forEach(section => {
+                sectionObserver.observe(section);
+            });
+        }
+
+        // Update active section indicator based on intersecting sections
+        function updateActiveSectionIndicator(intersectingSections) {
             const navItems = document.querySelectorAll('.section-nav-item');
 
-            let currentSection = 'happy-hour';
-            const scrollTop = scrollContainer.scrollTop;
-            const sectionNav = document.getElementById('venue-section-nav');
-            const sectionNavHeight = sectionNav ? sectionNav.offsetHeight : 0;
-            const offset = 60; // Extra offset to account for section title visibility
+            // Determine active section based on what's visible
+            let activeSection = 'happy-hour'; // Default
 
-            sections.forEach(section => {
-                const sectionTop = section.offsetTop - sectionNavHeight - offset;
-                const sectionBottom = sectionTop + section.offsetHeight;
-
-                if (scrollTop >= sectionTop && scrollTop < sectionBottom) {
-                    currentSection = section.id.replace('section-', '');
+            if (intersectingSections.size === 0) {
+                // Nothing intersecting, keep current or default to happy-hour
+                activeSection = 'happy-hour';
+            } else if (intersectingSections.size === 1) {
+                // Only one section visible - activate it
+                activeSection = Array.from(intersectingSections)[0];
+            } else {
+                // Multiple sections visible - use priority order
+                // When scrolling down: happy-hour -> info -> map
+                // Activate the "later" section in the priority order
+                if (intersectingSections.has('map')) {
+                    // Map has highest scroll priority when visible
+                    activeSection = 'map';
+                } else if (intersectingSections.has('info')) {
+                    // Info is second priority
+                    activeSection = 'info';
+                } else if (intersectingSections.has('happy-hour')) {
+                    // Happy hour is default/first
+                    activeSection = 'happy-hour';
                 }
-            });
+            }
 
+            // Update nav items
             navItems.forEach(item => {
-                if (item.dataset.section === currentSection) {
+                if (item.dataset.section === activeSection) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
