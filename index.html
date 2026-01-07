@@ -1543,13 +1543,18 @@
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
-            
+
             previousScreen = currentScreen;
             currentScreen = screenId;
-            
+
             document.getElementById(screenId).classList.add('active');
-            
+
             updateNavHighlighting(screenId);
+
+            // Stop venue tab tracker when leaving detail screen
+            if (screenId !== 'detail-screen') {
+                stopVenueTabTracker();
+            }
         }
 
         function initializeVenueDetailMap() {
@@ -1689,11 +1694,14 @@
         }
 
         // ========================================
-        // BRUTE-FORCE RELIABLE 2-TAB TRACKER
+        // BULLETPROOF VIEWPORT-BASED 2-TAB TRACKER
         // ========================================
-        let twoTabTrackerActive = false;
+        let venueTabUpdateLoop = null;
 
         function setupVenueDetailTwoTabTracker() {
+            // Stop any existing loop
+            stopVenueTabTracker();
+
             // Get elements by explicit IDs
             const scroller = document.getElementById('venue-detail-scroll');
             const tabHappyHour = document.getElementById('tab-happyhour');
@@ -1704,26 +1712,24 @@
             const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
             if (!scroller || !tabHappyHour || !tabInfo || !sectionHappyHour || !sectionInfo || !tabsContainer) {
-                console.error('2-Tab Tracker: Missing elements');
+                console.error('VENUE TAB TRACKER FAILED: Missing elements', {
+                    scroller: !!scroller,
+                    tabHappyHour: !!tabHappyHour,
+                    tabInfo: !!tabInfo,
+                    sectionHappyHour: !!sectionHappyHour,
+                    sectionInfo: !!sectionInfo,
+                    tabsContainer: !!tabsContainer
+                });
                 return;
             }
-
-            // Mark tracker as active
-            twoTabTrackerActive = true;
 
             // Set initial state (Happy Hour active)
             activateTab(tabHappyHour, tabInfo);
 
-            // Remove any existing listeners by cloning
-            if (scroller._venueTabScrollListener) {
-                scroller.removeEventListener('scroll', scroller._venueTabScrollListener);
-            }
-
-            // Create scroll handler
-            const scrollHandler = function() {
+            // Update function using VIEWPORT-BASED VISIBILITY
+            const updateActiveTab = function() {
+                // Collapse header based on scroll position
                 const scrollTop = scroller.scrollTop;
-
-                // Collapse header logic
                 if (collapsibleHeader) {
                     if (scrollTop > 180) {
                         collapsibleHeader.classList.add('collapsed');
@@ -1732,33 +1738,43 @@
                     }
                 }
 
-                // Calculate activation line
-                const tabsHeight = tabsContainer.offsetHeight || 47;
-                const activationLine = tabsHeight + 8;
-
-                // Get Info section position relative to scroller
-                const scrollerRect = scroller.getBoundingClientRect();
+                // Get viewport positions (what user actually sees)
+                const tabsRect = tabsContainer.getBoundingClientRect();
                 const infoRect = sectionInfo.getBoundingClientRect();
-                const infoTop = (infoRect.top - scrollerRect.top) + scrollTop;
 
-                // Determine active tab
-                if (scrollTop + activationLine >= infoTop) {
+                // Calculate activation line (bottom of tabs + small buffer)
+                const activationY = tabsRect.bottom + 8;
+
+                // Determine active tab based on what's visible
+                // If Info section top is at or above activation line -> Info is visible
+                if (infoRect.top <= activationY) {
                     activateTab(tabInfo, tabHappyHour);
                 } else {
                     activateTab(tabHappyHour, tabInfo);
                 }
             };
 
-            // Store reference and attach
-            scroller._venueTabScrollListener = scrollHandler;
-            scroller.addEventListener('scroll', scrollHandler);
+            // Start rAF loop for resilient updates
+            const loop = function() {
+                updateActiveTab();
+                venueTabUpdateLoop = requestAnimationFrame(loop);
+            };
 
-            // Run once immediately
-            scrollHandler();
+            // Start the loop
+            loop();
+        }
+
+        function stopVenueTabTracker() {
+            if (venueTabUpdateLoop !== null) {
+                cancelAnimationFrame(venueTabUpdateLoop);
+                venueTabUpdateLoop = null;
+            }
         }
 
         // Activate tab using INLINE STYLES (brute-force reliable)
         function activateTab(activeTab, inactiveTab) {
+            if (!activeTab || !inactiveTab) return;
+
             // Active tab
             activeTab.style.borderBottom = '2px solid #1a73e8';
             activeTab.style.fontWeight = '600';
