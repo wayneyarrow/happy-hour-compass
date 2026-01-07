@@ -1724,50 +1724,55 @@
             venueScrollListenerInitialized = true;
         }
 
-        // Robust scroll-position based active section detection
+        // Robust scroll-position based active section detection with explicit boundary logic
         function updateActiveSectionByScroll() {
             const scrollContainer = document.getElementById('venue-detail-scroll');
+            const detailHeader = document.getElementById('venue-detail-header');
             const sectionNav = document.getElementById('venue-section-nav');
-            const sections = [
-                { id: 'happy-hour', element: document.getElementById('section-happy-hour') },
-                { id: 'info', element: document.getElementById('section-info') },
-                { id: 'map', element: document.getElementById('section-map') }
-            ];
 
-            if (!scrollContainer || !sectionNav) return;
+            // Get section elements
+            const happyHourSection = document.getElementById('section-happy-hour');
+            const infoSection = document.getElementById('section-info');
+            const mapSection = document.getElementById('section-map');
+
+            if (!scrollContainer || !sectionNav || !happyHourSection || !infoSection || !mapSection) return;
 
             const scrollTop = scrollContainer.scrollTop;
             const scrollHeight = scrollContainer.scrollHeight;
             const clientHeight = scrollContainer.clientHeight;
 
-            // Calculate the activation line (sticky header + sticky nav + small padding)
-            const detailHeaderHeight = 57; // detail-page-header height
+            // Calculate activation line: sticky header + sticky tabs + 8px
+            const detailHeaderHeight = detailHeader ? detailHeader.offsetHeight : 57;
             const sectionNavHeight = sectionNav.offsetHeight || 47;
-            const activationLine = sectionNavHeight + 20; // 20px padding below nav
+            const activationLine = sectionNavHeight + 8;
 
-            // Bottom-of-page fallback: if within 80px of bottom, force Map active
+            // Compute absolute top offsets for each section (relative to scroll container)
+            const hhTop = happyHourSection.offsetTop;
+            const infoTop = infoSection.offsetTop;
+            const mapTop = mapSection.offsetTop;
+
+            // Current scroll position adjusted for activation line
+            const y = scrollTop + activationLine;
+
+            // Bottom fallback: if within 80px of bottom, force Map active
             const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-            if (distanceFromBottom <= 80) {
-                setActiveTab('map');
-                return;
-            }
+            const nearBottom = distanceFromBottom <= 80;
 
-            // Find the last section whose top is at or above the activation line
+            // Explicit scroll boundary logic
             let activeSection = 'happy-hour'; // Default
 
-            for (let i = sections.length - 1; i >= 0; i--) {
-                const section = sections[i];
-                if (!section.element) continue;
-
-                // Get section's position relative to scroll container
-                const sectionTop = section.element.offsetTop;
-                const sectionScrollPosition = sectionTop - scrollTop;
-
-                // If section top is at or above activation line, it's the active one
-                if (sectionScrollPosition <= activationLine) {
-                    activeSection = section.id;
-                    break;
-                }
+            if (nearBottom) {
+                // Near bottom: force Map active
+                activeSection = 'map';
+            } else if (y >= mapTop) {
+                // Scrolled past Map section top
+                activeSection = 'map';
+            } else if (y >= infoTop) {
+                // Scrolled past Info section top
+                activeSection = 'info';
+            } else {
+                // Before Info section: Happy Hour is active
+                activeSection = 'happy-hour';
             }
 
             setActiveTab(activeSection);
@@ -1791,20 +1796,18 @@
             const scrollContainer = document.getElementById('venue-detail-scroll');
             const section = document.getElementById(`section-${sectionName}`);
             const sectionNav = document.getElementById('venue-section-nav');
-            const collapsibleHeader = document.getElementById('venue-header-collapsible');
 
-            if (section && sectionNav) {
-                // Calculate the proper offset
-                const sectionNavHeight = sectionNav.offsetHeight;
-                const isCollapsed = collapsibleHeader.classList.contains('collapsed');
+            if (section && sectionNav && scrollContainer) {
+                // Calculate activation line: sticky tabs + 8px
+                const sectionNavHeight = sectionNav.offsetHeight || 47;
+                const activationLine = sectionNavHeight + 8;
 
-                // When collapsed, section nav is at top; when expanded, account for collapsible header
-                const offset = isCollapsed ? sectionNavHeight + 10 : sectionNavHeight + 10;
-
-                const sectionTop = section.offsetTop - offset;
+                // Scroll to sectionTop - activationLine
+                const sectionTop = section.offsetTop;
+                const targetScrollTop = sectionTop - activationLine;
 
                 scrollContainer.scrollTo({
-                    top: sectionTop,
+                    top: targetScrollTop,
                     behavior: 'smooth'
                 });
             }
