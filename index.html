@@ -438,68 +438,6 @@
             color: #6b7280;
         }
 
-        /* Location card - replaces embedded map */
-        .location-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 24px;
-            border: 1px solid #e5e7eb;
-        }
-
-        .location-card-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .location-card-address {
-            font-size: 16px;
-            font-weight: 500;
-            color: #111827;
-            margin-bottom: 16px;
-            line-height: 1.5;
-        }
-
-        .location-card-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .location-action-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background: white;
-            border: 1.5px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .location-action-btn:hover {
-            border-color: #3b82f6;
-            background: #eff6ff;
-            color: #3b82f6;
-        }
-
-        .location-action-btn:active {
-            transform: scale(0.98);
-        }
-
-        .location-btn-icon {
-            font-size: 18px;
-        }
-
         .info-row.clickable {
             cursor: pointer;
             padding: 8px;
@@ -2140,12 +2078,6 @@
 
             // Render Info section with conditional rows
             renderVenueInfo(venue);
-
-            // Update location card address
-            const locationAddress = document.getElementById('location-card-address');
-            if (locationAddress && venue.address) {
-                locationAddress.textContent = venue.address;
-            }
 
             // Get scroll container reference
             const scrollContainer = document.getElementById('venue-detail-scroll');
