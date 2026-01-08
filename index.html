@@ -461,6 +461,14 @@
             color: #2563eb;
         }
 
+        /* Happy Hour section headings (Times + Specials) */
+        .hh-section-heading {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+
         .hours-toggle:hover {
             color: #2563eb;
         }
@@ -2189,7 +2197,7 @@
             // Build specials HTML
             let specialsHtml = '';
             if (venue.specialsFood || venue.specialsDrinks) {
-                specialsHtml = '<div style="margin-top: 20px;"><strong>Happy Hour Specials</strong></div>';
+                specialsHtml = '<div class="hh-section-heading" style="margin-top: 20px;">Happy Hour Specials</div>';
 
                 if (venue.specialsFood && venue.specialsFood.length > 0) {
                     specialsHtml += '<div style="margin-top: 12px; font-weight: 600; font-size: 13px; color: #374151;">Food</div>';
@@ -2205,7 +2213,7 @@
             // TODO: "Today: <status> + Show full schedule" row intentionally mirrors Business Hours layout for consistency and scannability
             return `
                 <div>
-                    <div class="info-row-label">Happy Hour Times</div>
+                    <div class="hh-section-heading">Happy Hour Times</div>
                     <div class="hh-header-row">
                         <div class="hh-status-left">
                             <span class="hh-today-label">Today:</span>
