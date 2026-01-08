@@ -389,6 +389,19 @@
             color: #ef4444;
         }
 
+        /* Happy Hour status colors */
+        .hours-status-badge.hh-status-on-now {
+            color: #10b981;  /* Green - HH is happening now */
+        }
+
+        .hours-status-badge.hh-status-neutral {
+            color: #111827;  /* Dark gray - starts later or ended */
+        }
+
+        .hours-status-badge.hh-status-none-today {
+            color: #9ca3af;  /* Light gray - no HH today */
+        }
+
         .hours-status-text {
             font-size: 15px;
             font-weight: 500;
@@ -1633,6 +1646,18 @@
                 phone: '(250) 763-1442',
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
                 specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails',
+                // TODO: HH data structure supports 0-2 windows per day for multi-window venues
+                happyHourWeekly: {
+                    'Sunday': [],  // No happy hour
+                    'Monday': [{start: '15:00', end: '18:00'}],  // 3-6 PM (single window)
+                    'Tuesday': [{start: '15:00', end: '18:00'}],
+                    'Wednesday': [{start: '15:00', end: '18:00'}],
+                    'Thursday': [{start: '15:00', end: '18:00'}],
+                    'Friday': [{start: '15:00', end: '18:00'}, {start: '21:00', end: 'close'}],  // Two windows: 3-6 PM + 9 PM-close
+                    'Saturday': [{start: '14:00', end: '17:00'}]  // 2-5 PM
+                },
+                specialsFood: ['$6 appetizers', '$8 gourmet burgers'],
+                specialsDrinks: ['$5 house wine & beer', '$8 signature cocktails'],
                 // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 11:00 PM',
@@ -1654,6 +1679,17 @@
                 phone: '(250) 860-7768',
                 hours: 'Monday - Friday: 2:00 PM - 5:00 PM<br>Saturday - Sunday: 1:00 PM - 4:00 PM',
                 specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails',
+                happyHourWeekly: {
+                    'Sunday': [{start: '13:00', end: '16:00'}],  // 1-4 PM
+                    'Monday': [{start: '14:00', end: '17:00'}],  // 2-5 PM
+                    'Tuesday': [{start: '14:00', end: '17:00'}],
+                    'Wednesday': [{start: '14:00', end: '17:00'}],
+                    'Thursday': [{start: '14:00', end: '17:00'}],
+                    'Friday': [{start: '14:00', end: '17:00'}],
+                    'Saturday': [{start: '13:00', end: '16:00'}]  // 1-4 PM
+                },
+                specialsFood: ['$4 chicken wings', '$5 nachos'],
+                specialsDrinks: ['$3.50 draft beer', '$5 cocktails'],
                 // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '7:00 AM - 11:00 PM',
@@ -1675,6 +1711,17 @@
                 phone: '(250) 717-5687',
                 hours: 'Monday - Sunday: 4:00 PM - 7:00 PM',
                 specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters',
+                happyHourWeekly: {
+                    'Sunday': [{start: '16:00', end: '19:00'}],  // 4-7 PM
+                    'Monday': [{start: '16:00', end: '19:00'}],
+                    'Tuesday': [{start: '16:00', end: '19:00'}],
+                    'Wednesday': [],  // No happy hour on Wednesday (demo 0 windows)
+                    'Thursday': [{start: '16:00', end: '19:00'}],
+                    'Friday': [{start: '16:00', end: '19:00'}],
+                    'Saturday': [{start: '16:00', end: '19:00'}]
+                },
+                specialsFood: ['$8 gourmet burgers', '$6 appetizer platters', '$0.50 wings (min 10)'],
+                specialsDrinks: ['$4 cocktails', '$5 beer buckets'],
                 // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 12:00 AM',
@@ -1696,6 +1743,17 @@
                 phone: '(250) 763-7771',
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday - Sunday: 2:00 PM - 5:00 PM',
                 specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass',
+                happyHourWeekly: {
+                    'Sunday': [{start: '14:00', end: '17:00'}],  // 2-5 PM
+                    'Monday': [{start: '15:00', end: '18:00'}],  // 3-6 PM
+                    'Tuesday': [{start: '15:00', end: '18:00'}],
+                    'Wednesday': [{start: '15:00', end: '18:00'}],
+                    'Thursday': [{start: '15:00', end: '18:00'}],
+                    'Friday': [{start: '15:00', end: '18:00'}],
+                    'Saturday': [{start: '14:00', end: '17:00'}]  // 2-5 PM
+                },
+                specialsFood: ['$5 appetizers', '$7 flatbreads'],
+                specialsDrinks: ['$6 signature cocktails', '$4 wine by the glass', '$5 draft beer'],
                 // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 12:00 AM',
@@ -1941,6 +1999,206 @@
             }
         }
 
+        // TODO: HH uses "on now / starts / ended" language intentionally to avoid confusion with business hours "Open/Closed"
+        // Calculate Happy Hour status supporting 0-2 windows per day
+        function calculateHappyHourStatus(happyHourWeekly) {
+            if (!happyHourWeekly) return { status: 'unavailable', text: 'Schedule unavailable', windows: [] };
+
+            const now = new Date();
+            const currentDay = now.getDay(); // 0 = Sunday
+            const currentTime = now.getHours() * 60 + now.getMinutes(); // Minutes since midnight
+
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[currentDay];
+            const todayWindows = happyHourWeekly[todayName] || [];
+
+            // Helper: Convert 24-hour time string to minutes since midnight
+            function timeToMinutes(timeStr) {
+                if (timeStr === 'close') return 1440; // End of day for sorting purposes
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+
+            // Helper: Format time for display
+            function formatTime(timeStr) {
+                if (timeStr === 'close') return 'close';
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                const period = hours >= 12 ? 'PM' : 'AM';
+                const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+                return `${displayHour}${minutes > 0 ? ':' + minutes.toString().padStart(2, '0') : ''} ${period}`;
+            }
+
+            // State 1: Check if HH is happening now (within ANY window today)
+            for (const window of todayWindows) {
+                const startMin = timeToMinutes(window.start);
+                const endMin = window.end === 'close' ? 1440 : timeToMinutes(window.end);
+
+                if (currentTime >= startMin && currentTime < endMin) {
+                    return {
+                        status: 'on-now',
+                        text: `On now · until ${formatTime(window.end)}`,
+                        isActive: true,
+                        windows: todayWindows
+                    };
+                }
+            }
+
+            // State 2: Check if there's a later window today
+            const upcomingWindowsToday = todayWindows.filter(w => timeToMinutes(w.start) > currentTime);
+            if (upcomingWindowsToday.length > 0) {
+                const nextWindow = upcomingWindowsToday[0];
+                return {
+                    status: 'starts-later',
+                    text: `Starts at ${formatTime(nextWindow.start)}`,
+                    isActive: false,
+                    windows: todayWindows
+                };
+            }
+
+            // State 3: All windows today have ended (and there was at least 1 window)
+            if (todayWindows.length > 0) {
+                const lastWindow = todayWindows[todayWindows.length - 1];
+                return {
+                    status: 'ended',
+                    text: `Ended at ${formatTime(lastWindow.end)}`,
+                    isActive: false,
+                    windows: todayWindows
+                };
+            }
+
+            // State 4: No happy hour today - find next day with HH
+            for (let i = 1; i <= 7; i++) {
+                const nextDayIndex = (currentDay + i) % 7;
+                const nextDayName = dayNames[nextDayIndex];
+                const nextDayWindows = happyHourWeekly[nextDayName] || [];
+
+                if (nextDayWindows.length > 0) {
+                    const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
+                    return {
+                        status: 'none-today',
+                        text: `No happy hour today · next on ${dayLabel}`,
+                        isActive: false,
+                        windows: []
+                    };
+                }
+            }
+
+            return {
+                status: 'none',
+                text: 'No happy hour this week',
+                isActive: false,
+                windows: []
+            };
+        }
+
+        // Render Happy Hour section with status line, expandable schedule, and grouped specials
+        function renderHappyHourSection(venue) {
+            if (!venue.happyHourWeekly) {
+                return `<div class="info-box">Happy hour information not available.</div>`;
+            }
+
+            const hhStatus = calculateHappyHourStatus(venue.happyHourWeekly);
+
+            // Helper: Format window for display
+            function formatWindow(window) {
+                const startTime = window.start;
+                const endTime = window.end;
+                const [startHours, startMinutes] = startTime.split(':').map(Number);
+                const endDisplay = endTime === 'close' ? 'close' : (() => {
+                    const [endHours, endMinutes] = endTime.split(':').map(Number);
+                    const endPeriod = endHours >= 12 ? 'PM' : 'AM';
+                    const endDisplayHour = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours;
+                    return `${endDisplayHour}${endMinutes > 0 ? ':' + endMinutes.toString().padStart(2, '0') : ''} ${endPeriod}`;
+                })();
+
+                const startPeriod = startHours >= 12 ? 'PM' : 'AM';
+                const startDisplayHour = startHours === 0 ? 12 : startHours > 12 ? startHours - 12 : startHours;
+                const startDisplay = `${startDisplayHour}${startMinutes > 0 ? ':' + startMinutes.toString().padStart(2, '0') : ''} ${startPeriod}`;
+
+                return `${startDisplay}–${endDisplay}`;
+            }
+
+            // Build schedule HTML
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const scheduleHtml = dayNames.map(day => {
+                const windows = venue.happyHourWeekly[day] || [];
+                let timeDisplay = '';
+
+                if (windows.length === 0) {
+                    timeDisplay = 'No happy hour';
+                } else if (windows.length === 1) {
+                    timeDisplay = formatWindow(windows[0]);
+                } else {
+                    // Multiple windows - show as comma-separated list
+                    timeDisplay = windows.map(w => formatWindow(w)).join(', ');
+                }
+
+                return `
+                    <div class="hours-day-row">
+                        <span class="hours-day-name">${day}</span>
+                        <span class="hours-day-time">${timeDisplay}</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Determine status class
+            const statusClass = hhStatus.isActive ? 'on-now' :
+                               hhStatus.status === 'none-today' ? 'none-today' :
+                               'neutral';
+
+            // Build specials HTML
+            let specialsHtml = '';
+            if (venue.specialsFood || venue.specialsDrinks) {
+                specialsHtml = '<div style="margin-top: 20px;"><strong>Happy Hour Specials</strong></div>';
+
+                if (venue.specialsFood && venue.specialsFood.length > 0) {
+                    specialsHtml += '<div style="margin-top: 12px; font-weight: 600; font-size: 13px; color: #374151;">Food</div>';
+                    specialsHtml += venue.specialsFood.map(item => `<div style="margin-top: 4px;">• ${item}</div>`).join('');
+                }
+
+                if (venue.specialsDrinks && venue.specialsDrinks.length > 0) {
+                    specialsHtml += '<div style="margin-top: 12px; font-weight: 600; font-size: 13px; color: #374151;">Drinks</div>';
+                    specialsHtml += venue.specialsDrinks.map(item => `<div style="margin-top: 4px;">• ${item}</div>`).join('');
+                }
+            }
+
+            return `
+                <div>
+                    <div class="hours-status">
+                        <span class="hours-status-badge hh-status-${statusClass}">${hhStatus.status === 'on-now' ? 'Happy Hour' : 'Happy Hour'}</span>
+                        <span class="hours-status-text">· ${hhStatus.text}</span>
+                        <span class="hours-toggle" onclick="toggleHappyHourSchedule()">
+                            <span class="hours-disclosure" id="hh-schedule-disclosure">▾</span>
+                            <span id="hh-schedule-toggle-text">Show full happy hour schedule</span>
+                        </span>
+                    </div>
+                    <div class="hours-weekly" id="hh-schedule-weekly">
+                        ${scheduleHtml}
+                    </div>
+                </div>
+                ${specialsHtml}
+            `;
+        }
+
+        // Toggle HH schedule expand/collapse
+        function toggleHappyHourSchedule() {
+            const schedule = document.getElementById('hh-schedule-weekly');
+            const disclosure = document.getElementById('hh-schedule-disclosure');
+            const toggleText = document.getElementById('hh-schedule-toggle-text');
+
+            if (!schedule || !disclosure || !toggleText) return;
+
+            if (schedule.classList.contains('visible')) {
+                schedule.classList.remove('visible');
+                disclosure.classList.remove('expanded');
+                toggleText.textContent = 'Show full happy hour schedule';
+            } else {
+                schedule.classList.add('visible');
+                disclosure.classList.add('expanded');
+                toggleText.textContent = 'Hide full happy hour schedule';
+            }
+        }
+
         // TODO: Alpha uses placeholder data. Future: fields may be missing/null.
         // Render venue Info section with conditional display of rows
         function renderVenueInfo(venue) {
@@ -2102,9 +2360,8 @@
             document.getElementById('venue-distance').textContent = '0.3 km';
             document.getElementById('venue-category').textContent = `• ${venue.type}`;
 
-            // Update Happy Hour section
-            document.getElementById('venue-happy-hour-box').innerHTML =
-                `<strong>Happy Hour Times</strong><br>${venue.hours}<br><br><strong>Current Specials</strong><br>${venue.specials}`;
+            // Update Happy Hour section with new multi-window support
+            document.getElementById('venue-happy-hour-box').innerHTML = renderHappyHourSection(venue);
 
             // Render Info section with conditional rows
             renderVenueInfo(venue);
