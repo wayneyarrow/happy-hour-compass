@@ -368,8 +368,8 @@
         }
 
         .hours-status-badge {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 500;
         }
 
         .hours-status-badge.open {
@@ -382,6 +382,7 @@
 
         .hours-status-text {
             font-size: 15px;
+            font-weight: 500;
             color: #6b7280;
         }
 
@@ -1540,22 +1541,6 @@
                         <div class="venue-info-details" id="venue-info-container">
                             <!-- Conditionally rendered rows will appear here -->
                         </div>
-
-                        <!-- Location card - TODO: Replace with full Google Maps integration post-Alpha -->
-                        <div class="location-card" id="venue-location-card">
-                            <div class="location-card-label">Location</div>
-                            <div class="location-card-address" id="location-card-address">Address loading...</div>
-                            <div class="location-card-actions">
-                                <button class="location-action-btn" onclick="openGoogleMaps()">
-                                    <span class="location-btn-icon">🗺️</span>
-                                    <span>Google Maps</span>
-                                </button>
-                                <button class="location-action-btn" onclick="openAppleMaps()">
-                                    <span class="location-btn-icon">🍎</span>
-                                    <span>Apple Maps</span>
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -2061,7 +2046,7 @@
                             <div class="info-row-label">Address</div>
                             <div class="info-row-value">${venue.address}</div>
                         </div>
-                        <div class="info-row-icon">›</div>
+                        <div class="info-row-icon">📍</div>
                     </button>
                 `;
             }
@@ -2075,7 +2060,7 @@
                             <div class="info-row-label">Menu</div>
                             <div class="info-row-value">View menu</div>
                         </div>
-                        <div class="info-row-icon">›</div>
+                        <div class="info-row-icon">🔗</div>
                     </button>
                 `;
             }
@@ -2088,7 +2073,7 @@
                             <div class="info-row-label">Phone</div>
                             <div class="info-row-value">${venue.phone}</div>
                         </div>
-                        <div class="info-row-icon">›</div>
+                        <div class="info-row-icon">📞</div>
                     </button>
                 `;
             }
@@ -2113,7 +2098,7 @@
                             <div class="info-row-label">Website</div>
                             <div class="info-row-value">${venue.websiteUrl.replace('https://', '').replace('http://', '')}</div>
                         </div>
-                        <div class="info-row-icon">›</div>
+                        <div class="info-row-icon">🔗</div>
                     </button>
                 `;
             }
