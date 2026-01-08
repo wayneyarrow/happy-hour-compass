@@ -877,6 +877,26 @@
             font-weight: 600;
         }
 
+        /* Single HH status line for Search */
+        .hh-status-line {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.3;
+            margin-top: 2px;
+        }
+
+        .hh-status-line.hh-green {
+            color: #10b981;
+        }
+
+        .hh-status-line.hh-neutral {
+            color: #111827;
+        }
+
+        .hh-status-line.hh-muted {
+            color: #9ca3af;
+        }
+
         .section-header {
             color: #374151;
             font-size: 15px;
@@ -2047,6 +2067,99 @@
             }
         }
 
+        // Generate HH status HTML for Search card (returns HTML string or empty string)
+        function generateSearchHHStatusHTML(venueName) {
+            const venue = venues[venueName];
+            if (!venue || !venue.happyHourWeekly) return '';
+
+            const hhStatus = calculateSearchHHStatus(venue.happyHourWeekly);
+            if (!hhStatus) return '';
+
+            const colorClass = hhStatus.color === 'green' ? 'hh-green' :
+                              hhStatus.color === 'neutral' ? 'hh-neutral' : 'hh-muted';
+
+            return `<div class="hh-status-line ${colorClass}">${hhStatus.text}</div>`;
+        }
+
+        // TODO: Search uses a simplified single-line HH summary for scannability, with full truth/details on the Venue Detail page
+        // Calculate simplified Happy Hour status for Search listings (single line)
+        function calculateSearchHHStatus(happyHourWeekly) {
+            if (!happyHourWeekly) return null;
+
+            const now = new Date();
+            const currentDay = now.getDay();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[currentDay];
+            const todayWindows = happyHourWeekly[todayName] || [];
+
+            // Helper: Convert 24-hour time to minutes
+            function timeToMinutes(timeStr) {
+                if (timeStr === 'close') return 1440;
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+
+            // Helper: Format time for display
+            function formatTime(timeStr) {
+                if (timeStr === 'close') return 'close';
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                const period = hours >= 12 ? 'PM' : 'AM';
+                const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+                return `${displayHour}${minutes > 0 ? ':' + minutes.toString().padStart(2, '0') : ''} ${period}`;
+            }
+
+            // State 1: HH happening now
+            for (const window of todayWindows) {
+                const startMin = timeToMinutes(window.start);
+                const endMin = window.end === 'close' ? 1440 : timeToMinutes(window.end);
+                if (currentTime >= startMin && currentTime < endMin) {
+                    return {
+                        text: `Happy hour on now · until ${formatTime(window.end)}`,
+                        color: 'green'
+                    };
+                }
+            }
+
+            // State 2: HH starts later today
+            const upcomingWindowsToday = todayWindows.filter(w => timeToMinutes(w.start) > currentTime);
+            if (upcomingWindowsToday.length > 0) {
+                const nextWindow = upcomingWindowsToday[0];
+                return {
+                    text: `Happy hour starts at ${formatTime(nextWindow.start)}`,
+                    color: 'neutral'
+                };
+            }
+
+            // State 3: HH ended today
+            if (todayWindows.length > 0) {
+                const lastWindow = todayWindows[todayWindows.length - 1];
+                return {
+                    text: `Happy hour ended at ${formatTime(lastWindow.end)}`,
+                    color: 'muted'
+                };
+            }
+
+            // State 4: No HH today - find next day
+            for (let i = 1; i <= 7; i++) {
+                const nextDayIndex = (currentDay + i) % 7;
+                const nextDayName = dayNames[nextDayIndex];
+                const nextDayWindows = happyHourWeekly[nextDayName] || [];
+
+                if (nextDayWindows.length > 0) {
+                    const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
+                    return {
+                        text: `Happy hour on ${dayLabel}`,
+                        color: 'muted'
+                    };
+                }
+            }
+
+            // No HH at all this week
+            return null;
+        }
+
         // TODO: HH uses "on now / starts / ended" language intentionally to avoid confusion with business hours "Open/Closed"
         // Calculate Happy Hour status supporting 0-2 windows per day
         function calculateHappyHourStatus(happyHourWeekly) {
@@ -2951,12 +3064,38 @@
         }
 
         // Add search event listener
+        // Update all listing cards with dynamic HH status
+        function updateAllListingHHStatus() {
+            document.querySelectorAll('.listing-item').forEach(card => {
+                const venueName = card.querySelector('.listing-name')?.textContent;
+                if (!venueName) return;
+
+                // Remove old HH display elements
+                const oldTimeRange = card.querySelector('.listing-time-range');
+                const oldTimeRemaining = card.querySelector('.time-remaining');
+                if (oldTimeRange) oldTimeRange.remove();
+                if (oldTimeRemaining) oldTimeRemaining.remove();
+
+                // Add new single HH status line
+                const listingOffer = card.querySelector('.listing-offer');
+                if (listingOffer) {
+                    const hhStatusHTML = generateSearchHHStatusHTML(venueName);
+                    if (hhStatusHTML) {
+                        listingOffer.insertAdjacentHTML('afterend', hhStatusHTML);
+                    }
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize the toggle icon
             const toggleIconSvg = document.getElementById('toggle-icon-svg');
             if (toggleIconSvg) {
                 toggleIconSvg.innerHTML = mapPinIcon;
             }
+
+            // Update all listing cards with dynamic HH status
+            updateAllListingHHStatus();
 
             // Attach scroll listeners to both content areas
             const listContent = document.getElementById('list-content');
