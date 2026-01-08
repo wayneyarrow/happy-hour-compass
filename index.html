@@ -173,6 +173,14 @@
             color: #111827;
             margin: 0 0 8px 0;
             line-height: 1.2;
+            /* Clamp to 2 lines max for long venue names */
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-wrap: break-word;
+            word-break: break-word;
         }
 
         .venue-meta-row {
@@ -180,6 +188,8 @@
             align-items: center;
             gap: 4px;
             font-size: 12px;
+            /* Allow wrapping for long metadata */
+            flex-wrap: wrap;
         }
 
         .venue-action-buttons {
@@ -350,12 +360,23 @@
 
         .info-row-content {
             flex: 1;
+            /* Allow ellipsis to work in flex child */
+            min-width: 0;
         }
 
         .info-row-value {
             font-size: 15px;
             color: #111827;
             line-height: 1.5;
+            /* Truncate long addresses/URLs gracefully */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            word-wrap: break-word;
+            word-break: break-word;
         }
 
         .info-row-icon {
@@ -781,6 +802,16 @@
             font-size: 17px;
             color: #111827;
             line-height: 1.2;
+            /* Clamp to 2 lines max, allow flex to work properly */
+            flex: 1;
+            min-width: 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-wrap: break-word;
+            word-break: break-word;
         }
 
         .heart-icon {
@@ -843,6 +874,13 @@
             font-weight: 700;
             font-size: 16px;
             line-height: 1.3;
+            /* Clamp to 2 lines for long offer text */
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-wrap: break-word;
         }
 
         .listing-details {
@@ -861,6 +899,11 @@
             color: #6b7280;
             font-size: 11px;
             margin-left: 6px;
+            /* Truncate very long category names */
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .listing-meta {
@@ -869,6 +912,9 @@
             gap: 4px;
             font-size: 12px;
             color: #9ca3af;
+            /* Allow wrapping for long metadata */
+            flex-wrap: wrap;
+            min-width: 0;
         }
 
         .time-remaining {
@@ -883,6 +929,10 @@
             font-weight: 500;
             line-height: 1.3;
             margin-top: 2px;
+            /* Keep as single scannable line, truncate if too long */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .hh-status-line.hh-green {
