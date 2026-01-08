@@ -421,6 +421,46 @@
             margin-left: 8px;
         }
 
+        /* Happy Hour header row: Today: <status> | Show full schedule */
+        .hh-header-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .hh-status-left {
+            flex: 1;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .hh-today-label {
+            font-size: 15px;
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .hh-schedule-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            color: #3b82f6;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .hh-schedule-link:hover {
+            color: #2563eb;
+        }
+
         .hours-toggle:hover {
             color: #2563eb;
         }
@@ -2162,15 +2202,19 @@
                 }
             }
 
+            // TODO: "Today: <status> + Show full schedule" row intentionally mirrors Business Hours layout for consistency and scannability
             return `
                 <div>
-                    <div class="hours-status">
-                        <span class="hours-status-badge hh-status-${statusClass}">${hhStatus.status === 'on-now' ? 'Happy Hour' : 'Happy Hour'}</span>
-                        <span class="hours-status-text">· ${hhStatus.text}</span>
-                        <span class="hours-toggle" onclick="toggleHappyHourSchedule()">
+                    <div class="info-row-label">Happy Hour Times</div>
+                    <div class="hh-header-row">
+                        <div class="hh-status-left">
+                            <span class="hh-today-label">Today:</span>
+                            <span class="hours-status-text">${hhStatus.text}</span>
+                        </div>
+                        <div class="hh-schedule-link" onclick="toggleHappyHourSchedule()">
                             <span class="hours-disclosure" id="hh-schedule-disclosure">▾</span>
-                            <span id="hh-schedule-toggle-text">Show full happy hour schedule</span>
-                        </span>
+                            <span id="hh-schedule-toggle-text">Show full schedule</span>
+                        </div>
                     </div>
                     <div class="hours-weekly" id="hh-schedule-weekly">
                         ${scheduleHtml}
@@ -2191,11 +2235,11 @@
             if (schedule.classList.contains('visible')) {
                 schedule.classList.remove('visible');
                 disclosure.classList.remove('expanded');
-                toggleText.textContent = 'Show full happy hour schedule';
+                toggleText.textContent = 'Show full schedule';
             } else {
                 schedule.classList.add('visible');
                 disclosure.classList.add('expanded');
-                toggleText.textContent = 'Hide full happy hour schedule';
+                toggleText.textContent = 'Hide full schedule';
             }
         }
 
