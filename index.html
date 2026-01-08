@@ -290,74 +290,112 @@
         .venue-info-details {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 0; /* Flat list with dividers */
         }
 
-        .info-row {
+        /* Flat list row - non-tappable */
+        .info-list-row {
             display: flex;
-            flex-direction: column;
-            gap: 6px;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid #f3f4f6;
         }
 
-        /* Action rows - tappable with chevron affordance */
-        .info-row-action {
+        .info-list-row:last-child {
+            border-bottom: none;
+        }
+
+        /* Flat list row - tappable action */
+        .info-list-row-action {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 16px;
-            margin: 0 -16px; /* Extend to edges for full-width tap target */
+            padding: 16px 0;
+            border-bottom: 1px solid #f3f4f6;
             background: white;
-            border-radius: 8px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.15s;
+            margin: 0 -20px;
+            padding-left: 20px;
+            padding-right: 20px;
         }
 
-        .info-row-action:hover {
+        .info-list-row-action:hover {
             background: #f9fafb;
         }
 
-        .info-row-action:active {
+        .info-list-row-action:active {
             background: #f3f4f6;
+        }
+
+        .info-list-row-action:last-child {
+            border-bottom: none;
+        }
+
+        .info-row-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
         }
 
         .info-row-content {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .info-row-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         .info-row-value {
             font-size: 15px;
             color: #111827;
-            font-weight: 500;
+            line-height: 1.5;
         }
 
-        .info-row-chevron {
-            font-size: 18px;
+        .info-row-icon {
+            font-size: 20px;
             color: #9ca3af;
-            margin-left: 8px;
+            margin-left: 12px;
+            flex-shrink: 0;
         }
 
-        /* Hours expansion toggle */
-        .hours-toggle {
-            display: flex;
+        /* Business Hours status */
+        .hours-status {
+            display: inline-flex;
             align-items: center;
             gap: 6px;
-            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .hours-status-badge {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .hours-status-badge.open {
+            color: #10b981;
+        }
+
+        .hours-status-badge.closed {
+            color: #ef4444;
+        }
+
+        .hours-status-text {
+            font-size: 15px;
+            color: #6b7280;
+        }
+
+        /* Hours expansion toggle - inline with status */
+        .hours-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
             color: #3b82f6;
             font-weight: 500;
             cursor: pointer;
-            margin-top: 8px;
             user-select: none;
+            margin-left: 8px;
         }
 
         .hours-toggle:hover {
@@ -365,6 +403,7 @@
         }
 
         .hours-disclosure {
+            font-size: 10px;
             transition: transform 0.2s;
         }
 
@@ -1468,6 +1507,7 @@
                 </div>
 
                 <!-- Sticky Jump Chips Nav -->
+                <!-- TODO: May become horizontal carousel to support additional sections post-Alpha -->
                 <div class="venue-section-nav venue-tabs" id="venue-tabs">
                     <div class="venue-nav-label">Jump to</div>
                     <div class="venue-chips-row">
@@ -1662,15 +1702,14 @@
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
                 specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails',
                 // Alpha placeholder data for complete Info section
-                hoursToday: 'Open today: 11:00 AM - 11:00 PM',
                 hoursWeekly: {
-                    'Monday': '11:00 AM - 11:00 PM',
+                    'Sunday': '10:00 AM - 11:00 PM',
+                    'Monday': 'CLOSED',
                     'Tuesday': '11:00 AM - 11:00 PM',
                     'Wednesday': '11:00 AM - 11:00 PM',
                     'Thursday': '11:00 AM - 11:00 PM',
                     'Friday': '11:00 AM - 12:00 AM',
-                    'Saturday': '10:00 AM - 12:00 AM',
-                    'Sunday': '10:00 AM - 10:00 PM'
+                    'Saturday': '10:00 AM - 12:00 AM'
                 },
                 menuUrl: 'https://kegsteakhouse.com/menu',
                 websiteUrl: 'https://kegsteakhouse.com',
@@ -1684,15 +1723,14 @@
                 hours: 'Monday - Friday: 2:00 PM - 5:00 PM<br>Saturday - Sunday: 1:00 PM - 4:00 PM',
                 specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails',
                 // Alpha placeholder data for complete Info section
-                hoursToday: 'Open today: 7:00 AM - 11:00 PM',
                 hoursWeekly: {
+                    'Sunday': '7:00 AM - 11:00 PM',
                     'Monday': '7:00 AM - 11:00 PM',
                     'Tuesday': '7:00 AM - 11:00 PM',
                     'Wednesday': '7:00 AM - 11:00 PM',
                     'Thursday': '7:00 AM - 11:00 PM',
                     'Friday': '7:00 AM - 12:00 AM',
-                    'Saturday': '7:00 AM - 12:00 AM',
-                    'Sunday': '7:00 AM - 11:00 PM'
+                    'Saturday': '7:00 AM - 12:00 AM'
                 },
                 menuUrl: 'https://whitespot.ca/menu',
                 websiteUrl: 'https://whitespot.ca',
@@ -1706,15 +1744,14 @@
                 hours: 'Monday - Sunday: 4:00 PM - 7:00 PM',
                 specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters',
                 // Alpha placeholder data for complete Info section
-                hoursToday: 'Open today: 11:00 AM - 1:00 AM',
                 hoursWeekly: {
+                    'Sunday': '10:00 AM - 12:00 AM',
                     'Monday': '11:00 AM - 1:00 AM',
                     'Tuesday': '11:00 AM - 1:00 AM',
                     'Wednesday': '11:00 AM - 1:00 AM',
                     'Thursday': '11:00 AM - 1:00 AM',
                     'Friday': '11:00 AM - 2:00 AM',
-                    'Saturday': '10:00 AM - 2:00 AM',
-                    'Sunday': '10:00 AM - 12:00 AM'
+                    'Saturday': '10:00 AM - 2:00 AM'
                 },
                 menuUrl: 'https://anfieldkelowna.com/menu',
                 websiteUrl: 'https://anfieldkelowna.com',
@@ -1728,15 +1765,14 @@
                 hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday - Sunday: 2:00 PM - 5:00 PM',
                 specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass',
                 // Alpha placeholder data for complete Info section
-                hoursToday: 'Open today: 11:00 AM - 12:00 AM',
                 hoursWeekly: {
+                    'Sunday': '10:00 AM - 12:00 AM',
                     'Monday': '11:00 AM - 12:00 AM',
                     'Tuesday': '11:00 AM - 12:00 AM',
                     'Wednesday': '11:00 AM - 12:00 AM',
                     'Thursday': '11:00 AM - 12:00 AM',
                     'Friday': '11:00 AM - 1:00 AM',
-                    'Saturday': '10:00 AM - 1:00 AM',
-                    'Sunday': '10:00 AM - 12:00 AM'
+                    'Saturday': '10:00 AM - 1:00 AM'
                 },
                 menuUrl: 'https://moxies.com/menu',
                 websiteUrl: 'https://moxies.com',
@@ -1875,6 +1911,104 @@
         let currentVenue = null;
         let currentVenueName = null;
 
+        // TODO: Business Hours edge-case handling (skipping CLOSED days) is intentional.
+        // Calculate Business Hours open/closed status with next-opening logic
+        function calculateBusinessHoursStatus(hoursWeekly) {
+            if (!hoursWeekly) return { status: 'Unknown', text: 'Hours unavailable' };
+
+            const now = new Date();
+            const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            const currentTime = now.getHours() * 60 + now.getMinutes(); // Minutes since midnight
+
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[currentDay];
+            const todayHours = hoursWeekly[todayName];
+
+            // Helper: Parse "11:00 AM - 11:00 PM" to {open: minutes, close: minutes}
+            function parseHours(hoursStr) {
+                if (!hoursStr || hoursStr === 'CLOSED' || hoursStr === 'Closed') return null;
+
+                const match = hoursStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                if (!match) return null;
+
+                let openHour = parseInt(match[1]);
+                const openMin = parseInt(match[2]);
+                const openPeriod = match[3].toUpperCase();
+                let closeHour = parseInt(match[4]);
+                const closeMin = parseInt(match[5]);
+                const closePeriod = match[6].toUpperCase();
+
+                // Convert to 24-hour
+                if (openPeriod === 'PM' && openHour !== 12) openHour += 12;
+                if (openPeriod === 'AM' && openHour === 12) openHour = 0;
+                if (closePeriod === 'PM' && closeHour !== 12) closeHour += 12;
+                if (closePeriod === 'AM' && closeHour === 12) closeHour = 0;
+
+                return {
+                    open: openHour * 60 + openMin,
+                    close: closeHour * 60 + closeMin,
+                    openStr: `${match[1]}:${match[2]} ${match[3]}`,
+                    closeStr: `${match[4]}:${match[5]} ${match[6]}`
+                };
+            }
+
+            // Check today's hours
+            const today = parseHours(todayHours);
+
+            if (!today) {
+                // Today is CLOSED - find next opening
+                for (let i = 1; i <= 7; i++) {
+                    const nextDayIndex = (currentDay + i) % 7;
+                    const nextDayName = dayNames[nextDayIndex];
+                    const nextHours = parseHours(hoursWeekly[nextDayName]);
+
+                    if (nextHours) {
+                        const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
+                        return {
+                            status: 'Closed',
+                            text: `opens ${i === 1 ? 'tomorrow at' : 'on ' + nextDayName + ' at'} ${nextHours.openStr}`,
+                            isOpen: false
+                        };
+                    }
+                }
+                return { status: 'Closed', text: 'reopening TBD', isOpen: false };
+            }
+
+            // Today has hours - check current time
+            if (currentTime < today.open) {
+                // Before opening today
+                return {
+                    status: 'Closed',
+                    text: `opens at ${today.openStr}`,
+                    isOpen: false
+                };
+            } else if (currentTime >= today.open && currentTime < today.close) {
+                // Currently open
+                return {
+                    status: 'Open',
+                    text: `until ${today.closeStr}`,
+                    isOpen: true
+                };
+            } else {
+                // After closing today - find next opening
+                for (let i = 1; i <= 7; i++) {
+                    const nextDayIndex = (currentDay + i) % 7;
+                    const nextDayName = dayNames[nextDayIndex];
+                    const nextHours = parseHours(hoursWeekly[nextDayName]);
+
+                    if (nextHours) {
+                        const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
+                        return {
+                            status: 'Closed',
+                            text: `opens ${i === 1 ? 'tomorrow at' : 'on ' + nextDayName + ' at'} ${nextHours.openStr}`,
+                            isOpen: false
+                        };
+                    }
+                }
+                return { status: 'Closed', text: 'reopening TBD', isOpen: false };
+            }
+        }
+
         // TODO: Alpha uses placeholder data. Future: fields may be missing/null.
         // Render venue Info section with conditional display of rows
         function renderVenueInfo(venue) {
@@ -1883,29 +2017,38 @@
 
             let html = '';
 
-            // 1) Business Hours (with expand/collapse for weekly hours)
-            if (venue.hoursToday || venue.hours) {
-                const todayHours = venue.hoursToday || 'See details';
-                const hasWeekly = venue.hoursWeekly && Object.keys(venue.hoursWeekly).length > 0;
+            // 1) Business Hours - with Open/Closed status
+            if (venue.hoursWeekly) {
+                const status = calculateBusinessHoursStatus(venue.hoursWeekly);
+                const hasWeekly = Object.keys(venue.hoursWeekly).length > 0;
 
                 html += `
-                    <div class="info-row">
-                        <div class="info-row-label">Business Hours</div>
-                        <div class="info-row-value">${todayHours}</div>
-                        ${hasWeekly ? `
-                            <div class="hours-toggle" onclick="toggleWeeklyHours()">
-                                <span class="hours-disclosure" id="hours-disclosure">▾</span>
-                                <span id="hours-toggle-text">Show full hours</span>
-                            </div>
-                            <div class="hours-weekly" id="hours-weekly">
-                                ${Object.entries(venue.hoursWeekly).map(([day, time]) => `
-                                    <div class="hours-day-row">
-                                        <span class="hours-day-name">${day}</span>
-                                        <span class="hours-day-time">${time}</span>
+                    <div class="info-list-row">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Business Hours</div>
+                            <div>
+                                <div class="hours-status">
+                                    <span class="hours-status-badge ${status.isOpen ? 'open' : 'closed'}">${status.status}</span>
+                                    <span class="hours-status-text">· ${status.text}</span>
+                                    ${hasWeekly ? `
+                                        <span class="hours-toggle" onclick="toggleWeeklyHours()">
+                                            <span class="hours-disclosure" id="hours-disclosure">▾</span>
+                                            <span id="hours-toggle-text">Show full hours</span>
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                ${hasWeekly ? `
+                                    <div class="hours-weekly" id="hours-weekly">
+                                        ${Object.entries(venue.hoursWeekly).map(([day, time]) => `
+                                            <div class="hours-day-row">
+                                                <span class="hours-day-name">${day}</span>
+                                                <span class="hours-day-time">${time}</span>
+                                            </div>
+                                        `).join('')}
                                     </div>
-                                `).join('')}
+                                ` : ''}
                             </div>
-                        ` : ''}
+                        </div>
                     </div>
                 `;
             }
@@ -1913,12 +2056,12 @@
             // 2) Address (tappable → open in Maps)
             if (venue.address) {
                 html += `
-                    <button class="info-row-action" onclick="openMapApp()">
+                    <button class="info-list-row-action" onclick="openMapApp()">
                         <div class="info-row-content">
                             <div class="info-row-label">Address</div>
                             <div class="info-row-value">${venue.address}</div>
                         </div>
-                        <div class="info-row-chevron">›</div>
+                        <div class="info-row-icon">›</div>
                     </button>
                 `;
             }
@@ -1927,12 +2070,12 @@
             if (venue.menuUrl || venue.websiteUrl) {
                 const menuTarget = venue.menuUrl || venue.websiteUrl;
                 html += `
-                    <button class="info-row-action" onclick="openVenueMenu('${menuTarget}')">
+                    <button class="info-list-row-action" onclick="openVenueMenu('${menuTarget}')">
                         <div class="info-row-content">
                             <div class="info-row-label">Menu</div>
                             <div class="info-row-value">View menu</div>
                         </div>
-                        <div class="info-row-chevron">›</div>
+                        <div class="info-row-icon">›</div>
                     </button>
                 `;
             }
@@ -1940,12 +2083,12 @@
             // 4) Phone (tappable → click-to-call)
             if (venue.phone) {
                 html += `
-                    <button class="info-row-action" onclick="callVenue()">
+                    <button class="info-list-row-action" onclick="callVenue()">
                         <div class="info-row-content">
                             <div class="info-row-label">Phone</div>
                             <div class="info-row-value">${venue.phone}</div>
                         </div>
-                        <div class="info-row-chevron">›</div>
+                        <div class="info-row-icon">›</div>
                     </button>
                 `;
             }
@@ -1953,9 +2096,11 @@
             // 5) Payment Methods (text display, not tappable)
             if (venue.paymentMethods) {
                 html += `
-                    <div class="info-row">
-                        <div class="info-row-label">Payment</div>
-                        <div class="info-row-value">${venue.paymentMethods}</div>
+                    <div class="info-list-row">
+                        <div class="info-row-content">
+                            <div class="info-row-label">Payment</div>
+                            <div class="info-row-value">${venue.paymentMethods}</div>
+                        </div>
                     </div>
                 `;
             }
@@ -1963,12 +2108,12 @@
             // 6) Website (tappable → open externally)
             if (venue.websiteUrl) {
                 html += `
-                    <button class="info-row-action" onclick="openVenueWebsiteExternal('${venue.websiteUrl}')">
+                    <button class="info-list-row-action" onclick="openVenueWebsiteExternal('${venue.websiteUrl}')">
                         <div class="info-row-content">
                             <div class="info-row-label">Website</div>
                             <div class="info-row-value">${venue.websiteUrl.replace('https://', '').replace('http://', '')}</div>
                         </div>
-                        <div class="info-row-chevron">›</div>
+                        <div class="info-row-icon">›</div>
                     </button>
                 `;
             }
