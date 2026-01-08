@@ -1247,6 +1247,35 @@
             display: block;
         }
 
+        /* Calendar button for events */
+        .calendar-btn {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, border-color 0.2s;
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
+
+        .calendar-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        .calendar-btn svg {
+            color: #6b7280;
+        }
+
+        .date-picker-container {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
         /* Empty States */
         .empty-state {
             display: flex;
@@ -1588,18 +1617,55 @@
 
         <!-- Events Screen -->
         <div class="screen" id="events-screen">
-            <div class="page-header">
+            <div class="page-header sticky">
                 <h1 class="page-title">Specials & Events</h1>
+                <button class="search-toggle-btn" id="events-search-toggle" onclick="toggleEventsSearch()">
+                    🔍
+                </button>
             </div>
 
-            <div class="filters">
-                <button class="filter-chip active">Happening Today</button>
-                <button class="filter-chip">Monday</button>
-                <button class="filter-chip">Tuesday</button>
-                <button class="filter-chip">Weekend</button>
+            <div class="search-container" id="events-search-container">
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-bar" placeholder="Search events..." id="events-search-input" style="margin-top: 0;">
+                </div>
             </div>
 
-            <div class="content">
+            <div class="filters" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;">
+                <div style="display: flex; gap: 8px; flex: 1; overflow-x: auto;">
+                    <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
+                    <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
+                </div>
+                <button class="calendar-btn" id="events-calendar-btn" onclick="toggleEventsCalendar()" title="Select date">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Simple date picker (hidden by default) -->
+            <div class="date-picker-container" id="events-date-picker" style="display: none;">
+                <div style="padding: 16px 20px; background: white; border-bottom: 1px solid #e5e7eb;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">Select Date</label>
+                    <input type="date" id="events-date-input" class="form-input" style="margin-top: 0;">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" style="flex: 1;" onclick="applyDateFilter()">Apply</button>
+                        <button class="btn" style="flex: 1; background: white; border: 1px solid #d1d5db;" onclick="clearDateFilter()">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content" id="events-content">
+                <!-- Events Empty State (hidden when events exist) -->
+                <div class="empty-state" id="events-empty-state" style="display: none;">
+                    <div class="empty-state-icon">🎉</div>
+                    <div class="empty-state-title">No events found</div>
+                    <div class="empty-state-body">Try adjusting your filters or check back later for new events.</div>
+                </div>
+
                 <div class="event-item" onclick="showEventDetail('NFL Game Night')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
@@ -3022,6 +3088,144 @@
             }, 100);
         }
 
+        // ========================================
+        // EVENTS SEARCH, FILTERING, AND CALENDAR
+        // ========================================
+
+        let currentEventsFilter = 'today';
+        let selectedEventDate = null;
+
+        // Toggle events search (reuse Favorites pattern)
+        function toggleEventsSearch() {
+            const searchContainer = document.getElementById('events-search-container');
+            const searchToggleBtn = document.getElementById('events-search-toggle');
+            const searchInput = document.getElementById('events-search-input');
+
+            if (searchContainer.classList.contains('active')) {
+                // Close search
+                searchContainer.classList.remove('active');
+                searchToggleBtn.textContent = '🔍';
+                searchInput.value = '';
+                performEventsSearch(); // Reset filter
+            } else {
+                // Open search
+                searchContainer.classList.add('active');
+                searchToggleBtn.textContent = '✕';
+                setTimeout(() => searchInput.focus(), 100);
+            }
+        }
+
+        // Perform search on events
+        function performEventsSearch() {
+            const searchTerm = document.getElementById('events-search-input').value.toLowerCase();
+            const eventsContent = document.getElementById('events-content');
+            const eventItems = eventsContent.querySelectorAll('.event-item');
+            const emptyState = document.getElementById('events-empty-state');
+
+            if (searchTerm.length === 0) {
+                eventItems.forEach(item => {
+                    item.style.display = 'block';
+                });
+                checkEventsEmpty();
+                return;
+            }
+
+            let visibleCount = 0;
+            eventItems.forEach(item => {
+                const eventTitle = item.querySelector('.event-title')?.textContent.toLowerCase() || '';
+                const eventVenue = item.querySelector('.event-venue')?.textContent.toLowerCase() || '';
+                if (eventTitle.includes(searchTerm) || eventVenue.includes(searchTerm)) {
+                    item.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // Show/hide empty state
+            if (visibleCount === 0) {
+                if (emptyState) emptyState.style.display = 'flex';
+            } else {
+                if (emptyState) emptyState.style.display = 'none';
+            }
+        }
+
+        // Filter events by chip selection
+        function filterEventsBy(filter) {
+            currentEventsFilter = filter;
+            selectedEventDate = null; // Clear calendar selection
+
+            // Update chip active states
+            const todayChip = document.getElementById('events-chip-today');
+            const weekendChip = document.getElementById('events-chip-weekend');
+
+            todayChip.classList.remove('active');
+            weekendChip.classList.remove('active');
+
+            if (filter === 'today') {
+                todayChip.classList.add('active');
+            } else if (filter === 'weekend') {
+                weekendChip.classList.add('active');
+            }
+
+            // TODO: Alpha displays all events regardless of filter
+            // Future: Implement actual date-based filtering
+            checkEventsEmpty();
+        }
+
+        // Toggle calendar date picker
+        function toggleEventsCalendar() {
+            const datePicker = document.getElementById('events-date-picker');
+            if (datePicker.style.display === 'none') {
+                datePicker.style.display = 'block';
+            } else {
+                datePicker.style.display = 'none';
+            }
+        }
+
+        // Apply date filter from calendar
+        function applyDateFilter() {
+            const dateInput = document.getElementById('events-date-input');
+            selectedEventDate = dateInput.value;
+
+            if (selectedEventDate) {
+                // Clear chip selections
+                document.getElementById('events-chip-today').classList.remove('active');
+                document.getElementById('events-chip-weekend').classList.remove('active');
+                currentEventsFilter = 'custom';
+
+                // TODO: Alpha displays all events regardless of selected date
+                // Future: Implement actual date-based filtering
+                // For now, just close the picker
+                toggleEventsCalendar();
+            }
+        }
+
+        // Clear date filter
+        function clearDateFilter() {
+            selectedEventDate = null;
+            document.getElementById('events-date-input').value = '';
+            toggleEventsCalendar();
+
+            // Reset to "Happening Today"
+            filterEventsBy('today');
+        }
+
+        // Check if events list is empty and show/hide empty state
+        function checkEventsEmpty() {
+            const eventsContent = document.getElementById('events-content');
+            const emptyState = document.getElementById('events-empty-state');
+            const eventItems = eventsContent?.querySelectorAll('.event-item') || [];
+
+            const visibleCount = Array.from(eventItems).filter(item => {
+                return item.style.display !== 'none';
+            }).length;
+
+            if (emptyState) {
+                emptyState.style.display = visibleCount === 0 ? 'flex' : 'none';
+            }
+        }
+
         function showEventDetail(eventName) {
             const event = events[eventName];
             if (!event) return;
@@ -3410,6 +3614,17 @@
                 favoritesSearchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         performFavoritesSearch();
+                    }
+                });
+            }
+
+            // Events search listener
+            const eventsSearchInput = document.getElementById('events-search-input');
+            if (eventsSearchInput) {
+                eventsSearchInput.addEventListener('input', performEventsSearch);
+                eventsSearchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        performEventsSearch();
                     }
                 });
             }
