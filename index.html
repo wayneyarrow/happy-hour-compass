@@ -111,12 +111,16 @@
             background: none;
             border: none;
             cursor: pointer;
-            padding: 6px;
+            /* Increased padding for better tap target (44px min) */
+            padding: 8px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: background 0.2s;
+            /* Ensure minimum comfortable tap target */
+            min-width: 44px;
+            min-height: 44px;
         }
 
         .header-icon-btn:hover {
@@ -203,7 +207,9 @@
             background: white;
             border: 1px solid #d1d5db;
             border-radius: 8px;
-            padding: 10px 8px;
+            /* Improved padding for comfortable tap target */
+            padding: 12px 8px;
+            min-height: 64px;
             font-size: 13px;
             font-weight: 500;
             color: #374151;
@@ -211,6 +217,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 6px;
             transition: background 0.2s, border-color 0.2s;
         }
@@ -278,7 +285,8 @@
 
         .venue-sections {
             background: white;
-            padding-bottom: 60px;
+            /* Increased padding to ensure last content is reachable */
+            padding-bottom: 100px;
         }
 
         .venue-section {
@@ -321,7 +329,9 @@
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            padding: 16px 0;
+            /* Comfortable tap target height */
+            padding: 18px 0;
+            min-height: 60px;
             background: white;
             border: none;
             border-bottom: 1px solid #f3f4f6;
@@ -2515,17 +2525,33 @@
             const schedule = document.getElementById('hh-schedule-weekly');
             const disclosure = document.getElementById('hh-schedule-disclosure');
             const toggleText = document.getElementById('hh-schedule-toggle-text');
+            const scrollContainer = document.getElementById('venue-detail-scroll');
 
             if (!schedule || !disclosure || !toggleText) return;
 
-            if (schedule.classList.contains('visible')) {
-                schedule.classList.remove('visible');
-                disclosure.classList.remove('expanded');
-                toggleText.textContent = 'Show full schedule';
-            } else {
+            const isExpanding = !schedule.classList.contains('visible');
+
+            // For collapsing: measure position before to prevent scroll jump
+            let scrollBefore, elementTop;
+            if (!isExpanding && scrollContainer) {
+                scrollBefore = scrollContainer.scrollTop;
+                elementTop = schedule.offsetTop;
+            }
+
+            if (isExpanding) {
                 schedule.classList.add('visible');
                 disclosure.classList.add('expanded');
                 toggleText.textContent = 'Hide full schedule';
+            } else {
+                schedule.classList.remove('visible');
+                disclosure.classList.remove('expanded');
+                toggleText.textContent = 'Show full schedule';
+
+                // Adjust scroll if user was scrolled within the collapsed section
+                if (scrollContainer && scrollBefore > elementTop) {
+                    const scrollDelta = scrollBefore - elementTop;
+                    scrollContainer.scrollTop = elementTop;
+                }
             }
         }
 
@@ -2747,10 +2773,9 @@
         }
 
         // ========================================
-        // VENUE DETAIL TABS - CLICK-ONLY (ALPHA)
+        // VENUE DETAIL TABS WITH SCROLL TRACKING
         // ========================================
-        // Tabs act as jump links only - NO scroll tracking
-        // Active tab reflects last clicked tab, NOT scroll position
+        // Tabs act as jump links AND update based on scroll position
 
         function setupVenueDetailTabs() {
             // Get tab elements
@@ -2764,6 +2789,15 @@
 
             // Set default active tab (Happy Hour)
             setActiveVenueTab('happyhour');
+
+            // Attach scroll listener to update chip highlighting
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            if (scrollContainer) {
+                // Remove existing listener if any
+                scrollContainer.removeEventListener('scroll', handleVenueDetailScroll);
+                // Add new listener
+                scrollContainer.addEventListener('scroll', handleVenueDetailScroll);
+            }
         }
 
         // Set active chip state (visual only - inline styles)
@@ -2817,6 +2851,32 @@
                 behavior: 'smooth',
                 block: 'start'
             });
+        }
+
+        // Handle venue detail scroll to update active chip based on section in view
+        function handleVenueDetailScroll() {
+            const scrollContainer = document.getElementById('venue-detail-scroll');
+            if (!scrollContainer) return;
+
+            const scrollTop = scrollContainer.scrollTop;
+            const happyHourAnchor = document.getElementById('anchor-happyhour');
+            const infoAnchor = document.getElementById('anchor-info');
+
+            if (!happyHourAnchor || !infoAnchor) return;
+
+            // Calculate section positions relative to scroll container
+            const happyHourTop = happyHourAnchor.offsetTop;
+            const infoTop = infoAnchor.offsetTop;
+
+            // Add offset for sticky header + chips (~100px)
+            const scrollOffset = scrollTop + 100;
+
+            // Determine which section is in view
+            if (scrollOffset >= infoTop) {
+                setActiveVenueTab('info');
+            } else if (scrollOffset >= happyHourTop) {
+                setActiveVenueTab('happyhour');
+            }
         }
 
         // Toggle venue favorite
