@@ -1186,6 +1186,96 @@
         .search-container.active {
             display: block;
         }
+
+        /* Empty States */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 60px 40px;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-body {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-action {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .empty-state-action:hover {
+            background: #2563eb;
+        }
+
+        .empty-state-secondary {
+            background: transparent;
+            color: #3b82f6;
+            border: 1px solid #3b82f6;
+            margin-top: 8px;
+        }
+
+        .empty-state-secondary:hover {
+            background: #eff6ff;
+        }
+
+        /* Hero Image Fallback */
+        .venue-hero-image {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .venue-hero-image::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .venue-hero-image.fallback::before {
+            opacity: 1;
+        }
+
+        .venue-hero-image.fallback::after {
+            content: 'Photo not available';
+            position: absolute;
+            color: #9ca3af;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1;
+        }
     </style>
 </head>
 <body>
@@ -1216,6 +1306,15 @@
             </div>
 
             <div class="content" id="list-content">
+                <!-- Search Empty State (hidden by default, shown when no results) -->
+                <div class="empty-state" id="search-empty-state" style="display: none;">
+                    <div class="empty-state-icon">🔍</div>
+                    <div class="empty-state-title">No matches</div>
+                    <div class="empty-state-body">Try clearing filters or searching a different area.</div>
+                    <!-- TODO: Wire to filter reset handler when available -->
+                    <!-- <button class="empty-state-action empty-state-secondary" onclick="clearSearchFilters()">Clear filters</button> -->
+                </div>
+
                 <h3 class="section-header">🔥 Popular Right Now</h3>
 
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
@@ -1391,7 +1490,15 @@
                 </div>
             </div>
 
-            <div class="content">
+            <div class="content" id="favorites-content">
+                <!-- Favorites Empty State (hidden when favorites exist) -->
+                <div class="empty-state" id="favorites-empty-state" style="display: none;">
+                    <div class="empty-state-icon">♥</div>
+                    <div class="empty-state-title">No favorites yet</div>
+                    <div class="empty-state-body">Tap the heart on a venue to save it here.</div>
+                    <button class="empty-state-action" onclick="showScreen('search-screen')">Browse venues</button>
+                </div>
+
                 <!-- Favorites cards use the same .listing-item structure as Search for visual consistency.
                      The single-line HH status is dynamically added after .listing-offer by updateAllListingHHStatus() on page load. -->
                 <div class="listing-item" onclick="showVenueDetail('White Spot')">
@@ -1892,6 +1999,11 @@
             document.getElementById(screenId).classList.add('active');
 
             updateNavHighlighting(screenId);
+
+            // Check favorites empty state when showing favorites screen
+            if (screenId === 'favorites-screen') {
+                checkFavoritesEmpty();
+            }
         }
 
         function initializeVenueDetailMap() {
@@ -2510,7 +2622,7 @@
             // Update header
             document.getElementById('venue-detail-title').textContent = venueName;
 
-            // Update hero image - use category-based images like listings
+            // Update hero image - use category-based images like listings with fallback
             const heroImage = document.getElementById('venue-hero-image');
             let imagePath = 'images/default-1.jpg';
             if (venue.type.includes('Fine Dining') || venue.type.includes('Upscale')) {
@@ -2520,6 +2632,21 @@
             } else if (venue.type.includes('Casual') || venue.type.includes('Family')) {
                 imagePath = 'images/casual-dining-1.jpg';
             }
+
+            // Test if image loads successfully, otherwise show fallback
+            heroImage.classList.remove('fallback');
+            const testImage = new Image();
+            testImage.onload = function() {
+                heroImage.style.backgroundImage = `url('${imagePath}')`;
+                heroImage.classList.remove('fallback');
+            };
+            testImage.onerror = function() {
+                heroImage.style.backgroundImage = 'none';
+                heroImage.classList.add('fallback');
+            };
+            testImage.src = imagePath;
+
+            // Set initial background while testing
             heroImage.style.backgroundImage = `url('${imagePath}')`;
 
             // Update venue name and meta
@@ -2967,32 +3094,49 @@
 
         function toggleHeart(element) {
             element.classList.toggle('favorited');
+            // Update favorites empty state if we're on the favorites screen
+            checkFavoritesEmpty();
         }
 
         // Search functionality
         function performSearch() {
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
             const venueNames = Object.keys(venues);
-            
+            const emptyState = document.getElementById('search-empty-state');
+            const sectionHeaders = document.querySelectorAll('#list-content .section-header');
+
             if (searchTerm.length === 0) {
-                document.querySelectorAll('.listing-item').forEach(item => {
+                document.querySelectorAll('#list-content .listing-item').forEach(item => {
                     item.style.display = 'flex';
                 });
+                sectionHeaders.forEach(header => header.style.display = 'block');
+                if (emptyState) emptyState.style.display = 'none';
                 return;
             }
 
-            const matchingVenues = venueNames.filter(venue => 
+            const matchingVenues = venueNames.filter(venue =>
                 venue.toLowerCase().includes(searchTerm)
             );
 
-            document.querySelectorAll('.listing-item').forEach(item => {
+            let visibleCount = 0;
+            document.querySelectorAll('#list-content .listing-item').forEach(item => {
                 const venueName = item.querySelector('.listing-name')?.textContent;
                 if (venueName && matchingVenues.includes(venueName)) {
                     item.style.display = 'flex';
+                    visibleCount++;
                 } else if (venueName) {
                     item.style.display = 'none';
                 }
             });
+
+            // Show/hide empty state and section headers based on results
+            if (visibleCount === 0) {
+                if (emptyState) emptyState.style.display = 'flex';
+                sectionHeaders.forEach(header => header.style.display = 'none');
+            } else {
+                if (emptyState) emptyState.style.display = 'none';
+                sectionHeaders.forEach(header => header.style.display = 'none'); // Hide section headers during search
+            }
         }
 
         // Toggle favorites search visibility
@@ -3021,22 +3165,48 @@
             const searchTerm = document.getElementById('favorites-search-input').value.toLowerCase();
             const favoritesScreen = document.getElementById('favorites-screen');
             const listingItems = favoritesScreen.querySelectorAll('.listing-item');
+            const emptyState = document.getElementById('favorites-empty-state');
 
             if (searchTerm.length === 0) {
                 listingItems.forEach(item => {
                     item.style.display = 'flex';
                 });
+                checkFavoritesEmpty();
                 return;
             }
 
+            let visibleCount = 0;
             listingItems.forEach(item => {
-                const venueName = item.querySelector('span')?.textContent.toLowerCase() || '';
+                const venueName = item.querySelector('.listing-name')?.textContent.toLowerCase() || '';
                 if (venueName.includes(searchTerm)) {
                     item.style.display = 'flex';
+                    visibleCount++;
                 } else {
                     item.style.display = 'none';
                 }
             });
+
+            // Don't show empty state during search filtering - only when truly empty
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+        }
+
+        // Check if favorites is empty and show/hide empty state
+        function checkFavoritesEmpty() {
+            const favoritesContent = document.getElementById('favorites-content');
+            const emptyState = document.getElementById('favorites-empty-state');
+            const listingItems = favoritesContent?.querySelectorAll('.listing-item') || [];
+
+            // Count favorited items (items with .favorited heart icon)
+            const favoritedCount = Array.from(listingItems).filter(item => {
+                const heartIcon = item.querySelector('.heart-icon.favorited');
+                return heartIcon !== null;
+            }).length;
+
+            if (emptyState) {
+                emptyState.style.display = favoritedCount === 0 ? 'flex' : 'none';
+            }
         }
 
         // Filter collapse on scroll
@@ -3099,6 +3269,9 @@
 
             // Update all listing cards with dynamic HH status
             updateAllListingHHStatus();
+
+            // Initialize favorites empty state check
+            checkFavoritesEmpty();
 
             // Attach scroll listeners to both content areas
             const listContent = document.getElementById('list-content');
