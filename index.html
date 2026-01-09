@@ -3195,6 +3195,10 @@
                 // Opening calendar - set defaults to today if no prior selection
                 const today = new Date().toISOString().split('T')[0];
 
+                // Disable past dates - set min to today
+                startDateInput.min = today;
+                endDateInput.min = today;
+
                 if (!selectedEventDateStart && !selectedEventDateEnd) {
                     // No prior selection - default to today for both start and end
                     startDateInput.value = today;
@@ -3205,9 +3209,32 @@
                     endDateInput.value = selectedEventDateEnd || today;
                 }
 
+                // Set up event listener for start date changes to update end date default
+                startDateInput.addEventListener('change', handleStartDateChange);
+
                 datePicker.style.display = 'block';
             } else {
+                // Remove listener when closing to prevent duplicates
+                startDateInput.removeEventListener('change', handleStartDateChange);
                 datePicker.style.display = 'none';
+            }
+        }
+
+        // Handle start date change to update end date default
+        function handleStartDateChange() {
+            const startDateInput = document.getElementById('events-date-start');
+            const endDateInput = document.getElementById('events-date-end');
+            const startDate = startDateInput.value;
+
+            if (startDate) {
+                // Set end date to match start date by default (single-day range)
+                // User can extend forward if desired
+                if (!endDateInput.value || new Date(endDateInput.value) < new Date(startDate)) {
+                    endDateInput.value = startDate;
+                }
+
+                // Update end date minimum to prevent selecting before start date
+                endDateInput.min = startDate;
             }
         }
 
