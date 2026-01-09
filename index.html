@@ -1688,11 +1688,11 @@
 
                 <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div class="listing-image">
-                        <img src="images/casual-dining-2.jpg" alt="Moxie's Kelowna" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+                        <img src="images/casual-dining-2.jpg" alt="Moxies Kelowna" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                     </div>
                     <div class="listing-content">
                         <div class="listing-header">
-                            <div class="listing-name">Moxie's Kelowna</div>
+                            <div class="listing-name">Moxies Kelowna</div>
                             <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -1756,7 +1756,7 @@
 
                 <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div class="listing-header">
-                        <div class="listing-name">Moxie's Kelowna</div>
+                        <div class="listing-name">Moxies Kelowna</div>
                         <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -2717,13 +2717,26 @@
             }
         }
 
-        // Generate HH status HTML for Search card (returns HTML string or empty string)
+        // Generate HH status HTML for Search card (always returns HTML string, never empty)
         function generateSearchHHStatusHTML(venueName) {
             const venue = venues[venueName];
-            if (!venue || !venue.happyHourWeekly) return '';
+
+            // If venue not found, fallback to approved HH language
+            if (!venue) {
+                return `<div class="hh-status-line hh-muted">No happy hour today</div>`;
+            }
+
+            // If no HH data, use approved HH language
+            if (!venue.happyHourWeekly) {
+                return `<div class="hh-status-line hh-muted">No happy hour today</div>`;
+            }
 
             const hhStatus = calculateSearchHHStatus(venue.happyHourWeekly);
-            if (!hhStatus) return '';
+
+            // If calculation fails, use approved HH language
+            if (!hhStatus) {
+                return `<div class="hh-status-line hh-muted">No happy hour today</div>`;
+            }
 
             const colorClass = hhStatus.color === 'green' ? 'hh-green' :
                               hhStatus.color === 'neutral' ? 'hh-neutral' : 'hh-muted';
@@ -2782,32 +2795,11 @@
                 };
             }
 
-            // State 3: HH ended today
-            if (todayWindows.length > 0) {
-                const lastWindow = todayWindows[todayWindows.length - 1];
-                return {
-                    text: `Happy hour ended at ${formatTime(lastWindow.end)}`,
-                    color: 'muted'
-                };
-            }
-
-            // State 4: No HH today - find next day
-            for (let i = 1; i <= 7; i++) {
-                const nextDayIndex = (currentDay + i) % 7;
-                const nextDayName = dayNames[nextDayIndex];
-                const nextDayWindows = happyHourWeekly[nextDayName] || [];
-
-                if (nextDayWindows.length > 0) {
-                    const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
-                    return {
-                        text: `Happy hour on ${dayLabel}`,
-                        color: 'muted'
-                    };
-                }
-            }
-
-            // No HH at all this week
-            return null;
+            // State 3: HH ended today or no HH today - use approved language
+            return {
+                text: 'No happy hour today',
+                color: 'muted'
+            };
         }
 
         // TODO: HH uses "on now / starts / ended" language intentionally to avoid confusion with business hours "Open/Closed"
