@@ -196,6 +196,20 @@
             flex-wrap: wrap;
         }
 
+        /* Event venue link (tappable, navigates to Venue Detail) */
+        .event-venue-link {
+            font-size: 15px;
+            font-weight: 500;
+            color: #3b82f6;
+            margin-bottom: 6px;
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        .event-venue-link:hover {
+            text-decoration: underline;
+        }
+
         .venue-action-buttons {
             display: flex;
             gap: 8px;
@@ -2063,55 +2077,92 @@
 
         <!-- Event Detail Screen -->
         <div class="screen" id="event-detail-screen">
-            <div class="detail-page-header">
+            <div class="detail-page-header" id="event-detail-header">
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="event-detail-title">Event Details</h1>
-            </div>
-            <div class="content">
-                <div class="hero" id="event-hero" style="background: linear-gradient(135deg, #ef4444, #f97316);">
-                    <div class="hero-icon" id="event-hero-icon">🎉</div>
-                    <div class="hero-title" id="event-hero-title">Event Name</div>
-                    <div class="hero-subtitle" id="event-hero-subtitle">Event Type</div>
+                <div class="header-actions">
+                    <button class="header-icon-btn" id="event-favorite-btn" onclick="toggleEventFavorite(event)">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                    </button>
+                    <button class="header-icon-btn" onclick="shareEvent()">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+                        </svg>
+                    </button>
                 </div>
-                <div class="venue-info">
-                    <div class="venue-title" id="event-info-title">Event Title</div>
-                    <div class="venue-address" id="event-info-details">
-                        <span style="color: #3b82f6;" id="event-venue-name">Venue Name</span><br>
-                        📅 <span id="event-schedule">Schedule</span><br>
-                        🕒 <span id="event-time">Time</span>
+            </div>
+
+            <div class="venue-detail-scroll" id="event-detail-scroll">
+                <!-- Collapsible Header Content -->
+                <div class="venue-header-collapsible" id="event-header-collapsible">
+                    <div class="venue-hero-image" id="event-hero-image"></div>
+                    <div class="venue-name-section">
+                        <h2 class="venue-name-large" id="event-name-large">Event Name</h2>
+                        <div class="event-venue-link" id="event-venue-link" onclick="navigateToVenueFromEvent()">
+                            <span id="event-venue-name">Venue Name</span>
+                        </div>
+                        <div class="venue-meta-row" id="event-meta-row">
+                            <span id="event-date-time">Date • Time</span>
+                        </div>
+                    </div>
+                    <div class="venue-action-buttons" id="event-action-buttons">
+                        <button class="venue-action-btn" id="event-btn-tickets">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                            </svg>
+                            <span>Tickets</span>
+                        </button>
+                        <button class="venue-action-btn" id="event-btn-call" onclick="callEventVenue()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Call</span>
+                        </button>
+                        <button class="venue-action-btn" id="event-btn-website" onclick="openEventWebsite()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            <span>Website</span>
+                        </button>
                     </div>
                 </div>
-                <div class="info-box" id="event-info-box">
-                    <strong>Event Description</strong><br>
-                    Event description will appear here<br><br>
-                    <strong>Special Offers</strong><br>
-                    • Offers will be listed here
+
+                <!-- Sticky Jump Chips Nav -->
+                <div class="venue-section-nav venue-tabs" id="event-tabs">
+                    <div class="venue-nav-label">Jump to</div>
+                    <div class="venue-chips-row">
+                        <button id="tab-event" class="section-nav-item venue-tab" onclick="scrollToEventSection('event')">Event</button>
+                        <button id="tab-venue" class="section-nav-item venue-tab" onclick="scrollToEventSection('venue')">Venue</button>
+                    </div>
                 </div>
-                <div style="color: #6b7280; margin-bottom: 20px; line-height: 1.4;" id="event-contact">
-                    📍 Address<br>
-                    📞 Phone number
+
+                <!-- Content Sections -->
+                <div class="venue-sections">
+                    <!-- Event Section -->
+                    <div class="venue-section" id="section-event">
+                        <div class="scroll-anchor" id="anchor-event" aria-hidden="true"></div>
+                        <h3 class="section-title">Event</h3>
+                        <div class="info-box" id="event-details-box">
+                            <strong>Overview</strong><br>
+                            Event details will appear here
+                        </div>
+                    </div>
+
+                    <!-- Venue Section -->
+                    <div class="venue-section" id="section-venue">
+                        <div class="scroll-anchor" id="anchor-venue" aria-hidden="true"></div>
+                        <h3 class="section-title">Venue</h3>
+
+                        <!-- Info rows container - populated by renderEventVenueInfo() -->
+                        <div class="venue-info-details" id="event-venue-info-container">
+                            <!-- Conditionally rendered rows will appear here -->
+                        </div>
+                    </div>
                 </div>
-                <div class="action-buttons">
-                    <button class="btn btn-primary">Make Reservation</button>
-                    <button class="btn btn-secondary">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                        </svg>
-                        Save
-                    </button>
-                    <button class="btn btn-share">
-                        <svg width="14" height="14" viewBox="0 0 100 100" fill="currentColor" style="margin-right: 6px;">
-                            <circle cx="20" cy="20" r="12"/>
-                            <circle cx="80" cy="20" r="12"/>
-                            <circle cx="50" cy="80" r="12"/>
-                            <line x1="32" y1="26" x2="68" y2="26" stroke="currentColor" stroke-width="6"/>
-                            <line x1="26" y1="32" x2="44" y2="68" stroke="currentColor" stroke-width="6"/>
-                            <line x1="74" y1="32" x2="56" y2="68" stroke="currentColor" stroke-width="6"/>
-                        </svg>
-                        Share
-                    </button>
-                </div>
-                <div id="event-detail-map" style="height: 200px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
             </div>
         </div>
 
@@ -3711,38 +3762,215 @@
             }
         }
 
+        // Store current event data
+        let currentEventData = null;
+
         function showEventDetail(eventName) {
             const event = events[eventName];
             if (!event) return;
 
-            document.getElementById('event-detail-title').textContent = eventName;
-            document.getElementById('event-hero-title').textContent = eventName;
-            document.getElementById('event-hero-subtitle').textContent = event.type;
-            document.getElementById('event-hero-icon').textContent = event.icon;
-            document.getElementById('event-info-title').textContent = eventName + ' Specials';
-            document.getElementById('event-venue-name').textContent = event.venue;
-            document.getElementById('event-schedule').textContent = event.schedule;
-            document.getElementById('event-time').textContent = event.time;
-            document.getElementById('event-info-box').innerHTML = `<strong>Event Description</strong><br>${event.description}<br><br><strong>Special Offers</strong><br>${event.offers}`;
-            document.getElementById('event-contact').innerHTML = `📍 ${event.address}<br>📞 ${event.phone}`;
+            // Store current event data
+            currentEventData = { name: eventName, ...event };
 
-            // Set event hero background image
-            const eventHero = document.getElementById('event-hero');
+            // Update header
+            document.getElementById('event-detail-title').textContent = eventName;
+
+            // Update hero image (remove text overlay)
+            const eventHeroImage = document.getElementById('event-hero-image');
             if (event.image) {
-                eventHero.style.background = `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('${event.image}') center/cover`;
+                eventHeroImage.style.backgroundImage = `url('${event.image}')`;
+                eventHeroImage.style.backgroundSize = 'cover';
+                eventHeroImage.style.backgroundPosition = 'center';
             } else {
-                eventHero.style.background = 'linear-gradient(135deg, #ef4444, #f97316)';
+                // Fallback to gradient if no image
+                eventHeroImage.style.backgroundImage = 'linear-gradient(135deg, #ef4444, #f97316)';
             }
 
+            // Update event core info
+            document.getElementById('event-name-large').textContent = eventName;
+            document.getElementById('event-venue-name').textContent = event.venue;
+
+            // Format date/time
+            const dateTime = formatEventDateTime(event);
+            document.getElementById('event-date-time').textContent = dateTime;
+
+            // Update Event section
+            renderEventDetailsBox(event);
+
+            // Update Venue section
+            renderEventVenueInfo(event);
+
+            // Setup tabs and scroll tracking
+            setupEventDetailTabs();
+
             showScreen('event-detail-screen');
-            
-            // Force map initialization with multiple attempts
-            requestAnimationFrame(() => {
-                initializeEventDetailMap();
-                setTimeout(initializeEventDetailMap, 100);
-                setTimeout(initializeEventDetailMap, 300);
-                setTimeout(initializeEventDetailMap, 500);
-            });
+        }
+
+        // Format event date/time for display
+        function formatEventDateTime(event) {
+            // Support two formats:
+            // 1. One-off: "Jan 29 • 8 PM"
+            // 2. Repeating: "Thursdays • 8 PM"
+            return `${event.schedule} • ${event.time}`;
+        }
+
+        // Render Event Details box (reusing Happy Hour block structure)
+        function renderEventDetailsBox(event) {
+            const box = document.getElementById('event-details-box');
+            let html = `<strong>Overview</strong><br>${event.description}`;
+
+            if (event.offers) {
+                html += `<br><br><strong>Specials</strong><br>${event.offers}`;
+            }
+
+            box.innerHTML = html;
+        }
+
+        // Render Event Venue Info (reusing Venue Detail Info block pattern)
+        function renderEventVenueInfo(event) {
+            const container = document.getElementById('event-venue-info-container');
+            let html = '';
+
+            // Address row
+            if (event.address) {
+                html += `
+                    <div class="info-list-row-action">
+                        <div class="info-row-content">
+                            <div class="info-row-icon">📍</div>
+                            <div class="info-row-text-group">
+                                <div class="info-row-label">Address</div>
+                                <div class="info-row-value">${event.address}</div>
+                            </div>
+                        </div>
+                        <div class="info-row-arrow">→</div>
+                    </div>
+                `;
+            }
+
+            // Phone row
+            if (event.phone) {
+                html += `
+                    <div class="info-list-row-action" onclick="callEventVenue()">
+                        <div class="info-row-content">
+                            <div class="info-row-icon">📞</div>
+                            <div class="info-row-text-group">
+                                <div class="info-row-label">Phone</div>
+                                <div class="info-row-value">${event.phone}</div>
+                            </div>
+                        </div>
+                        <div class="info-row-arrow">→</div>
+                    </div>
+                `;
+            }
+
+            // Website row (if exists)
+            if (event.website) {
+                html += `
+                    <div class="info-list-row-action" onclick="openEventWebsite()">
+                        <div class="info-row-content">
+                            <div class="info-row-icon">🌐</div>
+                            <div class="info-row-text-group">
+                                <div class="info-row-label">Website</div>
+                                <div class="info-row-value">${event.website}</div>
+                            </div>
+                        </div>
+                        <div class="info-row-arrow">→</div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Setup Event Detail tabs and scroll tracking
+        function setupEventDetailTabs() {
+            // Set default active tab
+            setActiveEventTab('event');
+
+            // Attach scroll listener
+            const scrollContainer = document.getElementById('event-detail-scroll');
+            if (scrollContainer) {
+                scrollContainer.removeEventListener('scroll', handleEventDetailScroll);
+                scrollContainer.addEventListener('scroll', handleEventDetailScroll);
+            }
+        }
+
+        // Handle Event Detail scroll to update chip highlighting
+        function handleEventDetailScroll() {
+            const scrollContainer = document.getElementById('event-detail-scroll');
+            if (!scrollContainer) return;
+
+            const scrollTop = scrollContainer.scrollTop;
+            const eventAnchor = document.getElementById('anchor-event');
+            const venueAnchor = document.getElementById('anchor-venue');
+
+            if (!eventAnchor || !venueAnchor) return;
+
+            const eventTop = eventAnchor.offsetTop;
+            const venueTop = venueAnchor.offsetTop;
+            const scrollOffset = scrollTop + 100;
+
+            if (scrollOffset >= venueTop) {
+                setActiveEventTab('venue');
+            } else if (scrollOffset >= eventTop) {
+                setActiveEventTab('event');
+            }
+        }
+
+        // Set active event tab
+        function setActiveEventTab(tabId) {
+            const tabs = document.querySelectorAll('#event-tabs .venue-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            const activeTab = document.getElementById(`tab-${tabId}`);
+            if (activeTab) {
+                activeTab.classList.add('active');
+            }
+        }
+
+        // Scroll to event section
+        function scrollToEventSection(section) {
+            const scrollContainer = document.getElementById('event-detail-scroll');
+            const anchor = document.getElementById(`anchor-${section}`);
+
+            if (scrollContainer && anchor) {
+                const offsetTop = anchor.offsetTop - 10;
+                scrollContainer.scrollTo({
+                    top: offsetTop,
+                    behavior: 'smooth'
+                });
+            }
+
+            setActiveEventTab(section);
+        }
+
+        // Navigate to venue from event
+        function navigateToVenueFromEvent() {
+            if (!currentEventData || !currentEventData.venue) return;
+            // Navigate to the venue detail page
+            showVenueDetail(currentEventData.venue);
+        }
+
+        // Event action handlers
+        function toggleEventFavorite(e) {
+            e.stopPropagation();
+            const btn = document.getElementById('event-favorite-btn');
+            btn.classList.toggle('favorited');
+        }
+
+        function shareEvent() {
+            if (!currentEventData) return;
+            alert(`Sharing: ${currentEventData.name}`);
+        }
+
+        function callEventVenue() {
+            if (!currentEventData || !currentEventData.phone) return;
+            window.location.href = `tel:${currentEventData.phone}`;
+        }
+
+        function openEventWebsite() {
+            if (!currentEventData || !currentEventData.website) return;
+            window.open(currentEventData.website, '_blank');
         }
 
         function goBack() {
