@@ -2497,6 +2497,9 @@
         let currentVenue = null;
         let currentVenueName = null;
 
+        // DEBUG FLAG - Set to true to enable detailed logging
+        const DEBUG_HOURS = false;
+
         // TODO: Business Hours edge-case handling (skipping CLOSED days) is intentional.
         // Calculate Business Hours open/closed status with next-opening logic
         function calculateBusinessHoursStatus(hoursWeekly) {
@@ -2510,12 +2513,29 @@
             const todayName = dayNames[currentDay];
             const todayHours = hoursWeekly[todayName];
 
+            if (DEBUG_HOURS) {
+                console.log('=== Business Hours Debug ===');
+                console.log('Current time:', now.toString());
+                console.log('Current time ISO:', now.toISOString());
+                console.log('Current day index (Date.getDay()):', currentDay);
+                console.log('Current day name:', todayName);
+                console.log('Current time in minutes:', currentTime, `(${Math.floor(currentTime/60)}:${String(currentTime%60).padStart(2,'0')})`);
+                console.log('Today\'s hours string:', todayHours);
+                console.log('Full hoursWeekly object:', hoursWeekly);
+            }
+
             // Helper: Parse "11:00 AM - 11:00 PM" to {open: minutes, close: minutes}
             function parseHours(hoursStr) {
-                if (!hoursStr || hoursStr === 'CLOSED' || hoursStr === 'Closed') return null;
+                if (!hoursStr || hoursStr === 'CLOSED' || hoursStr === 'Closed') {
+                    if (DEBUG_HOURS) console.log('parseHours: CLOSED or null');
+                    return null;
+                }
 
                 const match = hoursStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-                if (!match) return null;
+                if (!match) {
+                    if (DEBUG_HOURS) console.log('parseHours: Failed to match regex for:', hoursStr);
+                    return null;
+                }
 
                 let openHour = parseInt(match[1]);
                 const openMin = parseInt(match[2]);
@@ -2524,24 +2544,59 @@
                 const closeMin = parseInt(match[5]);
                 const closePeriod = match[6].toUpperCase();
 
+                if (DEBUG_HOURS) {
+                    console.log('parseHours: Raw match:', { openHour, openMin, openPeriod, closeHour, closeMin, closePeriod });
+                }
+
                 // Convert to 24-hour
                 if (openPeriod === 'PM' && openHour !== 12) openHour += 12;
                 if (openPeriod === 'AM' && openHour === 12) openHour = 0;
                 if (closePeriod === 'PM' && closeHour !== 12) closeHour += 12;
                 if (closePeriod === 'AM' && closeHour === 12) closeHour = 0;
 
-                return {
-                    open: openHour * 60 + openMin,
-                    close: closeHour * 60 + closeMin,
+                let openMinutes = openHour * 60 + openMin;
+                let closeMinutes = closeHour * 60 + closeMin;
+
+                // Fix midnight closing time: "12:00 AM" as close means end-of-day (1440 minutes)
+                if (closeMinutes === 0 && openMinutes > 0) {
+                    closeMinutes = 1440; // End of day
+                }
+
+                // Handle overnight hours: if close <= open, it crosses midnight into next day
+                if (closeMinutes <= openMinutes && closeMinutes !== 1440) {
+                    closeMinutes += 1440; // Add 24 hours to represent next day
+                }
+
+                const result = {
+                    open: openMinutes,
+                    close: closeMinutes,
                     openStr: `${match[1]}:${match[2]} ${match[3]}`,
-                    closeStr: `${match[4]}:${match[5]} ${match[6]}`
+                    closeStr: `${match[4]}:${match[5]} ${match[6]}`,
+                    isOvernight: closeMinutes > 1440
                 };
+
+                if (DEBUG_HOURS) {
+                    console.log('parseHours: Converted to 24h:', {
+                        openHour24: openHour,
+                        closeHour24: closeHour,
+                        openMinutes: result.open,
+                        closeMinutes: result.close,
+                        isOvernight: result.isOvernight
+                    });
+                }
+
+                return result;
             }
 
             // Check today's hours
             const today = parseHours(todayHours);
 
+            if (DEBUG_HOURS) {
+                console.log('Parsed today\'s hours:', today);
+            }
+
             if (!today) {
+                if (DEBUG_HOURS) console.log('BRANCH: Today is CLOSED - finding next opening');
                 // Today is CLOSED - find next opening
                 for (let i = 1; i <= 7; i++) {
                     const nextDayIndex = (currentDay + i) % 7;
@@ -2549,49 +2604,118 @@
                     const nextHours = parseHours(hoursWeekly[nextDayName]);
 
                     if (nextHours) {
-                        const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
-                        return {
+                        const result = {
                             status: 'Closed',
                             text: `opens ${i === 1 ? 'tomorrow at' : 'on ' + nextDayName + ' at'} ${nextHours.openStr}`,
                             isOpen: false
                         };
+                        if (DEBUG_HOURS) console.log('RESULT:', result);
+                        return result;
                     }
                 }
-                return { status: 'Closed', text: 'reopening TBD', isOpen: false };
+                const result = { status: 'Closed', text: 'reopening TBD', isOpen: false };
+                if (DEBUG_HOURS) console.log('RESULT:', result);
+                return result;
+            }
+
+            // Check if we're still open from yesterday's overnight hours
+            const yesterdayIndex = (currentDay - 1 + 7) % 7;
+            const yesterdayName = dayNames[yesterdayIndex];
+            const yesterday = parseHours(hoursWeekly[yesterdayName]);
+
+            if (yesterday && yesterday.isOvernight) {
+                // Yesterday had overnight hours - check if we're in the spill window
+                const yesterdaySpillEnd = yesterday.close - 1440; // Convert back to today's minutes
+                if (currentTime < yesterdaySpillEnd) {
+                    // We're still open from yesterday!
+                    if (DEBUG_HOURS) console.log('BRANCH: Still open from yesterday\'s overnight hours');
+                    const result = {
+                        status: 'Open now',
+                        text: `closes at ${yesterday.closeStr}`,
+                        isOpen: true
+                    };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
+                }
             }
 
             // Today has hours - check current time
-            if (currentTime < today.open) {
-                // Before opening today
-                return {
-                    status: 'Closed',
-                    text: `opens at ${today.openStr}`,
-                    isOpen: false
-                };
-            } else if (currentTime >= today.open && currentTime < today.close) {
-                // Currently open
-                return {
-                    status: 'Open',
-                    text: `until ${today.closeStr}`,
-                    isOpen: true
-                };
-            } else {
-                // After closing today - find next opening
-                for (let i = 1; i <= 7; i++) {
-                    const nextDayIndex = (currentDay + i) % 7;
-                    const nextDayName = dayNames[nextDayIndex];
-                    const nextHours = parseHours(hoursWeekly[nextDayName]);
+            if (DEBUG_HOURS) {
+                console.log('Today has hours - comparing times:');
+                console.log('  currentTime:', currentTime);
+                console.log('  today.open:', today.open);
+                console.log('  today.close:', today.close);
+                console.log('  today.isOvernight:', today.isOvernight);
+            }
 
-                    if (nextHours) {
-                        const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
-                        return {
-                            status: 'Closed',
-                            text: `opens ${i === 1 ? 'tomorrow at' : 'on ' + nextDayName + ' at'} ${nextHours.openStr}`,
-                            isOpen: false
-                        };
-                    }
+            // Check today's window
+            if (today.isOvernight) {
+                // Overnight hours - check today's portion (open until midnight)
+                if (currentTime >= today.open) {
+                    // We're in today's open portion (will continue past midnight)
+                    if (DEBUG_HOURS) console.log('BRANCH: Currently OPEN (overnight hours, today portion)');
+                    const result = {
+                        status: 'Open now',
+                        text: `closes at ${today.closeStr}`,
+                        isOpen: true
+                    };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
+                } else {
+                    // Before opening today
+                    if (DEBUG_HOURS) console.log('BRANCH: Before opening today');
+                    const result = {
+                        status: 'Closed',
+                        text: `opens at ${today.openStr}`,
+                        isOpen: false
+                    };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
                 }
-                return { status: 'Closed', text: 'reopening TBD', isOpen: false };
+            } else {
+                // Normal same-day hours
+                if (currentTime < today.open) {
+                    // Before opening today
+                    if (DEBUG_HOURS) console.log('BRANCH: Before opening today');
+                    const result = {
+                        status: 'Closed',
+                        text: `opens at ${today.openStr}`,
+                        isOpen: false
+                    };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
+                } else if (currentTime >= today.open && currentTime <= today.close) {
+                    // Currently open (same-day hours)
+                    if (DEBUG_HOURS) console.log('BRANCH: Currently OPEN (same-day hours)');
+                    const result = {
+                        status: 'Open now',
+                        text: `closes at ${today.closeStr}`,
+                        isOpen: true
+                    };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
+                } else {
+                    // After closing today - find next opening
+                    if (DEBUG_HOURS) console.log('BRANCH: After closing today - finding next opening');
+                    for (let i = 1; i <= 7; i++) {
+                        const nextDayIndex = (currentDay + i) % 7;
+                        const nextDayName = dayNames[nextDayIndex];
+                        const nextHours = parseHours(hoursWeekly[nextDayName]);
+
+                        if (nextHours) {
+                            const result = {
+                                status: 'Closed',
+                                text: `opens ${i === 1 ? 'tomorrow at' : 'on ' + nextDayName + ' at'} ${nextHours.openStr}`,
+                                isOpen: false
+                            };
+                            if (DEBUG_HOURS) console.log('RESULT:', result);
+                            return result;
+                        }
+                    }
+                    const result = { status: 'Closed', text: 'reopening TBD', isOpen: false };
+                    if (DEBUG_HOURS) console.log('RESULT:', result);
+                    return result;
+                }
             }
         }
 
