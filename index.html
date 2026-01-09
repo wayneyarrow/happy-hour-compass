@@ -1661,6 +1661,14 @@
                             <input type="date" id="events-date-end" class="form-input" style="margin-top: 0;">
                         </div>
                     </div>
+                    <!-- Visual range indicator -->
+                    <div id="date-range-indicator" style="margin-top: 12px; padding: 10px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 13px; color: #1e40af; display: none;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-weight: 600;">Selected range:</span>
+                            <span id="range-display-text"></span>
+                        </div>
+                        <div id="range-days-count" style="font-size: 12px; color: #3b82f6; margin-top: 4px;"></div>
+                    </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-primary" style="flex: 1;" onclick="applyDateFilter()">Apply</button>
                         <button class="btn" style="flex: 1; background: white; border: 1px solid #d1d5db;" onclick="clearDateFilter()">Clear</button>
@@ -3209,13 +3217,18 @@
                     endDateInput.value = selectedEventDateEnd || today;
                 }
 
-                // Set up event listener for start date changes to update end date default
+                // Set up event listeners for date changes to update range display
                 startDateInput.addEventListener('change', handleStartDateChange);
+                endDateInput.addEventListener('change', updateRangeDisplay);
+
+                // Initialize range display
+                updateRangeDisplay();
 
                 datePicker.style.display = 'block';
             } else {
-                // Remove listener when closing to prevent duplicates
+                // Remove listeners when closing to prevent duplicates
                 startDateInput.removeEventListener('change', handleStartDateChange);
+                endDateInput.removeEventListener('change', updateRangeDisplay);
                 datePicker.style.display = 'none';
             }
         }
@@ -3235,7 +3248,54 @@
 
                 // Update end date minimum to prevent selecting before start date
                 endDateInput.min = startDate;
+
+                // Update range display
+                updateRangeDisplay();
             }
+        }
+
+        // Update visual range indicator
+        function updateRangeDisplay() {
+            const startDateInput = document.getElementById('events-date-start');
+            const endDateInput = document.getElementById('events-date-end');
+            const rangeIndicator = document.getElementById('date-range-indicator');
+            const rangeDisplayText = document.getElementById('range-display-text');
+            const rangeDaysCount = document.getElementById('range-days-count');
+
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+
+            if (startDate && endDate) {
+                // Calculate date range
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const daysDiff = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+
+                // Format dates for display
+                const startFormatted = formatDateForDisplay(start);
+                const endFormatted = formatDateForDisplay(end);
+
+                // Update display text
+                if (daysDiff === 0) {
+                    rangeDisplayText.textContent = startFormatted;
+                    rangeDaysCount.textContent = 'Single day';
+                } else {
+                    rangeDisplayText.textContent = `${startFormatted} – ${endFormatted}`;
+                    rangeDaysCount.textContent = `${daysDiff + 1} days`;
+                }
+
+                // Show range indicator with in-range styling
+                rangeIndicator.style.display = 'block';
+            } else {
+                // Hide if dates not selected
+                rangeIndicator.style.display = 'none';
+            }
+        }
+
+        // Format date for human-readable display
+        function formatDateForDisplay(date) {
+            const options = { month: 'short', day: 'numeric', year: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
         }
 
         // Apply date filter from calendar
