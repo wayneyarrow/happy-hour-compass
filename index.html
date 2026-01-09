@@ -1646,11 +1646,21 @@
                 </button>
             </div>
 
-            <!-- Simple date picker (hidden by default) -->
+            <!-- Date range picker (hidden by default) -->
             <div class="date-picker-container" id="events-date-picker" style="display: none;">
                 <div style="padding: 16px 20px; background: white; border-bottom: 1px solid #e5e7eb;">
-                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">Select Date</label>
-                    <input type="date" id="events-date-input" class="form-input" style="margin-top: 0;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">Select Date Range</label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 11px; font-weight: 500; color: #6b7280; margin-bottom: 4px;">Start Date</label>
+                            <input type="date" id="events-date-start" class="form-input" style="margin-top: 0;">
+                        </div>
+                        <div style="color: #9ca3af; padding-top: 16px;">→</div>
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 11px; font-weight: 500; color: #6b7280; margin-bottom: 4px;">End Date</label>
+                            <input type="date" id="events-date-end" class="form-input" style="margin-top: 0;">
+                        </div>
+                    </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-primary" style="flex: 1;" onclick="applyDateFilter()">Apply</button>
                         <button class="btn" style="flex: 1; background: white; border: 1px solid #d1d5db;" onclick="clearDateFilter()">Clear</button>
@@ -3093,7 +3103,8 @@
         // ========================================
 
         let currentEventsFilter = 'today';
-        let selectedEventDate = null;
+        let selectedEventDateStart = null;
+        let selectedEventDateEnd = null;
 
         // Toggle events search (reuse Favorites pattern)
         function toggleEventsSearch() {
@@ -3153,7 +3164,8 @@
         // Filter events by chip selection
         function filterEventsBy(filter) {
             currentEventsFilter = filter;
-            selectedEventDate = null; // Clear calendar selection
+            selectedEventDateStart = null; // Clear calendar selection
+            selectedEventDateEnd = null;
 
             // Update chip active states
             const todayChip = document.getElementById('events-chip-today');
@@ -3176,7 +3188,23 @@
         // Toggle calendar date picker
         function toggleEventsCalendar() {
             const datePicker = document.getElementById('events-date-picker');
+            const startDateInput = document.getElementById('events-date-start');
+            const endDateInput = document.getElementById('events-date-end');
+
             if (datePicker.style.display === 'none') {
+                // Opening calendar - set defaults to today if no prior selection
+                const today = new Date().toISOString().split('T')[0];
+
+                if (!selectedEventDateStart && !selectedEventDateEnd) {
+                    // No prior selection - default to today for both start and end
+                    startDateInput.value = today;
+                    endDateInput.value = today;
+                } else {
+                    // Restore prior selection
+                    startDateInput.value = selectedEventDateStart || today;
+                    endDateInput.value = selectedEventDateEnd || today;
+                }
+
                 datePicker.style.display = 'block';
             } else {
                 datePicker.style.display = 'none';
@@ -3185,26 +3213,41 @@
 
         // Apply date filter from calendar
         function applyDateFilter() {
-            const dateInput = document.getElementById('events-date-input');
-            selectedEventDate = dateInput.value;
+            const startDateInput = document.getElementById('events-date-start');
+            const endDateInput = document.getElementById('events-date-end');
 
-            if (selectedEventDate) {
+            selectedEventDateStart = startDateInput.value;
+            selectedEventDateEnd = endDateInput.value;
+
+            if (selectedEventDateStart && selectedEventDateEnd) {
+                // Validate that end date is not before start date
+                if (new Date(selectedEventDateEnd) < new Date(selectedEventDateStart)) {
+                    // Swap them if user selected backwards
+                    const temp = selectedEventDateStart;
+                    selectedEventDateStart = selectedEventDateEnd;
+                    selectedEventDateEnd = temp;
+                    startDateInput.value = selectedEventDateStart;
+                    endDateInput.value = selectedEventDateEnd;
+                }
+
                 // Clear chip selections
                 document.getElementById('events-chip-today').classList.remove('active');
                 document.getElementById('events-chip-weekend').classList.remove('active');
                 currentEventsFilter = 'custom';
 
-                // TODO: Alpha displays all events regardless of selected date
-                // Future: Implement actual date-based filtering
-                // For now, just close the picker
+                // TODO: Alpha displays all events regardless of selected date range
+                // Future: Implement actual date-based filtering logic here
+                // Filter should show events that occur on OR overlap the selected date range
                 toggleEventsCalendar();
             }
         }
 
         // Clear date filter
         function clearDateFilter() {
-            selectedEventDate = null;
-            document.getElementById('events-date-input').value = '';
+            selectedEventDateStart = null;
+            selectedEventDateEnd = null;
+            document.getElementById('events-date-start').value = '';
+            document.getElementById('events-date-end').value = '';
             toggleEventsCalendar();
 
             // Reset to "Happening Today"
