@@ -3919,10 +3919,32 @@
                 renderEventVenueInfo(fallbackVenue);
             }
 
+            // Get scroll container reference
+            const scrollContainer = document.getElementById('event-detail-scroll');
+            const collapsibleHeader = document.getElementById('event-header-collapsible');
+
+            // Reset scroll position BEFORE showing screen
+            scrollContainer.scrollTop = 0;
+            collapsibleHeader.classList.remove('collapsed');
+
+            // Show screen
+            showScreen('event-detail-screen');
+
+            // CRITICAL: Force scroll reset AFTER screen is visible
+            // This prevents browser history restoration from overriding our reset
+            requestAnimationFrame(() => {
+                scrollContainer.scrollTop = 0;
+                collapsibleHeader.classList.remove('collapsed');
+
+                // Also reset after a short delay to catch any delayed browser restore
+                setTimeout(() => {
+                    scrollContainer.scrollTop = 0;
+                    collapsibleHeader.classList.remove('collapsed');
+                }, 0);
+            });
+
             // Setup tabs and scroll tracking
             setupEventDetailTabs();
-
-            showScreen('event-detail-screen');
         }
 
         // Format event date/time for display
