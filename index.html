@@ -1271,6 +1271,143 @@
             color: #6b7280;
         }
 
+        /* Custom Calendar Styles */
+        .custom-calendar-container {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 20px;
+        }
+
+        .calendar-card {
+            background: white;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .calendar-month-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .calendar-nav-btn {
+            background: none;
+            border: none;
+            padding: 6px;
+            cursor: pointer;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            transition: background 0.2s;
+        }
+
+        .calendar-nav-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .calendar-nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .calendar-weekday {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            padding: 8px 0;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: #111827;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+            border: 1px solid transparent;
+        }
+
+        .calendar-day:hover:not(.disabled):not(.empty) {
+            background: #f3f4f6;
+            border-color: #e5e7eb;
+        }
+
+        .calendar-day.empty {
+            cursor: default;
+            visibility: hidden;
+        }
+
+        .calendar-day.disabled {
+            color: #d1d5db;
+            cursor: not-allowed;
+            background: #fafafa;
+        }
+
+        .calendar-day.today {
+            font-weight: 700;
+            color: #0284c7;
+        }
+
+        /* Range selection states */
+        .calendar-day.range-start {
+            background: #0284c7;
+            color: white;
+            font-weight: 600;
+            border-color: #0284c7;
+        }
+
+        .calendar-day.range-end {
+            background: #0284c7;
+            color: white;
+            font-weight: 600;
+            border-color: #0284c7;
+        }
+
+        .calendar-day.in-range {
+            background: #bae6fd;
+            color: #0c4a6e;
+            border-color: #7dd3fc;
+        }
+
+        .calendar-range-display {
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .calendar-actions {
+            display: flex;
+            gap: 8px;
+        }
+
         .date-picker-container {
             background: white;
             border-bottom: 1px solid #e5e7eb;
@@ -1646,32 +1783,48 @@
                 </button>
             </div>
 
-            <!-- Date range picker (hidden by default) -->
-            <div class="date-picker-container" id="events-date-picker" style="display: none;">
-                <div style="padding: 16px 20px; background: white; border-bottom: 1px solid #e5e7eb;">
-                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">Select Date Range</label>
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <div style="flex: 1;">
-                            <label style="display: block; font-size: 11px; font-weight: 500; color: #6b7280; margin-bottom: 4px;">Start Date</label>
-                            <input type="date" id="events-date-start" class="form-input" style="margin-top: 0;">
-                        </div>
-                        <div style="color: #9ca3af; padding-top: 16px;">→</div>
-                        <div style="flex: 1;">
-                            <label style="display: block; font-size: 11px; font-weight: 500; color: #6b7280; margin-bottom: 4px;">End Date</label>
-                            <input type="date" id="events-date-end" class="form-input" style="margin-top: 0;">
-                        </div>
+            <!-- Custom calendar range picker (hidden by default) -->
+            <div class="custom-calendar-container" id="events-calendar-picker" style="display: none;">
+                <div class="calendar-card">
+                    <!-- Calendar header with month navigation -->
+                    <div class="calendar-header">
+                        <button class="calendar-nav-btn" id="calendar-prev-month" onclick="navigateCalendarMonth(-1)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <div class="calendar-month-label" id="calendar-month-label">January 2026</div>
+                        <button class="calendar-nav-btn" id="calendar-next-month" onclick="navigateCalendarMonth(1)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
                     </div>
-                    <!-- Visual range indicator -->
-                    <div id="date-range-indicator" style="margin-top: 12px; padding: 10px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 13px; color: #1e40af; display: none;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-weight: 600;">Selected range:</span>
-                            <span id="range-display-text"></span>
-                        </div>
-                        <div id="range-days-count" style="font-size: 12px; color: #3b82f6; margin-top: 4px;"></div>
+
+                    <!-- Weekday headers -->
+                    <div class="calendar-weekdays">
+                        <div class="calendar-weekday">Su</div>
+                        <div class="calendar-weekday">Mo</div>
+                        <div class="calendar-weekday">Tu</div>
+                        <div class="calendar-weekday">We</div>
+                        <div class="calendar-weekday">Th</div>
+                        <div class="calendar-weekday">Fr</div>
+                        <div class="calendar-weekday">Sa</div>
                     </div>
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="btn btn-primary" style="flex: 1;" onclick="applyDateFilter()">Apply</button>
-                        <button class="btn" style="flex: 1; background: white; border: 1px solid #d1d5db;" onclick="clearDateFilter()">Clear</button>
+
+                    <!-- Calendar grid (dynamically populated) -->
+                    <div class="calendar-grid" id="calendar-grid"></div>
+
+                    <!-- Selected range display -->
+                    <div class="calendar-range-display" id="calendar-range-display">
+                        <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Selected Range</div>
+                        <div style="font-size: 14px; font-weight: 500; color: #111827;" id="calendar-range-text">Today</div>
+                    </div>
+
+                    <!-- Action buttons -->
+                    <div class="calendar-actions">
+                        <button class="btn btn-primary" style="flex: 1;" onclick="applyCalendarRange()">Apply</button>
+                        <button class="btn" style="flex: 1; background: white; border: 1px solid #d1d5db;" onclick="clearCalendarRange()">Clear</button>
                     </div>
                 </div>
             </div>
@@ -3193,102 +3346,198 @@
             checkEventsEmpty();
         }
 
-        // Toggle calendar date picker
+        // Custom Calendar State
+        let calendarCurrentMonth = new Date();
+        let calendarSelectedStart = null;
+        let calendarSelectedEnd = null;
+        let calendarAppliedStart = null;
+        let calendarAppliedEnd = null;
+
+        // Toggle custom calendar picker
         function toggleEventsCalendar() {
-            const datePicker = document.getElementById('events-date-picker');
-            const startDateInput = document.getElementById('events-date-start');
-            const endDateInput = document.getElementById('events-date-end');
+            const calendarPicker = document.getElementById('events-calendar-picker');
 
-            if (datePicker.style.display === 'none') {
-                // Opening calendar - set defaults to today if no prior selection
-                const today = new Date().toISOString().split('T')[0];
+            if (calendarPicker.style.display === 'none') {
+                // Opening calendar
+                const today = new Date();
 
-                // Disable past dates - set min to today
-                startDateInput.min = today;
-                endDateInput.min = today;
-
-                if (!selectedEventDateStart && !selectedEventDateEnd) {
-                    // No prior selection - default to today for both start and end
-                    startDateInput.value = today;
-                    endDateInput.value = today;
+                // Initialize selection to today if no prior applied range
+                if (!calendarAppliedStart && !calendarAppliedEnd) {
+                    calendarSelectedStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    calendarSelectedEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 } else {
-                    // Restore prior selection
-                    startDateInput.value = selectedEventDateStart || today;
-                    endDateInput.value = selectedEventDateEnd || today;
+                    // Restore applied range
+                    calendarSelectedStart = calendarAppliedStart ? new Date(calendarAppliedStart) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    calendarSelectedEnd = calendarAppliedEnd ? new Date(calendarAppliedEnd) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 }
 
-                // Set up event listeners for date changes to update range display
-                startDateInput.addEventListener('change', handleStartDateChange);
-                endDateInput.addEventListener('change', updateRangeDisplay);
+                // Set current month to the start date's month
+                calendarCurrentMonth = new Date(calendarSelectedStart.getFullYear(), calendarSelectedStart.getMonth(), 1);
 
-                // Initialize range display
-                updateRangeDisplay();
+                // Render calendar
+                renderCalendar();
+                updateCalendarRangeDisplay();
 
-                datePicker.style.display = 'block';
+                calendarPicker.style.display = 'block';
             } else {
-                // Remove listeners when closing to prevent duplicates
-                startDateInput.removeEventListener('change', handleStartDateChange);
-                endDateInput.removeEventListener('change', updateRangeDisplay);
-                datePicker.style.display = 'none';
+                // Closing calendar without applying - discard changes
+                calendarPicker.style.display = 'none';
             }
         }
 
-        // Handle start date change to update end date default
-        function handleStartDateChange() {
-            const startDateInput = document.getElementById('events-date-start');
-            const endDateInput = document.getElementById('events-date-end');
-            const startDate = startDateInput.value;
+        // Render calendar grid for current month
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            const monthLabel = document.getElementById('calendar-month-label');
+            const prevBtn = document.getElementById('calendar-prev-month');
 
-            if (startDate) {
-                // Set end date to match start date by default (single-day range)
-                // User can extend forward if desired
-                if (!endDateInput.value || new Date(endDateInput.value) < new Date(startDate)) {
-                    endDateInput.value = startDate;
+            if (!grid || !monthLabel) return;
+
+            // Update month label
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            monthLabel.textContent = `${monthNames[calendarCurrentMonth.getMonth()]} ${calendarCurrentMonth.getFullYear()}`;
+
+            // Disable prev button if it would go into past months
+            const today = new Date();
+            const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            const prevMonthStart = new Date(calendarCurrentMonth.getFullYear(), calendarCurrentMonth.getMonth() - 1, 1);
+
+            if (prevBtn) {
+                prevBtn.disabled = prevMonthStart < currentMonthStart;
+            }
+
+            // Calculate days in month and starting day of week
+            const year = calendarCurrentMonth.getFullYear();
+            const month = calendarCurrentMonth.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Clear grid
+            grid.innerHTML = '';
+
+            // Add empty cells for days before month start
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day empty';
+                grid.appendChild(emptyDay);
+            }
+
+            // Add day cells
+            const todayDate = new Date();
+            todayDate.setHours(0, 0, 0, 0);
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayDate = new Date(year, month, day);
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day';
+                dayCell.textContent = day;
+                dayCell.dataset.date = dayDate.toISOString().split('T')[0];
+
+                // Check if past date
+                const isPast = dayDate < todayDate;
+                if (isPast) {
+                    dayCell.classList.add('disabled');
+                } else {
+                    dayCell.onclick = () => handleDayClick(dayDate);
                 }
 
-                // Update end date minimum to prevent selecting before start date
-                endDateInput.min = startDate;
+                // Check if today
+                if (dayDate.getTime() === todayDate.getTime()) {
+                    dayCell.classList.add('today');
+                }
 
-                // Update range display
-                updateRangeDisplay();
+                // Apply range selection classes
+                applyCellRangeStyle(dayCell, dayDate);
+
+                grid.appendChild(dayCell);
             }
         }
 
-        // Update visual range indicator
-        function updateRangeDisplay() {
-            const startDateInput = document.getElementById('events-date-start');
-            const endDateInput = document.getElementById('events-date-end');
-            const rangeIndicator = document.getElementById('date-range-indicator');
-            const rangeDisplayText = document.getElementById('range-display-text');
-            const rangeDaysCount = document.getElementById('range-days-count');
+        // Apply range selection styling to a day cell
+        function applyCellRangeStyle(dayCell, dayDate) {
+            if (!calendarSelectedStart || !calendarSelectedEnd) return;
 
-            const startDate = startDateInput.value;
-            const endDate = endDateInput.value;
+            const cellTime = dayDate.getTime();
+            const startTime = calendarSelectedStart.getTime();
+            const endTime = calendarSelectedEnd.getTime();
 
-            if (startDate && endDate) {
-                // Calculate date range
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                const daysDiff = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+            // Check if start date
+            if (cellTime === startTime) {
+                dayCell.classList.add('range-start');
+            }
 
-                // Format dates for display
-                const startFormatted = formatDateForDisplay(start);
-                const endFormatted = formatDateForDisplay(end);
+            // Check if end date
+            if (cellTime === endTime && startTime !== endTime) {
+                dayCell.classList.add('range-end');
+            }
 
-                // Update display text
-                if (daysDiff === 0) {
-                    rangeDisplayText.textContent = startFormatted;
-                    rangeDaysCount.textContent = 'Single day';
+            // Check if in-range (strictly between start and end)
+            if (cellTime > startTime && cellTime < endTime) {
+                dayCell.classList.add('in-range');
+            }
+        }
+
+        // Handle day cell click (range selection logic)
+        function handleDayClick(clickedDate) {
+            const clickedTime = clickedDate.getTime();
+            const startTime = calendarSelectedStart ? calendarSelectedStart.getTime() : null;
+            const endTime = calendarSelectedEnd ? calendarSelectedEnd.getTime() : null;
+
+            // Booking-style range selection logic:
+            // 1. If no selection or clicking before current start -> set new start (single-day range)
+            // 2. If start === end (single-day range) and clicking after start -> extend to end
+            // 3. If full range exists -> reset to new single-day range
+
+            if (!calendarSelectedStart || !calendarSelectedEnd) {
+                // No selection - start new single-day range
+                calendarSelectedStart = clickedDate;
+                calendarSelectedEnd = clickedDate;
+            } else if (startTime === endTime) {
+                // Single-day range exists
+                if (clickedTime < startTime) {
+                    // Click before start -> new single-day range
+                    calendarSelectedStart = clickedDate;
+                    calendarSelectedEnd = clickedDate;
+                } else if (clickedTime === startTime) {
+                    // Click on same day -> no change
+                    return;
                 } else {
-                    rangeDisplayText.textContent = `${startFormatted} – ${endFormatted}`;
-                    rangeDaysCount.textContent = `${daysDiff + 1} days`;
+                    // Click after start -> extend range
+                    calendarSelectedEnd = clickedDate;
                 }
-
-                // Show range indicator with in-range styling
-                rangeIndicator.style.display = 'block';
             } else {
-                // Hide if dates not selected
-                rangeIndicator.style.display = 'none';
+                // Full range exists -> reset to new single-day range
+                calendarSelectedStart = clickedDate;
+                calendarSelectedEnd = clickedDate;
+            }
+
+            // Re-render calendar to update styling
+            renderCalendar();
+            updateCalendarRangeDisplay();
+        }
+
+        // Navigate to previous/next month
+        function navigateCalendarMonth(direction) {
+            calendarCurrentMonth = new Date(calendarCurrentMonth.getFullYear(), calendarCurrentMonth.getMonth() + direction, 1);
+            renderCalendar();
+        }
+
+        // Update the range display text below calendar
+        function updateCalendarRangeDisplay() {
+            const rangeText = document.getElementById('calendar-range-text');
+            if (!rangeText || !calendarSelectedStart || !calendarSelectedEnd) return;
+
+            const startFormatted = formatDateForDisplay(calendarSelectedStart);
+            const endFormatted = formatDateForDisplay(calendarSelectedEnd);
+
+            const startTime = calendarSelectedStart.getTime();
+            const endTime = calendarSelectedEnd.getTime();
+
+            if (startTime === endTime) {
+                rangeText.textContent = startFormatted;
+            } else {
+                const daysDiff = Math.floor((endTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
+                rangeText.textContent = `${startFormatted} – ${endFormatted} (${daysDiff} days)`;
             }
         }
 
@@ -3298,43 +3547,42 @@
             return date.toLocaleDateString('en-US', options);
         }
 
-        // Apply date filter from calendar
-        function applyDateFilter() {
-            const startDateInput = document.getElementById('events-date-start');
-            const endDateInput = document.getElementById('events-date-end');
+        // Apply calendar range filter
+        function applyCalendarRange() {
+            if (!calendarSelectedStart || !calendarSelectedEnd) return;
 
-            selectedEventDateStart = startDateInput.value;
-            selectedEventDateEnd = endDateInput.value;
+            // Save applied range
+            calendarAppliedStart = new Date(calendarSelectedStart);
+            calendarAppliedEnd = new Date(calendarSelectedEnd);
 
-            if (selectedEventDateStart && selectedEventDateEnd) {
-                // Validate that end date is not before start date
-                if (new Date(selectedEventDateEnd) < new Date(selectedEventDateStart)) {
-                    // Swap them if user selected backwards
-                    const temp = selectedEventDateStart;
-                    selectedEventDateStart = selectedEventDateEnd;
-                    selectedEventDateEnd = temp;
-                    startDateInput.value = selectedEventDateStart;
-                    endDateInput.value = selectedEventDateEnd;
-                }
+            // Store in ISO format for filtering
+            selectedEventDateStart = calendarAppliedStart.toISOString().split('T')[0];
+            selectedEventDateEnd = calendarAppliedEnd.toISOString().split('T')[0];
 
-                // Clear chip selections
-                document.getElementById('events-chip-today').classList.remove('active');
-                document.getElementById('events-chip-weekend').classList.remove('active');
-                currentEventsFilter = 'custom';
+            // Clear chip selections
+            document.getElementById('events-chip-today').classList.remove('active');
+            document.getElementById('events-chip-weekend').classList.remove('active');
+            currentEventsFilter = 'custom';
 
-                // TODO: Alpha displays all events regardless of selected date range
-                // Future: Implement actual date-based filtering logic here
-                // Filter should show events that occur on OR overlap the selected date range
-                toggleEventsCalendar();
-            }
+            // TODO: Alpha displays all events regardless of selected date range
+            // Future: Implement actual date-based filtering logic here
+            // Filter should show events that occur on OR overlap the selected date range
+
+            // Close calendar
+            toggleEventsCalendar();
         }
 
-        // Clear date filter
-        function clearDateFilter() {
+        // Clear calendar range filter
+        function clearCalendarRange() {
+            // Clear all calendar state
+            calendarSelectedStart = null;
+            calendarSelectedEnd = null;
+            calendarAppliedStart = null;
+            calendarAppliedEnd = null;
             selectedEventDateStart = null;
             selectedEventDateEnd = null;
-            document.getElementById('events-date-start').value = '';
-            document.getElementById('events-date-end').value = '';
+
+            // Close calendar
             toggleEventsCalendar();
 
             // Reset to "Happening Today"
