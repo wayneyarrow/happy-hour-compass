@@ -4210,8 +4210,15 @@
         }
 
         function shareEvent() {
-            if (!currentEventData) return;
-            alert(`Sharing: ${currentEventData.name}`);
+            if (currentEventData && navigator.share) {
+                navigator.share({
+                    title: currentEventData.name,
+                    text: `Check out ${currentEventData.name} on Happy Hour Compass!`,
+                    url: window.location.href
+                }).catch(err => console.log('Error sharing:', err));
+            } else if (currentEventData) {
+                alert(`Share: ${currentEventData.name}`);
+            }
         }
 
         function callEventVenue() {
