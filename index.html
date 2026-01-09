@@ -1408,6 +1408,67 @@
             gap: 8px;
         }
 
+        /* From/To Date Fields */
+        .calendar-from-to-fields {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .date-field {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .date-field:hover {
+            border-color: #cbd5e1;
+            background: #f9fafb;
+        }
+
+        .date-field.active {
+            border-color: #0284c7;
+            background: #f0f9ff;
+        }
+
+        .date-field-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .date-field-value {
+            font-size: 14px;
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .date-field-value.placeholder {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        /* Calendar Helper Text */
+        .calendar-helper-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            text-align: center;
+        }
+
         .date-picker-container {
             background: white;
             border-bottom: 1px solid #e5e7eb;
@@ -1786,6 +1847,22 @@
             <!-- Custom calendar range picker (hidden by default) -->
             <div class="custom-calendar-container" id="events-calendar-picker" style="display: none;">
                 <div class="calendar-card">
+                    <!-- From/To date fields -->
+                    <div class="calendar-from-to-fields">
+                        <div class="date-field" id="date-field-from" onclick="setActiveField('from')">
+                            <div class="date-field-label">From</div>
+                            <div class="date-field-value" id="date-field-from-value">Select start</div>
+                        </div>
+                        <div style="color: #9ca3af; padding-top: 20px;">→</div>
+                        <div class="date-field" id="date-field-to" onclick="setActiveField('to')">
+                            <div class="date-field-label">To</div>
+                            <div class="date-field-value" id="date-field-to-value">Select end</div>
+                        </div>
+                    </div>
+
+                    <!-- Helper text guidance -->
+                    <div class="calendar-helper-text" id="calendar-helper-text">Select a start date</div>
+
                     <!-- Calendar header with month navigation -->
                     <div class="calendar-header">
                         <button class="calendar-nav-btn" id="calendar-prev-month" onclick="navigateCalendarMonth(-1)">
@@ -1814,12 +1891,6 @@
 
                     <!-- Calendar grid (dynamically populated) -->
                     <div class="calendar-grid" id="calendar-grid"></div>
-
-                    <!-- Selected range display -->
-                    <div class="calendar-range-display" id="calendar-range-display">
-                        <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Selected Range</div>
-                        <div style="font-size: 14px; font-weight: 500; color: #111827;" id="calendar-range-text">Today</div>
-                    </div>
 
                     <!-- Action buttons -->
                     <div class="calendar-actions">
@@ -3352,6 +3423,57 @@
         let calendarSelectedEnd = null;
         let calendarAppliedStart = null;
         let calendarAppliedEnd = null;
+        let calendarActiveField = 'from'; // 'from' or 'to'
+
+        // Set active field (from or to)
+        function setActiveField(field) {
+            calendarActiveField = field;
+
+            // Update visual indicators
+            const fromField = document.getElementById('date-field-from');
+            const toField = document.getElementById('date-field-to');
+            const helperText = document.getElementById('calendar-helper-text');
+
+            if (field === 'from') {
+                fromField.classList.add('active');
+                toField.classList.remove('active');
+                helperText.textContent = 'Select a start date';
+            } else {
+                fromField.classList.remove('active');
+                toField.classList.add('active');
+                helperText.textContent = 'Select an end date';
+            }
+        }
+
+        // Update From/To field displays
+        function updateFromToFields() {
+            const fromValue = document.getElementById('date-field-from-value');
+            const toValue = document.getElementById('date-field-to-value');
+
+            if (calendarSelectedStart) {
+                const formatted = formatDateForFieldDisplay(calendarSelectedStart);
+                fromValue.textContent = formatted;
+                fromValue.classList.remove('placeholder');
+            } else {
+                fromValue.textContent = 'Select start';
+                fromValue.classList.add('placeholder');
+            }
+
+            if (calendarSelectedEnd) {
+                const formatted = formatDateForFieldDisplay(calendarSelectedEnd);
+                toValue.textContent = formatted;
+                toValue.classList.remove('placeholder');
+            } else {
+                toValue.textContent = 'Select end';
+                toValue.classList.add('placeholder');
+            }
+        }
+
+        // Format date for From/To field display (e.g., "Thu, Jan 8")
+        function formatDateForFieldDisplay(date) {
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
 
         // Toggle custom calendar picker
         function toggleEventsCalendar() {
@@ -3374,9 +3496,15 @@
                 // Set current month to the start date's month
                 calendarCurrentMonth = new Date(calendarSelectedStart.getFullYear(), calendarSelectedStart.getMonth(), 1);
 
+                // Default to selecting From field
+                calendarActiveField = 'from';
+                setActiveField('from');
+
+                // Update From/To field displays
+                updateFromToFields();
+
                 // Render calendar
                 renderCalendar();
-                updateCalendarRangeDisplay();
 
                 calendarPicker.style.display = 'block';
             } else {
@@ -3477,43 +3605,41 @@
             }
         }
 
-        // Handle day cell click (range selection logic)
+        // Handle day cell click (guided From/To selection logic)
         function handleDayClick(clickedDate) {
             const clickedTime = clickedDate.getTime();
-            const startTime = calendarSelectedStart ? calendarSelectedStart.getTime() : null;
-            const endTime = calendarSelectedEnd ? calendarSelectedEnd.getTime() : null;
 
-            // Booking-style range selection logic:
-            // 1. If no selection or clicking before current start -> set new start (single-day range)
-            // 2. If start === end (single-day range) and clicking after start -> extend to end
-            // 3. If full range exists -> reset to new single-day range
-
-            if (!calendarSelectedStart || !calendarSelectedEnd) {
-                // No selection - start new single-day range
+            if (calendarActiveField === 'from') {
+                // Setting From (start date)
                 calendarSelectedStart = clickedDate;
-                calendarSelectedEnd = clickedDate;
-            } else if (startTime === endTime) {
-                // Single-day range exists
-                if (clickedTime < startTime) {
-                    // Click before start -> new single-day range
-                    calendarSelectedStart = clickedDate;
-                    calendarSelectedEnd = clickedDate;
-                } else if (clickedTime === startTime) {
-                    // Click on same day -> no change
-                    return;
-                } else {
-                    // Click after start -> extend range
+
+                // If end date is now before start date, set end = start
+                if (calendarSelectedEnd && calendarSelectedEnd.getTime() < clickedTime) {
                     calendarSelectedEnd = clickedDate;
                 }
+
+                // Switch to selecting To field
+                setActiveField('to');
             } else {
-                // Full range exists -> reset to new single-day range
-                calendarSelectedStart = clickedDate;
-                calendarSelectedEnd = clickedDate;
+                // Setting To (end date)
+                const startTime = calendarSelectedStart ? calendarSelectedStart.getTime() : null;
+
+                if (clickedTime < startTime) {
+                    // User clicked before start date - treat as new start
+                    calendarSelectedStart = clickedDate;
+                    calendarSelectedEnd = clickedDate;
+                    // Keep active field as 'to' (user still choosing end)
+                } else {
+                    // Normal case - set end date
+                    calendarSelectedEnd = clickedDate;
+                }
             }
+
+            // Update From/To field displays
+            updateFromToFields();
 
             // Re-render calendar to update styling
             renderCalendar();
-            updateCalendarRangeDisplay();
         }
 
         // Navigate to previous/next month
@@ -3522,26 +3648,7 @@
             renderCalendar();
         }
 
-        // Update the range display text below calendar
-        function updateCalendarRangeDisplay() {
-            const rangeText = document.getElementById('calendar-range-text');
-            if (!rangeText || !calendarSelectedStart || !calendarSelectedEnd) return;
-
-            const startFormatted = formatDateForDisplay(calendarSelectedStart);
-            const endFormatted = formatDateForDisplay(calendarSelectedEnd);
-
-            const startTime = calendarSelectedStart.getTime();
-            const endTime = calendarSelectedEnd.getTime();
-
-            if (startTime === endTime) {
-                rangeText.textContent = startFormatted;
-            } else {
-                const daysDiff = Math.floor((endTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
-                rangeText.textContent = `${startFormatted} – ${endFormatted} (${daysDiff} days)`;
-            }
-        }
-
-        // Format date for human-readable display
+        // Format date for human-readable display (e.g., "Jan 8, 2026")
         function formatDateForDisplay(date) {
             const options = { month: 'short', day: 'numeric', year: 'numeric' };
             return date.toLocaleDateString('en-US', options);
