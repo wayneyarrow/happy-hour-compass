@@ -3932,6 +3932,9 @@
             const container = document.getElementById('event-action-buttons');
             if (!container) return;
 
+            // Look up the venue to access its website URL
+            const venue = venues[event.venue];
+
             let ctaHTML = '';
 
             // Buy Tickets CTA - only if ticketUrl exists
@@ -3958,8 +3961,8 @@
                 `;
             }
 
-            // Website CTA - only if website exists
-            if (event.website) {
+            // Website CTA - use venue's websiteUrl (same as Venue Detail)
+            if (venue && venue.websiteUrl) {
                 ctaHTML += `
                     <button class="venue-action-btn" onclick="openEventWebsite()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4332,8 +4335,12 @@
         }
 
         function openEventWebsite() {
-            if (!currentEventData || !currentEventData.website) return;
-            window.open(currentEventData.website, '_blank');
+            if (!currentEventData) return;
+            // Use the venue's website URL (same as Venue Detail)
+            const venue = venues[currentEventData.venue];
+            if (venue && venue.websiteUrl) {
+                window.open(venue.websiteUrl, '_blank');
+            }
         }
 
         function goBack() {
