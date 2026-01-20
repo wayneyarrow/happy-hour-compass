@@ -1897,7 +1897,7 @@
                         </svg>
                     </button>
                 </div>
-                <div class="filters">
+                <div class="filters" id="events-filters">
                     <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
                     <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
                 </div>
@@ -4708,6 +4708,45 @@
             });
         }
 
+        // One-time horizontal peek animation for filter chips
+        function showFilterSwipeHint(filterId, storageKey) {
+            // Check if hint has already been shown
+            if (sessionStorage.getItem(storageKey)) {
+                return;
+            }
+
+            const filterContainer = document.getElementById(filterId);
+            if (!filterContainer) return;
+
+            // Only animate if there's horizontal overflow
+            if (filterContainer.scrollWidth <= filterContainer.clientWidth + 1) {
+                return;
+            }
+
+            // Wait a moment for layout to settle, then animate
+            setTimeout(() => {
+                const initialScroll = filterContainer.scrollLeft;
+                const nudgeAmount = 16; // pixels to nudge right
+
+                // Smoothly scroll right
+                filterContainer.scrollTo({
+                    left: initialScroll + nudgeAmount,
+                    behavior: 'smooth'
+                });
+
+                // After a short pause, scroll back to start
+                setTimeout(() => {
+                    filterContainer.scrollTo({
+                        left: initialScroll,
+                        behavior: 'smooth'
+                    });
+                }, 400);
+
+                // Mark hint as shown
+                sessionStorage.setItem(storageKey, 'true');
+            }, 300);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize the toggle icon
             const toggleIconSvg = document.getElementById('toggle-icon-svg');
@@ -4720,6 +4759,10 @@
 
             // Initialize favorites empty state check
             checkFavoritesEmpty();
+
+            // Show one-time swipe hint for filter chips (if overflow exists)
+            showFilterSwipeHint('search-filters', 'hhc_filters_swipe_hint_shown_search');
+            showFilterSwipeHint('events-filters', 'hhc_filters_swipe_hint_shown_events');
 
             // Attach scroll listeners to both content areas
             const listContent = document.getElementById('list-content');
