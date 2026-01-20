@@ -736,10 +736,23 @@
             flex-shrink: 0;
         }
 
+        .filter-section {
+            flex-shrink: 0;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 20px 8px 20px;
+        }
+
         .filters {
             display: flex;
             gap: 10px;
-            padding: 15px 20px;
+            padding: 0 20px 15px 20px;
             overflow-x: auto;
             flex-shrink: 0;
             max-height: 100px;
@@ -747,7 +760,7 @@
             transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
         }
 
-        .filters.collapsed {
+        .filter-section.collapsed .filters {
             max-height: 0;
             opacity: 0;
             padding-top: 0;
@@ -755,19 +768,46 @@
             overflow: hidden;
         }
 
+        .filter-section.collapsed .filter-label {
+            display: none;
+        }
+
         .filter-chip {
-            background: #e5e7eb;
-            border: none;
+            background: white;
+            border: 2px solid #d1d5db;
             border-radius: 20px;
             padding: 8px 16px;
             white-space: nowrap;
             cursor: pointer;
             font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-chip:hover {
+            border-color: #9ca3af;
+            background: #f9fafb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-chip:active {
+            transform: scale(0.97);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
 
         .filter-chip.active {
             background: #3b82f6;
             color: white;
+            border-color: #3b82f6;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        }
+
+        .filter-chip.active:hover {
+            background: #2563eb;
+            border-color: #2563eb;
         }
 
 
@@ -1590,14 +1630,17 @@
                 </div>
             </div>
 
-            <div class="filters" id="search-filters">
-                <button class="filter-chip active">Happening Now</button>
-                <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
-                <button class="filter-chip">Near Me</button>
-                <button class="filter-chip">Open Now</button>
-                <button class="filter-chip">Sports Bars</button>
-                <button class="filter-chip">Fine Dining</button>
-                <button class="filter-chip">Under $10</button>
+            <div class="filter-section" id="search-filter-section">
+                <div class="filter-label">Filter results</div>
+                <div class="filters" id="search-filters">
+                    <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
+                    <button class="filter-chip">Near Me</button>
+                    <button class="filter-chip active">Happening Now</button>
+                    <button class="filter-chip">Open Now</button>
+                    <button class="filter-chip">Sports Bars</button>
+                    <button class="filter-chip">Fine Dining</button>
+                    <button class="filter-chip">Under $10</button>
+                </div>
             </div>
 
             <div class="content" id="list-content">
@@ -4609,7 +4652,7 @@
         // Filter collapse on scroll
         let lastScrollTop = 0;
         const searchScreen = document.getElementById('search-screen');
-        const filters = document.getElementById('search-filters');
+        const filterSection = document.getElementById('search-filter-section');
 
         function handleSearchScroll() {
             const listContent = document.getElementById('list-content');
@@ -4624,10 +4667,10 @@
 
             // If scrolled to top (or very close), show filters
             if (scrollTop <= 10) {
-                filters.classList.remove('collapsed');
+                filterSection.classList.remove('collapsed');
             } else {
                 // If scrolling down, hide filters
-                filters.classList.add('collapsed');
+                filterSection.classList.add('collapsed');
             }
 
             lastScrollTop = scrollTop;
