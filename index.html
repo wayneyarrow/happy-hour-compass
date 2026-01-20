@@ -736,35 +736,10 @@
             flex-shrink: 0;
         }
 
-        .filter-section {
-            flex-shrink: 0;
-            position: sticky;
-            top: 0;
-            z-index: 48;
-            background: white;
-            border-bottom: 1px solid #e5e7eb;
-            margin: -20px -20px 0 -20px;
-        }
-
-        .filter-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 12px 20px 8px 20px;
-        }
-
-        /* Events filter section with calendar button */
-        #events-filter-section > div:first-child {
-            padding: 0 20px;
-            padding-bottom: 8px;
-        }
-
         .filters {
             display: flex;
             gap: 10px;
-            padding: 0 20px 15px 20px;
+            padding: 15px 20px;
             overflow-x: auto;
             flex-shrink: 0;
             max-height: 100px;
@@ -772,7 +747,7 @@
             transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
         }
 
-        .filter-section.collapsed .filters {
+        .filters.collapsed {
             max-height: 0;
             opacity: 0;
             padding-top: 0;
@@ -780,46 +755,19 @@
             overflow: hidden;
         }
 
-        .filter-section.collapsed .filter-label {
-            display: none;
-        }
-
         .filter-chip {
-            background: white;
-            border: 2px solid #d1d5db;
+            background: #e5e7eb;
+            border: none;
             border-radius: 20px;
             padding: 8px 16px;
             white-space: nowrap;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        }
-
-        .filter-chip:hover {
-            border-color: #9ca3af;
-            background: #f9fafb;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .filter-chip:active {
-            transform: scale(0.97);
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
 
         .filter-chip.active {
             background: #3b82f6;
             color: white;
-            border-color: #3b82f6;
-            font-weight: 600;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-        }
-
-        .filter-chip.active:hover {
-            background: #2563eb;
-            border-color: #2563eb;
         }
 
 
@@ -1642,19 +1590,17 @@
                 </div>
             </div>
 
+            <div class="filters" id="search-filters">
+                <button class="filter-chip active">Happening Now</button>
+                <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
+                <button class="filter-chip">Near Me</button>
+                <button class="filter-chip">Open Now</button>
+                <button class="filter-chip">Sports Bars</button>
+                <button class="filter-chip">Fine Dining</button>
+                <button class="filter-chip">Under $10</button>
+            </div>
+
             <div class="content" id="list-content">
-                <div class="filter-section" id="search-filter-section">
-                    <div class="filter-label">Filter results</div>
-                    <div class="filters" id="search-filters">
-                        <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
-                        <button class="filter-chip">Near Me</button>
-                        <button class="filter-chip active">Happening Now</button>
-                        <button class="filter-chip">Open Now</button>
-                        <button class="filter-chip">Sports Bars</button>
-                        <button class="filter-chip">Fine Dining</button>
-                        <button class="filter-chip">Under $10</button>
-                    </div>
-                </div>
                 <!-- Search Empty State (hidden by default, shown when no results) -->
                 <div class="empty-state" id="search-empty-state" style="display: none;">
                     <div class="empty-state-icon">🔍</div>
@@ -1891,22 +1837,19 @@
                 </div>
             </div>
 
-            <div class="filter-section" id="events-filter-section">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="filter-label">Filter events</div>
-                    <button class="calendar-btn" id="events-calendar-btn" onclick="toggleEventsCalendar()" title="Select date">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                    </button>
-                </div>
-                <div class="filters" id="events-filters">
+            <div class="filters" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;">
+                <div style="display: flex; gap: 8px; flex: 1; overflow-x: auto;">
                     <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
                     <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
                 </div>
+                <button class="calendar-btn" id="events-calendar-btn" onclick="toggleEventsCalendar()" title="Select date">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </button>
             </div>
 
             <!-- Custom calendar range picker (hidden by default) -->
@@ -4666,7 +4609,7 @@
         // Filter collapse on scroll
         let lastScrollTop = 0;
         const searchScreen = document.getElementById('search-screen');
-        const filterSection = document.getElementById('search-filter-section');
+        const filters = document.getElementById('search-filters');
 
         function handleSearchScroll() {
             const listContent = document.getElementById('list-content');
@@ -4681,10 +4624,10 @@
 
             // If scrolled to top (or very close), show filters
             if (scrollTop <= 10) {
-                filterSection.classList.remove('collapsed');
+                filters.classList.remove('collapsed');
             } else {
                 // If scrolling down, hide filters
-                filterSection.classList.add('collapsed');
+                filters.classList.add('collapsed');
             }
 
             lastScrollTop = scrollTop;
