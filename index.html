@@ -745,6 +745,19 @@
             padding: 12px 20px 6px 20px;
         }
 
+        .filter-section {
+            flex-shrink: 0;
+            max-height: 200px;
+            opacity: 1;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+        }
+
+        .filter-section.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
         .filters {
             display: flex;
             gap: 10px;
@@ -1622,15 +1635,17 @@
                 </div>
             </div>
 
-            <div class="filter-label">Filter results</div>
-            <div class="filters" id="search-filters">
-                <button class="filter-chip active">Happening Now</button>
-                <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
-                <button class="filter-chip">Near Me</button>
-                <button class="filter-chip">Open Now</button>
-                <button class="filter-chip">Sports Bars</button>
-                <button class="filter-chip">Fine Dining</button>
-                <button class="filter-chip">Under $10</button>
+            <div class="filter-section" id="search-filter-section">
+                <div class="filter-label">Filter results</div>
+                <div class="filters" id="search-filters">
+                    <button class="filter-chip active">Happening Now</button>
+                    <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
+                    <button class="filter-chip">Near Me</button>
+                    <button class="filter-chip">Open Now</button>
+                    <button class="filter-chip">Sports Bars</button>
+                    <button class="filter-chip">Fine Dining</button>
+                    <button class="filter-chip">Under $10</button>
+                </div>
             </div>
 
             <div class="content" id="list-content">
@@ -1870,20 +1885,22 @@
                 </div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px 6px 20px;">
-                <div class="filter-label" style="padding: 0;">Filter events</div>
-                <button class="calendar-btn" id="events-calendar-btn" onclick="toggleEventsCalendar()" title="Select date">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="filters">
-                <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
-                <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
+            <div class="filter-section" id="events-filter-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px 6px 20px;">
+                    <div class="filter-label" style="padding: 0;">Filter events</div>
+                    <button class="calendar-btn" id="events-calendar-btn" onclick="toggleEventsCalendar()" title="Select date">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="filters">
+                    <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
+                    <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
+                </div>
             </div>
 
             <!-- Custom calendar range picker (hidden by default) -->
@@ -4643,7 +4660,7 @@
         // Filter collapse on scroll
         let lastScrollTop = 0;
         const searchScreen = document.getElementById('search-screen');
-        const filters = document.getElementById('search-filters');
+        const searchFilterSection = document.getElementById('search-filter-section');
 
         function handleSearchScroll() {
             const listContent = document.getElementById('list-content');
@@ -4658,10 +4675,10 @@
 
             // If scrolled to top (or very close), show filters
             if (scrollTop <= 10) {
-                filters.classList.remove('collapsed');
+                searchFilterSection.classList.remove('collapsed');
             } else {
                 // If scrolling down, hide filters
-                filters.classList.add('collapsed');
+                searchFilterSection.classList.add('collapsed');
             }
 
             lastScrollTop = scrollTop;
