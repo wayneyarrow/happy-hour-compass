@@ -1513,6 +1513,30 @@
             text-align: center;
             padding: 60px 40px;
             color: #6b7280;
+            position: relative;
+        }
+
+        .empty-state-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f3f4f6;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-size: 18px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .empty-state-close:hover {
+            background: #e5e7eb;
+            color: #374151;
         }
 
         .empty-state-icon {
@@ -1548,6 +1572,14 @@
 
         .empty-state-action:hover {
             background: #2563eb;
+        }
+
+        .empty-state-action.orange {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .empty-state-action.orange:hover {
+            background: linear-gradient(135deg, #d97706, #b45309);
         }
 
         .empty-state-secondary {
@@ -1628,11 +1660,12 @@
             <div class="content" id="list-content">
                 <!-- Search Empty State (hidden by default, shown when no results) -->
                 <div class="empty-state" id="search-empty-state" style="display: none;">
+                    <button class="empty-state-close" onclick="dismissSearchEmptyState()" aria-label="Close">✕</button>
                     <div class="empty-state-icon">🔍</div>
                     <div class="empty-state-title">No matches</div>
                     <div class="empty-state-body">Try clearing filters or searching a different area.</div>
                     <div class="empty-state-body" style="margin-top: 24px; margin-bottom: 12px;">Can't find your favorite spot?</div>
-                    <button class="empty-state-action" onclick="showScreen('create-ask-screen')">Suggest a place</button>
+                    <button class="empty-state-action orange" onclick="showScreen('create-ask-screen')">Suggest a place</button>
                 </div>
 
                 <h3 class="section-header">🔥 Popular Right Now</h3>
@@ -4519,6 +4552,29 @@
             element.classList.toggle('favorited');
             // Update favorites empty state if we're on the favorites screen
             checkFavoritesEmpty();
+        }
+
+        // Dismiss search empty state and clear search
+        function dismissSearchEmptyState() {
+            const searchInput = document.getElementById('search-input');
+            const emptyState = document.getElementById('search-empty-state');
+            const sectionHeaders = document.querySelectorAll('#list-content .section-header');
+
+            // Clear search input
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            // Hide empty state
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+
+            // Show all venues and section headers (return to default state)
+            document.querySelectorAll('#list-content .listing-item').forEach(item => {
+                item.style.display = 'flex';
+            });
+            sectionHeaders.forEach(header => header.style.display = 'block');
         }
 
         // Search functionality
