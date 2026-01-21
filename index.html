@@ -3629,37 +3629,37 @@
 
         // Perform search on events
         function performEventsSearch() {
-            const searchTerm = document.getElementById('events-search-input').value.toLowerCase();
+            const searchTerm = document.getElementById('events-search-input')?.value.toLowerCase() || '';
             const eventsContent = document.getElementById('events-content');
             const eventItems = eventsContent.querySelectorAll('.event-item');
-            const emptyState = document.getElementById('events-empty-state');
 
             if (searchTerm.length === 0) {
-                eventItems.forEach(item => {
-                    item.style.display = 'block';
-                });
-                checkEventsEmpty();
+                // No search term - apply only filters
+                applyEventFilters();
                 return;
             }
 
-            let visibleCount = 0;
+            // Search with filters combined
             eventItems.forEach(item => {
                 const eventTitle = item.querySelector('.event-title')?.textContent.toLowerCase() || '';
                 const eventVenue = item.querySelector('.event-venue')?.textContent.toLowerCase() || '';
-                if (eventTitle.includes(searchTerm) || eventVenue.includes(searchTerm)) {
+
+                // Extract event name for filter check
+                const onclickAttr = item.getAttribute('onclick') || '';
+                const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
+                const eventName = match ? match[1] : null;
+
+                const matchesSearch = eventTitle.includes(searchTerm) || eventVenue.includes(searchTerm);
+                const matchesFilter = eventName ? eventMatchesFilter(eventName) : true;
+
+                if (matchesSearch && matchesFilter) {
                     item.style.display = 'block';
-                    visibleCount++;
                 } else {
                     item.style.display = 'none';
                 }
             });
 
-            // Show/hide empty state
-            if (visibleCount === 0) {
-                if (emptyState) emptyState.style.display = 'flex';
-            } else {
-                if (emptyState) emptyState.style.display = 'none';
-            }
+            checkEventsEmpty();
         }
 
         // Filter events by chip selection
@@ -3681,8 +3681,61 @@
                 weekendChip.classList.add('active');
             }
 
-            // TODO: Alpha displays all events regardless of filter
-            // Future: Implement actual date-based filtering
+            // Apply the filter to event items
+            applyEventFilters();
+        }
+
+        // Check if an event matches the current filter
+        function eventMatchesFilter(eventName) {
+            const event = events[eventName];
+            if (!event) return false;
+
+            const now = new Date();
+            const currentDay = now.getDay(); // 0 = Sunday
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[currentDay];
+
+            // Parse the schedule to determine which day(s) the event runs
+            const schedule = (event.schedule || '').toLowerCase();
+
+            if (currentEventsFilter === 'today') {
+                // Check if event runs today
+                if (schedule.includes('every')) {
+                    // e.g., "Every Sunday", "Every Thursday", "Every Wednesday"
+                    return schedule.toLowerCase().includes(todayName.toLowerCase());
+                }
+                // For one-off events, check if the date matches today
+                return schedule.includes(todayName.toLowerCase());
+            } else if (currentEventsFilter === 'weekend') {
+                // Weekend = Saturday or Sunday
+                if (schedule.includes('every')) {
+                    return schedule.includes('saturday') || schedule.includes('sunday');
+                }
+                // Check for weekend days in the schedule
+                return schedule.includes('saturday') || schedule.includes('sunday');
+            }
+
+            // If no filter or unknown filter, show all
+            return true;
+        }
+
+        // Apply event filters to the list
+        function applyEventFilters() {
+            const eventItems = document.querySelectorAll('#events-content .event-item');
+
+            eventItems.forEach(item => {
+                // Extract event name from onclick attribute
+                const onclickAttr = item.getAttribute('onclick') || '';
+                const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
+                const eventName = match ? match[1] : null;
+
+                if (eventName && eventMatchesFilter(eventName)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
             checkEventsEmpty();
         }
 
@@ -4557,65 +4610,157 @@
         // Dismiss search empty state and clear search
         function dismissSearchEmptyState() {
             const searchInput = document.getElementById('search-input');
-            const emptyState = document.getElementById('search-empty-state');
-            const sectionHeaders = document.querySelectorAll('#list-content .section-header');
 
             // Clear search input
             if (searchInput) {
                 searchInput.value = '';
             }
 
-            // Hide empty state
-            if (emptyState) {
-                emptyState.style.display = 'none';
-            }
-
-            // Show all venues and section headers (return to default state)
-            document.querySelectorAll('#list-content .listing-item').forEach(item => {
-                item.style.display = 'flex';
+            // Clear all venue filters and reset chip states
+            activeVenueFilters.clear();
+            document.querySelectorAll('#search-filters .filter-chip').forEach(chip => {
+                chip.classList.remove('active');
             });
-            sectionHeaders.forEach(header => header.style.display = 'block');
+
+            // Reapply filters (which will show all venues since no filters are active)
+            applyVenueFilters();
         }
 
-        // Search functionality
-        function performSearch() {
-            const searchTerm = document.getElementById('search-input').value.toLowerCase();
-            const venueNames = Object.keys(venues);
+        // Venue filter state
+        let activeVenueFilters = new Set(['happening-now']); // Default: "Happening Now" is active
+
+        // Initialize venue filters
+        function initVenueFilters() {
+            const filterChips = document.querySelectorAll('#search-filters .filter-chip');
+            filterChips.forEach(chip => {
+                const filterType = getFilterTypeFromChip(chip);
+                chip.onclick = () => toggleVenueFilter(chip, filterType);
+            });
+            // Apply initial filters
+            applyVenueFilters();
+        }
+
+        // Map chip text to filter type
+        function getFilterTypeFromChip(chip) {
+            const text = chip.textContent.trim().toLowerCase();
+            if (text.includes('happening now')) return 'happening-now';
+            if (text.includes('near me')) return 'near-me';
+            if (text.includes('open now')) return 'open-now';
+            if (text.includes('sports')) return 'sports-bars';
+            if (text.includes('fine dining')) return 'fine-dining';
+            if (text.includes('under $10')) return 'under-10';
+            return text;
+        }
+
+        // Toggle a venue filter
+        function toggleVenueFilter(chip, filterType) {
+            if (activeVenueFilters.has(filterType)) {
+                activeVenueFilters.delete(filterType);
+                chip.classList.remove('active');
+            } else {
+                activeVenueFilters.add(filterType);
+                chip.classList.add('active');
+            }
+            applyVenueFilters();
+        }
+
+        // Check if a venue matches the active filters
+        function venueMatchesFilters(venueName) {
+            const venue = venues[venueName];
+            if (!venue) return false;
+
+            // If no filters are active, show all venues
+            if (activeVenueFilters.size === 0) return true;
+
+            // Check each active filter - venue must match ALL active filters
+            for (const filter of activeVenueFilters) {
+                if (!venueMatchesFilter(venueName, venue, filter)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Check if a venue matches a specific filter
+        function venueMatchesFilter(venueName, venue, filter) {
+            switch (filter) {
+                case 'happening-now':
+                    // Check if happy hour is currently active
+                    const hhStatus = calculateHappyHourStatus(venue.happyHourWeekly);
+                    return hhStatus.status === 'on-now';
+
+                case 'open-now':
+                    // Check if business is currently open
+                    const bizStatus = calculateBusinessHoursStatus(venue.hoursWeekly);
+                    return bizStatus.isOpen === true;
+
+                case 'sports-bars':
+                    // Check venue type
+                    return venue.type && venue.type.toLowerCase().includes('sports');
+
+                case 'fine-dining':
+                    // Check venue type
+                    return venue.type && venue.type.toLowerCase().includes('fine dining');
+
+                case 'under-10':
+                    // Check if any specials mention prices under $10
+                    const specials = (venue.specials || '').toLowerCase();
+                    const specialsFood = (venue.specialsFood || []).join(' ').toLowerCase();
+                    const specialsDrinks = (venue.specialsDrinks || []).join(' ').toLowerCase();
+                    const allSpecials = specials + ' ' + specialsFood + ' ' + specialsDrinks;
+                    // Look for prices $1-$9 (under $10)
+                    return /\$[1-9](?:\.\d{2})?(?:\s|$|[^0-9])/.test(allSpecials);
+
+                case 'near-me':
+                    // TODO: Implement location-based filtering when location services are available
+                    // For now, return true (show all) as this is a placeholder
+                    return true;
+
+                default:
+                    return true;
+            }
+        }
+
+        // Apply venue filters to the list
+        function applyVenueFilters() {
+            const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
             const emptyState = document.getElementById('search-empty-state');
             const sectionHeaders = document.querySelectorAll('#list-content .section-header');
-
-            if (searchTerm.length === 0) {
-                document.querySelectorAll('#list-content .listing-item').forEach(item => {
-                    item.style.display = 'flex';
-                });
-                sectionHeaders.forEach(header => header.style.display = 'block');
-                if (emptyState) emptyState.style.display = 'none';
-                return;
-            }
-
-            const matchingVenues = venueNames.filter(venue =>
-                venue.toLowerCase().includes(searchTerm)
-            );
+            const listItems = document.querySelectorAll('#list-content .listing-item');
 
             let visibleCount = 0;
-            document.querySelectorAll('#list-content .listing-item').forEach(item => {
+
+            listItems.forEach(item => {
                 const venueName = item.querySelector('.listing-name')?.textContent;
-                if (venueName && matchingVenues.includes(venueName)) {
+                if (!venueName) return;
+
+                // Check both search term AND filters
+                const matchesSearch = searchTerm.length === 0 || venueName.toLowerCase().includes(searchTerm);
+                const matchesFilters = venueMatchesFilters(venueName);
+
+                if (matchesSearch && matchesFilters) {
                     item.style.display = 'flex';
                     visibleCount++;
-                } else if (venueName) {
+                } else {
                     item.style.display = 'none';
                 }
             });
 
-            // Show/hide empty state and section headers based on results
+            // Show/hide empty state
             if (visibleCount === 0) {
                 if (emptyState) emptyState.style.display = 'flex';
                 sectionHeaders.forEach(header => header.style.display = 'none');
             } else {
                 if (emptyState) emptyState.style.display = 'none';
-                sectionHeaders.forEach(header => header.style.display = 'none'); // Hide section headers during search
+                // Show section headers only when no search term and no filters (default state)
+                const showHeaders = searchTerm.length === 0 && activeVenueFilters.size === 0;
+                sectionHeaders.forEach(header => header.style.display = showHeaders ? 'block' : 'none');
             }
+        }
+
+        // Search functionality - delegates to applyVenueFilters to combine search + filters
+        function performSearch() {
+            applyVenueFilters();
         }
 
         // Toggle favorites search visibility
@@ -4787,6 +4932,9 @@
 
             // Update all listing cards with dynamic HH status
             updateAllListingHHStatus();
+
+            // Initialize venue filters
+            initVenueFilters();
 
             // Initialize favorites empty state check
             checkFavoritesEmpty();
