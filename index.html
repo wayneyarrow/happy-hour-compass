@@ -3662,9 +3662,15 @@
             checkEventsEmpty();
         }
 
-        // Filter events by chip selection
+        // Filter events by chip selection (toggle behavior: tap again to deselect)
         function filterEventsBy(filter) {
-            currentEventsFilter = filter;
+            // If tapping the already-active filter, toggle it off (return to no filter)
+            if (currentEventsFilter === filter) {
+                currentEventsFilter = null;
+            } else {
+                currentEventsFilter = filter;
+            }
+
             selectedEventDateStart = null; // Clear calendar selection
             selectedEventDateEnd = null;
 
@@ -3675,11 +3681,12 @@
             todayChip.classList.remove('active');
             weekendChip.classList.remove('active');
 
-            if (filter === 'today') {
+            if (currentEventsFilter === 'today') {
                 todayChip.classList.add('active');
-            } else if (filter === 'weekend') {
+            } else if (currentEventsFilter === 'weekend') {
                 weekendChip.classList.add('active');
             }
+            // If currentEventsFilter is null, no chips are active (correct behavior)
 
             // Apply the filter to event items
             applyEventFilters();
