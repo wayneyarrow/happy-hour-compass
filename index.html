@@ -1985,7 +1985,7 @@
                 <div class="event-item" onclick="showEventDetail('Wine Tasting')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <div class="event-title">Wine Tasting Thursday</div>
+                            <div class="event-title">Wine Tasting</div>
                             <div class="event-venue">The Keg Kelowna</div>
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
@@ -2927,10 +2927,10 @@
                 const nextDayWindows = happyHourWeekly[nextDayName] || [];
 
                 if (nextDayWindows.length > 0) {
-                    const dayLabel = i === 1 ? 'tomorrow' : nextDayName;
+                    const dayLabel = i === 1 ? 'Tomorrow' : nextDayName;
                     return {
                         status: 'none-today',
-                        text: `No happy hour today · next on ${dayLabel}`,
+                        text: `No happy hour today · Next happy hour: ${dayLabel}`,
                         isActive: false,
                         windows: []
                     };
@@ -4117,7 +4117,10 @@
         // Render Event Details box (reusing Happy Hour block structure)
         function renderEventDetailsBox(event) {
             const box = document.getElementById('event-details-box');
-            let html = `<strong>Overview</strong><br>${event.description}`;
+            const dateTime = formatEventDateTime(event);
+
+            let html = `<strong>Date & Time</strong><br>${dateTime}`;
+            html += `<br><br><strong>Overview</strong><br>${event.description}`;
 
             if (event.offers) {
                 html += `<br><br><strong>Specials</strong><br>${event.offers}`;
