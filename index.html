@@ -1647,7 +1647,7 @@
             <div class="filter-section" id="search-filter-section">
                 <div class="filter-label">Filter results</div>
                 <div class="filters" id="search-filters">
-                    <button class="filter-chip active">Happening Now</button>
+                    <button class="filter-chip">Happening Now</button>
                     <!-- TODO: "Near Me" is a placeholder chip for Alpha. Will be wired to location-based filtering in a later phase. -->
                     <button class="filter-chip">Near Me</button>
                     <button class="filter-chip">Open Now</button>
@@ -1908,7 +1908,7 @@
                     </button>
                 </div>
                 <div class="filters" id="events-filters">
-                    <button class="filter-chip active" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
+                    <button class="filter-chip" id="events-chip-today" onclick="filterEventsBy('today')">Happening Today</button>
                     <button class="filter-chip" id="events-chip-weekend" onclick="filterEventsBy('weekend')">This Weekend</button>
                 </div>
             </div>
@@ -3603,7 +3603,7 @@
         // EVENTS SEARCH, FILTERING, AND CALENDAR
         // ========================================
 
-        let currentEventsFilter = 'today';
+        let currentEventsFilter = null; // No filter active by default
         let selectedEventDateStart = null;
         let selectedEventDateEnd = null;
 
@@ -4627,7 +4627,7 @@
         }
 
         // Venue filter state
-        let activeVenueFilters = new Set(['happening-now']); // Default: "Happening Now" is active
+        let activeVenueFilters = new Set(); // No filters active by default
 
         // Initialize venue filters
         function initVenueFilters() {
@@ -4699,8 +4699,9 @@
                     return venue.type && venue.type.toLowerCase().includes('sports');
 
                 case 'fine-dining':
-                    // Check venue type
-                    return venue.type && venue.type.toLowerCase().includes('fine dining');
+                    // Check venue type - match "fine dining" or "upscale" venues
+                    const venueType = (venue.type || '').toLowerCase();
+                    return venueType.includes('fine dining') || venueType.includes('upscale');
 
                 case 'under-10':
                     // Check if any specials mention prices under $10
