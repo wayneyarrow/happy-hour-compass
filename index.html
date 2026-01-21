@@ -1019,29 +1019,6 @@
             letter-spacing: -0.01em;
         }
 
-        .banner {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-            padding: 14px 0;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100%;
-            max-width: 375px;
-            z-index: 100;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-
-        .banner:hover {
-            background: linear-gradient(135deg, #d97706, #b45309);
-        }
-
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -1654,8 +1631,8 @@
                     <div class="empty-state-icon">🔍</div>
                     <div class="empty-state-title">No matches</div>
                     <div class="empty-state-body">Try clearing filters or searching a different area.</div>
-                    <!-- TODO: Wire to filter reset handler when available -->
-                    <!-- <button class="empty-state-action empty-state-secondary" onclick="clearSearchFilters()">Clear filters</button> -->
+                    <div class="empty-state-body" style="margin-top: 24px; margin-bottom: 12px;">Can't find your favorite spot?</div>
+                    <button class="empty-state-action" onclick="showScreen('create-ask-screen')">Suggest a place</button>
                 </div>
 
                 <h3 class="section-header">🔥 Popular Right Now</h3>
@@ -2249,11 +2226,6 @@
                 <p>We've received your venue request and will reach out to them soon. You'll be notified when they're added to the app.</p>
                 <button class="btn btn-primary" onclick="showScreen('search-screen')">Back to Search</button>
             </div>
-        </div>
-
-        <!-- Banner -->
-        <div class="banner" onclick="showScreen('create-ask-screen')">
-            📍 Missing your favorite spot? Help us add it!
         </div>
 
         <!-- Bottom Navigation -->
