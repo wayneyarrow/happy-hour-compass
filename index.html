@@ -1696,163 +1696,12 @@
                     <div class="empty-state-body" style="margin-top: 24px; margin-bottom: 12px;">Can't find your favorite spot?</div>
                     <button class="empty-state-action orange" onclick="showScreen('create-ask-screen')">Suggest a place</button>
                 </div>
-
-                <h3 class="section-header">🔥 Popular Right Now</h3>
-
-                <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
-                    <div class="listing-image">
-                        <img src="images/fine-dining-1.jpg" alt="The Keg Kelowna" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                    </div>
-                    <div class="listing-content">
-                        <div class="listing-header">
-                            <div class="listing-name">The Keg Kelowna</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="listing-time-range">3:00 PM – 6:00 PM</div>
-                        <div class="listing-offer">$6 appetizers, $5 drinks</div>
-                        <div class="time-remaining">Ends in 2 hours 15 minutes</div>
-                        <div class="listing-meta">
-                            <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">0.3 km</span>
-                            <span class="category-tag">• Fine Dining</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="listing-item" onclick="showVenueDetail('White Spot')">
-                    <div class="listing-image">
-                        <img src="images/casual-dining-1.jpg" alt="White Spot" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                    </div>
-                    <div class="listing-content">
-                        <div class="listing-header">
-                            <div class="listing-name">White Spot</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="listing-time-range">2:00 PM – 5:00 PM</div>
-                        <div class="listing-offer">$4 wings, $3.50 beer</div>
-                        <div class="time-remaining">Ends in 1 hour 45 minutes</div>
-                        <div class="listing-meta">
-                            <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">0.5 km</span>
-                            <span class="category-tag">• Family Restaurant</span>
-                        </div>
-                    </div>
-                </div>
-
-                <h3 class="section-header">All Venues</h3>
-
-                <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
-                    <div class="listing-image">
-                        <img src="images/sports-bar-1.jpg" alt="Anfield Restaurant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                    </div>
-                    <div class="listing-content">
-                        <div class="listing-header">
-                            <div class="listing-name">Anfield Restaurant</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="listing-time-range">4:00 PM – 7:00 PM</div>
-                        <div class="listing-offer">$8 burgers, $4 cocktails</div>
-                        <div class="time-remaining">Starts in 45 minutes</div>
-                        <div class="listing-meta">
-                            <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">0.8 km</span>
-                            <span class="category-tag">• Sports Bar</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
-                    <div class="listing-image">
-                        <img src="images/casual-dining-2.jpg" alt="Moxies Kelowna" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                    </div>
-                    <div class="listing-content">
-                        <div class="listing-header">
-                            <div class="listing-name">Moxies Kelowna</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="listing-time-range">3:00 PM – 6:00 PM</div>
-                        <div class="listing-offer">$5 appetizers, $6 cocktails</div>
-                        <div class="time-remaining">Starts in 1 hour 30 minutes</div>
-                        <div class="listing-meta">
-                            <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">1.2 km</span>
-                            <span class="category-tag">• Casual Dining</span>
-                        </div>
-                    </div>
-                </div>
+                <!-- Venue cards will be rendered dynamically from venuesData -->
             </div>
 
             <div class="content" id="map-content" style="display: none;">
                 <div id="map" style="height: 300px; width: 100%; border-radius: 8px; margin-bottom: 20px; border: 3px solid #10b981;"></div>
-                <div style="font-size: 14px; color: #6b7280; margin-bottom: 20px;">4 venues found nearby</div>
-                
-                <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
-                    <div class="listing-header">
-                        <div class="listing-name">The Keg Kelowna</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="listing-time-range">3:00 PM – 6:00 PM</div>
-                    <div class="distance-prominent">0.3 km away</div>
-                </div>
-
-                <div class="listing-item" onclick="showVenueDetail('White Spot')">
-                    <div class="listing-header">
-                        <div class="listing-name">White Spot</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="listing-time-range">2:00 PM – 5:00 PM</div>
-                    <div class="distance-prominent">0.5 km away</div>
-                </div>
-
-                <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
-                    <div class="listing-header">
-                        <div class="listing-name">Anfield Restaurant</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="listing-time-range">4:00 PM – 7:00 PM</div>
-                    <div class="distance-prominent">0.8 km away</div>
-                </div>
-
-                <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
-                    <div class="listing-header">
-                        <div class="listing-name">Moxies Kelowna</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="listing-time-range">3:00 PM – 6:00 PM</div>
-                    <div class="distance-prominent">1.2 km away</div>
-                </div>
+                <!-- Venue count and cards will be rendered dynamically from venuesData -->
             </div>
         </div>
 
@@ -1981,51 +1830,7 @@
                     <div class="empty-state-title">No events found</div>
                     <div class="empty-state-body">Try adjusting your filters or check back later for new events.</div>
                 </div>
-
-                <div class="event-item" onclick="showEventDetail('NFL Game Night')">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <div class="event-title">NFL Game Night</div>
-                            <div class="event-venue">Anfield Restaurant</div>
-                            <div class="event-time">Every Sunday 5:00 PM - 11:00 PM</div>
-                        </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="event-item" onclick="showEventDetail('Wine Tasting')">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <div class="event-title">Wine Tasting</div>
-                            <div class="event-venue">The Keg Kelowna</div>
-                            <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
-                        </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="event-item" onclick="showEventDetail('Trivia Night')">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <div class="event-title">Trivia Night</div>
-                            <div class="event-venue">White Spot</div>
-                            <div class="event-time">Wednesday 7:00 PM - 10:00 PM</div>
-                        </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                <!-- Event cards will be rendered dynamically from eventsData -->
             </div>
         </div>
 
@@ -2293,6 +2098,7 @@
 
         // ===== CENTRAL SAVED STATE =====
         // Single source of truth for all saved venues and events
+        // Stores venue/event IDs (not names) for proper data model integration
         // Persisted to localStorage for session continuity
         const savedVenues = new Set(JSON.parse(localStorage.getItem('savedVenues') || '[]'));
         const savedEvents = new Set(JSON.parse(localStorage.getItem('savedEvents') || '[]'));
@@ -2303,34 +2109,50 @@
             localStorage.setItem('savedEvents', JSON.stringify([...savedEvents]));
         }
 
-        // Check if a venue is saved
-        function isVenueSaved(venueName) {
-            return savedVenues.has(venueName);
+        // Check if a venue is saved (accepts ID or name)
+        function isVenueSaved(idOrName) {
+            // First try direct ID lookup
+            if (savedVenues.has(idOrName)) return true;
+            // Fall back to name lookup - find the venue and check its ID
+            const venue = getVenue(idOrName);
+            return venue ? savedVenues.has(venue.id) : false;
         }
 
-        // Check if an event is saved
-        function isEventSaved(eventName) {
-            return savedEvents.has(eventName);
+        // Check if an event is saved (accepts ID or name)
+        function isEventSaved(idOrName) {
+            // First try direct ID lookup
+            if (savedEvents.has(idOrName)) return true;
+            // Fall back to name lookup - find the event and check its ID
+            const event = getEvent(idOrName);
+            return event ? savedEvents.has(event.id) : false;
         }
 
-        // Toggle saved state for a venue
-        function toggleVenueSavedState(venueName) {
-            if (savedVenues.has(venueName)) {
-                savedVenues.delete(venueName);
+        // Toggle saved state for a venue (accepts ID or name, stores ID)
+        function toggleVenueSavedState(idOrName) {
+            const venue = getVenue(idOrName);
+            if (!venue) return;
+
+            const id = venue.id;
+            if (savedVenues.has(id)) {
+                savedVenues.delete(id);
             } else {
-                savedVenues.add(venueName);
+                savedVenues.add(id);
             }
             persistSavedState();
             syncAllBookmarkIcons();
             renderSavedPage();
         }
 
-        // Toggle saved state for an event
-        function toggleEventSavedState(eventName) {
-            if (savedEvents.has(eventName)) {
-                savedEvents.delete(eventName);
+        // Toggle saved state for an event (accepts ID or name, stores ID)
+        function toggleEventSavedState(idOrName) {
+            const event = getEvent(idOrName);
+            if (!event) return;
+
+            const id = event.id;
+            if (savedEvents.has(id)) {
+                savedEvents.delete(id);
             } else {
-                savedEvents.add(eventName);
+                savedEvents.add(id);
             }
             persistSavedState();
             syncAllBookmarkIcons();
@@ -2344,7 +2166,7 @@
                 const venueName = item.querySelector('.listing-name')?.textContent;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
                 if (venueName && bookmarkBtn) {
-                    if (savedVenues.has(venueName)) {
+                    if (isVenueSaved(venueName)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2357,7 +2179,7 @@
                 const venueName = item.querySelector('.listing-name')?.textContent;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
                 if (venueName && bookmarkBtn) {
-                    if (savedVenues.has(venueName)) {
+                    if (isVenueSaved(venueName)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2370,7 +2192,7 @@
                 const eventName = item.querySelector('.event-title')?.textContent;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
                 if (eventName && bookmarkBtn) {
-                    if (savedEvents.has(eventName)) {
+                    if (isEventSaved(eventName)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2381,7 +2203,7 @@
             // Sync venue detail page bookmark (if visible)
             const venueSaveBtn = document.getElementById('venue-save-btn');
             if (venueSaveBtn && currentVenueName) {
-                if (savedVenues.has(currentVenueName)) {
+                if (isVenueSaved(currentVenueName)) {
                     venueSaveBtn.classList.add('saved');
                 } else {
                     venueSaveBtn.classList.remove('saved');
@@ -2391,7 +2213,7 @@
             // Sync event detail page bookmark (if visible)
             const eventSaveBtn = document.getElementById('event-save-btn');
             if (eventSaveBtn && currentEventData) {
-                if (savedEvents.has(currentEventData.name)) {
+                if (isEventSaved(currentEventData.name)) {
                     eventSaveBtn.classList.add('saved');
                 } else {
                     eventSaveBtn.classList.remove('saved');
@@ -2399,30 +2221,57 @@
             }
         }
 
-        // Store venue data
-        // TODO: Alpha uses placeholder data for Info section fields.
-        // Future: These fields may be missing/null - Info rendering is conditional.
-        const venues = {
-            'The Keg Kelowna': {
+        // ===== CENTRALIZED DATA MODEL =====
+        //
+        // HOW TO ADD/EDIT VENUES AND EVENTS FOR BETA:
+        // 1. Each venue/event has a unique 'id' field - use lowercase-hyphenated format (e.g., 'the-keg-kelowna')
+        // 2. The 'id' is used for Saved state and cross-referencing (events link to venues via 'venueId')
+        // 3. Add new entries to the venuesData or eventsData arrays below
+        // 4. Beta data will be maintained via CSV → AI → JS object conversion
+        //
+        // REQUIRED VENUE FIELDS:
+        //   - id: string (unique identifier, used by Saved and filters)
+        //   - name: string (display name)
+        //   - type: string (category - powers 'sports-bars', 'fine-dining' filters)
+        //   - address: string
+        //   - phone: string
+        //   - happyHourWeekly: object (powers 'happening-now' filter)
+        //   - hoursWeekly: object (powers 'open-now' filter)
+        //   - specialsFood: array of strings (powers 'under-10' filter)
+        //   - specialsDrinks: array of strings (powers 'under-10' filter)
+        //
+        // OPTIONAL VENUE FIELDS:
+        //   - icon, image, menuUrl, websiteUrl, paymentMethods, distance
+        //
+        // REQUIRED EVENT FIELDS:
+        //   - id: string (unique identifier, used by Saved)
+        //   - name: string (display name)
+        //   - venueId: string (links to venue.id)
+        //   - schedule: string (e.g., 'Every Sunday' - powers 'today'/'weekend' filters)
+        //   - time: string (e.g., '5:00 PM - 11:00 PM')
+        //
+        // OPTIONAL EVENT FIELDS:
+        //   - icon, type, description, offers, image
+
+        const venuesData = [
+            {
+                id: 'the-keg-kelowna',
+                name: 'The Keg Kelowna',
                 icon: '🍽️',
                 type: 'Upscale Restaurant',
                 address: '532 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-1442',
-                hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday: 2:00 PM - 5:00 PM',
-                specials: '• $6 appetizers<br>• $5 house wine & beer<br>• $8 signature cocktails',
-                // TODO: HH data structure supports 0-2 windows per day for multi-window venues
+                distance: 0.3,
+                image: 'images/fine-dining-1.jpg',
                 happyHourWeekly: {
-                    'Sunday': [],  // No happy hour
-                    'Monday': [{start: '15:00', end: '18:00'}],  // 3-6 PM (single window)
+                    'Sunday': [],
+                    'Monday': [{start: '15:00', end: '18:00'}],
                     'Tuesday': [{start: '15:00', end: '18:00'}],
                     'Wednesday': [{start: '15:00', end: '18:00'}],
                     'Thursday': [{start: '15:00', end: '18:00'}],
-                    'Friday': [{start: '15:00', end: '18:00'}, {start: '21:00', end: 'close'}],  // Two windows: 3-6 PM + 9 PM-close
-                    'Saturday': [{start: '14:00', end: '17:00'}]  // 2-5 PM
+                    'Friday': [{start: '15:00', end: '18:00'}, {start: '21:00', end: 'close'}],
+                    'Saturday': [{start: '14:00', end: '17:00'}]
                 },
-                specialsFood: ['$6 appetizers', '$8 gourmet burgers'],
-                specialsDrinks: ['$5 house wine & beer', '$8 signature cocktails'],
-                // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 11:00 PM',
                     'Monday': 'CLOSED',
@@ -2432,29 +2281,30 @@
                     'Friday': '11:00 AM - 12:00 AM',
                     'Saturday': '10:00 AM - 12:00 AM'
                 },
+                specialsFood: ['$6 appetizers', '$8 gourmet burgers'],
+                specialsDrinks: ['$5 house wine & beer', '$8 signature cocktails'],
                 menuUrl: 'https://kegsteakhouse.com/menu',
                 websiteUrl: 'https://kegsteakhouse.com',
                 paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
-            'White Spot': {
+            {
+                id: 'white-spot',
+                name: 'White Spot',
                 icon: '🍔',
                 type: 'Family Restaurant',
                 address: '1405 Harvey Ave, Kelowna, BC',
                 phone: '(250) 860-7768',
-                hours: 'Monday - Friday: 2:00 PM - 5:00 PM<br>Saturday - Sunday: 1:00 PM - 4:00 PM',
-                specials: '• $4 chicken wings<br>• $3.50 draft beer<br>• $5 cocktails',
+                distance: 0.5,
+                image: 'images/casual-dining-1.jpg',
                 happyHourWeekly: {
-                    'Sunday': [{start: '13:00', end: '16:00'}],  // 1-4 PM
-                    'Monday': [{start: '14:00', end: '17:00'}],  // 2-5 PM
+                    'Sunday': [{start: '13:00', end: '16:00'}],
+                    'Monday': [{start: '14:00', end: '17:00'}],
                     'Tuesday': [{start: '14:00', end: '17:00'}],
                     'Wednesday': [{start: '14:00', end: '17:00'}],
                     'Thursday': [{start: '14:00', end: '17:00'}],
                     'Friday': [{start: '14:00', end: '17:00'}],
-                    'Saturday': [{start: '13:00', end: '16:00'}]  // 1-4 PM
+                    'Saturday': [{start: '13:00', end: '16:00'}]
                 },
-                specialsFood: ['$4 chicken wings', '$5 nachos'],
-                specialsDrinks: ['$3.50 draft beer', '$5 cocktails'],
-                // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '7:00 AM - 11:00 PM',
                     'Monday': '7:00 AM - 11:00 PM',
@@ -2464,29 +2314,30 @@
                     'Friday': '7:00 AM - 12:00 AM',
                     'Saturday': '7:00 AM - 12:00 AM'
                 },
+                specialsFood: ['$4 chicken wings', '$5 nachos'],
+                specialsDrinks: ['$3.50 draft beer', '$5 cocktails'],
                 menuUrl: 'https://whitespot.ca/menu',
                 websiteUrl: 'https://whitespot.ca',
                 paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
-            'Anfield Restaurant': {
+            {
+                id: 'anfield-restaurant',
+                name: 'Anfield Restaurant',
                 icon: '⚽',
                 type: 'Sports Bar',
                 address: '1620 Dickson Ave, Kelowna, BC',
                 phone: '(250) 717-5687',
-                hours: 'Monday - Sunday: 4:00 PM - 7:00 PM',
-                specials: '• $8 gourmet burgers<br>• $4 cocktails<br>• $6 appetizer platters',
+                distance: 0.8,
+                image: 'images/sports-bar-1.jpg',
                 happyHourWeekly: {
-                    'Sunday': [{start: '16:00', end: '19:00'}],  // 4-7 PM
+                    'Sunday': [{start: '16:00', end: '19:00'}],
                     'Monday': [{start: '16:00', end: '19:00'}],
                     'Tuesday': [{start: '16:00', end: '19:00'}],
-                    'Wednesday': [],  // No happy hour on Wednesday (demo 0 windows)
+                    'Wednesday': [],
                     'Thursday': [{start: '16:00', end: '19:00'}],
                     'Friday': [{start: '16:00', end: '19:00'}],
                     'Saturday': [{start: '16:00', end: '19:00'}]
                 },
-                specialsFood: ['$8 gourmet burgers', '$6 appetizer platters', '$0.50 wings (min 10)'],
-                specialsDrinks: ['$4 cocktails', '$5 beer buckets'],
-                // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 12:00 AM',
                     'Monday': '11:00 AM - 1:00 AM',
@@ -2496,29 +2347,30 @@
                     'Friday': '11:00 AM - 2:00 AM',
                     'Saturday': '10:00 AM - 2:00 AM'
                 },
+                specialsFood: ['$8 gourmet burgers', '$6 appetizer platters', '$0.50 wings (min 10)'],
+                specialsDrinks: ['$4 cocktails', '$5 beer buckets'],
                 menuUrl: 'https://anfieldkelowna.com/menu',
                 websiteUrl: 'https://anfieldkelowna.com',
                 paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             },
-            'Moxies Kelowna': {
+            {
+                id: 'moxies-kelowna',
+                name: 'Moxies Kelowna',
                 icon: '🍸',
                 type: 'Casual Dining',
                 address: '551 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-7771',
-                hours: 'Monday - Friday: 3:00 PM - 6:00 PM<br>Saturday - Sunday: 2:00 PM - 5:00 PM',
-                specials: '• $5 appetizers<br>• $6 signature cocktails<br>• $4 wine by the glass',
+                distance: 1.2,
+                image: 'images/casual-dining-2.jpg',
                 happyHourWeekly: {
-                    'Sunday': [{start: '14:00', end: '17:00'}],  // 2-5 PM
-                    'Monday': [{start: '15:00', end: '18:00'}],  // 3-6 PM
+                    'Sunday': [{start: '14:00', end: '17:00'}],
+                    'Monday': [{start: '15:00', end: '18:00'}],
                     'Tuesday': [{start: '15:00', end: '18:00'}],
                     'Wednesday': [{start: '15:00', end: '18:00'}],
                     'Thursday': [{start: '15:00', end: '18:00'}],
                     'Friday': [{start: '15:00', end: '18:00'}],
-                    'Saturday': [{start: '14:00', end: '17:00'}]  // 2-5 PM
+                    'Saturday': [{start: '14:00', end: '17:00'}]
                 },
-                specialsFood: ['$5 appetizers', '$7 flatbreads'],
-                specialsDrinks: ['$6 signature cocktails', '$4 wine by the glass', '$5 draft beer'],
-                // Alpha placeholder data for complete Info section
                 hoursWeekly: {
                     'Sunday': '10:00 AM - 12:00 AM',
                     'Monday': '11:00 AM - 12:00 AM',
@@ -2528,51 +2380,271 @@
                     'Friday': '11:00 AM - 1:00 AM',
                     'Saturday': '10:00 AM - 1:00 AM'
                 },
+                specialsFood: ['$5 appetizers', '$7 flatbreads'],
+                specialsDrinks: ['$6 signature cocktails', '$4 wine by the glass', '$5 draft beer'],
                 menuUrl: 'https://moxies.com/menu',
                 websiteUrl: 'https://moxies.com',
                 paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
             }
-        };
+        ];
 
-        // Store event data
-        const events = {
-            'NFL Game Night': {
+        const eventsData = [
+            {
+                id: 'nfl-game-night',
+                name: 'NFL Game Night',
                 icon: '🏈',
                 type: 'Sports Bar Event',
-                venue: 'Anfield Restaurant',
+                venueId: 'anfield-restaurant',
                 schedule: 'Every Sunday',
                 time: '5:00 PM - 11:00 PM',
                 description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks. Perfect for groups!',
                 offers: '• $0.50 wings (minimum 10)<br>• $5 beer buckets<br>• $12 nachos for two<br>• $15 pitcher specials',
-                address: '1620 Dickson Ave, Kelowna, BC',
-                phone: '(250) 717-5687',
                 image: 'images/event-nfl.jpg'
             },
-            'Wine Tasting': {
+            {
+                id: 'wine-tasting',
+                name: 'Wine Tasting',
                 icon: '🍷',
                 type: 'Fine Dining Event',
-                venue: 'The Keg Kelowna',
+                venueId: 'the-keg-kelowna',
                 schedule: 'Every Thursday',
                 time: '6:00 PM - 9:00 PM',
                 description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.',
                 offers: '• 5 wine tastings for $25<br>• Paired appetizers included<br>• 20% off featured wines<br>• Sommelier-guided experience',
-                address: '532 Bernard Ave, Kelowna, BC',
-                phone: '(250) 763-1442',
                 image: 'images/event-wine.jpg'
             },
-            'Trivia Night': {
+            {
+                id: 'trivia-night',
+                name: 'Trivia Night',
                 icon: '🧠',
                 type: 'Family Event',
-                venue: 'White Spot',
+                venueId: 'white-spot',
                 schedule: 'Every Wednesday',
                 time: '7:00 PM - 10:00 PM',
                 description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.',
                 offers: '• $3 appetizers during trivia<br>• $2.50 beer<br>• Prize for winning team<br>• Family-friendly atmosphere',
-                address: '1405 Harvey Ave, Kelowna, BC',
-                phone: '(250) 860-7768',
                 image: 'images/event-trivia.jpg'
             }
-        };
+        ];
+
+        // ===== DATA MODEL LOOKUP HELPERS =====
+        // These provide fast lookups by ID and backwards-compatible lookups by name
+
+        // Build lookup maps for O(1) access
+        const venuesById = {};
+        const venuesByName = {};  // For backwards compatibility during transition
+        venuesData.forEach(venue => {
+            venuesById[venue.id] = venue;
+            venuesByName[venue.name] = venue;
+        });
+
+        const eventsById = {};
+        const eventsByName = {};  // For backwards compatibility during transition
+        eventsData.forEach(event => {
+            eventsById[event.id] = event;
+            eventsByName[event.name] = event;
+        });
+
+        // Helper to get venue by ID or name (for backwards compatibility)
+        function getVenue(idOrName) {
+            return venuesById[idOrName] || venuesByName[idOrName] || null;
+        }
+
+        // Helper to get event by ID or name (for backwards compatibility)
+        function getEvent(idOrName) {
+            return eventsById[idOrName] || eventsByName[idOrName] || null;
+        }
+
+        // Helper to get venue for an event
+        function getVenueForEvent(event) {
+            if (!event) return null;
+            return venuesById[event.venueId] || null;
+        }
+
+        // Legacy aliases for backwards compatibility with existing code
+        const venues = venuesByName;
+        const events = eventsByName;
+
+        // ===== VENUE/EVENT RENDER FUNCTIONS =====
+        // These functions render venue and event cards from the data model
+
+        // Generate HTML for a single venue card (list view with image)
+        function renderVenueCardListView(venue) {
+            if (!venue) return '';
+            const savedClass = isVenueSaved(venue.id) ? 'saved' : '';
+            return `
+                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
+                    <div class="listing-image">
+                        <img src="${getVenueImage(venue)}" alt="${venue.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+                    </div>
+                    <div class="listing-content">
+                        <div class="listing-header">
+                            <div class="listing-name">${venue.name}</div>
+                            <button class="bookmark-icon ${savedClass}" onclick="event.stopPropagation(); handleBookmarkClick(this)">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="listing-offer">${getVenueShortSpecials(venue)}</div>
+                        <div class="listing-meta">
+                            <span class="status-badge status-open">Open Now</span>
+                            <span class="distance-prominent">${venue.distance || 0} km</span>
+                            <span class="category-tag">• ${venue.type}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Generate HTML for a single venue card (map view - compact)
+        function renderVenueCardMapView(venue) {
+            if (!venue) return '';
+            const savedClass = isVenueSaved(venue.id) ? 'saved' : '';
+            return `
+                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
+                    <div class="listing-header">
+                        <div class="listing-name">${venue.name}</div>
+                        <button class="bookmark-icon ${savedClass}" onclick="event.stopPropagation(); handleBookmarkClick(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="listing-time-range">Happy Hour Times</div>
+                    <div class="distance-prominent">${venue.distance || 0} km away</div>
+                </div>
+            `;
+        }
+
+        // Generate HTML for a single event card
+        function renderEventCard(event) {
+            if (!event) return '';
+            const savedClass = isEventSaved(event.id) ? 'saved' : '';
+            const venue = getVenueForEvent(event);
+            const venueName = venue ? venue.name : 'Unknown Venue';
+            return `
+                <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.name}')">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div class="event-title">${event.name}</div>
+                            <div class="event-venue">${venueName}</div>
+                            <div class="event-time">${event.schedule} ${event.time}</div>
+                        </div>
+                        <button class="bookmark-icon ${savedClass}" onclick="event.stopPropagation(); handleBookmarkClick(this)">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render all venues to the list view container
+        function renderVenueListView(filteredVenues = null) {
+            const container = document.getElementById('list-content');
+            if (!container) return;
+
+            // Keep the empty state element
+            const emptyState = container.querySelector('#search-empty-state');
+
+            // Clear existing venue cards
+            container.querySelectorAll('.listing-item, .section-header').forEach(el => el.remove());
+
+            // Get venues to render (all venues if no filter)
+            const venuesToRender = filteredVenues || venuesData;
+
+            // Show empty state if no venues
+            if (venuesToRender.length === 0) {
+                if (emptyState) emptyState.style.display = 'flex';
+                return;
+            }
+
+            if (emptyState) emptyState.style.display = 'none';
+
+            // Split into "Popular" and "All Venues" sections
+            // For now, mark first 2 as popular (can be enhanced with actual popularity data)
+            const popularVenues = venuesToRender.slice(0, 2);
+            const allVenues = venuesToRender.slice(2);
+
+            // Add Popular section
+            if (popularVenues.length > 0) {
+                container.insertAdjacentHTML('beforeend', '<h3 class="section-header">🔥 Popular Right Now</h3>');
+                popularVenues.forEach(venue => {
+                    container.insertAdjacentHTML('beforeend', renderVenueCardListView(venue));
+                });
+            }
+
+            // Add All Venues section
+            if (allVenues.length > 0) {
+                container.insertAdjacentHTML('beforeend', '<h3 class="section-header">All Venues</h3>');
+                allVenues.forEach(venue => {
+                    container.insertAdjacentHTML('beforeend', renderVenueCardListView(venue));
+                });
+            }
+
+            // Update HH status on all cards
+            updateAllListingHHStatus();
+        }
+
+        // Render all venues to the map view container
+        function renderVenueMapView(filteredVenues = null) {
+            const container = document.getElementById('map-content');
+            if (!container) return;
+
+            // Keep the map element
+            const mapElement = container.querySelector('#map');
+
+            // Clear existing venue cards but keep map
+            container.querySelectorAll('.listing-item').forEach(el => el.remove());
+
+            // Remove old count text
+            const oldCount = container.querySelector('[style*="font-size: 14px"]');
+            if (oldCount) oldCount.remove();
+
+            // Get venues to render (all venues if no filter)
+            const venuesToRender = filteredVenues || venuesData;
+
+            // Add count text
+            const countHtml = `<div style="font-size: 14px; color: #6b7280; margin-bottom: 20px;">${venuesToRender.length} venues found nearby</div>`;
+            if (mapElement) {
+                mapElement.insertAdjacentHTML('afterend', countHtml);
+            }
+
+            // Render venue cards
+            venuesToRender.forEach(venue => {
+                container.insertAdjacentHTML('beforeend', renderVenueCardMapView(venue));
+            });
+        }
+
+        // Render all events to the events container
+        function renderEventsList(filteredEvents = null) {
+            const container = document.getElementById('events-content');
+            if (!container) return;
+
+            // Keep the empty state element if exists
+            const emptyState = container.querySelector('#events-empty-state');
+
+            // Clear existing event cards
+            container.querySelectorAll('.event-item').forEach(el => el.remove());
+
+            // Get events to render (all events if no filter)
+            const eventsToRender = filteredEvents || eventsData;
+
+            // Show empty state if no events
+            if (eventsToRender.length === 0) {
+                if (emptyState) emptyState.style.display = 'flex';
+                return;
+            }
+
+            if (emptyState) emptyState.style.display = 'none';
+
+            // Render event cards
+            eventsToRender.forEach(event => {
+                container.insertAdjacentHTML('beforeend', renderEventCard(event));
+            });
+        }
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(screen => {
@@ -4258,7 +4330,11 @@
 
             // Update event core info
             document.getElementById('event-name-large').textContent = eventName;
-            document.getElementById('event-venue-name').textContent = event.venue;
+
+            // Get venue name using venueId from data model
+            const eventVenue = getVenueForEvent(event);
+            const venueName = eventVenue ? eventVenue.name : (event.venue || 'Unknown Venue');
+            document.getElementById('event-venue-name').textContent = venueName;
 
             // Format date/time
             const dateTime = formatEventDateTime(event);
@@ -4270,8 +4346,8 @@
             // Render CTAs conditionally based on available data
             renderEventCTAs(event);
 
-            // Update Venue section - look up actual venue data
-            const venueData = venues[event.venue];
+            // Update Venue section - look up actual venue data using venueId
+            const venueData = getVenueForEvent(event);
             if (venueData) {
                 renderEventVenueInfo(venueData);
             } else {
@@ -4850,25 +4926,31 @@
             applyVenueFilters();
         }
 
-        // Check if a venue matches the active filters
-        function venueMatchesFilters(venueName) {
-            const venue = venues[venueName];
+        // Check if a venue (object) matches the active filters
+        function venueMatchesFilters(venue, searchTerm = '') {
             if (!venue) return false;
 
-            // If no filters are active, show all venues
+            // Check search term match
+            if (searchTerm.length > 0) {
+                const nameMatch = venue.name.toLowerCase().includes(searchTerm);
+                const typeMatch = (venue.type || '').toLowerCase().includes(searchTerm);
+                if (!nameMatch && !typeMatch) return false;
+            }
+
+            // If no filters are active, show all venues (that match search)
             if (activeVenueFilters.size === 0) return true;
 
             // Check each active filter - venue must match ALL active filters
             for (const filter of activeVenueFilters) {
-                if (!venueMatchesFilter(venueName, venue, filter)) {
+                if (!venueMatchesFilter(venue, filter)) {
                     return false;
                 }
             }
             return true;
         }
 
-        // Check if a venue matches a specific filter
-        function venueMatchesFilter(venueName, venue, filter) {
+        // Check if a venue (object) matches a specific filter
+        function venueMatchesFilter(venue, filter) {
             switch (filter) {
                 case 'happening-now':
                     // Check if happy hour is currently active
@@ -4908,41 +4990,23 @@
             }
         }
 
-        // Apply venue filters to the list
+        // Get filtered venues from data model
+        function getFilteredVenues(searchTerm = '') {
+            return venuesData.filter(venue => venueMatchesFilters(venue, searchTerm));
+        }
+
+        // Apply venue filters to the list - re-renders from data model
         function applyVenueFilters() {
             const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
-            const emptyState = document.getElementById('search-empty-state');
-            const sectionHeaders = document.querySelectorAll('#list-content .section-header');
-            const listItems = document.querySelectorAll('#list-content .listing-item');
 
-            let visibleCount = 0;
+            // Get filtered venues from data model
+            const filteredVenues = getFilteredVenues(searchTerm);
 
-            listItems.forEach(item => {
-                const venueName = item.querySelector('.listing-name')?.textContent;
-                if (!venueName) return;
+            // Re-render list view with filtered venues
+            renderVenueListView(filteredVenues);
 
-                // Check both search term AND filters
-                const matchesSearch = searchTerm.length === 0 || venueName.toLowerCase().includes(searchTerm);
-                const matchesFilters = venueMatchesFilters(venueName);
-
-                if (matchesSearch && matchesFilters) {
-                    item.style.display = 'flex';
-                    visibleCount++;
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-
-            // Show/hide empty state
-            if (visibleCount === 0) {
-                if (emptyState) emptyState.style.display = 'flex';
-                sectionHeaders.forEach(header => header.style.display = 'none');
-            } else {
-                if (emptyState) emptyState.style.display = 'none';
-                // Show section headers only when no search term and no filters (default state)
-                const showHeaders = searchTerm.length === 0 && activeVenueFilters.size === 0;
-                sectionHeaders.forEach(header => header.style.display = showHeaders ? 'block' : 'none');
-            }
+            // Re-render map view with filtered venues
+            renderVenueMapView(filteredVenues);
         }
 
         // Search functionality - delegates to applyVenueFilters to combine search + filters
@@ -5062,20 +5126,20 @@
                 emptyState.style.display = hasAnySaved ? 'none' : 'flex';
             }
 
-            // Render saved venues
+            // Render saved venues (iterate over IDs, look up venue by ID)
             if (hasSavedVenues) {
-                savedVenues.forEach(venueName => {
-                    const venue = venues[venueName];
+                savedVenues.forEach(venueId => {
+                    const venue = venuesById[venueId];
                     if (!venue) return;
 
                     const itemHtml = `
-                        <div class="listing-item" onclick="showVenueDetail('${venueName}')">
+                        <div class="listing-item" onclick="showVenueDetail('${venue.name}')">
                             <div class="listing-image">
-                                <img src="${getVenueImage(venue)}" alt="${venueName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+                                <img src="${getVenueImage(venue)}" alt="${venue.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                             </div>
                             <div class="listing-content">
                                 <div class="listing-header">
-                                    <div class="listing-name">${venueName}</div>
+                                    <div class="listing-name">${venue.name}</div>
                                     <button class="bookmark-icon saved" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
@@ -5093,18 +5157,22 @@
                 });
             }
 
-            // Render saved events
+            // Render saved events (iterate over IDs, look up event by ID)
             if (hasSavedEvents) {
-                savedEvents.forEach(eventName => {
-                    const event = events[eventName];
+                savedEvents.forEach(eventId => {
+                    const event = eventsById[eventId];
                     if (!event) return;
 
+                    // Get venue name for the event
+                    const eventVenue = getVenueForEvent(event);
+                    const venueName = eventVenue ? eventVenue.name : 'Unknown Venue';
+
                     const itemHtml = `
-                        <div class="event-item" onclick="showEventDetail('${eventName}')">
+                        <div class="event-item" onclick="showEventDetail('${event.name}')">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
-                                    <div class="event-title">${eventName}</div>
-                                    <div class="event-venue">${event.venue}</div>
+                                    <div class="event-title">${event.name}</div>
+                                    <div class="event-venue">${venueName}</div>
                                     <div class="event-time">${event.schedule} ${event.time}</div>
                                 </div>
                                 <button class="bookmark-icon saved" onclick="event.stopPropagation(); handleBookmarkClick(this)">
@@ -5222,10 +5290,17 @@
                 toggleIconSvg.innerHTML = mapPinIcon;
             }
 
+            // Render initial venue lists from data model
+            renderVenueListView();
+            renderVenueMapView();
+
+            // Render initial events list from data model
+            renderEventsList();
+
             // Update all listing cards with dynamic HH status
             updateAllListingHHStatus();
 
-            // Initialize venue filters
+            // Initialize venue filters (will also trigger applyVenueFilters)
             initVenueFilters();
 
             // Initialize saved state - sync all bookmark icons and render saved page
