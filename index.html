@@ -2229,7 +2229,7 @@
         <!-- Create Ask Screen -->
         <div class="screen" id="create-ask-screen">
             <div class="detail-page-header">
-                <button class="detail-back-btn" onclick="goBack()">←</button>
+                <button class="detail-back-btn" onclick="closeAskPage()" aria-label="Close">✕</button>
                 <h1 class="detail-page-title">Add a Venue</h1>
             </div>
             <div class="content">
@@ -4788,6 +4788,28 @@
 
             // Reapply filters (which will show all venues since no filters are active)
             applyVenueFilters();
+        }
+
+        // Close ask page and return to default search state
+        function closeAskPage() {
+            const searchInput = document.getElementById('search-input');
+
+            // Clear search input
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            // Clear all venue filters and reset chip states
+            activeVenueFilters.clear();
+            document.querySelectorAll('#search-filters .filter-chip').forEach(chip => {
+                chip.classList.remove('active');
+            });
+
+            // Reapply filters (which will show all venues since no filters are active)
+            applyVenueFilters();
+
+            // Navigate to search screen
+            showScreen('search-screen');
         }
 
         // Venue filter state
