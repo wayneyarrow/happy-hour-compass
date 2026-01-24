@@ -136,8 +136,16 @@
             fill: #374151;
         }
 
-        .header-icon-btn.saved svg path {
+        /* Bookmark icon in header: outline by default, filled when saved */
+        .header-icon-btn.header-bookmark-btn svg path {
+            fill: none;
+            stroke: #6b7280;
+            stroke-width: 2;
+        }
+
+        .header-icon-btn.header-bookmark-btn.saved svg path {
             fill: #f97316;
+            stroke: #f97316;
         }
 
         .venue-detail-scroll {
@@ -1052,8 +1060,29 @@
         .nav-icon {
             display: block;
             margin-bottom: 4px;
-            font-size: 20px;
-            line-height: 1;
+        }
+
+        /* Nav bookmark icon: outline by default, filled when active */
+        .nav-bookmark-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-bookmark-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .nav-bookmark-icon svg path {
+            fill: none;
+            stroke: #6b7280;
+            stroke-width: 2;
+        }
+
+        .nav-item.active .nav-bookmark-icon svg path {
+            fill: #3b82f6;
+            stroke: #3b82f6;
         }
 
         .action-buttons {
@@ -2030,7 +2059,7 @@
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="venue-detail-title">Venue Details</h1>
                 <div class="header-actions">
-                    <button class="header-icon-btn" id="venue-save-btn" onclick="toggleVenueSave(event)">
+                    <button class="header-icon-btn header-bookmark-btn" id="venue-save-btn" onclick="toggleVenueSave(event)">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                         </svg>
@@ -2136,7 +2165,7 @@
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="event-detail-title">Event Details</h1>
                 <div class="header-actions">
-                    <button class="header-icon-btn" id="event-save-btn" onclick="toggleEventSave(event)">
+                    <button class="header-icon-btn header-bookmark-btn" id="event-save-btn" onclick="toggleEventSave(event)">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                         </svg>
@@ -2268,7 +2297,11 @@
                 Search
             </div>
             <div class="nav-item" onclick="showScreen('favorites-screen')">
-                <span class="nav-icon">🔖</span>
+                <span class="nav-icon nav-bookmark-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </span>
                 Saved
             </div>
             <div class="nav-item" onclick="showScreen('events-screen')">
