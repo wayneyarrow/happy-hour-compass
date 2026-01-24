@@ -136,8 +136,8 @@
             fill: #374151;
         }
 
-        .header-icon-btn.favorited svg path {
-            fill: #ef4444;
+        .header-icon-btn.saved svg path {
+            fill: #f97316;
         }
 
         .venue-detail-scroll {
@@ -877,7 +877,7 @@
             word-break: break-word;
         }
 
-        .heart-icon {
+        .bookmark-icon {
             background: none;
             border: none;
             cursor: pointer;
@@ -892,7 +892,7 @@
             margin-left: 8px;
         }
 
-        .heart-icon svg {
+        .bookmark-icon svg {
             width: 18px;
             height: 18px;
             fill: none;
@@ -901,9 +901,9 @@
             transition: fill 0.2s, stroke 0.2s;
         }
 
-        .heart-icon.favorited svg {
-            fill: #ef4444;
-            stroke: #ef4444;
+        .bookmark-icon.saved svg {
+            fill: #f97316;
+            stroke: #f97316;
         }
 
         .status-badge {
@@ -1677,9 +1677,9 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">The Keg Kelowna</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
                             </button>
                         </div>
@@ -1701,9 +1701,9 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">White Spot</div>
-                            <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
                             </button>
                         </div>
@@ -1727,9 +1727,9 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">Anfield Restaurant</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
                             </button>
                         </div>
@@ -1751,9 +1751,9 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">Moxies Kelowna</div>
-                            <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
                             </button>
                         </div>
@@ -1776,9 +1776,9 @@
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div class="listing-header">
                         <div class="listing-name">The Keg Kelowna</div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -1789,9 +1789,9 @@
                 <div class="listing-item" onclick="showVenueDetail('White Spot')">
                     <div class="listing-header">
                         <div class="listing-name">White Spot</div>
-                        <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -1802,9 +1802,9 @@
                 <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
                     <div class="listing-header">
                         <div class="listing-name">Anfield Restaurant</div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -1815,9 +1815,9 @@
                 <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div class="listing-header">
                         <div class="listing-name">Moxies Kelowna</div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -1827,10 +1827,10 @@
             </div>
         </div>
 
-        <!-- Favorites Screen -->
+        <!-- Saved Screen -->
         <div class="screen" id="favorites-screen">
             <div class="page-header sticky">
-                <h1 class="page-title">Favorites</h1>
+                <h1 class="page-title">Saved</h1>
                 <button class="search-toggle-btn" id="favorites-search-toggle" onclick="toggleFavoritesSearch()">
                     🔍
                 </button>
@@ -1839,16 +1839,16 @@
             <div class="search-container" id="favorites-search-container">
                 <div class="search-wrapper">
                     <span class="search-icon">🔍</span>
-                    <input type="text" class="search-bar" placeholder="Search favorites..." id="favorites-search-input" style="margin-top: 0;">
+                    <input type="text" class="search-bar" placeholder="Search saved..." id="favorites-search-input" style="margin-top: 0;">
                 </div>
             </div>
 
             <div class="content" id="favorites-content">
-                <!-- Favorites Empty State (hidden when favorites exist) -->
+                <!-- Saved Empty State (hidden when saved items exist) -->
                 <div class="empty-state" id="favorites-empty-state" style="display: none;">
-                    <div class="empty-state-icon">♥</div>
-                    <div class="empty-state-title">No favorites yet</div>
-                    <div class="empty-state-body">Tap the heart on a venue to save it here.</div>
+                    <div class="empty-state-icon">🔖</div>
+                    <div class="empty-state-title">No saved places yet</div>
+                    <div class="empty-state-body">Tap the bookmark on a venue to save it here.</div>
                     <button class="empty-state-action" onclick="showScreen('search-screen')">Browse venues</button>
                 </div>
 
@@ -1861,9 +1861,9 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">White Spot</div>
-                            <button class="heart-icon favorited" onclick="event.stopPropagation(); toggleHeart(this)">
+                            <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
                             </button>
                         </div>
@@ -1984,9 +1984,9 @@
                             <div class="event-venue">Anfield Restaurant</div>
                             <div class="event-time">Every Sunday 5:00 PM - 11:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -1999,9 +1999,9 @@
                             <div class="event-venue">The Keg Kelowna</div>
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -2014,9 +2014,9 @@
                             <div class="event-venue">White Spot</div>
                             <div class="event-time">Wednesday 7:00 PM - 10:00 PM</div>
                         </div>
-                        <button class="heart-icon" onclick="event.stopPropagation(); toggleHeart(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
                         </button>
                     </div>
@@ -2030,9 +2030,9 @@
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="venue-detail-title">Venue Details</h1>
                 <div class="header-actions">
-                    <button class="header-icon-btn" id="venue-favorite-btn" onclick="toggleVenueFavorite(event)">
+                    <button class="header-icon-btn" id="venue-save-btn" onclick="toggleVenueSave(event)">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                         </svg>
                     </button>
                     <button class="header-icon-btn" onclick="shareVenue()">
@@ -2136,9 +2136,9 @@
                 <button class="detail-back-btn" onclick="goBack()">←</button>
                 <h1 class="detail-page-title" id="event-detail-title">Event Details</h1>
                 <div class="header-actions">
-                    <button class="header-icon-btn" id="event-favorite-btn" onclick="toggleEventFavorite(event)">
+                    <button class="header-icon-btn" id="event-save-btn" onclick="toggleEventSave(event)">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                         </svg>
                     </button>
                     <button class="header-icon-btn" onclick="shareEvent()">
@@ -2268,8 +2268,8 @@
                 Search
             </div>
             <div class="nav-item" onclick="showScreen('favorites-screen')">
-                <span class="nav-icon">♥</span>
-                Favourites
+                <span class="nav-icon">🔖</span>
+                Saved
             </div>
             <div class="nav-item" onclick="showScreen('events-screen')">
                 <span class="nav-icon">🎉</span>
@@ -3456,11 +3456,11 @@
             }
         }
 
-        // Toggle venue favorite
-        function toggleVenueFavorite(event) {
+        // Toggle venue save
+        function toggleVenueSave(event) {
             event.stopPropagation();
-            const btn = document.getElementById('venue-favorite-btn');
-            btn.classList.toggle('favorited');
+            const btn = document.getElementById('venue-save-btn');
+            btn.classList.toggle('saved');
         }
 
         // Share venue
@@ -4430,10 +4430,10 @@
         }
 
         // Event action handlers
-        function toggleEventFavorite(e) {
+        function toggleEventSave(e) {
             e.stopPropagation();
-            const btn = document.getElementById('event-favorite-btn');
-            btn.classList.toggle('favorited');
+            const btn = document.getElementById('event-save-btn');
+            btn.classList.toggle('saved');
         }
 
         function shareEvent() {
@@ -4608,9 +4608,9 @@
             mapInitialized = true;
         }
 
-        function toggleHeart(element) {
-            element.classList.toggle('favorited');
-            // Update favorites empty state if we're on the favorites screen
+        function toggleBookmark(element) {
+            element.classList.toggle('saved');
+            // Update saved empty state if we're on the saved screen
             checkFavoritesEmpty();
         }
 
@@ -4830,14 +4830,14 @@
             const emptyState = document.getElementById('favorites-empty-state');
             const listingItems = favoritesContent?.querySelectorAll('.listing-item') || [];
 
-            // Count favorited items (items with .favorited heart icon)
-            const favoritedCount = Array.from(listingItems).filter(item => {
-                const heartIcon = item.querySelector('.heart-icon.favorited');
-                return heartIcon !== null;
+            // Count saved items (items with .saved bookmark icon)
+            const savedCount = Array.from(listingItems).filter(item => {
+                const bookmarkIcon = item.querySelector('.bookmark-icon.saved');
+                return bookmarkIcon !== null;
             }).length;
 
             if (emptyState) {
-                emptyState.style.display = favoritedCount === 0 ? 'flex' : 'none';
+                emptyState.style.display = savedCount === 0 ? 'flex' : 'none';
             }
         }
 
