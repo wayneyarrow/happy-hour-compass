@@ -5229,7 +5229,9 @@
                 searchInput.addEventListener('input', performSearch);
                 searchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
+                        e.preventDefault();
                         performSearch();
+                        this.blur(); // Dismiss keyboard on mobile
                     }
                 });
             }
@@ -5240,7 +5242,9 @@
                 favoritesSearchInput.addEventListener('input', performFavoritesSearch);
                 favoritesSearchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
+                        e.preventDefault();
                         performFavoritesSearch();
+                        this.blur(); // Dismiss keyboard on mobile
                     }
                 });
             }
@@ -5251,7 +5255,9 @@
                 eventsSearchInput.addEventListener('input', performEventsSearch);
                 eventsSearchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
+                        e.preventDefault();
                         performEventsSearch();
+                        this.blur(); // Dismiss keyboard on mobile
                     }
                 });
             }
