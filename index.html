@@ -2365,8 +2365,8 @@
                 }
             });
 
-            // Sync event bookmarks
-            document.querySelectorAll('#events-list .event-item').forEach(item => {
+            // Sync event bookmarks on events listing page
+            document.querySelectorAll('#events-content .event-item').forEach(item => {
                 const eventName = item.querySelector('.event-title')?.textContent;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
                 if (eventName && bookmarkBtn) {
