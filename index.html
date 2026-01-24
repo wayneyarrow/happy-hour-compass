@@ -1706,7 +1706,7 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">The Keg Kelowna</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
@@ -1730,7 +1730,7 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">White Spot</div>
-                            <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
@@ -1756,7 +1756,7 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">Anfield Restaurant</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
@@ -1780,7 +1780,7 @@
                     <div class="listing-content">
                         <div class="listing-header">
                             <div class="listing-name">Moxies Kelowna</div>
-                            <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                            <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                                 </svg>
@@ -1805,7 +1805,7 @@
                 <div class="listing-item" onclick="showVenueDetail('The Keg Kelowna')">
                     <div class="listing-header">
                         <div class="listing-name">The Keg Kelowna</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -1818,7 +1818,7 @@
                 <div class="listing-item" onclick="showVenueDetail('White Spot')">
                     <div class="listing-header">
                         <div class="listing-name">White Spot</div>
-                        <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -1831,7 +1831,7 @@
                 <div class="listing-item" onclick="showVenueDetail('Anfield Restaurant')">
                     <div class="listing-header">
                         <div class="listing-name">Anfield Restaurant</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -1844,7 +1844,7 @@
                 <div class="listing-item" onclick="showVenueDetail('Moxies Kelowna')">
                     <div class="listing-header">
                         <div class="listing-name">Moxies Kelowna</div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -1873,38 +1873,14 @@
             </div>
 
             <div class="content" id="favorites-content">
-                <!-- Saved Empty State (hidden when saved items exist) -->
-                <div class="empty-state" id="favorites-empty-state" style="display: none;">
+                <!-- Saved Empty State (shown when no saved items exist) -->
+                <div class="empty-state" id="favorites-empty-state" style="display: flex;">
                     <div class="empty-state-icon">🔖</div>
                     <div class="empty-state-title">No saved places yet</div>
                     <div class="empty-state-body">Tap the bookmark on a venue to save it here.</div>
                     <button class="empty-state-action" onclick="showScreen('search-screen')">Browse venues</button>
                 </div>
-
-                <!-- Favorites cards use the same .listing-item structure as Search for visual consistency.
-                     The single-line HH status is dynamically added after .listing-offer by updateAllListingHHStatus() on page load. -->
-                <div class="listing-item" onclick="showVenueDetail('White Spot')">
-                    <div class="listing-image">
-                        <img src="images/casual-dining-1.jpg" alt="White Spot" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                    </div>
-                    <div class="listing-content">
-                        <div class="listing-header">
-                            <div class="listing-name">White Spot</div>
-                            <button class="bookmark-icon saved" onclick="event.stopPropagation(); toggleBookmark(this)">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="listing-offer">$4 wings, $3.50 beer</div>
-                        <!-- HH status line dynamically inserted here by updateAllListingHHStatus() -->
-                        <div class="listing-meta">
-                            <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">0.5 km</span>
-                            <span class="category-tag">• Family Restaurant</span>
-                        </div>
-                    </div>
-                </div>
+                <!-- Saved items are dynamically rendered here by renderSavedPage() -->
             </div>
         </div>
 
@@ -2013,7 +1989,7 @@
                             <div class="event-venue">Anfield Restaurant</div>
                             <div class="event-time">Every Sunday 5:00 PM - 11:00 PM</div>
                         </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -2028,7 +2004,7 @@
                             <div class="event-venue">The Keg Kelowna</div>
                             <div class="event-time">Thursday 6:00 PM - 9:00 PM</div>
                         </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -2043,7 +2019,7 @@
                             <div class="event-venue">White Spot</div>
                             <div class="event-time">Wednesday 7:00 PM - 10:00 PM</div>
                         </div>
-                        <button class="bookmark-icon" onclick="event.stopPropagation(); toggleBookmark(this)">
+                        <button class="bookmark-icon" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                             </svg>
@@ -2315,6 +2291,114 @@
         let currentScreen = 'search-screen';
         let previousScreen = 'search-screen';
 
+        // ===== CENTRAL SAVED STATE =====
+        // Single source of truth for all saved venues and events
+        // Persisted to localStorage for session continuity
+        const savedVenues = new Set(JSON.parse(localStorage.getItem('savedVenues') || '[]'));
+        const savedEvents = new Set(JSON.parse(localStorage.getItem('savedEvents') || '[]'));
+
+        // Persist saved state to localStorage
+        function persistSavedState() {
+            localStorage.setItem('savedVenues', JSON.stringify([...savedVenues]));
+            localStorage.setItem('savedEvents', JSON.stringify([...savedEvents]));
+        }
+
+        // Check if a venue is saved
+        function isVenueSaved(venueName) {
+            return savedVenues.has(venueName);
+        }
+
+        // Check if an event is saved
+        function isEventSaved(eventName) {
+            return savedEvents.has(eventName);
+        }
+
+        // Toggle saved state for a venue
+        function toggleVenueSavedState(venueName) {
+            if (savedVenues.has(venueName)) {
+                savedVenues.delete(venueName);
+            } else {
+                savedVenues.add(venueName);
+            }
+            persistSavedState();
+            syncAllBookmarkIcons();
+            renderSavedPage();
+        }
+
+        // Toggle saved state for an event
+        function toggleEventSavedState(eventName) {
+            if (savedEvents.has(eventName)) {
+                savedEvents.delete(eventName);
+            } else {
+                savedEvents.add(eventName);
+            }
+            persistSavedState();
+            syncAllBookmarkIcons();
+            renderSavedPage();
+        }
+
+        // Sync all bookmark icons across the app to match central state
+        function syncAllBookmarkIcons() {
+            // Sync venue bookmarks on search cards (list view)
+            document.querySelectorAll('#list-content .listing-item').forEach(item => {
+                const venueName = item.querySelector('.listing-name')?.textContent;
+                const bookmarkBtn = item.querySelector('.bookmark-icon');
+                if (venueName && bookmarkBtn) {
+                    if (savedVenues.has(venueName)) {
+                        bookmarkBtn.classList.add('saved');
+                    } else {
+                        bookmarkBtn.classList.remove('saved');
+                    }
+                }
+            });
+
+            // Sync venue bookmarks on search cards (map view)
+            document.querySelectorAll('#map-content .listing-item').forEach(item => {
+                const venueName = item.querySelector('.listing-name')?.textContent;
+                const bookmarkBtn = item.querySelector('.bookmark-icon');
+                if (venueName && bookmarkBtn) {
+                    if (savedVenues.has(venueName)) {
+                        bookmarkBtn.classList.add('saved');
+                    } else {
+                        bookmarkBtn.classList.remove('saved');
+                    }
+                }
+            });
+
+            // Sync event bookmarks
+            document.querySelectorAll('#events-list .event-item').forEach(item => {
+                const eventName = item.querySelector('.event-title')?.textContent;
+                const bookmarkBtn = item.querySelector('.bookmark-icon');
+                if (eventName && bookmarkBtn) {
+                    if (savedEvents.has(eventName)) {
+                        bookmarkBtn.classList.add('saved');
+                    } else {
+                        bookmarkBtn.classList.remove('saved');
+                    }
+                }
+            });
+
+            // Sync venue detail page bookmark (if visible)
+            const venueSaveBtn = document.getElementById('venue-save-btn');
+            if (venueSaveBtn && currentVenueName) {
+                if (savedVenues.has(currentVenueName)) {
+                    venueSaveBtn.classList.add('saved');
+                } else {
+                    venueSaveBtn.classList.remove('saved');
+                }
+            }
+
+            // Sync event detail page bookmark (if visible)
+            const eventSaveBtn = document.getElementById('event-save-btn');
+            if (eventSaveBtn && currentEventData) {
+                if (savedEvents.has(currentEventData.name)) {
+                    eventSaveBtn.classList.add('saved');
+                } else {
+                    eventSaveBtn.classList.remove('saved');
+                }
+            }
+        }
+
         // Store venue data
         // TODO: Alpha uses placeholder data for Info section fields.
         // Future: These fields may be missing/null - Info rendering is conditional.
@@ -2502,9 +2586,12 @@
 
             updateNavHighlighting(screenId);
 
-            // Check favorites empty state when showing favorites screen
+            // Sync bookmark icons across all views when switching screens
+            syncAllBookmarkIcons();
+
+            // Render saved page when showing favorites screen
             if (screenId === 'favorites-screen') {
-                checkFavoritesEmpty();
+                renderSavedPage();
             }
         }
 
@@ -3302,6 +3389,16 @@
             currentVenue = venue;
             currentVenueName = venueName;
 
+            // Sync venue detail header bookmark state with central saved state
+            const venueSaveBtn = document.getElementById('venue-save-btn');
+            if (venueSaveBtn) {
+                if (savedVenues.has(venueName)) {
+                    venueSaveBtn.classList.add('saved');
+                } else {
+                    venueSaveBtn.classList.remove('saved');
+                }
+            }
+
             // Update header
             document.getElementById('venue-detail-title').textContent = venueName;
 
@@ -3489,11 +3586,12 @@
             }
         }
 
-        // Toggle venue save
+        // Toggle venue save from detail page header
         function toggleVenueSave(event) {
             event.stopPropagation();
-            const btn = document.getElementById('venue-save-btn');
-            btn.classList.toggle('saved');
+            if (currentVenueName) {
+                toggleVenueSavedState(currentVenueName);
+            }
         }
 
         // Share venue
@@ -4134,6 +4232,16 @@
             // Store current event data
             currentEventData = { name: eventName, ...event };
 
+            // Sync event detail header bookmark state with central saved state
+            const eventSaveBtn = document.getElementById('event-save-btn');
+            if (eventSaveBtn) {
+                if (savedEvents.has(eventName)) {
+                    eventSaveBtn.classList.add('saved');
+                } else {
+                    eventSaveBtn.classList.remove('saved');
+                }
+            }
+
             // Update header
             document.getElementById('event-detail-title').textContent = eventName;
 
@@ -4465,8 +4573,9 @@
         // Event action handlers
         function toggleEventSave(e) {
             e.stopPropagation();
-            const btn = document.getElementById('event-save-btn');
-            btn.classList.toggle('saved');
+            if (currentEventData && currentEventData.name) {
+                toggleEventSavedState(currentEventData.name);
+            }
         }
 
         function shareEvent() {
@@ -4641,10 +4750,25 @@
             mapInitialized = true;
         }
 
-        function toggleBookmark(element) {
-            element.classList.toggle('saved');
-            // Update saved empty state if we're on the saved screen
-            checkFavoritesEmpty();
+        // Unified bookmark click handler - determines item type and name from DOM context
+        function handleBookmarkClick(element) {
+            // Find the parent card to determine type and name
+            const listingItem = element.closest('.listing-item');
+            const eventItem = element.closest('.event-item');
+
+            if (listingItem) {
+                // This is a venue bookmark
+                const venueName = listingItem.querySelector('.listing-name')?.textContent;
+                if (venueName) {
+                    toggleVenueSavedState(venueName);
+                }
+            } else if (eventItem) {
+                // This is an event bookmark
+                const eventName = eventItem.querySelector('.event-title')?.textContent;
+                if (eventName) {
+                    toggleEventSavedState(eventName);
+                }
+            }
         }
 
         // Dismiss search empty state and clear search
@@ -4830,21 +4954,39 @@
             const searchTerm = document.getElementById('favorites-search-input').value.toLowerCase();
             const favoritesScreen = document.getElementById('favorites-screen');
             const listingItems = favoritesScreen.querySelectorAll('.listing-item');
+            const eventItems = favoritesScreen.querySelectorAll('.event-item');
             const emptyState = document.getElementById('favorites-empty-state');
 
             if (searchTerm.length === 0) {
                 listingItems.forEach(item => {
                     item.style.display = 'flex';
                 });
-                checkFavoritesEmpty();
+                eventItems.forEach(item => {
+                    item.style.display = 'block';
+                });
+                renderSavedPage();
                 return;
             }
 
             let visibleCount = 0;
+
+            // Filter venue listings
             listingItems.forEach(item => {
                 const venueName = item.querySelector('.listing-name')?.textContent.toLowerCase() || '';
                 if (venueName.includes(searchTerm)) {
                     item.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // Filter event listings
+            eventItems.forEach(item => {
+                const eventTitle = item.querySelector('.event-title')?.textContent.toLowerCase() || '';
+                const eventVenue = item.querySelector('.event-venue')?.textContent.toLowerCase() || '';
+                if (eventTitle.includes(searchTerm) || eventVenue.includes(searchTerm)) {
+                    item.style.display = 'block';
                     visibleCount++;
                 } else {
                     item.style.display = 'none';
@@ -4857,21 +4999,108 @@
             }
         }
 
-        // Check if favorites is empty and show/hide empty state
-        function checkFavoritesEmpty() {
+        // Get venue image based on type
+        function getVenueImage(venue) {
+            if (venue.type.includes('Fine Dining') || venue.type.includes('Upscale')) {
+                return 'images/fine-dining-1.jpg';
+            } else if (venue.type.includes('Sports Bar')) {
+                return 'images/sports-bar-1.jpg';
+            } else if (venue.type.includes('Casual')) {
+                return 'images/casual-dining-2.jpg';
+            } else {
+                return 'images/casual-dining-1.jpg';
+            }
+        }
+
+        // Get short specials text for listing card
+        function getVenueShortSpecials(venue) {
+            const food = venue.specialsFood?.[0] || '';
+            const drinks = venue.specialsDrinks?.[0] || '';
+            if (food && drinks) return `${food}, ${drinks}`;
+            return food || drinks || 'Happy Hour Specials';
+        }
+
+        // Render the Saved page from central state
+        function renderSavedPage() {
             const favoritesContent = document.getElementById('favorites-content');
             const emptyState = document.getElementById('favorites-empty-state');
-            const listingItems = favoritesContent?.querySelectorAll('.listing-item') || [];
 
-            // Count saved items (items with .saved bookmark icon)
-            const savedCount = Array.from(listingItems).filter(item => {
-                const bookmarkIcon = item.querySelector('.bookmark-icon.saved');
-                return bookmarkIcon !== null;
-            }).length;
+            if (!favoritesContent) return;
 
+            // Clear existing items (except empty state)
+            const existingItems = favoritesContent.querySelectorAll('.listing-item, .event-item');
+            existingItems.forEach(item => item.remove());
+
+            const hasSavedVenues = savedVenues.size > 0;
+            const hasSavedEvents = savedEvents.size > 0;
+            const hasAnySaved = hasSavedVenues || hasSavedEvents;
+
+            // Show/hide empty state
             if (emptyState) {
-                emptyState.style.display = savedCount === 0 ? 'flex' : 'none';
+                emptyState.style.display = hasAnySaved ? 'none' : 'flex';
             }
+
+            // Render saved venues
+            if (hasSavedVenues) {
+                savedVenues.forEach(venueName => {
+                    const venue = venues[venueName];
+                    if (!venue) return;
+
+                    const itemHtml = `
+                        <div class="listing-item" onclick="showVenueDetail('${venueName}')">
+                            <div class="listing-image">
+                                <img src="${getVenueImage(venue)}" alt="${venueName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+                            </div>
+                            <div class="listing-content">
+                                <div class="listing-header">
+                                    <div class="listing-name">${venueName}</div>
+                                    <button class="bookmark-icon saved" onclick="event.stopPropagation(); handleBookmarkClick(this)">
+                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="listing-offer">${getVenueShortSpecials(venue)}</div>
+                                <div class="listing-meta">
+                                    <span class="category-tag">• ${venue.type}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    favoritesContent.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+            // Render saved events
+            if (hasSavedEvents) {
+                savedEvents.forEach(eventName => {
+                    const event = events[eventName];
+                    if (!event) return;
+
+                    const itemHtml = `
+                        <div class="event-item" onclick="showEventDetail('${eventName}')">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div class="event-title">${eventName}</div>
+                                    <div class="event-venue">${event.venue}</div>
+                                    <div class="event-time">${event.schedule} ${event.time}</div>
+                                </div>
+                                <button class="bookmark-icon saved" onclick="event.stopPropagation(); handleBookmarkClick(this)">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    favoritesContent.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+        }
+
+        // Legacy function - now calls renderSavedPage
+        function checkFavoritesEmpty() {
+            renderSavedPage();
         }
 
         // Filter collapse on scroll
@@ -4977,8 +5206,9 @@
             // Initialize venue filters
             initVenueFilters();
 
-            // Initialize favorites empty state check
-            checkFavoritesEmpty();
+            // Initialize saved state - sync all bookmark icons and render saved page
+            syncAllBookmarkIcons();
+            renderSavedPage();
 
             // Show one-time swipe hint for filter chips (if overflow exists)
             showFilterSwipeHint('search-filters', 'hhc_filters_swipe_hint_shown_search');
