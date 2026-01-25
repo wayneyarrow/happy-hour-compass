@@ -3976,6 +3976,35 @@
             applyEventFilters();
         }
 
+        // Helper: Parse ISO date string (YYYY-MM-DD) to local Date object
+        // This avoids timezone issues with new Date('YYYY-MM-DD') which parses as UTC
+        function parseLocalDate(dateStr) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            return new Date(year, month - 1, day); // month is 0-indexed
+        }
+
+        // Helper: Check if an event's dayOfWeek falls within a date range
+        function eventDayFallsInRange(eventDayOfWeek, startDateStr, endDateStr) {
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayIndex = dayNames.findIndex(d => d.toLowerCase() === eventDayOfWeek.toLowerCase());
+
+            if (dayIndex === -1) return false;
+
+            // Parse dates as local dates to avoid timezone issues
+            const startDate = parseLocalDate(startDateStr);
+            const endDate = parseLocalDate(endDateStr);
+
+            // Iterate through each day in the range
+            const currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                if (currentDate.getDay() === dayIndex) {
+                    return true;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return false;
+        }
+
         // Check if an event matches the current filter
         function eventMatchesFilter(eventIdOrName) {
             const event = getEvent(eventIdOrName);
@@ -4012,21 +4041,7 @@
                 // Custom calendar date range filter
                 // For recurring events, check if the event's dayOfWeek falls within the date range
                 if (eventDay) {
-                    const startDate = new Date(selectedEventDateStart);
-                    const endDate = new Date(selectedEventDateEnd);
-                    const dayIndex = dayNames.findIndex(d => d.toLowerCase() === eventDay.toLowerCase());
-
-                    if (dayIndex === -1) return false;
-
-                    // Check if any day in the range matches the event's dayOfWeek
-                    const currentDate = new Date(startDate);
-                    while (currentDate <= endDate) {
-                        if (currentDate.getDay() === dayIndex) {
-                            return true;
-                        }
-                        currentDate.setDate(currentDate.getDate() + 1);
-                    }
-                    return false;
+                    return eventDayFallsInRange(eventDay, selectedEventDateStart, selectedEventDateEnd);
                 }
                 // For events without dayOfWeek, show them (permissive for now)
                 return true;
