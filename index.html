@@ -2109,6 +2109,46 @@
             localStorage.setItem('savedEvents', JSON.stringify([...savedEvents]));
         }
 
+        // Migrate legacy name-based saved items to ID-based (called after data model is loaded)
+        function migrateSavedStateToIds() {
+            let migrated = false;
+
+            // Migrate venues: if a saved item is a name (not an ID), convert it
+            const venuesToMigrate = [];
+            savedVenues.forEach(item => {
+                // Check if item is a name (exists in venuesByName but not venuesById)
+                if (!venuesById[item] && venuesByName[item]) {
+                    const venue = venuesByName[item];
+                    venuesToMigrate.push({ oldName: item, newId: venue.id });
+                }
+            });
+            venuesToMigrate.forEach(({ oldName, newId }) => {
+                savedVenues.delete(oldName);
+                savedVenues.add(newId);
+                migrated = true;
+            });
+
+            // Migrate events: if a saved item is a name (not an ID), convert it
+            const eventsToMigrate = [];
+            savedEvents.forEach(item => {
+                // Check if item is a name (exists in eventsByName but not eventsById)
+                if (!eventsById[item] && eventsByName[item]) {
+                    const event = eventsByName[item];
+                    eventsToMigrate.push({ oldName: item, newId: event.id });
+                }
+            });
+            eventsToMigrate.forEach(({ oldName, newId }) => {
+                savedEvents.delete(oldName);
+                savedEvents.add(newId);
+                migrated = true;
+            });
+
+            // Persist if any migrations occurred
+            if (migrated) {
+                persistSavedState();
+            }
+        }
+
         // Check if a venue is saved (accepts ID or name)
         function isVenueSaved(idOrName) {
             // First try direct ID lookup
@@ -2163,10 +2203,12 @@
         function syncAllBookmarkIcons() {
             // Sync venue bookmarks on search cards (list view)
             document.querySelectorAll('#list-content .listing-item').forEach(item => {
+                const venueId = item.getAttribute('data-venue-id');
                 const venueName = item.querySelector('.listing-name')?.textContent;
+                const identifier = venueId || venueName;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
-                if (venueName && bookmarkBtn) {
-                    if (isVenueSaved(venueName)) {
+                if (identifier && bookmarkBtn) {
+                    if (isVenueSaved(identifier)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2176,10 +2218,12 @@
 
             // Sync venue bookmarks on search cards (map view)
             document.querySelectorAll('#map-content .listing-item').forEach(item => {
+                const venueId = item.getAttribute('data-venue-id');
                 const venueName = item.querySelector('.listing-name')?.textContent;
+                const identifier = venueId || venueName;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
-                if (venueName && bookmarkBtn) {
-                    if (isVenueSaved(venueName)) {
+                if (identifier && bookmarkBtn) {
+                    if (isVenueSaved(identifier)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2189,10 +2233,41 @@
 
             // Sync event bookmarks on events listing page
             document.querySelectorAll('#events-content .event-item').forEach(item => {
+                const eventId = item.getAttribute('data-event-id');
                 const eventName = item.querySelector('.event-title')?.textContent;
+                const identifier = eventId || eventName;
                 const bookmarkBtn = item.querySelector('.bookmark-icon');
-                if (eventName && bookmarkBtn) {
-                    if (isEventSaved(eventName)) {
+                if (identifier && bookmarkBtn) {
+                    if (isEventSaved(identifier)) {
+                        bookmarkBtn.classList.add('saved');
+                    } else {
+                        bookmarkBtn.classList.remove('saved');
+                    }
+                }
+            });
+
+            // Sync bookmarks on Saved page
+            document.querySelectorAll('#favorites-content .listing-item').forEach(item => {
+                const venueId = item.getAttribute('data-venue-id');
+                const venueName = item.querySelector('.listing-name')?.textContent;
+                const identifier = venueId || venueName;
+                const bookmarkBtn = item.querySelector('.bookmark-icon');
+                if (identifier && bookmarkBtn) {
+                    if (isVenueSaved(identifier)) {
+                        bookmarkBtn.classList.add('saved');
+                    } else {
+                        bookmarkBtn.classList.remove('saved');
+                    }
+                }
+            });
+
+            document.querySelectorAll('#favorites-content .event-item').forEach(item => {
+                const eventId = item.getAttribute('data-event-id');
+                const eventName = item.querySelector('.event-title')?.textContent;
+                const identifier = eventId || eventName;
+                const bookmarkBtn = item.querySelector('.bookmark-icon');
+                if (identifier && bookmarkBtn) {
+                    if (isEventSaved(identifier)) {
                         bookmarkBtn.classList.add('saved');
                     } else {
                         bookmarkBtn.classList.remove('saved');
@@ -2396,6 +2471,7 @@
                 type: 'Sports Bar Event',
                 venueId: 'anfield-restaurant',
                 schedule: 'Every Sunday',
+                dayOfWeek: 'Sunday',
                 time: '5:00 PM - 11:00 PM',
                 description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks. Perfect for groups!',
                 offers: '• $0.50 wings (minimum 10)<br>• $5 beer buckets<br>• $12 nachos for two<br>• $15 pitcher specials',
@@ -2408,6 +2484,7 @@
                 type: 'Fine Dining Event',
                 venueId: 'the-keg-kelowna',
                 schedule: 'Every Thursday',
+                dayOfWeek: 'Thursday',
                 time: '6:00 PM - 9:00 PM',
                 description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.',
                 offers: '• 5 wine tastings for $25<br>• Paired appetizers included<br>• 20% off featured wines<br>• Sommelier-guided experience',
@@ -2420,6 +2497,7 @@
                 type: 'Family Event',
                 venueId: 'white-spot',
                 schedule: 'Every Wednesday',
+                dayOfWeek: 'Wednesday',
                 time: '7:00 PM - 10:00 PM',
                 description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.',
                 offers: '• $3 appetizers during trivia<br>• $2.50 beer<br>• Prize for winning team<br>• Family-friendly atmosphere',
@@ -3847,13 +3925,16 @@
                 const eventTitle = item.querySelector('.event-title')?.textContent.toLowerCase() || '';
                 const eventVenue = item.querySelector('.event-venue')?.textContent.toLowerCase() || '';
 
-                // Extract event name for filter check
-                const onclickAttr = item.getAttribute('onclick') || '';
-                const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
-                const eventName = match ? match[1] : null;
+                // Use data-event-id attribute first, fall back to onclick parsing
+                let eventId = item.getAttribute('data-event-id');
+                if (!eventId) {
+                    const onclickAttr = item.getAttribute('onclick') || '';
+                    const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
+                    eventId = match ? match[1] : null;
+                }
 
                 const matchesSearch = eventTitle.includes(searchTerm) || eventVenue.includes(searchTerm);
-                const matchesFilter = eventName ? eventMatchesFilter(eventName) : true;
+                const matchesFilter = eventId ? eventMatchesFilter(eventId) : true;
 
                 if (matchesSearch && matchesFilter) {
                     item.style.display = 'block';
@@ -3896,8 +3977,8 @@
         }
 
         // Check if an event matches the current filter
-        function eventMatchesFilter(eventName) {
-            const event = events[eventName];
+        function eventMatchesFilter(eventIdOrName) {
+            const event = getEvent(eventIdOrName);
             if (!event) return false;
 
             const now = new Date();
@@ -3905,24 +3986,50 @@
             const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             const todayName = dayNames[currentDay];
 
-            // Parse the schedule to determine which day(s) the event runs
+            // Use explicit dayOfWeek field if available, otherwise parse schedule
+            const eventDay = event.dayOfWeek || '';
             const schedule = (event.schedule || '').toLowerCase();
 
             if (currentEventsFilter === 'today') {
-                // Check if event runs today
-                if (schedule.includes('every')) {
-                    // e.g., "Every Sunday", "Every Thursday", "Every Wednesday"
-                    return schedule.toLowerCase().includes(todayName.toLowerCase());
+                // Check if event runs today using dayOfWeek field first
+                if (eventDay) {
+                    return eventDay.toLowerCase() === todayName.toLowerCase();
                 }
-                // For one-off events, check if the date matches today
+                // Fallback: parse schedule string
+                if (schedule.includes('every')) {
+                    return schedule.includes(todayName.toLowerCase());
+                }
                 return schedule.includes(todayName.toLowerCase());
             } else if (currentEventsFilter === 'weekend') {
                 // Weekend = Saturday or Sunday
-                if (schedule.includes('every')) {
-                    return schedule.includes('saturday') || schedule.includes('sunday');
+                if (eventDay) {
+                    const dayLower = eventDay.toLowerCase();
+                    return dayLower === 'saturday' || dayLower === 'sunday';
                 }
-                // Check for weekend days in the schedule
+                // Fallback: parse schedule string
                 return schedule.includes('saturday') || schedule.includes('sunday');
+            } else if (currentEventsFilter === 'custom' && selectedEventDateStart && selectedEventDateEnd) {
+                // Custom calendar date range filter
+                // For recurring events, check if the event's dayOfWeek falls within the date range
+                if (eventDay) {
+                    const startDate = new Date(selectedEventDateStart);
+                    const endDate = new Date(selectedEventDateEnd);
+                    const dayIndex = dayNames.findIndex(d => d.toLowerCase() === eventDay.toLowerCase());
+
+                    if (dayIndex === -1) return false;
+
+                    // Check if any day in the range matches the event's dayOfWeek
+                    const currentDate = new Date(startDate);
+                    while (currentDate <= endDate) {
+                        if (currentDate.getDay() === dayIndex) {
+                            return true;
+                        }
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    }
+                    return false;
+                }
+                // For events without dayOfWeek, show them (permissive for now)
+                return true;
             }
 
             // If no filter or unknown filter, show all
@@ -3934,12 +4041,16 @@
             const eventItems = document.querySelectorAll('#events-content .event-item');
 
             eventItems.forEach(item => {
-                // Extract event name from onclick attribute
-                const onclickAttr = item.getAttribute('onclick') || '';
-                const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
-                const eventName = match ? match[1] : null;
+                // Use data-event-id attribute first (from render functions), fall back to onclick parsing
+                let eventId = item.getAttribute('data-event-id');
+                if (!eventId) {
+                    // Fallback: extract event name from onclick attribute
+                    const onclickAttr = item.getAttribute('onclick') || '';
+                    const match = onclickAttr.match(/showEventDetail\(['"](.+?)['"]\)/);
+                    eventId = match ? match[1] : null;
+                }
 
-                if (eventName && eventMatchesFilter(eventName)) {
+                if (eventId && eventMatchesFilter(eventId)) {
                     item.style.display = 'block';
                 } else {
                     item.style.display = 'none';
@@ -4203,9 +4314,8 @@
             document.getElementById('events-chip-weekend').classList.remove('active');
             currentEventsFilter = 'custom';
 
-            // TODO: Alpha displays all events regardless of selected date range
-            // Future: Implement actual date-based filtering logic here
-            // Filter should show events that occur on OR overlap the selected date range
+            // Apply the filter to show events matching the date range
+            applyEventFilters();
 
             // Close calendar
             toggleEventsCalendar();
@@ -4828,21 +4938,25 @@
 
         // Unified bookmark click handler - determines item type and name from DOM context
         function handleBookmarkClick(element) {
-            // Find the parent card to determine type and name
+            // Find the parent card to determine type and identifier
             const listingItem = element.closest('.listing-item');
             const eventItem = element.closest('.event-item');
 
             if (listingItem) {
-                // This is a venue bookmark
+                // This is a venue bookmark - prefer data-venue-id, fall back to name
+                const venueId = listingItem.getAttribute('data-venue-id');
                 const venueName = listingItem.querySelector('.listing-name')?.textContent;
-                if (venueName) {
-                    toggleVenueSavedState(venueName);
+                const identifier = venueId || venueName;
+                if (identifier) {
+                    toggleVenueSavedState(identifier);
                 }
             } else if (eventItem) {
-                // This is an event bookmark
+                // This is an event bookmark - prefer data-event-id, fall back to name
+                const eventId = eventItem.getAttribute('data-event-id');
                 const eventName = eventItem.querySelector('.event-title')?.textContent;
-                if (eventName) {
-                    toggleEventSavedState(eventName);
+                const identifier = eventId || eventName;
+                if (identifier) {
+                    toggleEventSavedState(identifier);
                 }
             }
         }
@@ -5133,7 +5247,7 @@
                     if (!venue) return;
 
                     const itemHtml = `
-                        <div class="listing-item" onclick="showVenueDetail('${venue.name}')">
+                        <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
                             <div class="listing-image">
                                 <img src="${getVenueImage(venue)}" alt="${venue.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                             </div>
@@ -5168,7 +5282,7 @@
                     const venueName = eventVenue ? eventVenue.name : 'Unknown Venue';
 
                     const itemHtml = `
-                        <div class="event-item" onclick="showEventDetail('${event.name}')">
+                        <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.name}')">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
                                     <div class="event-title">${event.name}</div>
@@ -5284,6 +5398,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Migrate any legacy name-based saved items to ID-based
+            migrateSavedStateToIds();
+
             // Initialize the toggle icon
             const toggleIconSvg = document.getElementById('toggle-icon-svg');
             if (toggleIconSvg) {
