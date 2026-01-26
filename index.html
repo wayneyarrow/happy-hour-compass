@@ -61,6 +61,60 @@
             display: flex;
         }
 
+        /* ===== SPLASH & HOME SCREEN STYLES ===== */
+        .splash-screen, .home-screen {
+            background: white;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .splash-logo {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+        }
+
+        .home-screen .splash-logo {
+            width: 140px;
+            height: 140px;
+            margin-bottom: 24px;
+        }
+
+        .home-tagline {
+            font-size: 18px;
+            color: #374151;
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 500;
+        }
+
+        .home-cta {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .home-cta:hover {
+            background: #2563eb;
+        }
+
+        .home-cta:active {
+            background: #1d4ed8;
+        }
+
+        /* Fade transition for splash */
+        .splash-screen.fade-out {
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+        }
+
         .header {
             background: #3b82f6;
             color: white;
@@ -1658,8 +1712,20 @@
 </head>
 <body>
     <div class="phone-frame">
+        <!-- Splash Screen (logo only, for subsequent launches) -->
+        <div class="screen splash-screen" id="splash-screen">
+            <img src="logo.png" alt="Happy Hour Compass" class="splash-logo">
+        </div>
+
+        <!-- Home Screen (first-launch only) -->
+        <div class="screen home-screen" id="home-screen">
+            <img src="logo.png" alt="Happy Hour Compass" class="splash-logo">
+            <p class="home-tagline">Your guide to local happy hours</p>
+            <button class="home-cta" id="home-cta-btn">Explore happy hours</button>
+        </div>
+
         <!-- Search Screen -->
-        <div class="screen active" id="search-screen">
+        <div class="screen" id="search-screen">
             <div style="padding: 20px 20px 0;">
                 <div class="search-controls">
                     <div class="search-wrapper">
@@ -5413,6 +5479,51 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // ===== LAUNCH SCREEN LOGIC =====
+            // Determine if this is first launch or subsequent launch
+            const hasLaunchedBefore = localStorage.getItem('hhc_has_launched');
+            const splashScreen = document.getElementById('splash-screen');
+            const homeScreen = document.getElementById('home-screen');
+            const searchScreen = document.getElementById('search-screen');
+            const homeCta = document.getElementById('home-cta-btn');
+
+            function transitionToSearch() {
+                // Hide splash/home screens
+                if (splashScreen) splashScreen.classList.remove('active');
+                if (homeScreen) homeScreen.classList.remove('active');
+                // Show search screen
+                if (searchScreen) searchScreen.classList.add('active');
+            }
+
+            if (!hasLaunchedBefore) {
+                // First launch: show home screen with tagline and CTA
+                if (homeScreen) homeScreen.classList.add('active');
+
+                // Handle CTA click
+                if (homeCta) {
+                    homeCta.addEventListener('click', function() {
+                        // Mark as launched
+                        localStorage.setItem('hhc_has_launched', 'true');
+                        // Transition to search
+                        transitionToSearch();
+                    });
+                }
+            } else {
+                // Subsequent launch: show splash briefly, then search
+                if (splashScreen) splashScreen.classList.add('active');
+
+                // Brief splash display (1.5 seconds), then fade and show search
+                setTimeout(function() {
+                    if (splashScreen) {
+                        splashScreen.classList.add('fade-out');
+                        // After fade animation completes, transition to search
+                        setTimeout(function() {
+                            transitionToSearch();
+                        }, 300); // Match the CSS transition duration
+                    }
+                }, 1200); // Splash visible for 1.2s before fade begins
+            }
+
             // Migrate any legacy name-based saved items to ID-based
             migrateSavedStateToIds();
 
