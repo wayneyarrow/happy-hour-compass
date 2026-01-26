@@ -62,35 +62,44 @@
         }
 
         /* ===== SPLASH & HOME SCREEN STYLES ===== */
-        .splash-screen, .home-screen {
+        .splash-screen {
             background: white;
             justify-content: center;
             align-items: center;
             flex-direction: column;
         }
 
+        .home-screen {
+            background: white;
+            justify-content: flex-start;
+            align-items: center;
+            flex-direction: column;
+            padding-top: 120px;
+        }
+
         .splash-logo {
-            width: 120px;
-            height: 120px;
+            width: 160px;
+            height: 160px;
             object-fit: contain;
         }
 
         .home-screen .splash-logo {
-            width: 140px;
-            height: 140px;
-            margin-bottom: 24px;
+            width: 180px;
+            height: 180px;
+            margin-bottom: 32px;
         }
 
         .home-tagline {
-            font-size: 18px;
+            font-size: 20px;
             color: #374151;
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 48px;
             font-weight: 500;
+            padding: 0 24px;
         }
 
         .home-cta {
-            background: #3b82f6;
+            background: #f97316;
             color: white;
             border: none;
             padding: 16px 32px;
@@ -102,11 +111,11 @@
         }
 
         .home-cta:hover {
-            background: #2563eb;
+            background: #ea580c;
         }
 
         .home-cta:active {
-            background: #1d4ed8;
+            background: #c2410c;
         }
 
         /* Fade transition for splash */
