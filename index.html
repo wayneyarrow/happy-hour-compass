@@ -4,8 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Happy Hour Compass</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <!--
+        Google Maps API Configuration
+        ─────────────────────────────
+        This app uses the Google Maps JavaScript API for interactive map views.
+        The API key is loaded from env.js (see env.example.js for setup).
+
+        If env.js is missing or the key is empty, maps display a placeholder
+        message. All other app functionality remains fully operational.
+
+        This setup is intentional and sufficient for Beta.
+    -->
+    <script src="env.js"></script>
     <style>
         * {
             margin: 0;
@@ -2168,6 +2178,92 @@
     </div>
 
     <script>
+        // =====================================================================
+        // GOOGLE MAPS API — ENVIRONMENT-BASED CONFIGURATION
+        // =====================================================================
+        //
+        // Required env variable: GOOGLE_MAPS_API_KEY
+        //   Provide it via env.js (see env.example.js for the format).
+        //   For Vercel: set the env var in the dashboard and generate env.js
+        //   at build time (see env.example.js for the build command).
+        //
+        // Behavior when the key is missing:
+        //   - The Google Maps script is never loaded
+        //   - Map containers show a descriptive placeholder instead
+        //   - The rest of the app (venues, filters, distance, etc.) works normally
+        //
+        // This setup is Beta-ready. Once a valid API key is supplied via env.js,
+        // Google Maps will render automatically with no code changes needed.
+        //
+        // Future hardening (not implemented — document only):
+        //   - Restrict API key to specific HTTP referrers in Google Cloud Console
+        //   - Set daily quota / billing cap
+        //   - Restrict key to Maps JavaScript API only
+        // =====================================================================
+
+        // Ensure config object exists even if env.js was not loaded
+        window.HHC_CONFIG = window.HHC_CONFIG || {};
+
+        // Google Maps readiness state
+        var googleMapsReady = false;
+        var googleMapsLoadPromise = null;
+
+        /**
+         * Conditionally load the Google Maps JavaScript API.
+         * Only loads if a non-empty API key is present in HHC_CONFIG.
+         * Returns a Promise that resolves to true (loaded) or false (skipped/failed).
+         */
+        function loadGoogleMapsAPI() {
+            var apiKey = (window.HHC_CONFIG && window.HHC_CONFIG.GOOGLE_MAPS_API_KEY) || '';
+            if (!apiKey) {
+                // No API key configured — maps will show placeholder.
+                // This is expected during development and until Beta key is provisioned.
+                return Promise.resolve(false);
+            }
+
+            return new Promise(function(resolve) {
+                var script = document.createElement('script');
+                script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(apiKey);
+                script.async = true;
+                script.defer = true;
+                script.onload = function() {
+                    googleMapsReady = true;
+                    resolve(true);
+                };
+                script.onerror = function() {
+                    // API key may be invalid or network issue — fail gracefully
+                    googleMapsReady = false;
+                    resolve(false);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Begin loading Google Maps API as early as possible (non-blocking).
+        // The promise is awaited later when a map view is actually requested.
+        googleMapsLoadPromise = loadGoogleMapsAPI();
+
+        /**
+         * Render a user-friendly placeholder when Google Maps is unavailable.
+         * Keeps the container visible so surrounding UI is not disrupted.
+         */
+        function renderMapPlaceholder(containerId) {
+            var container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML =
+                '<div style="height: 100%; min-height: 200px; background: linear-gradient(135deg, #e0f2fe, #f0fdf4);' +
+                ' border-radius: 8px; display: flex; flex-direction: column; align-items: center;' +
+                ' justify-content: center; color: #6b7280; font-family: -apple-system, BlinkMacSystemFont,' +
+                ' \'Segoe UI\', Roboto, Arial, sans-serif; text-align: center; padding: 24px;">' +
+                '<div style="font-size: 32px; margin-bottom: 12px;">🗺️</div>' +
+                '<div style="font-weight: 600; font-size: 15px; color: #374151; margin-bottom: 6px;">' +
+                'Map view requires setup</div>' +
+                '<div style="font-size: 13px; line-height: 1.5; max-width: 260px;">' +
+                'A Google Maps API key is needed to display interactive maps.' +
+                ' See <strong>env.example.js</strong> for configuration instructions.</div>' +
+                '</div>';
+        }
+
         let currentScreen = 'search-screen';
         let previousScreen = 'search-screen';
 
@@ -3990,35 +4086,35 @@
             modal.style.display = 'none';
         }
 
-        // Initialize expanded map
+        // Initialize expanded (detail) map — Google Maps version
         let expandedMap = null;
         function initializeExpandedMap() {
-            const container = document.getElementById('detail-map-expanded');
-
+            var container = document.getElementById('detail-map-expanded');
             if (!container) return;
 
-            if (expandedMap) {
-                expandedMap.remove();
+            // If Google Maps is not available, show placeholder instead of crashing
+            if (!googleMapsReady) {
+                renderMapPlaceholder('detail-map-expanded');
+                return;
             }
 
-            expandedMap = L.map('detail-map-expanded').setView([49.8880, -119.4960], 15);
+            // Clear previous instance (Google Maps does not have a .remove() method)
+            container.innerHTML = '';
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(expandedMap);
-
-            const customIcon = L.divIcon({
-                className: 'custom-marker',
-                html: createCustomMarker(),
-                iconSize: [40, 40],
-                iconAnchor: [20, 40]
+            expandedMap = new google.maps.Map(container, {
+                center: { lat: 49.8880, lng: -119.4960 },
+                zoom: 15
             });
 
-            L.marker([49.8880, -119.4960], { icon: customIcon }).addTo(expandedMap);
+            new google.maps.Marker({
+                position: { lat: 49.8880, lng: -119.4960 },
+                map: expandedMap,
+                icon: createGoogleMapsMarkerIcon()
+            });
 
-            setTimeout(() => {
+            setTimeout(function() {
                 if (expandedMap) {
-                    expandedMap.invalidateSize();
+                    google.maps.event.trigger(expandedMap, 'resize');
                 }
             }, 100);
         }
@@ -5002,11 +5098,9 @@
                 listContent.style.display = 'none';
                 mapContent.style.display = 'block';
 
-                setTimeout(() => {
+                setTimeout(function() {
                     initializeMap();
-                    if (map) {
-                        map.invalidateSize();
-                    }
+                    // Google Maps resize is handled inside _buildMainGoogleMap
                 }, 100);
             } else {
                 // Switch to list view - show map icon (to go to map)
@@ -5018,54 +5112,101 @@
             }
         }
 
-        // Map functionality
+        // Map functionality — powered by Google Maps JavaScript API
+        // Requires GOOGLE_MAPS_API_KEY in env.js (see env.example.js)
         let map;
         let mapInitialized = false;
 
-        function createCustomMarker() {
-            return L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">📍</div>',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -15]
-            });
+        /**
+         * Create a custom marker icon for Google Maps.
+         * Returns a google.maps.Icon config using an inline SVG data URI
+         * that visually matches the original red pin style.
+         */
+        function createGoogleMapsMarkerIcon() {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30">' +
+                '<circle cx="15" cy="15" r="13" fill="%23ef4444" stroke="white" stroke-width="3"/>' +
+                '<text x="15" y="20" text-anchor="middle" font-size="14">📍</text>' +
+                '</svg>';
+            return {
+                url: 'data:image/svg+xml;charset=UTF-8,' + svg,
+                scaledSize: new google.maps.Size(30, 30),
+                anchor: new google.maps.Point(15, 15)
+            };
         }
 
+        /**
+         * Initialize the main search-view map.
+         * Waits for the Google Maps API load promise to settle, then either
+         * renders the interactive map or shows a placeholder.
+         */
         function initializeMap() {
             if (mapInitialized) return;
-            
-            map = L.map('map').setView([49.8880, -119.4960], 14);
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-            
+
+            // Guard: wait for the Google Maps API load attempt to finish
+            if (googleMapsLoadPromise) {
+                googleMapsLoadPromise.then(function(loaded) {
+                    if (loaded && !mapInitialized) {
+                        _buildMainGoogleMap();
+                    } else if (!loaded) {
+                        // No API key or load failure — show placeholder, do not crash
+                        renderMapPlaceholder('map');
+                    }
+                });
+            } else {
+                renderMapPlaceholder('map');
+            }
+        }
+
+        /**
+         * Internal: construct the Google Maps instance and venue markers.
+         * Called only after the API has loaded successfully.
+         */
+        function _buildMainGoogleMap() {
+            if (mapInitialized) return;
+
+            var mapEl = document.getElementById('map');
+            if (!mapEl) return;
+
+            map = new google.maps.Map(mapEl, {
+                center: { lat: 49.8880, lng: -119.4960 },
+                zoom: 14
+            });
+
+            var infoWindow = new google.maps.InfoWindow();
+
             // Build map markers from venue data model (single source of truth for coords)
-            venuesData.filter(v => v.latitude && v.longitude).forEach(venue => {
-                const marker = L.marker([venue.latitude, venue.longitude], {
-                    icon: createCustomMarker()
-                }).addTo(map);
-                
-                marker.bindTooltip(`<strong>${venue.name}</strong><br>${venue.type}`, {
-                    permanent: false,
-                    direction: 'top',
-                    offset: [0, -20]
+            venuesData.filter(function(v) { return v.latitude && v.longitude; }).forEach(function(venue) {
+                var marker = new google.maps.Marker({
+                    position: { lat: venue.latitude, lng: venue.longitude },
+                    map: map,
+                    icon: createGoogleMapsMarkerIcon(),
+                    title: venue.name + ' — ' + venue.type
                 });
 
-                const shortSpecials = getVenueShortSpecials(venue);
-                marker.bindPopup(`
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; cursor: pointer;" onclick="showVenueDetail('${venue.name}')">
-                        <strong>${venue.name}</strong><br>
-                        <div style="color: #6b7280; font-size: 14px; margin: 4px 0;">
-                            ${shortSpecials}
-                        </div>
-                        <div style="color: #3b82f6; font-size: 12px; margin-top: 8px;">📍 Click to view details</div>
-                    </div>
-                `);
+                var shortSpecials = getVenueShortSpecials(venue);
+                var contentString =
+                    '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Arial, sans-serif; cursor: pointer;" onclick="showVenueDetail(\'' + venue.name.replace(/'/g, "\\'") + '\')">' +
+                        '<strong>' + venue.name + '</strong><br>' +
+                        '<div style="color: #6b7280; font-size: 14px; margin: 4px 0;">' +
+                            shortSpecials +
+                        '</div>' +
+                        '<div style="color: #3b82f6; font-size: 12px; margin-top: 8px;">📍 Click to view details</div>' +
+                    '</div>';
+
+                marker.addListener('click', function() {
+                    infoWindow.setContent(contentString);
+                    infoWindow.open(map, marker);
+                });
             });
-            
+
             mapInitialized = true;
+
+            // Ensure the map renders fully in its (potentially just-revealed) container
+            setTimeout(function() {
+                if (map) {
+                    google.maps.event.trigger(map, 'resize');
+                }
+            }, 100);
         }
 
         // Unified bookmark click handler - determines item type and name from DOM context
