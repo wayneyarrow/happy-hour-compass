@@ -2383,6 +2383,8 @@
         //   - id: string (unique identifier, used by Saved and filters)
         //   - name: string (display name)
         //   - type: string (category - powers 'sports-bars', 'fine-dining' filters)
+        //   - latitude: number (decimal degrees, e.g. 49.8854 - powers distance calc and 'near-me' filter)
+        //   - longitude: number (decimal degrees, e.g. -119.4937 - powers distance calc and 'near-me' filter)
         //   - address: string
         //   - phone: string
         //   - happyHourWeekly: object (powers 'happening-now' filter)
@@ -2391,7 +2393,7 @@
         //   - specialsDrinks: array of strings (powers 'under-10' filter)
         //
         // OPTIONAL VENUE FIELDS:
-        //   - icon, image, menuUrl, websiteUrl, paymentMethods, distance
+        //   - icon, image, menuUrl, websiteUrl, paymentMethods
         //
         // REQUIRED EVENT FIELDS:
         //   - id: string (unique identifier, used by Saved)
@@ -2409,9 +2411,10 @@
                 name: 'The Keg Kelowna',
                 icon: '🍽️',
                 type: 'Upscale Restaurant',
+                latitude: 49.8854,
+                longitude: -119.4937,
                 address: '532 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-1442',
-                distance: 0.3,
                 image: 'images/fine-dining-1.jpg',
                 happyHourWeekly: {
                     'Sunday': [],
@@ -2442,9 +2445,10 @@
                 name: 'White Spot',
                 icon: '🍔',
                 type: 'Family Restaurant',
+                latitude: 49.8901,
+                longitude: -119.4851,
                 address: '1405 Harvey Ave, Kelowna, BC',
                 phone: '(250) 860-7768',
-                distance: 0.5,
                 image: 'images/casual-dining-1.jpg',
                 happyHourWeekly: {
                     'Sunday': [{start: '13:00', end: '16:00'}],
@@ -2475,9 +2479,10 @@
                 name: 'Anfield Restaurant',
                 icon: '⚽',
                 type: 'Sports Bar',
+                latitude: 49.8833,
+                longitude: -119.4789,
                 address: '1620 Dickson Ave, Kelowna, BC',
                 phone: '(250) 717-5687',
-                distance: 0.8,
                 image: 'images/sports-bar-1.jpg',
                 happyHourWeekly: {
                     'Sunday': [{start: '16:00', end: '19:00'}],
@@ -2508,9 +2513,10 @@
                 name: 'Moxies Kelowna',
                 icon: '🍸',
                 type: 'Casual Dining',
+                latitude: 49.8812,
+                longitude: -119.4702,
                 address: '551 Bernard Ave, Kelowna, BC',
                 phone: '(250) 763-7771',
-                distance: 1.2,
                 image: 'images/casual-dining-2.jpg',
                 happyHourWeekly: {
                     'Sunday': [{start: '14:00', end: '17:00'}],
@@ -2618,6 +2624,68 @@
         const venues = venuesByName;
         const events = eventsByName;
 
+        // ===== USER LOCATION & DISTANCE CALCULATION =====
+        // Kelowna downtown fallback coordinates (used when geolocation is unavailable)
+        const KELOWNA_FALLBACK = { latitude: 49.8880, longitude: -119.4960 };
+        const NEAR_ME_RADIUS_KM = 2; // "Near Me" filter radius in km
+
+        // Current user location (set on app load via geolocation or fallback)
+        let userLocation = null;
+
+        // Haversine formula: calculates distance in km between two lat/lng points
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // Get computed distance from user to a venue (in km, rounded to 1 decimal)
+        function getVenueDistance(venue) {
+            if (!userLocation || !venue.latitude || !venue.longitude) return null;
+            return Math.round(haversineDistance(
+                userLocation.latitude, userLocation.longitude,
+                venue.latitude, venue.longitude
+            ) * 10) / 10;
+        }
+
+        // Format distance for display
+        function formatDistance(venue) {
+            const dist = getVenueDistance(venue);
+            if (dist === null) return '';
+            return dist + ' km';
+        }
+
+        // Capture user location via browser Geolocation API
+        function captureUserLocation() {
+            return new Promise(function(resolve) {
+                if (!navigator.geolocation) {
+                    userLocation = KELOWNA_FALLBACK;
+                    resolve(userLocation);
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        userLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        };
+                        resolve(userLocation);
+                    },
+                    function() {
+                        // Permission denied or error — fall back to Kelowna
+                        userLocation = KELOWNA_FALLBACK;
+                        resolve(userLocation);
+                    },
+                    { timeout: 5000, maximumAge: 300000 }
+                );
+            });
+        }
+
         // ===== VENUE/EVENT RENDER FUNCTIONS =====
         // These functions render venue and event cards from the data model
 
@@ -2642,7 +2710,7 @@
                         <div class="listing-offer">${getVenueShortSpecials(venue)}</div>
                         <div class="listing-meta">
                             <span class="status-badge status-open">Open Now</span>
-                            <span class="distance-prominent">${venue.distance || 0} km</span>
+                            <span class="distance-prominent">${formatDistance(venue)}</span>
                             <span class="category-tag">• ${venue.type}</span>
                         </div>
                     </div>
@@ -2665,7 +2733,7 @@
                         </button>
                     </div>
                     <div class="listing-time-range">Happy Hour Times</div>
-                    <div class="distance-prominent">${venue.distance || 0} km away</div>
+                    <div class="distance-prominent">${formatDistance(venue)}</div>
                 </div>
             `;
         }
@@ -3657,7 +3725,7 @@
             // Update venue name and meta
             document.getElementById('venue-name-large').textContent = venueName;
             document.getElementById('venue-status').textContent = 'Open Now';
-            document.getElementById('venue-distance').textContent = '0.3 km';
+            document.getElementById('venue-distance').textContent = formatDistance(venue) || '';
             document.getElementById('venue-category').textContent = `• ${venue.type}`;
 
             // Update Happy Hour section with new multi-window support
@@ -4973,50 +5041,24 @@
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
             
-            const venueLocations = [
-                {
-                    name: "The Keg Kelowna",
-                    coords: [49.8854, -119.4937],
-                    hours: "3:00 PM - 6:00 PM",
-                    deals: "$6 appetizers, $5 drinks"
-                },
-                {
-                    name: "White Spot",
-                    coords: [49.8901, -119.4851],
-                    hours: "2:00 PM - 5:00 PM", 
-                    deals: "$4 wings, $3.50 beer"
-                },
-                {
-                    name: "Anfield Restaurant",
-                    coords: [49.8833, -119.4789],
-                    hours: "4:00 PM - 7:00 PM",
-                    deals: "$8 burgers, $4 cocktails"
-                },
-                {
-                    name: "Moxies Kelowna",
-                    coords: [49.8812, -119.4702],
-                    hours: "3:00 PM - 6:00 PM",
-                    deals: "$5 appetizers, $6 cocktails"
-                }
-            ];
-            
-            venueLocations.forEach(venue => {
-                const marker = L.marker(venue.coords, {
+            // Build map markers from venue data model (single source of truth for coords)
+            venuesData.filter(v => v.latitude && v.longitude).forEach(venue => {
+                const marker = L.marker([venue.latitude, venue.longitude], {
                     icon: createCustomMarker()
                 }).addTo(map);
                 
-                marker.bindTooltip(`<strong>${venue.name}</strong><br>${venue.hours}`, {
+                marker.bindTooltip(`<strong>${venue.name}</strong><br>${venue.type}`, {
                     permanent: false,
                     direction: 'top',
                     offset: [0, -20]
                 });
-                
+
+                const shortSpecials = getVenueShortSpecials(venue);
                 marker.bindPopup(`
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; cursor: pointer;" onclick="showVenueDetail('${venue.name}')">
                         <strong>${venue.name}</strong><br>
                         <div style="color: #6b7280; font-size: 14px; margin: 4px 0;">
-                            Happy Hour: ${venue.hours}<br>
-                            ${venue.deals}
+                            ${shortSpecials}
                         </div>
                         <div style="color: #3b82f6; font-size: 12px; margin-top: 8px;">📍 Click to view details</div>
                     </div>
@@ -5185,9 +5227,9 @@
                     return /\$[1-9](?:\.\d{2})?(?:\s|$|[^0-9])/.test(allSpecials);
 
                 case 'near-me':
-                    // TODO: Implement location-based filtering when location services are available
-                    // For now, return true (show all) as this is a placeholder
-                    return true;
+                    const dist = getVenueDistance(venue);
+                    if (dist === null) return true; // No location data — show all
+                    return dist <= NEAR_ME_RADIUS_KM;
 
                 default:
                     return true;
@@ -5535,6 +5577,16 @@
 
             // Migrate any legacy name-based saved items to ID-based
             migrateSavedStateToIds();
+
+            // Capture user location for distance calculation
+            // Renders happen immediately (distances blank until resolved),
+            // then re-render once geolocation completes
+            captureUserLocation().then(function() {
+                renderVenueListView();
+                renderVenueMapView();
+                syncAllBookmarkIcons();
+                updateAllListingHHStatus();
+            });
 
             // Initialize the toggle icon
             const toggleIconSvg = document.getElementById('toggle-icon-svg');
