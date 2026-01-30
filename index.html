@@ -2501,144 +2501,287 @@
         // OPTIONAL EVENT FIELDS:
         //   - icon, type, description, offers, image
 
-        const venuesData = [
-            {
-                id: 'the-keg-kelowna',
-                name: 'The Keg',
-                icon: '🍽️',
-                type: 'Upscale Restaurant',
-                latitude: 49.8815354,
-                longitude: -119.4368404,
-                address: '1825 Underhill St, Kelowna, BC V1X 7E1',
-                phone: '(250) 763-1442',
-                image: 'images/fine-dining-1.jpg',
-                happyHourWeekly: {
-                    'Sunday': [],
-                    'Monday': [{start: '15:00', end: '18:00'}],
-                    'Tuesday': [{start: '15:00', end: '18:00'}],
-                    'Wednesday': [{start: '15:00', end: '18:00'}],
-                    'Thursday': [{start: '15:00', end: '18:00'}],
-                    'Friday': [{start: '15:00', end: '18:00'}, {start: '21:00', end: 'close'}],
-                    'Saturday': [{start: '14:00', end: '17:00'}]
-                },
-                hoursWeekly: {
-                    'Sunday': '10:00 AM - 11:00 PM',
-                    'Monday': 'CLOSED',
-                    'Tuesday': '11:00 AM - 11:00 PM',
-                    'Wednesday': '11:00 AM - 11:00 PM',
-                    'Thursday': '11:00 AM - 11:00 PM',
-                    'Friday': '11:00 AM - 12:00 AM',
-                    'Saturday': '10:00 AM - 12:00 AM'
-                },
-                specialsFood: ['$6 appetizers', '$8 gourmet burgers'],
-                specialsDrinks: ['$5 house wine & beer', '$8 signature cocktails'],
-                menuUrl: 'https://kegsteakhouse.com/menu',
-                websiteUrl: 'https://kegsteakhouse.com',
-                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
-            },
-            {
-                id: 'white-spot',
-                name: 'White Spot',
-                icon: '🍔',
-                type: 'Family Restaurant',
-                latitude: 49.8822203,
-                longitude: -119.4394539,
-                address: '2190 Harvey Ave, Kelowna, BC V1Y 6G8',
-                phone: '(250) 860-7768',
-                image: 'images/casual-dining-1.jpg',
-                happyHourWeekly: {
-                    'Sunday': [{start: '13:00', end: '16:00'}],
-                    'Monday': [{start: '14:00', end: '17:00'}],
-                    'Tuesday': [{start: '14:00', end: '17:00'}],
-                    'Wednesday': [{start: '14:00', end: '17:00'}],
-                    'Thursday': [{start: '14:00', end: '17:00'}],
-                    'Friday': [{start: '14:00', end: '17:00'}],
-                    'Saturday': [{start: '13:00', end: '16:00'}]
-                },
-                hoursWeekly: {
-                    'Sunday': '7:00 AM - 11:00 PM',
-                    'Monday': '7:00 AM - 11:00 PM',
-                    'Tuesday': '7:00 AM - 11:00 PM',
-                    'Wednesday': '7:00 AM - 11:00 PM',
-                    'Thursday': '7:00 AM - 11:00 PM',
-                    'Friday': '7:00 AM - 12:00 AM',
-                    'Saturday': '7:00 AM - 12:00 AM'
-                },
-                specialsFood: ['$4 chicken wings', '$5 nachos'],
-                specialsDrinks: ['$3.50 draft beer', '$5 cocktails'],
-                menuUrl: 'https://whitespot.ca/menu',
-                websiteUrl: 'https://whitespot.ca',
-                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
-            },
-            {
-                id: 'pretty-not-bad',
-                name: 'Pretty Not Bad',
-                icon: '🍷',
-                type: 'Wine Bar',
-                latitude: 49.8938238,
-                longitude: -119.4901693,
-                address: '740 Clement Ave #1, Kelowna, BC V1Y 7C9',
-                phone: '(250) 717-5687',
-                image: 'images/sports-bar-1.jpg',
-                happyHourWeekly: {
-                    'Sunday': [{start: '16:00', end: '19:00'}],
-                    'Monday': [{start: '16:00', end: '19:00'}],
-                    'Tuesday': [{start: '16:00', end: '19:00'}],
-                    'Wednesday': [],
-                    'Thursday': [{start: '16:00', end: '19:00'}],
-                    'Friday': [{start: '16:00', end: '19:00'}],
-                    'Saturday': [{start: '16:00', end: '19:00'}]
-                },
-                hoursWeekly: {
-                    'Sunday': '10:00 AM - 12:00 AM',
-                    'Monday': '11:00 AM - 1:00 AM',
-                    'Tuesday': '11:00 AM - 1:00 AM',
-                    'Wednesday': '11:00 AM - 1:00 AM',
-                    'Thursday': '11:00 AM - 1:00 AM',
-                    'Friday': '11:00 AM - 2:00 AM',
-                    'Saturday': '10:00 AM - 2:00 AM'
-                },
-                specialsFood: ['$8 gourmet burgers', '$6 appetizer platters', '$0.50 wings (min 10)'],
-                specialsDrinks: ['$4 cocktails', '$5 beer buckets'],
-                menuUrl: '',
-                websiteUrl: '',
-                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
-            },
-            {
-                id: 'moxies-kelowna',
-                name: 'Moxies',
-                icon: '🍸',
-                type: 'Casual Dining',
-                latitude: 49.8828606,
-                longitude: -119.4465695,
-                address: '1730 Cooper Rd, Kelowna, BC V1Y 8V5',
-                phone: '(250) 763-7771',
-                image: 'images/casual-dining-2.jpg',
-                happyHourWeekly: {
-                    'Sunday': [{start: '14:00', end: '17:00'}],
-                    'Monday': [{start: '15:00', end: '18:00'}],
-                    'Tuesday': [{start: '15:00', end: '18:00'}],
-                    'Wednesday': [{start: '15:00', end: '18:00'}],
-                    'Thursday': [{start: '15:00', end: '18:00'}],
-                    'Friday': [{start: '15:00', end: '18:00'}],
-                    'Saturday': [{start: '14:00', end: '17:00'}]
-                },
-                hoursWeekly: {
-                    'Sunday': '10:00 AM - 12:00 AM',
-                    'Monday': '11:00 AM - 12:00 AM',
-                    'Tuesday': '11:00 AM - 12:00 AM',
-                    'Wednesday': '11:00 AM - 12:00 AM',
-                    'Thursday': '11:00 AM - 12:00 AM',
-                    'Friday': '11:00 AM - 1:00 AM',
-                    'Saturday': '10:00 AM - 1:00 AM'
-                },
-                specialsFood: ['$5 appetizers', '$7 flatbreads'],
-                specialsDrinks: ['$6 signature cocktails', '$4 wine by the glass', '$5 draft beer'],
-                menuUrl: 'https://moxies.com/menu',
-                websiteUrl: 'https://moxies.com',
-                paymentMethods: 'Visa, Mastercard, Amex, Debit, Cash'
+        // venuesData is loaded from venues.beta.csv at startup (see loadVenuesFromCSV)
+        let venuesData = [];
+
+        // ===== CSV PARSING & DATA LOADING =====
+
+        // Parse a CSV string that may contain quoted fields with embedded newlines/commas
+        function parseCSV(csvText) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+            let i = 0;
+
+            while (i < csvText.length) {
+                const ch = csvText[i];
+
+                if (inQuotes) {
+                    if (ch === '"') {
+                        if (i + 1 < csvText.length && csvText[i + 1] === '"') {
+                            currentField += '"';
+                            i += 2;
+                        } else {
+                            inQuotes = false;
+                            i++;
+                        }
+                    } else {
+                        currentField += ch;
+                        i++;
+                    }
+                } else {
+                    if (ch === '"') {
+                        inQuotes = true;
+                        i++;
+                    } else if (ch === ',') {
+                        currentRow.push(currentField);
+                        currentField = '';
+                        i++;
+                    } else if (ch === '\n' || (ch === '\r' && csvText[i + 1] === '\n')) {
+                        currentRow.push(currentField);
+                        currentField = '';
+                        if (currentRow.some(f => f.trim() !== '')) {
+                            rows.push(currentRow);
+                        }
+                        currentRow = [];
+                        i += (ch === '\r') ? 2 : 1;
+                    } else {
+                        currentField += ch;
+                        i++;
+                    }
+                }
             }
-        ];
+            // Flush last field/row
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                if (currentRow.some(f => f.trim() !== '')) {
+                    rows.push(currentRow);
+                }
+            }
+            return rows;
+        }
+
+        // Parse time like "4 PM", "2:30 PM", "12 AM" → "16:00", "14:30", "00:00"
+        function parseTimeStr(timeStr) {
+            timeStr = timeStr.trim();
+            if (timeStr.toLowerCase() === 'close') return 'close';
+            if (timeStr.toLowerCase() === 'open') return '00:00';
+
+            const match = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+            if (!match) return null;
+
+            let hours = parseInt(match[1]);
+            const minutes = match[2] ? parseInt(match[2]) : 0;
+            const period = match[3].toUpperCase();
+
+            if (period === 'PM' && hours !== 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+
+            return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+        }
+
+        // Expand a day range string into individual day names
+        function expandDayRange(dayStr) {
+            dayStr = dayStr.trim();
+            const allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            if (dayStr === 'Daily' || dayStr === 'Everyday') return [...allDays];
+            if (dayStr === 'Weekdays') return allDays.slice(0, 5);
+
+            // Single day
+            const singleMatch = allDays.find(d => d === dayStr);
+            if (singleMatch) return [singleMatch];
+
+            // Range: "Monday – Thursday", "Friday – Sunday"
+            const rangeMatch = dayStr.match(/^(\w+)\s*[–\-]\s*(\w+)$/);
+            if (rangeMatch) {
+                const startIdx = allDays.indexOf(rangeMatch[1]);
+                const endIdx = allDays.indexOf(rangeMatch[2]);
+                if (startIdx === -1 || endIdx === -1) return [];
+                if (endIdx >= startIdx) {
+                    return allDays.slice(startIdx, endIdx + 1);
+                } else {
+                    // Wraps around (e.g., "Friday – Sunday")
+                    return [...allDays.slice(startIdx), ...allDays.slice(0, endIdx + 1)];
+                }
+            }
+            return [];
+        }
+
+        // Parse happy_hour_times text into happyHourWeekly structure
+        // Input: "Monday – Thursday: 4 PM – 6 PM\nFriday: 2 PM – 5 PM"
+        // Output: { Monday: [{start:'16:00',end:'18:00'}], ... }
+        function parseHappyHourTimes(timesText) {
+            const weekly = {
+                'Sunday': [], 'Monday': [], 'Tuesday': [], 'Wednesday': [],
+                'Thursday': [], 'Friday': [], 'Saturday': []
+            };
+            if (!timesText || !timesText.trim()) return weekly;
+
+            const lines = timesText.split('\n').map(l => l.trim()).filter(l => l);
+            for (const line of lines) {
+                const colonIdx = line.indexOf(':');
+                if (colonIdx === -1) continue;
+
+                // Handle cases like "Daily: 3 PM – 6 PM" vs "Monday – Friday: 2 PM – 6 PM"
+                // Find the colon that separates day from time (skip colons in time like "2:30")
+                let splitIdx = -1;
+                for (let j = 0; j < line.length; j++) {
+                    if (line[j] === ':') {
+                        // Check if this colon is part of a time (preceded by digits only)
+                        const before = line.substring(0, j).trim();
+                        if (/\d$/.test(before) && /^\d/.test(line.substring(j + 1).trim())) {
+                            continue; // This is a time colon like "2:30"
+                        }
+                        splitIdx = j;
+                        break;
+                    }
+                }
+                if (splitIdx === -1) continue;
+
+                const dayPart = line.substring(0, splitIdx).trim();
+                const timePart = line.substring(splitIdx + 1).trim();
+
+                if (timePart.toLowerCase() === 'all day') {
+                    const days = expandDayRange(dayPart);
+                    for (const day of days) {
+                        weekly[day].push({ start: '00:00', end: 'close' });
+                    }
+                    continue;
+                }
+
+                // Parse time range: "4 PM – 6 PM", "2:30 PM – 5 PM", "9 PM – Close"
+                const timeMatch = timePart.match(/^(.+?)\s*[–\-]\s*(.+)$/);
+                if (!timeMatch) continue;
+
+                const startTime = parseTimeStr(timeMatch[1]);
+                const endTime = parseTimeStr(timeMatch[2]);
+                if (!startTime || !endTime) continue;
+
+                const days = expandDayRange(dayPart);
+                for (const day of days) {
+                    weekly[day].push({ start: startTime, end: endTime });
+                }
+            }
+            return weekly;
+        }
+
+        // Parse business_hours text into hoursWeekly structure
+        // Input: "Monday – Thursday: 4 PM – 10 PM\nFriday: 2 PM – 11 PM"
+        // Output: { Monday: "4:00 PM - 10:00 PM", ... }
+        function parseBusinessHours(hoursText) {
+            const weekly = {};
+            const allDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            allDays.forEach(d => { weekly[d] = 'CLOSED'; });
+
+            if (!hoursText || !hoursText.trim()) return weekly;
+
+            const lines = hoursText.split('\n').map(l => l.trim()).filter(l => l);
+            for (const line of lines) {
+                // Find the day/time split colon (same logic as HH parser)
+                let splitIdx = -1;
+                for (let j = 0; j < line.length; j++) {
+                    if (line[j] === ':') {
+                        const before = line.substring(0, j).trim();
+                        if (/\d$/.test(before) && /^\d/.test(line.substring(j + 1).trim())) {
+                            continue;
+                        }
+                        splitIdx = j;
+                        break;
+                    }
+                }
+                if (splitIdx === -1) continue;
+
+                const dayPart = line.substring(0, splitIdx).trim();
+                const timePart = line.substring(splitIdx + 1).trim();
+
+                const days = expandDayRange(dayPart);
+                if (timePart.toLowerCase() === 'closed') {
+                    for (const day of days) { weekly[day] = 'CLOSED'; }
+                } else {
+                    // Keep the original time string for display (the business hours parser expects "H:MM AM - H:MM PM")
+                    // Normalize the time range for the display format
+                    const timeMatch = timePart.match(/^(.+?)\s*[–\-]\s*(.+)$/);
+                    if (timeMatch) {
+                        const formatForDisplay = function(t) {
+                            t = t.trim();
+                            const m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+                            if (!m) return t;
+                            const h = m[1];
+                            const min = m[2] || '00';
+                            return h + ':' + min + ' ' + m[3].toUpperCase();
+                        };
+                        const display = formatForDisplay(timeMatch[1]) + ' - ' + formatForDisplay(timeMatch[2]);
+                        for (const day of days) { weekly[day] = display; }
+                    } else {
+                        for (const day of days) { weekly[day] = timePart; }
+                    }
+                }
+            }
+            return weekly;
+        }
+
+        // Load venue data from venues.beta.csv and populate venuesData
+        async function loadVenuesFromCSV() {
+            try {
+                const response = await fetch('venues.beta.csv');
+                const csvText = await response.text();
+                const rows = parseCSV(csvText);
+                if (rows.length < 2) return;
+
+                // Find header row (first row with 'id' as first column)
+                let headerIdx = rows.findIndex(r => r[0].trim() === 'id');
+                if (headerIdx === -1) return;
+
+                const headers = rows[headerIdx].map(h => h.trim());
+                const col = {};
+                headers.forEach((h, i) => { col[h] = i; });
+
+                const newVenues = [];
+                for (let r = headerIdx + 1; r < rows.length; r++) {
+                    const row = rows[r];
+                    const get = function(name) { return col[name] !== undefined ? (row[col[name]] || '').trim() : ''; };
+
+                    const id = get('id');
+                    if (!id) continue;
+
+                    const venue = {
+                        id: id,
+                        name: get('name'),
+                        type: get('type') || 'Restaurant',
+                        city: get('city'),
+                        area: get('area'),
+                        latitude: parseFloat(get('latitude')) || null,
+                        longitude: parseFloat(get('longitude')) || null,
+                        address: get('address'),
+                        phone: get('phone'),
+                        websiteUrl: get('url'),
+                        menuUrl: get('menu_url'),
+                        paymentMethods: get('payment_types'),
+                        happyHourTagline: get('happy_hour_tagline'),
+                        happyHourWeekly: parseHappyHourTimes(get('happy_hour_times')),
+                        hoursWeekly: parseBusinessHours(get('business_hours')),
+                        specialsFood: get('happy_hour_food_details') ? get('happy_hour_food_details').split('\n').filter(s => s.trim()) : [],
+                        specialsDrinks: get('happy_hour_drink_details') ? get('happy_hour_drink_details').split('\n').filter(s => s.trim()) : []
+                    };
+                    newVenues.push(venue);
+                }
+
+                venuesData = newVenues;
+
+                // Rebuild lookup maps
+                Object.keys(venuesById).forEach(k => delete venuesById[k]);
+                Object.keys(venuesByName).forEach(k => delete venuesByName[k]);
+                venuesData.forEach(venue => {
+                    venuesById[venue.id] = venue;
+                    venuesByName[venue.name] = venue;
+                });
+
+            } catch (err) {
+                console.error('Failed to load venues.beta.csv:', err);
+            }
+        }
 
         const eventsData = [
             {
@@ -2790,7 +2933,7 @@
             if (!venue) return '';
             const savedClass = isVenueSaved(venue.id) ? 'saved' : '';
             return `
-                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
+                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.id}')">
                     <div class="listing-image">
                         <img src="${getVenueImage(venue)}" alt="${venue.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                     </div>
@@ -2819,7 +2962,7 @@
             if (!venue) return '';
             const savedClass = isVenueSaved(venue.id) ? 'saved' : '';
             return `
-                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
+                <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.id}')">
                     <div class="listing-header">
                         <div class="listing-name">${venue.name}</div>
                         <button class="bookmark-icon ${savedClass}" onclick="event.stopPropagation(); handleBookmarkClick(this)">
@@ -2880,26 +3023,11 @@
 
             if (emptyState) emptyState.style.display = 'none';
 
-            // Split into "Popular" and "All Venues" sections
-            // For now, mark first 2 as popular (can be enhanced with actual popularity data)
-            const popularVenues = venuesToRender.slice(0, 2);
-            const allVenues = venuesToRender.slice(2);
-
-            // Add Popular section
-            if (popularVenues.length > 0) {
-                container.insertAdjacentHTML('beforeend', '<h3 class="section-header">🔥 Popular Right Now</h3>');
-                popularVenues.forEach(venue => {
-                    container.insertAdjacentHTML('beforeend', renderVenueCardListView(venue));
-                });
-            }
-
-            // Add All Venues section
-            if (allVenues.length > 0) {
-                container.insertAdjacentHTML('beforeend', '<h3 class="section-header">All Venues</h3>');
-                allVenues.forEach(venue => {
-                    container.insertAdjacentHTML('beforeend', renderVenueCardListView(venue));
-                });
-            }
+            // Render all venues
+            container.insertAdjacentHTML('beforeend', '<h3 class="section-header">All Venues</h3>');
+            venuesToRender.forEach(venue => {
+                container.insertAdjacentHTML('beforeend', renderVenueCardListView(venue));
+            });
 
             // Update HH status on all cards
             updateAllListingHHStatus();
@@ -3284,7 +3412,7 @@
 
         // Generate HH status HTML for Search card (always returns HTML string, never empty)
         function generateSearchHHStatusHTML(venueName) {
-            const venue = venues[venueName];
+            const venue = getVenue(venueName);
 
             // If venue not found, fallback to approved HH language
             if (!venue) {
@@ -3771,17 +3899,17 @@
             container.innerHTML = ctaHTML;
         }
 
-        function showVenueDetail(venueName) {
-            const venue = venues[venueName];
+        function showVenueDetail(venueIdentifier) {
+            const venue = getVenue(venueIdentifier);
             if (!venue) return;
 
             currentVenue = venue;
-            currentVenueName = venueName;
+            currentVenueName = venue.name;
 
             // Sync venue detail header bookmark state with central saved state
             const venueSaveBtn = document.getElementById('venue-save-btn');
             if (venueSaveBtn) {
-                if (savedVenues.has(venueName)) {
+                if (isVenueSaved(venue.id)) {
                     venueSaveBtn.classList.add('saved');
                 } else {
                     venueSaveBtn.classList.remove('saved');
@@ -3789,16 +3917,17 @@
             }
 
             // Update header
-            document.getElementById('venue-detail-title').textContent = venueName;
+            document.getElementById('venue-detail-title').textContent = venue.name;
 
             // Update hero image - use category-based images like listings with fallback
             const heroImage = document.getElementById('venue-hero-image');
             let imagePath = 'images/default-1.jpg';
-            if (venue.type.includes('Fine Dining') || venue.type.includes('Upscale')) {
+            const vType = venue.type || '';
+            if (vType.includes('Fine Dining') || vType.includes('Upscale')) {
                 imagePath = 'images/fine-dining-1.jpg';
-            } else if (venue.type.includes('Sports Bar')) {
+            } else if (vType.includes('Sports Bar')) {
                 imagePath = 'images/sports-bar-1.jpg';
-            } else if (venue.type.includes('Casual') || venue.type.includes('Family')) {
+            } else if (vType.includes('Casual') || vType.includes('Family')) {
                 imagePath = 'images/casual-dining-1.jpg';
             }
 
@@ -4616,7 +4745,7 @@
             if (!container) return;
 
             // Look up the venue to access its website URL
-            const venue = venues[event.venue];
+            const venue = getVenue(event.venue);
 
             let ctaHTML = '';
 
@@ -5038,7 +5167,7 @@
         function openEventWebsite() {
             if (!currentEventData) return;
             // Use the venue's website URL (same as Venue Detail)
-            const venue = venues[currentEventData.venue];
+            const venue = getVenue(currentEventData.venue);
             if (venue && venue.websiteUrl) {
                 window.open(venue.websiteUrl, '_blank');
             }
@@ -5185,7 +5314,7 @@
 
                 var shortSpecials = getVenueShortSpecials(venue);
                 var contentString =
-                    '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Arial, sans-serif; cursor: pointer;" onclick="showVenueDetail(\'' + venue.name.replace(/'/g, "\\'") + '\')">' +
+                    '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Arial, sans-serif; cursor: pointer;" onclick="showVenueDetail(\'' + venue.id + '\')">' +
                         '<strong>' + venue.name + '</strong><br>' +
                         '<div style="color: #6b7280; font-size: 14px; margin: 4px 0;">' +
                             shortSpecials +
@@ -5474,12 +5603,17 @@
 
         // Get venue image based on type
         function getVenueImage(venue) {
-            if (venue.type.includes('Fine Dining') || venue.type.includes('Upscale')) {
+            const vType = venue.type || '';
+            if (vType.includes('Fine Dining') || vType.includes('Upscale')) {
                 return 'images/fine-dining-1.jpg';
-            } else if (venue.type.includes('Sports Bar')) {
+            } else if (vType.includes('Sports Bar')) {
                 return 'images/sports-bar-1.jpg';
-            } else if (venue.type.includes('Casual')) {
+            } else if (vType.includes('Casual')) {
                 return 'images/casual-dining-2.jpg';
+            } else if (vType.includes('Brewery')) {
+                return 'images/casual-dining-1.jpg';
+            } else if (vType.includes('Pub')) {
+                return 'images/sports-bar-1.jpg';
             } else {
                 return 'images/casual-dining-1.jpg';
             }
@@ -5487,6 +5621,7 @@
 
         // Get short specials text for listing card
         function getVenueShortSpecials(venue) {
+            if (venue.happyHourTagline) return venue.happyHourTagline;
             const food = venue.specialsFood?.[0] || '';
             const drinks = venue.specialsDrinks?.[0] || '';
             if (food && drinks) return `${food}, ${drinks}`;
@@ -5520,7 +5655,7 @@
                     if (!venue) return;
 
                     const itemHtml = `
-                        <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.name}')">
+                        <div class="listing-item" data-venue-id="${venue.id}" onclick="showVenueDetail('${venue.id}')">
                             <div class="listing-image">
                                 <img src="${getVenueImage(venue)}" alt="${venue.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                             </div>
@@ -5719,38 +5854,39 @@
             // Migrate any legacy name-based saved items to ID-based
             migrateSavedStateToIds();
 
-            // Capture user location for distance calculation
-            // Renders happen immediately (distances blank until resolved),
-            // then re-render once geolocation completes
-            captureUserLocation().then(function() {
-                renderVenueListView();
-                renderVenueMapView();
-                syncAllBookmarkIcons();
-                updateAllListingHHStatus();
-            });
-
             // Initialize the toggle icon
             const toggleIconSvg = document.getElementById('toggle-icon-svg');
             if (toggleIconSvg) {
                 toggleIconSvg.innerHTML = mapPinIcon;
             }
 
-            // Render initial venue lists from data model
-            renderVenueListView();
-            renderVenueMapView();
+            // Load venues from CSV, then render everything
+            loadVenuesFromCSV().then(function() {
+                // Capture user location for distance calculation, re-render after
+                captureUserLocation().then(function() {
+                    renderVenueListView();
+                    renderVenueMapView();
+                    syncAllBookmarkIcons();
+                    updateAllListingHHStatus();
+                });
 
-            // Render initial events list from data model
-            renderEventsList();
+                // Render initial venue lists from data model
+                renderVenueListView();
+                renderVenueMapView();
 
-            // Update all listing cards with dynamic HH status
-            updateAllListingHHStatus();
+                // Render initial events list from data model
+                renderEventsList();
 
-            // Initialize venue filters (will also trigger applyVenueFilters)
-            initVenueFilters();
+                // Update all listing cards with dynamic HH status
+                updateAllListingHHStatus();
 
-            // Initialize saved state - sync all bookmark icons and render saved page
-            syncAllBookmarkIcons();
-            renderSavedPage();
+                // Initialize venue filters (will also trigger applyVenueFilters)
+                initVenueFilters();
+
+                // Initialize saved state - sync all bookmark icons and render saved page
+                syncAllBookmarkIcons();
+                renderSavedPage();
+            });
 
             // Show one-time swipe hint for filter chips (if overflow exists)
             showFilterSwipeHint('search-filters', 'hhc_filters_swipe_hint_shown_search');
