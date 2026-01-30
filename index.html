@@ -3948,7 +3948,7 @@
             heroImage.style.backgroundImage = `url('${imagePath}')`;
 
             // Update venue name and meta
-            document.getElementById('venue-name-large').textContent = venueName;
+            document.getElementById('venue-name-large').textContent = venue.name;
             document.getElementById('venue-status').textContent = 'Open Now';
             document.getElementById('venue-distance').textContent = formatDistance(venue) || '';
             document.getElementById('venue-category').textContent = `• ${venue.type}`;
@@ -5749,11 +5749,13 @@
                 const venueName = card.querySelector('.listing-name')?.textContent;
                 if (!venueName) return;
 
-                // Remove old HH display elements
+                // Remove old HH display elements (including any previously injected status line)
                 const oldTimeRange = card.querySelector('.listing-time-range');
                 const oldTimeRemaining = card.querySelector('.time-remaining');
+                const oldStatusLine = card.querySelector('.hh-status-line');
                 if (oldTimeRange) oldTimeRange.remove();
                 if (oldTimeRemaining) oldTimeRemaining.remove();
+                if (oldStatusLine) oldStatusLine.remove();
 
                 // Add new single HH status line
                 const listingOffer = card.querySelector('.listing-offer');
