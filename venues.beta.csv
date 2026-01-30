@@ -1,52 +1,670 @@
-id,name,type,city,area,address,phone,latitude,longitude,happy_hour_times,happy_hour_tagline,happy_hour_food_details,happy_hour_drink_details
-kelowna-the-keg,The Keg Steakhouse + Bar,,Kelowna,Orchard Park,"1825 Underhill St, Kelowna, BC V1X 7E1",,49.8815354,-119.4368404,,,,
-kelowna-kelly-obryans-downtown,Kelly & Carlos O'Bryan's – Kelowna,,Kelowna,Downtown,"262 Bernard Ave, Kelowna, BC V1Y 6N4",,49.8849761,-119.4943934,,,,
-kelowna-pretty-not-bad,Pretty Not Bad,,Kelowna,North End,"740 Clement Ave #1, Kelowna, BC V1Y 7C9",,49.8938238,-119.4901693,,,,
-kelowna-micro-bar-bites,Micro Bar & Bites,,Kelowna,Downtown,"1500 Water St, Kelowna, BC V1Y 1J8",,49.8859965,-119.4993091,,,,
-kelowna-bna-brewing,BNA Brewing Co. & Eatery,,Kelowna,Downtown,"1250 Ellis St, Kelowna, BC V1Y 1Z4",,49.8927871,-119.4963678,,,,
-kelowna-oflannigans-pub,O'Flannigan's Pub,,Kelowna,Downtown,"319 Queensway, Kelowna, BC V1Y 8E6",,49.8871373,-119.4985224,,,,
-kelowna-central-kitchen-bar,Central Kitchen + Bar,,Kelowna,North End,"1155 Ellis St, Kelowna, BC V1Y 1Z5",,49.894552,-119.4957217,,,,
-kelowna-oak-cru,Oak & Cru,,Kelowna,Downtown,"1310 Water St, Kelowna, BC V1Y 9P4",,49.8916466,-119.5002773,,,,
-kelowna-gulfstream,Gulfstream,,Kelowna,Airport,"5505 Airport Way, Kelowna, BC V1V 3C3",,49.951052,-119.3911489,,,,
-kelowna-shore-line-brewing,Shore Line Brewing Co.,,Kelowna,Mission,"3477 Lakeshore Rd #116, Kelowna, BC V1W 0A9",,49.855027,-119.4924945,,,,
-kelowna-bernies-supper-club,Bernie's Supper Club & Lounge,,Kelowna,Downtown,"353 Bernard Ave, Kelowna, BC V1Y 6N6",,49.8860585,-119.4982884,,,,
-kelowna-train-station-pub,Train Station Pub,,Kelowna,Downtown,"1177 Ellis St, Kelowna, BC V1Y 1Z5",,49.8939424,-119.495366,,,,
-kelowna-kettle-river-brewing,Kettle River Brewing Co.,,Kelowna,North End,"731 Baillie Ave, Kelowna, BC V1Y 7E4",,49.8961517,-119.4898997,,,,
-kelowna-mid-town-station,Mid-Town Station,,Kelowna,Landmark,"1615 Dickson Ave #200, Kelowna, BC V1Y 0B1",,49.8805206,-119.4647523,,,,
-kelowna-browns-social-house,Browns Social House,,Kelowna,Landmark,"100-1544 Harvey Ave, Kelowna, BC V1Y 6G2",,49.8823555,-119.4680086,,,,
-kelowna-moxies,Moxies,,Kelowna,Orchard Park,"1730 Cooper Rd, Kelowna, BC V1Y 8V5",,49.8828606,-119.4465695,,,,
-kelowna-baxters,Baxters Bar and Grill,,Kelowna,Orchard Park,"1745 Spall Rd, Kelowna, BC V1Y 4P7",,49.8834095,-119.4561243,,,,
-kelowna-flip-flops-and-hops,Flip Flops and Hops,,Kelowna,Glenmore,"1974 Kane Rd #300, Kelowna, BC V1V 2E5",,49.9148301,-119.4438755,,,,
-kelowna-brants-creek-pub,Brants Creek Pub,,Kelowna,Glenmore,"435 Glenmore Rd, Kelowna, BC V1V 1Y5",,49.915053,-119.4481979,,,,
-kelowna-red-bird,Red Bird,,Kelowna,North End,"1080 Richter St, Kelowna, BC V1Y 2K5",,49.8961066,-119.4916947,,,,
-kelowna-wildling,Wildling,,Kelowna,North End,"1036 Richter St, Kelowna, BC V1Y 2K5",,49.8966838,-119.4912904,,,,
-kelowna-skinny-dukes,Skinny Dukes,,Kelowna,Downtown,"1481 Water St, Kelowna, BC V1Y 1J6",,49.8867086,-119.498959,,,,
-kelowna-ask-pablo,Ask Pablo,,Kelowna,Downtown,"269 Lawrence Ave, Kelowna, BC V1Y 6L2",,49.8851805,-119.5000399,,,,
-kelowna-leopolds-tavern,Leopold's Tavern,,Kelowna,Downtown,"279 Bernard Ave, Kelowna, BC V1Y 6N2",,49.8861837,-119.499901,,,,
-kelowna-king-taps-lakeside,King Taps Lakeside,,Kelowna,Downtown,"1352 Water St, Kelowna, BC V1Y 9P4",,49.890475,-119.500233,,,,
-kelowna-cactus-club-yacht-club,Cactus Club Cafe – Yacht Club,,Kelowna,Downtown,"1370 Water St #1, Kelowna, BC V1Y 1J1",,49.890475,-119.5002336,,,,
-kelowna-cactus-club-banks-road,Cactus Club Cafe – Banks Road,,Kelowna,Orchard Park,"1575 Banks Rd Unit 200 Unit 200, Kelowna, BC V1X 7Y1",,49.888109,-119.4280384,,,,
-kelowna-earls-kitchen-bar,Earls Kitchen + Bar,,Kelowna,Downtown,"211 Bernard Ave, Kelowna, BC V1Y 6N2",,49.886007,-119.501651,,,,
-kelowna-canadian-brewhouse,The Canadian Brewhouse,,Kelowna,Sopa,"3030 Pandosy St, Kelowna, BC V1Y 1W2",,49.8652329,-119.4943549,,,,
-kelowna-original-joes,Original Joe's – Kelowna,,Kelowna,Sopa,"2728 Pandosy St, Kelowna, BC V1Y 1V7",,49.8652329,-119.4942501,,,,
-kelowna-hugos-mexican-kitchen,Hugo's Mexican Kitchen,,Kelowna,Mission,"3499 Lakeshore Rd, Kelowna, BC V1W 0A7",,49.8548754,-119.4922951,,,,
-kelowna-barn-owl-brewing,Barn Owl Brewing,,Kelowna,Mission,"4629 Lakeshore Rd #102, Kelowna, BC V1W 1X3",,49.8168484,-119.4968151,,,,
-kelowna-hotel-eldorado,Hotel Eldorado,,Kelowna,Mission,"500 Cook Rd, Kelowna, BC V1W 3G9",,49.8456643,-119.4920327,,,,
-kelowna-creekside-pub,Creekside Pub,,Kelowna,Mission,"3929 Lakeshore Rd, Kelowna, BC V1W 1V3",,49.842213,-119.4900741,,,,
-kelowna-dunnenzies-mission,DunnEnzies – Mission,,Kelowna,Mission,"4638 Lakeshore Rd, Kelowna, BC V1W 1X5",,49.8164925,-119.4981975,,,,
-kelowna-wings-rutland,Wings – Rutland,,Kelowna,Rutland,"590 Hwy 33 W #1, Kelowna, BC V1X 6A8",,49.890332,-119.4011853,,,,
-kelowna-packing-house-pub,Packing House Pub,,Kelowna,Rutland,"663 Finns Rd, Kelowna, BC V1X 5B8",,49.9076709,-119.4010753,,,,
-kelowna-post-haus-pub,Post Haus Pub,,Kelowna,Rutland,"230 Hwy 33 E, Kelowna, BC V1X 2Y4",,49.8894185,-119.386997,,,,
-kelowna-joey,JOEY Kelowna,,Kelowna,Orchard Park,"2475 BC-97 #300, Kelowna, BC V1X 6Y7",,49.8834084,-119.4172667,,,,
-west-kelowna-quails-gate,Quails' Gate Old Vines Restaurant,,West Kelowna,West Kelowna,"3303 Boucherie Rd, West Kelowna, BC V1Z 2S5",,49.842719,-119.5690272,,,,
-west-kelowna-hatching-post,The Hatching Post,,West Kelowna,West Kelowna,"2850 Boucherie Rd, West Kelowna, BC V1Z 2G5",,49.8550877,-119.5589392,,,,
-west-kelowna-modest-butcher,The Modest Butcher,,West Kelowna,West Kelowna,"829 Douglas Rd, West Kelowna, BC V1Z 1N9",,49.8553899,-119.5525289,,,,
-west-kelowna-19-greens,19 Okanagan Grill + Bar,,West Kelowna,West Kelowna,"3509 Carrington Rd, West Kelowna, BC V4T 2E6",,49.8384191,-119.6093918,,,,
-west-kelowna-landing-kitchen-bar,The Landing Kitchen + Bar,,West Kelowna,West Kelowna,"4205 Gellatly Rd, West Kelowna, BC V4T 2K4",,49.8110036,-119.6266749,,,,
-west-kelowna-original-joes,Original Joe's – West Kelowna,,West Kelowna,West Kelowna,"3000 Louie Dr Unit 114, West Kelowna, BC V4T 3E1",,49.8366707,-119.6203626,,,,
-west-kelowna-kelly-obryans,Kelly & Carlos O'Bryan's – West Kelowna,,West Kelowna,West Kelowna,"3470 Carrington Rd, Westbank, BC V4T 3V1",,49.8403854,-119.60709,,,,
-lake-country-woodys-pub,Woody's Pub,,Lake Country,Lake Country,"9882 BC-97, Lake Country, BC V4V 1V7",,50.0253963,-119.4083618,,,,
-lake-country-turtle-bay-pub,Turtle Bay Pub,,Lake Country,Lake Country,"2850 Woodsdale Rd, Lake Country, BC V4V 2L2",,50.0528805,-119.4126376,,,,
-lake-country-block-one,BLOCK ONE at 50th Parallel Estate Winery,,Lake Country,Lake Country,"17101 Terrace View Rd, Lake Country, BC V4V 1B7",,50.1293632,-119.4508574,,,,
-lake-country-garden-bistro-peak-cellars,Garden Bistro at Peak Cellars,,Lake Country,Lake Country,"2290 Goldie Rd, Lake Country, BC V4V 1G5",,50.060351,-119.429836,,,,
-lake-country-britannia-brewing,Britannia Brewing,,Lake Country,Lake Country,"8999 Jim Bailey Rd, Kelowna, BC V4V 1R7",,50.0112518,-119.3937762,,,,
+id,name,url,menu_url,type,city,area,address,phone,business_hours,payment_types,latitude,longitude,happy_hour_times,happy_hour_tagline,happy_hour_food_details,happy_hour_drink_details
+kelowna-the-keg,The Keg Steakhouse + Bar,https://thekeg.com/en/locations/kelowna,http://www.thekeg.com/en/locations/kelowna/menu,Casual Dining,Kelowna,Orchard Park,"1825 Underhill St, Kelowna, BC V1X 7E1",778-484-3810,"Monday – Thursday: 4 PM – 10 PM
+Friday – Saturday: 2 PM – 11 PM
+Sunday: 2 PM – 10 PM","Cash, Debit, Credit Cards",49.8815354,-119.4368404,"Monday – Thursday: 4 PM – 6 PM
+Friday – Sunday: 2 PM – 5 PM
+Sunday – Thursday: 8 PM – Close
+Friday – Saturday: 9 PM – Close",Early & late night food and drink specials,"Select appetizers discounted
+Late-night snack specials","Discounted cocktails
+Beer and wine specials
+Late-night drink deals"
+kelowna-kelly-obryans-downtown,Kelly & Carlos O'Bryan's – Kelowna,https://www.kobcob.com/kelowna/welcome/,https://www.kobcob.com/menu/carlos/,Restaurant and Bar,Kelowna,Downtown,"262 Bernard Ave, Kelowna, BC V1Y 6N4",250-861-1338,Monday – Sunday: 11 AM – 12 AM,"Cash, Debit, Credit Cards",49.8849761,-119.4943934,"Daily: 2 PM – 6 PM
+Daily: 9 PM – Close",Drink Specials • Food from $12,"$12 Nachos
+$12 Deep-Fried Pickles
+$12 Potato Skins
+$14 Chicken Lips
+$14 Dry Ribs
+$14 Classic Poutine
+$14 Chicken Quesadillas
+$16 Chicken Wings
+$16 McCracken Rolls
+$16 Irish Yorkies
+$16 Dunkin’s Beef Dip","$6.25 Single Highballs (1 oz)
+$9.25 Double Highballs (2 oz)
+$6.25 Domestic Draft Beer (16 oz)
+$8.75 Premium Irish Pints (20 oz)
+$7.75 House Wine (9 oz
+"
+kelowna-pretty-not-bad,Pretty Not Bad,https://prettynotbadylw.com/pages/food,https://prettynotbadylw.com/pages/food,Sports Bar,Kelowna,North End,"740 Clement Ave #1, Kelowna, BC V1Y 7C9",236-420-3222,"Monday – Friday: 4 PM – 11 PM
+Saturday – Sunday: 12 PM – 11 PM","Cash, Debit, Credit Cards",49.8938238,-119.4901693,"Monday – Saturday: 4 PM – 5 PM
+Monday – Saturday: 9 PM – Close",$3.66 drinks • food from $12,"$13 Smash Burger (GF)
+$12 Cheesy Bread
+$13 Nachos (GF)","$3.66 House Beer (12 oz)
+$3.66 House Wine (5 oz)
+$3.66 Single Highball (1 oz)"
+kelowna-micro-bar-bites,Micro Bar & Bites,http://microkelowna.com/,http://microkelowna.com/menu-micro/,Casual Dining,Kelowna,Downtown,"1500 Water St, Kelowna, BC V1Y 1J8",778-484-3500,"Tuesday – Thursday: 3 PM – 11 PM
+Friday – Saturday: 3 PM – 12 AM
+Sunday – Monday: Closed","Cash, Debit, Credit Cards",49.8859965,-119.4993091,Daily: 3 PM – 6 PM,"$9 cocktails • $2 off beer, wine & zero-proof",,"$9 Old Fashioned
+$9 Japanese Slipper
+$9 Margarita
+$9 Sangria
+$9 Sidecar
+$9 Negroni
+$9 Espresso Martini
+$9 Sazerac
+$2 off craft beer (16 oz)
+$2 off international wine (6 oz and 9 oz)
+$2 off zero-proof drinks"
+kelowna-bna-brewing,BNA Brewing Co. & Eatery,https://www.bnabrewing.com,https://www.bnabrewing.com/menu,Restaurant and Bar,Kelowna,Downtown,"1250 Ellis St, Kelowna, BC V1Y 1Z4",236-420-0025,"Sunday – Thursday: 5 PM – 11 PM
+Friday – Saturday: 5 PM – 1 AM","Cash, Debit, Credit Cards",49.8927871,-119.4963678,Daily: 5 PM – 6 PM,"Discounted beer, wine & cocktails • food from $9","$9 Truffle Fries
+$14 Chicken Wings
+$10 Pork Steamed Buns
+$12 BBQ Oyster Mushrooms
+$12 BBQ Wonton Nachos","$4.99 BNA Lite
+$4.99 Ace
+$5.99 BNA Beer
+$5.99 Back Hand of God
+$6.99 Super Save White Wine (5 oz)
+$6.99 Super Save Red Wine (5 oz)
+$8.99 Bee’s Knees
+$8.99 Silly Soda
+$8.99 Shaft
+$8.99 Espresso Martini"
+kelowna-oflannigans-pub,O'Flannigan's Pub,http://www.oflanniganspub.com/,http://www.oflanniganspub.com/oflannigans_menu.php,Pub,Kelowna,Downtown,"319 Queensway, Kelowna, BC V1Y 8E6",250-763-2292,"Monday – Thursday: 11:30 AM – 1 AM
+Friday – Saturday: 11:30 AM – 1 AM
+Sunday: Closed","Cash, Debit, Credit Cards",49.8871373,-119.4985224,Monday – Friday: 2 PM – 6 PM,Drink specials • selected appetizers,$4.95 – $12.95 Selected Appetizers,"$6.25 Draft Bud & Bud Light
+$6.25 Well Highballs
+$6.75 House Wine
+$35 Corona Bucket (5)"
+kelowna-central-kitchen-bar,Central Kitchen + Bar,http://www.centralkelowna.com,https://www.centralkelowna.com/menu/?UTM_source=GMB_listing&UTM_medium=organic,Casual Dining,Kelowna,North End,"1155 Ellis St, Kelowna, BC V1Y 1Z5",250-862-8820,"Monday – Thursday: 11 AM – 11 PM
+Friday: 11 AM – 12 AM
+Saturday: 10 AM – 12 AM
+Sunday: 10 AM – 11 PM","Cash, Debit, Credit Cards",49.894552,-119.4957217,Monday – Sunday: 2 PM – 5 PM,The Happiest Way to Eat x Drink,"Chips + Salsa $6
+Happy Central Churros $9.50
+Dirty Truffle Fries $12
+Crispy Chicken Bao Buns (2) $12
+Crispy Cauliflower $15
+Crispy Prawn + Avocado Sushi Press $15
+Happy Tenders + Fries (3) $15
+Smashburger Rangoon (6) $15","Central ""Celly"" Pints $6
+White Claw Vodka Sodas $6
+Well Highballs $6
+Tequila Shooter $6
+Jameson Shooter $6
+Phillips Blue Buck (16 oz) $6
+Mr Tea $9.50 (double $12.50)
+Central ""CZR"" $9.50 (double $12.50)
+Shaft (2 oz) $9.50
+Happy Vino (6 oz) $6
+Okanagan Old Fashioned $12
+Elderflower Sour (2 oz) $12
+White Freezee Shooters (4) $12
+Prosecco (2 glasses) $15"
+kelowna-oak-cru,Oak & Cru,https://oakandcru.com/,https://oakandcrumenus.com/,Fine Dining,Kelowna,Downtown,"1310 Water St, Kelowna, BC V1Y 9P4",250-859-4790,Monday – Sunday: 6:30 AM – 12 AM,"Cash, Debit, Credit Cards",49.8916466,-119.5002773,"Daily: 3 PM – 5 PM
+Sunday – Thursday: 9 PM – 12 AM
+Friday – Saturday: 10 PM – 12 AM",Happy Hour & Late-Night Happy Hour,,
+kelowna-gulfstream,Gulfstream,https://www.gulfstreamkelowna.com/,https://www.gulfstreamkelowna.com/our-menus,Restaurant and Bar,Kelowna,Airport,"5505 Airport Way, Kelowna, BC V1V 3C3",250-807-7427,Monday – Sunday: 6:30 AM – 11 PM,"Cash, Debit, Credit Cards",49.951052,-119.3911489,Daily: 3 PM – 6 PM,Happy Hour,,
+kelowna-shore-line-brewing,Shore Line Brewing Co.,https://shorelinebrewing.com/,https://shorelinebrewing.com/our-menu,Brewery,Kelowna,Mission,"3477 Lakeshore Rd #116, Kelowna, BC V1W 0A9",778-940-6802,"Monday: 2 PM – 9 PM
+Tuesday: 2 PM – 9 PM
+Wednesday: 12 PM – 10 PM
+Thursday: 12 PM – 10 PM
+Friday: 12 PM – 11 PM
+Saturday: 12 PM – 11 PM
+Sunday: 12 PM – 9 PM","Cash, Debit, Credit Cards",49.855027,-119.4924945,"Monday – Thursday: 8 PM – Close
+Friday – Saturday: 9 PM – Close",Late-night happy hour food specials,"Taproom Fries $8
+Truffle Fries $12
+Poutine $18
+Wings (1 lb) $18
+Tuna Tartare $21
+SLBC Nachos Para Dos $24",
+kelowna-bernies-supper-club,Bernie's Supper Club & Lounge,https://bernieskelowna.com/,https://bernieskelowna.com/menu/,Restaurant and Bar,Kelowna,Downtown,"353 Bernard Ave, Kelowna, BC V1Y 6N6",778-484-9836,Monday – Sunday: 4 PM – 11 PM,"Cash, Debit, Credit Cards",49.8860585,-119.4982884,Daily: 4 PM – 6 PM,The Happiest Hours at Bernie’s,"Oysters $1 off MP
+Caviar Bite $12
+Pesto Fries $13
+Big Warm Buns $8
+Half Caesar Salad $10
+Spicy Tuna Roll $15
+Ebi Oshi $16
+Black Tiger Prawns $17","Sauvignon Blanc $8
+Rosé $8
+Cabernet Sauvignon $8
+BNA Lite Lager $6
+Don't Lose Your Dinosaur IPA $6 (price not fully specified)
+Ace Hazy Pale Ale $6
+Vienna Amber Lager $6
+Cucumber Rickey $9
+Espresso Martini $9
+Negroni $9
+Sangria $9"
+kelowna-train-station-pub,Train Station Pub,https://thetrainstationpub.com/,https://thetrainstationpub.com/tsp-menu/,Pub,Kelowna,Downtown,"1177 Ellis St, Kelowna, BC V1Y 1Z5",778-484-5558,"Monday: 11 AM – 10 PM  
+Tuesday – Thursday: 11 AM – 11 PM  
+Friday: 11 AM – 12 AM  
+Saturday: 10 AM – 12 AM  
+Sunday: 10 AM – 10 PM","Cash, Debit, Credit Cards",49.8939424,-119.495366,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Drink & food specials,"Tortilla Chips & Southwest Guac $7.25
+Train Whistle Dog $7.50
+Dick McCheeseburger $10
+Parmesan Fries $12.50
+Dirty Fries $13","$5 sleeves
+$5 off bottles of wine & bubbles
+$6 single well highballs
+$6 Hornitos Plata shooter
+Espolòn Blanco shooter $7
+Honey Badger $8
+Okanagan Iced Tea $8.50
+Station Shaft $8.50
+Rosé All Day $10
+4 Polar Bear shooters $14
+4 Green Tea shooters $16"
+kelowna-kettle-river-brewing,Kettle River Brewing Co.,https://www.kettleriverbrewing.ca/,https://www.kettleriverbrewing.ca/eats,Brewery,Kelowna,North End,"731 Baillie Ave, Kelowna, BC V1Y 7E4",250-862-5115,"Monday – Thursday: 3 PM – 10 PM
+Friday – Saturday: 12 PM – 11 PM
+Sunday: 12 PM – 10 PM","Cash, Debit, Credit Cards",49.8961517,-119.4898997,"Daily: 3 PM – 5 PM
+Daily: 9 PM – Close",$6 pints • $6 wine • $6 snacks,"$6 Fries
+$6 Olives
+$6 Single Cheese Plate","$6 Lager Pints (20 oz)
+$6 White Wine (6 oz)"
+kelowna-mid-town-station,Mid-Town Station,https://www.midtownstn.com/,https://www.midtownstn.com/menu,Pub,Kelowna,Landmark,"1615 Dickson Ave #200, Kelowna, BC V1Y 0B1",250-469-9690,"Monday – Friday: 11 AM – 8 PM
+Saturday – Sunday: Closed","Cash, Debit, Credit Cards",49.8805206,-119.4647523,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Drink & food specials,"Tortilla Chips & Southwest Guac $7.25
+Train Whistle Dog $7.50
+Dick McCheeseburger $10
+Parmesan Fries $12.50
+Dirty Fries $13","$5 sleeves
+$5 off bottles of wine & bubbles
+$6 single well highballs
+$6 Hornitos Plata shooter
+Espolòn Blanco shooter $7
+Honey Badger $8
+Okanagan Iced Tea $8.50
+Station Shaft $8.50
+Rosé All Day $10
+4 Polar Bear shooters $14
+4 Green Tea shooters $16"
+kelowna-browns-social-house,Browns Social House,https://www.brownssocialhouse.com/harvey,https://browns.xdineapp.com/#viewMenu/1083/HARVEY%2BAVENUE-Kelowna/749743/DINE%20IN%20MENU,Casual Dining,Kelowna,Landmark,"100-1544 Harvey Ave, Kelowna, BC V1Y 6G2",236-420-2292,"Monday – Thursday: 11 AM – 11 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 11 PM","Cash, Debit, Credit Cards",49.8823555,-119.4680086,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Social Hour • drinks & bites,"Crispy Cauliflower $9.00
+Crispy Yam & Avocado Roll $11.00
+Snackin’ Nachos $9.75
+Sticky Thai Chicken $13.00
+HCDC Fries $6.00
+Steakhouse Sliders $15.00","Social Soda (1 oz $6.00, 2 oz $9.00)
+Long Island Social (1 oz $6.00, 2 oz $9.00)
+Social Hound (1 oz $6.50, 2 oz $9.25)
+Cucumber Socialite (1 oz $6.50, 2 oz $9.75)
+Social Wine (6 oz $7.00, 9 oz $9.50)
+Bottles of Wine 50% Off
+Social Lager (355 ml) $5.25
+Social Ale (355 ml) $6.00
+Free Hugo (non-alcoholic) $6.00"
+kelowna-moxies,Moxies,https://moxies.com/restaurants/kelowna-enterprise-way/,https://moxies.com/restaurants/kelowna-enterprise-way/?menu=true&utm_source=google&utm_medium=maps_menu&utm_campaign=organic#menus,Casual Dining,Kelowna,Orchard Park,"1730 Cooper Rd, Kelowna, BC V1Y 8V5",250-861-6110,"Monday – Thursday: 11 AM – 11 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 11 PM","Cash, Debit, Credit Cards",49.8828606,-119.4465695,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Tacos $5
+Blackened Shrimp or Black Bean
+Truffle Parm Fries $9
+Calamari & Shrimp $17
+Smashed Avocado Dip $12
+Bacon Cheeseburger $14
+Dry Ribs $15
+Roasted Tomatoes & Whipped Feta $17
+Steak Frites $31
+Tofu Cashew Lettuce Wraps $20
+Cashew Chicken Lettuce Wraps $20","House Highballs (1 oz $5, 2 oz $8)
+Big Lager or Amber Ale (16 oz $5, 20 oz $7)
+Espresso Martini (1.5 oz) $8
+Glasses of Wine (5 oz $5)
+Handcrafted Cocktails $10
+Absolut Sips (1 oz $6, 2 oz $9)
+Tropic Thunder (non-alcoholic) $6
+½ Price Bottles of Wine (750 ml)"
+kelowna-wildling,Wildling,https://www.wildling.ca/,https://www.exploretock.com/wildling-kelowna/,Fine Dining,Kelowna,North End,"1036 Richter St, Kelowna, BC V1Y 2K5",250-980-6919,"Monday – Thursday: 4 PM – 10 PM
+Friday – Saturday: 4 PM – 11 PM
+Sunday: 4 PM – 10 PM","Cash, Debit, Credit Cards",49.8966838,-119.4912904,Daily: 4 PM – 5 PM,Apero Hour • small snacks & good drinks,"Order a drink and choose a snack on the house:
+Gilda - Classic Pintxo
+Truffle Arancini with Tomato Jam
+Cheese Croquette with Aioli & Chives
+Deviled Egg
+
+
+Apero Plates
+Porchetta Sando $15
+Mushrooms on Toast $13
+Chicken Liver Pâté $10
+Bistro Tartare $18
+Try All Four Snacks $10",
+kelowna-skinny-dukes,Skinny Dukes,https://www.skinnydukes.com/,https://www.skinnydukes.com/menus/,Resturant and Bar,Kelowna,Downtown,"1481 Water St, Kelowna, BC V1Y 1J6",778-478-1289,"Monday – Thursday: 5 PM – 11 PM
+Friday – Saturday: 5 PM – 12 AM
+Sunday: 5 PM – 11 PM","Cash, Debit, Credit Cards",49.8867086,-119.498959,Daily: 5 PM – 6 PM,Happy Hour food & drink specials,"Black Vinegar Peanuts $5.99
+Okinomiya-Style Brussels Sprouts $14.99
+Duck Spring Rolls $12.99
+Louis Pizza $19.99
+Smash Burger $19.99
+Nasi Goreng $19.99","Negroni $9.99
+Old Fashioned $9.99
+Aperol Spritz $9.99
+Moscow Mule $9.99
+Tom Collins $9.99
+House Wine $7.99–$10.99
+Coors Original $5.99
+Miller High Life $5.99"
+kelowna-leopolds-tavern,Leopold's Tavern,https://leopoldstavern.com/,https://leopoldstavern.com/pages/menus,Restaurant and Bar,Kelowna,Downtown,"279 Bernard Ave, Kelowna, BC V1Y 6N2",855-522-5367,"Monday – Friday: 12 PM – 2 AM
+Saturday – Sunday: 11 AM – 2 AM","Cash, Debit, Credit Cards",49.8861837,-119.499901,"Monday: All Day
+Everyday: 2 PM – 5 PM",Happy Hour snacks & drinks,"Pickled Egg $0.99
+Scotch Egg $6.00
+Chips & Guac $9.00
+Perogies $6.00
+Bucket of Bacon $12.50
+Fried Pickles $10.00
+Thai Chili Popcorn Chicken $10.00
+Snack Fries $5.00
+Garlic Parm Fries
+Dill Pickle Fries
+Cajun Fries
+Add House Queso $3.00
+Sub Curly, Waffle, or Sweet Fries $3.00","Leo’s Lager (20 oz) $7.00
+Leo’s Fizz (12 oz) $7.50
+Leo’s Island Iced Tea (10 oz) $7.00
+Leo’s Caesar (10 oz) $8.00
+Highballs (1 oz) $6.00
+House Wine (6 oz) $7.00
+Jameson (1 oz) $6.00"
+kelowna-king-taps-lakeside,King Taps Lakeside,https://kingtaps.com/locations/lakeside/,https://kingtaps.com/locations/lakeside/menu/drink/,Casual Dining,Kelowna,Downtown,"1352 Water St, Kelowna, BC V1Y 9P4",778-738-3989,"Monday – Thursday: 11 AM – 12 AM
+Friday: 11 AM – 1 AM
+Saturday: 10 AM – 1 AM
+Sunday: 10 AM – 12 AM","Cash, Debit, Credit Cards",49.890475,-119.500233,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Half-price wine • $10 cocktails • $5 beer & highballs,"$5 off all share plates
+$5 off all pizzas","Half off bottles of wine
+$10 cocktails
+$5 happy hour beer
+Happy hour wine: red or white (6 oz $6, 9 oz $9)
+$5 highballs"
+kelowna-cactus-club-yacht-club,Cactus Club Cafe – Yacht Club,https://www.cactusclubcafe.com/locations/kelowna-yacht-club/,https://www.cactusclubcafe.com/locations/kelowna-yacht-club/menu/drink/,Casual Dining,Kelowna,Downtown,"1370 Water St #1, Kelowna, BC V1Y 1J1",236-420-2272,"Monday – Wednesday: 11 AM – 12 AM
+Thursday – Saturday: 11 AM – 1 AM
+Sunday: 11 AM – 12 AM","Cash, Debit, Credit Cards",49.890475,-119.5002336,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Mini Crispy Chicken Sandwich $5
+Sea Salted Fries $5
+London Fog Crème Brûlée $7
+Avocado Dip $8
+Truffle Fries $8
+Tuna Temaki $9
+Prawn Crunch Roll $15
+Hot Chicken & Pickles $15
+Avocado Kale Salad $15
+Chipotle Chicken Tacos $16
+Salmon Aburi $16
+Cheddar Burger $17
+Cajun Chicken Sandwich $17
+Gardenburger $17
+The Med Bowl $18
+Teriyaki Chicken Rice Bowl $18
+Rigatoni Bolognese $19
+Blackened Creole Chicken $24
+Steak Frites $29","Sunset Soda $5
+Longboard Light $5
+Longboard Lager $5
+33 Acres of Life Amber Lager $6
+Parallel 49 Stir Crazy Hazy $6
+Happy Hour Red or White Wine (6 oz) $7
+Madri Excepcional (16 oz) $7
+The Bellini (2 oz) $8
+Heineken $8
+Spiked Frapp $10
+Sugar-Free Margarita (2 oz) $10
+Happy Hour Red or White Wine (9 oz) $10"
+kelowna-cactus-club-banks-road,Cactus Club Cafe – Banks Road,https://www.cactusclubcafe.com/locations/kelowna/,https://www.cactusclubcafe.com/locations/kelowna/menu/drink/,Casual Dining,Kelowna,Orchard Park,"1575 Banks Rd Unit 200 Unit 200, Kelowna, BC V1X 7Y1",250-763-6752,"Monday – Wednesday: 11 AM – 12 AM
+Thursday – Saturday: 11 AM – 12:30 AM
+Sunday: 11 AM – 12 AM","Cash, Debit, Credit Cards",49.888109,-119.4280384,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Mini Crispy Chicken Sandwich $5
+Sea Salted Fries $5
+London Fog Crème Brûlée $7
+Avocado Dip $8
+Truffle Fries $8
+Tuna Temaki $9
+Prawn Crunch Roll $15
+Hot Chicken & Pickles $15
+Avocado Kale Salad $15
+Chipotle Chicken Tacos $16
+Salmon Aburi $16
+Cheddar Burger $17
+Cajun Chicken Sandwich $17
+Gardenburger $17
+The Med Bowl $18
+Teriyaki Chicken Rice Bowl $18
+Rigatoni Bolognese $19
+Blackened Creole Chicken $24
+Steak Frites $29","Sunset Soda $5
+Longboard Light $5
+Longboard Lager $5
+33 Acres of Life Amber Lager $6
+Parallel 49 Stir Crazy Hazy $6
+Happy Hour Red or White Wine (6 oz) $7
+Madri Excepcional (16 oz) $7
+The Bellini (2 oz) $8
+Heineken $8
+Spiked Frapp $10
+Sugar-Free Margarita (2 oz) $10
+Happy Hour Red or White Wine (9 oz) $10"
+kelowna-earls-kitchen-bar,Earls Kitchen + Bar,https://earls.ca/locations/kelowna/,https://earls.ca/locations/kelowna/menu/kitchen,Casual Dining,Kelowna,Downtown,"211 Bernard Ave, Kelowna, BC V1Y 6N2",250-763-2777,"Monday – Thursday: 11 AM – 11 PM
+Friday: 11 AM – 12 AM
+Saturday: 10 AM – 12 AM
+Sunday: 10 AM – 11 PM","Cash, Debit, Credit Cards",49.886007,-119.501651,"Daily: 3 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Baja Taco $5
+Fries $5 (French or Truffle)
+Charred Corn & Avocado Dip $5
+Oyster on the Half Shell $3.50
+Bigger Better Burger $15
+Szechuan Shrimp & Pork Dumplings $15
+Aburi Salmon Sushi Press $15
+Crispy Chili Tofu $12
+Margherita Pizza $12
+Seafood Platter $75","$3 off Corona
+$3 off Stella Artois
+$3 off Rhino Draft
+$3 off Red Bull
+$5 Cheekies
+Half-price Crush Cocktails
+Half-price Shaft (1 oz)
+Half-price Rascal Red & White Wine (8 oz)
+Half-price Sangria (7 oz)
+Half-price Nitro Espresso Martini
+Half-price Aperol Spritz
+Half-price Earls Lime Margarita
+Half-price Picante Margarita (zero-proof)"
+kelowna-canadian-brewhouse,The Canadian Brewhouse,https://thecanadianbrewhouse.com/city/kelowna-area/,https://thecanadianbrewhouse.com/menu/,Restaurant and Bar,Kelowna,Sopa,"3030 Pandosy St, Kelowna, BC V1Y 1W2",250-980-4521,"Monday – Thursday: 11:30 AM – 12 AM
+Friday: 11:30 AM – 1 AM
+Saturday: 11 AM – 1 AM
+Sunday: 11 AM – 12 AM","Cash, Debit, Credit Cards",49.8652329,-119.4943549,"Daily: 4 PM – Close
+Monday – Friday: Open – 7 PM
+Saturday – Sunday: Open – 4 PM",Daily drink specials,,"$5.99 Steins (all beers on tap) Monday – Friday
+$1 off Caesars Saturday – Sunday"
+kelowna-original-joes,Original Joe's – Kelowna,https://www.originaljoes.ca/en/locations/bc/kelowna/2728-pandosy-street,https://www.originaljoes.ca/en/menus.html?s=8240,Casual Dining,Kelowna,Sopa,"2728 Pandosy St, Kelowna, BC V1Y 1V7",250-717-5637,"Monday – Thursday: 11 AM – 10 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 10 PM","Cash, Debit, Credit Cards",49.8652329,-119.4942501,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Spicy Chicken Bites $10
+Mexi Fries $10
+Lil’ Cheeseburger & Fries $10
+Chipotle Chicken Tacos $10
+Baja Fish Tacos $10
+Bruschetta $10
+Truffle Parm Fries $9
+Dynamite Shrimp (Snack Size) $9
+Mini Yorkie Trio $9
+6"" Spicy Beef Quesadilla $9
+Sweet Potato Fries $8
+Onion Rings $8
+Chicken Gyoza (4) $7
+Chips & Guac $7","House Wine (5 oz / 8 oz) $5 / $8
+OJ’s Draught (14 oz) $5
+Lawn Mower Yard Lager (14 oz) $5.50
+Well Highballs (1 oz / 2 oz) $5 / $8.50
+Red Bull $4
+Classic Margarita $10
+Old Fashioned $10
+Patio Joe $10
+Joe’s Soda (1 oz / 2 oz) $6 / $9.50"
+kelowna-hugos-mexican-kitchen,Hugo's Mexican Kitchen,https://www.hugosmexicankitchen.com/,https://www.hugosmexicankitchen.com/copy-of-langley-menu-1,Casual Dining,Kelowna,Mission,"3499 Lakeshore Rd, Kelowna, BC V1W 0A7",778-940-5558,"Monday – Thursday: 12 PM – 8:30 PM
+Friday – Saturday: 12 PM – 9 PM
+Sunday: 12 PM – 8 PM","Cash, Debit, Credit Cards",49.8548754,-119.4922951,Daily: 3 PM – 5:30 PM,"Margaritas, cervezas & street tacos","Street Tacos $5
+Chips & Guac $7
+Chicken Tostaditas $12
+Chicharrones $6
+4 Churros $6","All Tequila Margaritas $7
+All Mexican Cervezas $7"
+kelowna-hotel-eldorado,Hotel Eldorado,https://www.hoteleldoradokelowna.com/dining,https://www.hoteleldoradokelowna.com/dining/menus,Fine Dining,Kelowna,Mission,"500 Cook Rd, Kelowna, BC V1W 3G9",250-763-7500,"Monday – Thursday: 7 AM – 10 PM
+Friday – Saturday: 7 AM – 11 PM
+Sunday: 7 AM – 10 PM","Cash, Debit, Credit Cards",49.8456643,-119.4920327,"Daily: 3 PM – 5 PM
+Daily: 9 PM – Close",Hotel Eldorado Happy Hour • food & drink specials,"El Chili Chicken $16
+Boardwalk Smash Burger $17
+Smoked Pork Ribs $16
+Pepperoni & Hot Honey Flatbread $17
+Black Truffle & Zucchini Flatbread $18
+Margherita Flatbread $17
+Spicy Fried Chicken Sandwich $18
+Petite Green Goddess Wedge Salad $13
+Beetroot Hummus Dip $14
+Crispy Brussels Sprouts $14","Eldorado Heirloom Red, White & Rosé (6 oz) $8
+Eldorado Heirloom Red, White & Rosé (9 oz) $11
+Lakeside Lager (20 oz) $8
+BNA Purple Rain Sour (20 oz) $8
+Boardwalk Amber Ale (20 oz) $8
+El Shaft (2 oz) $9
+Canadian Old Fashioned (2 oz) $12
+Peach Aperol Spritz (4 oz) $12
+Valdobbiadene Prosecco (5 oz) $12
+Piña Colada (6 oz) $12
+Cherry Crush (6 oz) $12"
+kelowna-dunnenzies-mission,DunnEnzies – Mission,https://www.dunnenzies.com/mission,https://www.dunnenzies.com/mission-location-menu,Casual Dining,Kelowna,Mission,"4638 Lakeshore Rd, Kelowna, BC V1W 1X5",236-420-5722,"Monday – Thursday: 11 AM – 10 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 10 PM","Cash, Debit, Credit Cards",49.8164925,-119.4981975,Daily: 3 PM – 5 PM,Drink specials • discounted appetizers,"25% off appetizers
+Excludes nachos and platters","$7 house lager pints
+$7 pilsner pints
+$8 shaft on draft
+$1 off craft pints
+$1 off house wines"
+kelowna-wings-rutland,Wings – Rutland,https://greatwings.ca/kelowna/,http://greatwings.ca/menu/,Casual Dining,Kelowna,Rutland,"590 Hwy 33 W #1, Kelowna, BC V1X 6A8",236-420-0320,"Monday – Tuesday: 11 AM – 9 PM
+Wednesday: 11 AM – 10 PM
+Thursday: 11 AM – 9 PM
+Friday: 11 AM – 10 PM
+Saturday – Sunday: 11 AM – 9 PM","Cash, Debit, Credit Cards",49.890332,-119.4011853,Monday – Saturday: 2 PM – 6 PM,Happiest Hours • food & drink specials,"Avocado Hummus Dip $11
+Country Style Perogies $7
+Garlic Parm & Herb Fries $9.50
+Street Taco $5
+Peri Peri Fries $8.50
+Hat Trick $22
+Fried Pickles $9
+Wings & Fries $12","Fiji Blond Lager (14 oz) $4.75
+House Wine (6 oz) $5.50
+House Wine (9 oz) $8.50
+Highballs (1 oz) $6
+Highballs (2 oz) $8
+The Mule (1 oz) $7
+The Mule (2 oz) $9"
+kelowna-packing-house-pub,Packing House Pub,https://woodsmangroup.com/packing-house-pub/,https://ohbz.com/oo/packinghousepubkelowna-kelowna-bc,Pub,Kelowna,Rutland,"663 Finns Rd, Kelowna, BC V1X 5B8",250-765-0667,"Monday – Tuesday: 11 AM – 10 PM
+Wednesday – Thursday: 11 AM – 11 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 10 PM","Cash, Debit, Credit Cards",49.9076709,-119.4010753,"Daily: 3 PM – 5 PM
+Daily: 9 PM – Close",Drink specials • discounted snacks & burgers,"25% off snack & share items
+$9 Smash Burger
+$3 Chicharrons
+25% off all starters (Wednesday – Saturday)","$5 16 oz sleeves
+$1 off house wine
+$3.75 12 oz draft
+$3.50 Lemon Drops (Burt Reynolds)"
+kelowna-joey,JOEY Kelowna,https://joeyrestaurants.com/location/joey-kelowna,https://joeyrestaurants.com/location/joey-kelowna/menu#food,Casual Dining,Kelowna,Orchard Park,"2475 BC-97 #300, Kelowna, BC V1X 6Y7",250-860-8999,"Monday – Thursday: 11 AM – 12 AM
+Friday – Saturday: 11 AM – 1 AM
+Sunday: 11 AM – 12 AM","Cash, Debit, Credit Cards",49.8834084,-119.4172667,"Sunday – Thursday: 3 PM – 6 PM
+Sunday – Thursday: 9 PM – Close
+Friday – Saturday: 3 PM – 6 PM
+Friday – Saturday: 10 PM – Close",Happy Hour & Late Night • food & drink specials,"Fries $5
+Sushi Cones $6
+Japanese Gyoza $14
+Truffle Parmesan Fries $9
+Hummus $14
+Szechuan Lettuce Wraps $21
+Szechuan Prawn Lettuce Wraps $23
+Crispy Tempura Prawns $10
+Roasted Corn Guacamole $12
+Duo of Donuts $5","Super Vodka Highballs $5
+Super Gin Highballs $5
+Signature Sangria $6.50
+Real Peach Bellini $8
+Classic Margarita $10
+Aperol Spritz $11
+JOEY House Wine (Red or White) $6 / $10.50
+Castel Firmian Pinot Grigio or Luna’s Malbec $6 / $9.50
+Red Truck Road Trip Lager $5
+Red Truck West Coast Pale Ale $6
+Stella Artois $10
+Okanagan Spring 1516 $6
+Sapporo Premium Lager $7"
+west-kelowna-quails-gate,Quails' Gate Old Vines Restaurant,https://www.quailsgate.com/old-vines-restaurant/,https://www.quailsgate.com/old-vines-restaurant/,Fine Dining,West Kelowna,West Kelowna,"3303 Boucherie Rd, West Kelowna, BC V1Z 2S5",250-769-2500,Monday – Sunday: 11 AM – 9 PM,"Cash, Debit, Credit Cards",49.842719,-119.5690272,Daily: 2:30 PM – 5 PM,Happy Hour food specials,"63 Acres Beef Meatballs $18
+Fried Brussels Sprouts $13
+Grilled Baby Octopus $15
+Cod Croquettes $14
+Espelette Pepper Chicharrónes $9
+Olives & House Pickle Bowl $11
+Hand-Cut Truffle Parmesan Fries $13
+Oysters on the Half Shell $25
+Artisan Cheese & Charcuterie Board $32",
+west-kelowna-hatching-post,The Hatching Post,https://hatchingpostbeer.com,https://hatchingpostbeer.com/pages/smokery,Brewery,West Kelowna,West Kelowna,"2850 Boucherie Rd, West Kelowna, BC V1Z 2G5",778-755-8166,"Monday – Thursday: 11 AM – 9 PM
+Friday – Saturday: 11 AM – 10 PM
+Sunday: 11 AM – 9 PM","Cash, Debit, Credit Cards",49.8550877,-119.5589392,Monday – Friday: 3 PM – 6 PM,$9 food • drink specials,"Sausage on a Bun $9
+Smokehouse Tomato Soup & Bun $9
+Pulled Pork Mac & Cheese (Small) $9
+Bacon Twist “Pig Tails” with a Beer $9
+Smoked Cho’s (Small Nachos) $9","$6.50 Pint of Beer (20 oz)
+$12 Beer Flight (16 oz)
+$8.50 Cider (473 ml can)
+$10 House Wine (6 oz)
+$5 off Bottle of Wine
+$10 Cowboy Old Fashioned (2 oz)
+$10 Shot & Sleeve
+$16 Caesar Flight (3 oz total)"
+west-kelowna-modest-butcher,The Modest Butcher,https://modestbutcher.com/,https://modestbutcher.com/pages/modest-menu,Fine Dining,West Kelowna,West Kelowna,"829 Douglas Rd, West Kelowna, BC V1Z 1N9",250-769-8803,"Monday – Thursday: 2 PM – 9 PM
+Friday – Sunday: 12 PM – 9 PM","Cash, Debit, Credit Cards",49.8553899,-119.5525289,Daily: 2 PM – 5 PM,"Happy Hour cocktails, wine & small plates","Steamed PEI Mussels $22
+Cup o’ Creamy Seafood Chowder $14
+Roasted Shishito Peppers $12
+Burger Buddy & Fries $9
+Pork Belly Bao Bun $8
+Boucherie Cooter-ie $60
+Add Maple Candied Salmon $10","House Wine Blanc (5 oz) $7
+House Wine Rouge (5 oz) $7
+Paloma (1.5 oz) $9
+Moscow Mule (1.5 oz) $9
+Margarita (2 oz) $12
+Caesar (1.5 oz) $9
+Shaft (1.5 oz) $9
+Negroni (2 oz) $12
+Old Fashioned (2 oz) $12
+Draught Lager (16 oz) $7
+Draught IPA (16 oz) $7
+Draught Seasonal (16 oz) $7"
+west-kelowna-19-greens,19 Okanagan Grill + Bar,https://www.dine19.com/,https://www.dine19.com/menu,Fine Dining,West Kelowna,West Kelowna,"3509 Carrington Rd, West Kelowna, BC V4T 2E6",250-768-3133,Monday – Sunday: 11 AM – 9 PM,"Cash, Debit, Credit Cards",49.8384191,-119.6093918,Daily: 2 PM – 5 PM,"Wine, cocktails & local beer specials",,"Fantini Red or White Wine (5 oz $5, 9 oz $9)
+Slushy Lime Margarita (1 oz $8, 2 oz $10)
+19 Okanagan Peach Bellini $8
+Premium Well Hi-Balls (1 oz $7, 2 oz $9)
+Local Beer or Cider on Tap ($2 off any sleeve, pint, or flight)
+Coca Cola Old Fashioned $8"
+west-kelowna-landing-kitchen-bar,The Landing Kitchen + Bar,https://www.thelandingkitchenandbar.com,https://www.thelandingkitchenandbar.com/menu/#dinein,Casual Dining,West Kelowna,West Kelowna,"4205 Gellatly Rd, West Kelowna, BC V4T 2K4",250-707-1810,Monday – Sunday: 3 PM – 9 PM,"Cash, Debit, Credit Cards",49.8110036,-119.6266749,Daily: 3 PM – 5 PM,Happy Hour social plates & drink specials,"Hummus & Naan $13
+Korean BBQ Chicken $12
+Sweet Thai Chili Chicken $15
+Crispy Calamari $18.50
+Wagyu Beef Gyoza $15.50","House Red or White Wine ($1 per ounce)
+Volcanic Hills Merlot (6 oz $10.50, 9 oz $14.50)
+Gray Monk Pinot Gris (6 oz $10.50, 9 oz $14.50)
+Classic Margarita (1 oz $10, 2 oz $12.75)
+Landing Lager (16 oz) $6
+Lakesider Rotating Beer (16 oz) $7.50
+Landing Crantini (2 oz) $8"
+west-kelowna-original-joes,Original Joe's – West Kelowna,https://www.originaljoes.ca/en/locations/bc/west-kelowna/3000-louie-drive,https://www.originaljoes.ca/en/menus.html?s=8231,Casual Dining,West Kelowna,West Kelowna,"3000 Louie Dr Unit 114, West Kelowna, BC V4T 3E1",250-768-3835,"Monday – Thursday: 11 AM – 10 PM
+Friday – Saturday: 11 AM – 12 AM
+Sunday: 11 AM – 10 PM","Cash, Debit, Credit Cards",49.8366707,-119.6203626,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour & Late Night • food & drink specials,"Spicy Chicken Bites $10
+Mexi Fries $10
+Lil’ Cheeseburger & Fries $10
+Chipotle Chicken Tacos $10
+Baja Fish Tacos $10
+Bruschetta $10
+Truffle Parm Fries $9
+Dynamite Shrimp (Snack Size) $9
+Mini Yorkie Trio $9
+6"" Spicy Beef Quesadilla $9
+Sweet Potato Fries $8
+Onion Rings $8
+Chicken Gyoza (4) $7
+Chips & Guac $7","House Wine (5 oz / 8 oz) $5 / $8
+OJ’s Draught (14 oz) $5
+Lawn Mower Yard Lager (14 oz) $5.50
+Well Highballs (1 oz / 2 oz) $5 / $8.50
+Red Bull $4
+Classic Margarita $10
+Old Fashioned $10
+Patio Joe $10
+Joe’s Soda (1 oz / 2 oz) $6 / $9.50"
+west-kelowna-kelly-obryans,Kelly & Carlos O'Bryan's – West Kelowna,https://www.kobcob.com/locations/west-kelowna/,https://www.kobcob.com/menu/kelly/,Restaurant and Bar,West Kelowna,West Kelowna,"3470 Carrington Rd, Westbank, BC V4T 3V1",250-768-8442,Monday – Sunday: 11 AM – 12 AM,"Cash, Debit, Credit Cards",49.8403854,-119.60709,"Daily: 2 PM – 6 PM
+Daily: 9 PM – Close",Drink Specials • Food from $12,"$12 Nachos
+$12 Deep-Fried Pickles
+$12 Potato Skins
+$14 Chicken Lips
+$14 Dry Ribs
+$14 Classic Poutine
+$14 Chicken Quesadillas
+$16 Chicken Wings
+$16 McCracken Rolls
+$16 Irish Yorkies
+$16 Dunkin’s Beef Dip","$6.25 Single Highballs (1 oz)
+$9.25 Double Highballs (2 oz)
+$6.25 Domestic Draft Beer (16 oz)
+$8.75 Premium Irish Pints (20 oz)
+$7.75 House Wine (9 oz
+"
+lake-country-woodys-pub,Woody's Pub,https://woodsmangroup.com/woodys-pub/,https://ohbz.com/oo/woodyspub,Pub,Lake Country,Lake Country,"9882 BC-97, Lake Country, BC V4V 1V7",250-766-2310,"Monday – Tuesday: 11 AM – 10 PM
+Wednesday – Thursday: 11 AM – 11 PM
+Friday: 11 AM – 12 AM
+Saturday: 10 AM – 12 AM
+Sunday: 10 AM – 10 PM","Cash, Debit, Credit Cards",50.0253963,-119.4083618,"Daily: 3 PM – 5 PM
+Daily: 9 PM – Late",Afternoon & late-night drink specials • discounted snacks,25% off all snacks & shares,"$5 16 oz draft sleeves (afternoon)
+$3.75 12 oz draft (late night)
+$1 off house wines
+$3.50 Lemon Drops
+$3.50 Burt Reynolds"
+lake-country-turtle-bay-pub,Turtle Bay Pub,https://turtlebaypub.com,https://order.incentivio.com/c/turtlebaypub/,Pub,Lake Country,Lake Country,"2850 Woodsdale Rd, Lake Country, BC V4V 2L2",250-766-4534,"Monday: 11 AM – 10 PM
+Tuesday – Thursday: 11 AM – 11 PM
+Friday – Saturday: 11 AM – 11 PM
+Sunday: 11 AM – 10 PM","Cash, Debit, Credit Cards",50.0528805,-119.4126376,"Daily: 2 PM – 5 PM
+Daily: 9 PM – Close",Happy Hour food & drink specials,"Mussels $19.89
+“Let’s Get Dirty” Fries $12.89
+Pickles Nickels $9.89
+Sweet Potato Fries $8.89
+Tuna Tataki $15.89
+Curry Chickpea Dip $14.89
+Crispy Rice Salad $16.89
+Italian Deli Sandwich $17.89
+Roast Beef Sliders $17.29
+Fish ’N’ Chips $16.89
+Blackened Chicken Pappardelle $22.89
+Churro & Ice Cream $7.00","PBR (16 oz) $5.00
+Phillips Pilsner (16 oz) $5.00
+Big Rock Honey Brown (16 oz) $5.00
+Granville Island Seasonal (16 oz) $6.50
+Blue Moon (16 oz) $6.75
+House Wine (6 oz $5, 9 oz $8)
+Watermelon Lemon Mojito (2 oz) $10.00
+Highballs (1 oz $5, 2 oz $8)
+Salted Caramel Coffee Martini (2 oz) $11.00
+Bayside Soda (2 oz) $8.00
+Blackberry Smash (1.5 oz) $9.00"
+lake-country-block-one,BLOCK ONE at 50th Parallel Estate Winery,https://www.50thparallel.com/our-restaurant/,https://www.50thparallel.com/wp-content/uploads/2026/01/2026-Winter-All-Day-Menu.pdf,Fine Dining,Lake Country,Lake Country,"17101 Terrace View Rd, Lake Country, BC V4V 1B7",250-766-3408,"Thursday – Sunday: 12 PM – 8 PM
+Monday – Wednesday: Closed","Cash, Debit, Credit Cards",50.1293632,-119.4508574,Daily: 3 PM – 5 PM,Happy Hour snacks & wine,"Crumpets $17
+Duck Wings $24
+Olives $18
+Truffle Fries $9
+Oysters by the 1/2 Dozen $27
+Charcuterie & Cheese $40 / $80
+Deep Fried Oyster $6
+Duck Confit Poutine $18
+Karaage Chicken $12
+Karaage Fish $12
+Beef Tongue Slider $8
+Water Buffalo Tartare $24","50th Parallel Estate Pétillant 2023 (5 oz $14 | bottle $65)
+50th Parallel Estate Pinot Gris 2024 (6 oz $10 | bottle $40)
+50th Parallel Estate Pinot Noir Rosé 2024 (6 oz $10 | bottle $40)
+50th Parallel Estate Pinot Noir 2023 (6 oz $13 | bottle $50)
+Local Craft Beer (355 ml) $6"
+lake-country-garden-bistro-peak-cellars,Garden Bistro at Peak Cellars,https://peakcellars.com/restaurant/,https://peakcellars.com/restaurant/#summer-menu,Casual Dining,Lake Country,Lake Country,"2290 Goldie Rd, Lake Country, BC V4V 1G5",250-766-9922,Monday – Sunday: 11:30 AM – 7:30 PM,"Cash, Debit, Credit Cards",50.060351,-119.429836,Monday – Friday: 2:30 PM – 5 PM,Happy Hour food & drink specials,"Fresh Shucked Oysters $21
+Roasted Delicata Squash & Poached Pear Salad $18
+Peak Fries $12
+Honey & Blue Pizza $25
+Margherita Pizza $22","Goldie White 2022 (6 oz $7 | bottle $30)
+Gewürztraminer 2022 (6 oz $7 | bottle $30)
+Pinot Gris 2023 (6 oz $8 | bottle $32)
+Chardonnay 2019 (6 oz $10 | bottle $38)
+Aperol Spritz $14
+All Beers $7
+All Ciders $10"
+lake-country-britannia-brewing,Britannia Brewing,https://www.bbco.ca/lake-country/,https://www.bbco.ca/lake-country/,Brewery,Lake Country,Lake Country,"8999 Jim Bailey Rd, Kelowna, BC V4V 1R7",604-273-9379,"Monday – Thursday: 10:30 AM – 9 PM
+Friday: 10:30 AM – 10 PM
+Saturday: 10 AM – 10 PM
+Sunday: 10 AM – 9 PM
+","Cash, Debit, Credit Cards",50.0112518,-119.3937762,Weekdays: 2 PM – 5 PM,Weekday drink & bite specials,"Sicilian Olives $4
+Parm Truffle Popcorn $5
+Warm Pretzel $8
+Chips & Salsa $8
+Birria Tacos $15
+Peach Bruschetta $16
+Grass-Fed Beef Burger $18","Pints $5
+Pitchers $18
+Red & White Wine (6 oz $10, 9 oz $14)
+Smashed Apple $9
+Aperol Spritz $10
+Grapefruit Paloma $12"
