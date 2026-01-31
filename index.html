@@ -845,6 +845,26 @@
             opacity: 1;
             overflow: hidden;
             transition: max-height 0.3s ease, opacity 0.3s ease;
+            position: relative;
+        }
+
+        /* Right-edge gradient fade indicating more filters off-screen */
+        .filter-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 40px;
+            background: linear-gradient(to right, transparent, white);
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+            z-index: 1;
+        }
+
+        .filter-section.scrolled-end::after {
+            opacity: 0;
         }
 
         .filter-section.collapsed {
@@ -1029,7 +1049,7 @@
         .listing-offer {
             color: #111827;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 14px;
             line-height: 1.3;
             /* Clamp to 2 lines for long offer text */
             display: -webkit-box;
@@ -2958,6 +2978,12 @@
         // ===== VENUE/EVENT RENDER FUNCTIONS =====
         // These functions render venue and event cards from the data model
 
+        // Display-friendly venue type (presentation only, does not modify data)
+        function displayVenueType(type) {
+            if (type === 'Restaurant and Bar') return 'Restaurant & Bar';
+            return type;
+        }
+
         // Generate HTML for a single venue card (list view with image)
         function renderVenueCardListView(venue) {
             if (!venue) return '';
@@ -2980,7 +3006,7 @@
                         <div class="listing-meta">
                             <span class="status-badge status-open">Open Now</span>
                             <span class="distance-prominent">${formatDistance(venue)}</span>
-                            <span class="category-tag">• ${venue.type}</span>
+                            <span class="category-tag">• ${displayVenueType(venue.type)}</span>
                         </div>
                     </div>
                 </div>
@@ -3981,7 +4007,7 @@
             document.getElementById('venue-name-large').textContent = venue.name;
             document.getElementById('venue-status').textContent = 'Open Now';
             document.getElementById('venue-distance').textContent = formatDistance(venue) || '';
-            document.getElementById('venue-category').textContent = `• ${venue.type}`;
+            document.getElementById('venue-category').textContent = `• ${displayVenueType(venue.type)}`;
 
             // Update Happy Hour section with new multi-window support
             document.getElementById('venue-happy-hour-box').innerHTML = renderHappyHourSection(venue);
@@ -5700,7 +5726,7 @@
                                 </div>
                                 <div class="listing-offer">${getVenueShortSpecials(venue)}</div>
                                 <div class="listing-meta">
-                                    <span class="category-tag">• ${venue.type}</span>
+                                    <span class="category-tag">• ${displayVenueType(venue.type)}</span>
                                 </div>
                             </div>
                         </div>
@@ -5837,6 +5863,23 @@
             }, 300);
         }
 
+        // Toggle right-edge gradient fade based on scroll position
+        function initFilterScrollFade(filterId) {
+            const filterContainer = document.getElementById(filterId);
+            if (!filterContainer) return;
+            const section = filterContainer.closest('.filter-section');
+            if (!section) return;
+
+            function updateFade() {
+                const atEnd = filterContainer.scrollLeft + filterContainer.clientWidth >= filterContainer.scrollWidth - 2;
+                section.classList.toggle('scrolled-end', atEnd);
+            }
+
+            filterContainer.addEventListener('scroll', updateFade, { passive: true });
+            // Initial check
+            updateFade();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             // ===== LAUNCH SCREEN LOGIC =====
             // Determine if this is first launch or subsequent launch
@@ -5852,6 +5895,13 @@
                 if (homeScreen) homeScreen.classList.remove('active');
                 // Show search screen
                 if (searchScreen) searchScreen.classList.add('active');
+                // Show filter scroll hints and gradient fade after screen is visible
+                requestAnimationFrame(function() {
+                    showFilterSwipeHint('search-filters', 'hhc_filters_swipe_hint_shown_search');
+                    showFilterSwipeHint('events-filters', 'hhc_filters_swipe_hint_shown_events');
+                    initFilterScrollFade('search-filters');
+                    initFilterScrollFade('events-filters');
+                });
             }
 
             if (!hasLaunchedBefore) {
@@ -5919,10 +5969,6 @@
                 syncAllBookmarkIcons();
                 renderSavedPage();
             });
-
-            // Show one-time swipe hint for filter chips (if overflow exists)
-            showFilterSwipeHint('search-filters', 'hhc_filters_swipe_hint_shown_search');
-            showFilterSwipeHint('events-filters', 'hhc_filters_swipe_hint_shown_events');
 
             // Attach scroll listeners to both content areas
             const listContent = document.getElementById('list-content');
