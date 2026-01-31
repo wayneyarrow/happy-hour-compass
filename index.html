@@ -490,15 +490,17 @@
 
         /* Business Hours status */
         .hours-status {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             margin-bottom: 4px;
         }
 
         .hours-status-badge {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 500;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .hours-status-badge.open {
@@ -528,6 +530,15 @@
             color: #6b7280;
         }
 
+        /* Tighter sizing inside the Business Hours row to prevent wrapping at 375px */
+        .hours-status .hours-status-text {
+            font-size: 14px;
+            white-space: nowrap;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Hours expansion toggle - inline with status */
         .hours-toggle {
             display: inline-flex;
@@ -538,7 +549,9 @@
             font-weight: 500;
             cursor: pointer;
             user-select: none;
-            margin-left: 8px;
+            margin-left: auto;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         /* Happy Hour header row: Today: <status> | Show full schedule */
@@ -1273,6 +1286,23 @@
             font-size: 14px;
             color: #1e40af;
             line-height: 1.5;
+        }
+
+        /* High-contrast overrides for text inside the blue .info-box panel */
+        .info-box .hours-status-text {
+            color: #374151;
+        }
+
+        .info-box .hh-schedule-link {
+            color: #1e40af;
+        }
+
+        .info-box .hh-schedule-link:hover {
+            color: #1e3a8a;
+        }
+
+        .info-box .hours-day-time {
+            color: #374151;
         }
 
         .form-group {
