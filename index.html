@@ -2350,12 +2350,12 @@
                 migrated = true;
             });
 
-            // Migrate events: if a saved item is a name (not an ID), convert it
+            // Migrate events: if a saved item is a title (not an ID), convert it
             const eventsToMigrate = [];
             savedEvents.forEach(item => {
-                // Check if item is a name (exists in eventsByName but not eventsById)
-                if (!eventsById[item] && eventsByName[item]) {
-                    const event = eventsByName[item];
+                // Check if item is a title (exists in eventsByTitle but not eventsById)
+                if (!eventsById[item] && eventsByTitle[item]) {
+                    const event = eventsByTitle[item];
                     eventsToMigrate.push({ oldName: item, newId: event.id });
                 }
             });
@@ -2510,7 +2510,7 @@
             // Sync event detail page bookmark (if visible)
             const eventSaveBtn = document.getElementById('event-save-btn');
             if (eventSaveBtn && currentEventData) {
-                if (isEventSaved(currentEventData.name)) {
+                if (isEventSaved(currentEventData.id)) {
                     eventSaveBtn.classList.add('saved');
                 } else {
                     eventSaveBtn.classList.remove('saved');
@@ -2834,45 +2834,38 @@
             }
         }
 
+        // ===== BETA EVENT DATA MODEL =====
+        // Normalized event shape matching the locked Beta data model.
+        // Each event references a venue via venue_id (must match a venue.id from venues.beta.csv).
+        // event_time is a plain human-readable string — no Date parsing.
+        // event_frequency is one of: 'weekly' | 'one-off' | 'monthly' | 'seasonal'.
+        //
+        // This demo array will be replaced by CSV-loaded data in a future phase.
+
         const eventsData = [
             {
-                id: 'nfl-game-night',
-                name: 'NFL Game Night',
-                icon: '🏈',
-                type: 'Sports Bar Event',
-                venueId: 'pretty-not-bad',
-                schedule: 'Every Sunday',
-                dayOfWeek: 'Sunday',
-                time: '5:00 PM - 11:00 PM',
-                description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks. Perfect for groups!',
-                offers: '• $0.50 wings (minimum 10)<br>• $5 beer buckets<br>• $12 nachos for two<br>• $15 pitcher specials',
-                image: 'images/event-nfl.jpg'
+                id: 'kelowna-pretty-not-bad-nfl-game-night',
+                venue_id: 'kelowna-pretty-not-bad',
+                title: 'NFL Game Night',
+                event_time: 'Sundays · 5–11 PM',
+                event_frequency: 'weekly',
+                description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks.'
             },
             {
-                id: 'wine-tasting',
-                name: 'Wine Tasting',
-                icon: '🍷',
-                type: 'Fine Dining Event',
-                venueId: 'the-keg-kelowna',
-                schedule: 'Every Thursday',
-                dayOfWeek: 'Thursday',
-                time: '6:00 PM - 9:00 PM',
-                description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.',
-                offers: '• 5 wine tastings for $25<br>• Paired appetizers included<br>• 20% off featured wines<br>• Sommelier-guided experience',
-                image: 'images/event-wine.jpg'
+                id: 'kelowna-the-keg-wine-tasting',
+                venue_id: 'kelowna-the-keg',
+                title: 'Wine Tasting',
+                event_time: 'Thursdays · 6–9 PM',
+                event_frequency: 'weekly',
+                description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.'
             },
             {
-                id: 'trivia-night',
-                name: 'Trivia Night',
-                icon: '🧠',
-                type: 'Family Event',
-                venueId: 'white-spot',
-                schedule: 'Every Wednesday',
-                dayOfWeek: 'Wednesday',
-                time: '7:00 PM - 10:00 PM',
-                description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.',
-                offers: '• $3 appetizers during trivia<br>• $2.50 beer<br>• Prize for winning team<br>• Family-friendly atmosphere',
-                image: 'images/event-trivia.jpg'
+                id: 'kelowna-kelly-obryans-trivia-night',
+                venue_id: 'kelowna-kelly-obryans-downtown',
+                title: 'Trivia Night',
+                event_time: 'Wednesdays · 7–10 PM',
+                event_frequency: 'weekly',
+                description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.'
             }
         ];
 
@@ -2888,10 +2881,10 @@
         });
 
         const eventsById = {};
-        const eventsByName = {};  // For backwards compatibility during transition
+        const eventsByTitle = {};  // Lookup by title for search/display
         eventsData.forEach(event => {
             eventsById[event.id] = event;
-            eventsByName[event.name] = event;
+            eventsByTitle[event.title] = event;
         });
 
         // Helper to get venue by ID or name (for backwards compatibility)
@@ -2899,20 +2892,19 @@
             return venuesById[idOrName] || venuesByName[idOrName] || null;
         }
 
-        // Helper to get event by ID or name (for backwards compatibility)
-        function getEvent(idOrName) {
-            return eventsById[idOrName] || eventsByName[idOrName] || null;
+        // Helper to get event by ID or title
+        function getEvent(idOrTitle) {
+            return eventsById[idOrTitle] || eventsByTitle[idOrTitle] || null;
         }
 
-        // Helper to get venue for an event
+        // Helper to get venue for an event (uses normalized venue_id field)
         function getVenueForEvent(event) {
             if (!event) return null;
-            return venuesById[event.venueId] || null;
+            return venuesById[event.venue_id] || null;
         }
 
-        // Legacy aliases for backwards compatibility with existing code
+        // Legacy alias for venues (backwards compatibility with existing code)
         const venues = venuesByName;
-        const events = eventsByName;
 
         // ===== USER LOCATION & DISTANCE CALCULATION =====
         // Kelowna downtown fallback coordinates (used when geolocation is unavailable)
@@ -3041,12 +3033,12 @@
             const venue = getVenueForEvent(event);
             const venueName = venue ? venue.name : 'Unknown Venue';
             return `
-                <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.name}')">
+                <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.id}')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <div class="event-title">${event.name}</div>
+                            <div class="event-title">${event.title}</div>
                             <div class="event-venue">${venueName}</div>
-                            <div class="event-time">${event.schedule} ${event.time}</div>
+                            <div class="event-time">${event.event_time}</div>
                         </div>
                         <button class="bookmark-icon ${savedClass}" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -4430,9 +4422,22 @@
             return false;
         }
 
+        // Extract day name from event_time string (e.g. "Sundays · 5–11 PM" → "Sunday")
+        // Returns empty string if no day name found.
+        function extractDayFromEventTime(eventTime) {
+            if (!eventTime) return '';
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const timeLower = eventTime.toLowerCase();
+            for (const day of dayNames) {
+                // Match both singular ("Sunday") and plural ("Sundays")
+                if (timeLower.includes(day.toLowerCase())) return day;
+            }
+            return '';
+        }
+
         // Check if an event matches the current filter
-        function eventMatchesFilter(eventIdOrName) {
-            const event = getEvent(eventIdOrName);
+        function eventMatchesFilter(eventId) {
+            const event = getEvent(eventId);
             if (!event) return false;
 
             const now = new Date();
@@ -4440,35 +4445,28 @@
             const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             const todayName = dayNames[currentDay];
 
-            // Use explicit dayOfWeek field if available, otherwise parse schedule
-            const eventDay = event.dayOfWeek || '';
-            const schedule = (event.schedule || '').toLowerCase();
+            // Extract day from event_time (e.g. "Sundays · 5–11 PM" → "Sunday")
+            const eventDay = extractDayFromEventTime(event.event_time);
 
             if (currentEventsFilter === 'today') {
-                // Check if event runs today using dayOfWeek field first
                 if (eventDay) {
                     return eventDay.toLowerCase() === todayName.toLowerCase();
                 }
-                // Fallback: parse schedule string
-                if (schedule.includes('every')) {
-                    return schedule.includes(todayName.toLowerCase());
-                }
-                return schedule.includes(todayName.toLowerCase());
+                // One-off or unrecognized format: show permissively
+                return true;
             } else if (currentEventsFilter === 'weekend') {
                 // Weekend = Saturday or Sunday
                 if (eventDay) {
                     const dayLower = eventDay.toLowerCase();
                     return dayLower === 'saturday' || dayLower === 'sunday';
                 }
-                // Fallback: parse schedule string
-                return schedule.includes('saturday') || schedule.includes('sunday');
+                return true;
             } else if (currentEventsFilter === 'custom' && selectedEventDateStart && selectedEventDateEnd) {
                 // Custom calendar date range filter
-                // For recurring events, check if the event's dayOfWeek falls within the date range
                 if (eventDay) {
                     return eventDayFallsInRange(eventDay, selectedEventDateStart, selectedEventDateEnd);
                 }
-                // For events without dayOfWeek, show them (permissive for now)
+                // For events without a recognizable day, show them (permissive)
                 return true;
             }
 
@@ -4801,25 +4799,13 @@
             const container = document.getElementById('event-action-buttons');
             if (!container) return;
 
-            // Look up the venue to access its website URL
-            const venue = getVenue(event.venue);
+            // Look up the venue via venue_id to access phone and website
+            const venue = getVenueForEvent(event);
 
             let ctaHTML = '';
 
-            // Buy Tickets CTA - only if ticketUrl exists
-            if (event.ticketUrl) {
-                ctaHTML += `
-                    <button class="venue-action-btn" onclick="window.open('${event.ticketUrl}', '_blank')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
-                        </svg>
-                        <span>Tickets</span>
-                    </button>
-                `;
-            }
-
-            // Call CTA - only if phone exists
-            if (event.phone) {
+            // Call CTA - only if venue has a phone number
+            if (venue && venue.phone) {
                 ctaHTML += `
                     <button class="venue-action-btn" onclick="callEventVenue()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4830,7 +4816,7 @@
                 `;
             }
 
-            // Website CTA - use venue's websiteUrl (same as Venue Detail)
+            // Website CTA - use venue's websiteUrl
             if (venue && venue.websiteUrl) {
                 ctaHTML += `
                     <button class="venue-action-btn" onclick="openEventWebsite()">
@@ -4847,17 +4833,18 @@
             container.innerHTML = ctaHTML;
         }
 
-        function showEventDetail(eventName) {
-            const event = events[eventName];
+        function showEventDetail(eventId) {
+            const event = getEvent(eventId);
             if (!event) return;
 
-            // Store current event data
-            currentEventData = { name: eventName, ...event };
+            // Store current event data (includes venue lookup for action handlers)
+            const venue = getVenueForEvent(event);
+            currentEventData = { ...event, _venue: venue };
 
             // Sync event detail header bookmark state with central saved state
             const eventSaveBtn = document.getElementById('event-save-btn');
             if (eventSaveBtn) {
-                if (savedEvents.has(eventName)) {
+                if (isEventSaved(event.id)) {
                     eventSaveBtn.classList.add('saved');
                 } else {
                     eventSaveBtn.classList.remove('saved');
@@ -4865,49 +4852,34 @@
             }
 
             // Update header
-            document.getElementById('event-detail-title').textContent = eventName;
+            document.getElementById('event-detail-title').textContent = event.title;
 
-            // Update hero image (remove text overlay)
+            // Hero image — normalized model has no image field; use gradient
             const eventHeroImage = document.getElementById('event-hero-image');
-            if (event.image) {
-                eventHeroImage.style.backgroundImage = `url('${event.image}')`;
-                eventHeroImage.style.backgroundSize = 'cover';
-                eventHeroImage.style.backgroundPosition = 'center';
-            } else {
-                // Fallback to gradient if no image
-                eventHeroImage.style.backgroundImage = 'linear-gradient(135deg, #ef4444, #f97316)';
-            }
+            eventHeroImage.style.backgroundImage = 'linear-gradient(135deg, #ef4444, #f97316)';
 
             // Update event core info
-            document.getElementById('event-name-large').textContent = eventName;
+            document.getElementById('event-name-large').textContent = event.title;
 
-            // Get venue name using venueId from data model
-            const eventVenue = getVenueForEvent(event);
-            const venueName = eventVenue ? eventVenue.name : (event.venue || 'Unknown Venue');
+            // Get venue name using venue_id from data model
+            const venueName = venue ? venue.name : 'Unknown Venue';
             document.getElementById('event-venue-name').textContent = venueName;
 
-            // Format date/time
-            const dateTime = formatEventDateTime(event);
-            document.getElementById('event-date-time').textContent = dateTime;
+            // Display event_time directly (already human-readable)
+            document.getElementById('event-date-time').textContent = event.event_time;
 
             // Update Event section
             renderEventDetailsBox(event);
 
-            // Render CTAs conditionally based on available data
+            // Render CTAs conditionally based on venue data
             renderEventCTAs(event);
 
-            // Update Venue section - look up actual venue data using venueId
-            const venueData = getVenueForEvent(event);
-            if (venueData) {
-                renderEventVenueInfo(venueData);
+            // Update Venue section — look up actual venue data using venue_id
+            if (venue) {
+                renderEventVenueInfo(venue);
             } else {
-                // Fallback: render basic event info if venue not found
-                const fallbackVenue = {
-                    address: event.address,
-                    phone: event.phone,
-                    websiteUrl: event.website
-                };
-                renderEventVenueInfo(fallbackVenue);
+                // Fallback: render empty venue section if venue not found
+                renderEventVenueInfo({});
             }
 
             // Get scroll container reference
@@ -4938,25 +4910,13 @@
             setupEventDetailTabs();
         }
 
-        // Format event date/time for display
-        function formatEventDateTime(event) {
-            // Support two formats:
-            // 1. One-off: "Jan 29 • 8 PM"
-            // 2. Repeating: "Thursdays • 8 PM"
-            return `${event.schedule} • ${event.time}`;
-        }
-
         // Render Event Details box (reusing Happy Hour block structure)
         function renderEventDetailsBox(event) {
             const box = document.getElementById('event-details-box');
-            const dateTime = formatEventDateTime(event);
 
-            let html = `<strong>Date & Time</strong><br>${dateTime}`;
+            let html = `<strong>Date & Time</strong><br>${event.event_time}`;
+            html += `<br><br><strong>Frequency</strong><br>${event.event_frequency}`;
             html += `<br><br><strong>Overview</strong><br>${event.description}`;
-
-            if (event.offers) {
-                html += `<br><br><strong>Specials</strong><br>${event.offers}`;
-            }
 
             box.innerHTML = html;
         }
@@ -5114,8 +5074,10 @@
         }
 
         function openEventMapApp() {
-            if (!currentEventData || !currentEventData.address) return;
-            const address = encodeURIComponent(currentEventData.address);
+            if (!currentEventData) return;
+            const venue = currentEventData._venue;
+            if (!venue || !venue.address) return;
+            const address = encodeURIComponent(venue.address);
             window.open(`https://maps.google.com/?q=${address}`, '_blank');
         }
 
@@ -5191,40 +5153,40 @@
 
         // Navigate to venue from event
         function navigateToVenueFromEvent() {
-            if (!currentEventData || !currentEventData.venue) return;
-            // Navigate to the venue detail page
-            showVenueDetail(currentEventData.venue);
+            if (!currentEventData || !currentEventData.venue_id) return;
+            showVenueDetail(currentEventData.venue_id);
         }
 
         // Event action handlers
         function toggleEventSave(e) {
             e.stopPropagation();
-            if (currentEventData && currentEventData.name) {
-                toggleEventSavedState(currentEventData.name);
+            if (currentEventData && currentEventData.id) {
+                toggleEventSavedState(currentEventData.id);
             }
         }
 
         function shareEvent() {
             if (currentEventData && navigator.share) {
                 navigator.share({
-                    title: currentEventData.name,
-                    text: `Check out ${currentEventData.name} on Happy Hour Compass!`,
+                    title: currentEventData.title,
+                    text: `Check out ${currentEventData.title} on Happy Hour Compass!`,
                     url: window.location.href
                 }).catch(err => console.log('Error sharing:', err));
             } else if (currentEventData) {
-                alert(`Share: ${currentEventData.name}`);
+                alert(`Share: ${currentEventData.title}`);
             }
         }
 
         function callEventVenue() {
-            if (!currentEventData || !currentEventData.phone) return;
-            window.location.href = `tel:${currentEventData.phone}`;
+            if (!currentEventData) return;
+            const venue = currentEventData._venue;
+            if (!venue || !venue.phone) return;
+            window.location.href = `tel:${venue.phone}`;
         }
 
         function openEventWebsite() {
             if (!currentEventData) return;
-            // Use the venue's website URL (same as Venue Detail)
-            const venue = getVenue(currentEventData.venue);
+            const venue = currentEventData._venue;
             if (venue && venue.websiteUrl) {
                 window.open(venue.websiteUrl, '_blank');
             }
@@ -5742,17 +5704,17 @@
                     const event = eventsById[eventId];
                     if (!event) return;
 
-                    // Get venue name for the event
+                    // Get venue name for the event via venue_id
                     const eventVenue = getVenueForEvent(event);
                     const venueName = eventVenue ? eventVenue.name : 'Unknown Venue';
 
                     const itemHtml = `
-                        <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.name}')">
+                        <div class="event-item" data-event-id="${event.id}" onclick="showEventDetail('${event.id}')">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
-                                    <div class="event-title">${event.name}</div>
+                                    <div class="event-title">${event.title}</div>
                                     <div class="event-venue">${venueName}</div>
-                                    <div class="event-time">${event.schedule} ${event.time}</div>
+                                    <div class="event-time">${event.event_time}</div>
                                 </div>
                                 <button class="bookmark-icon saved" onclick="event.stopPropagation(); handleBookmarkClick(this)">
                                     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
