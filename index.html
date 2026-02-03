@@ -5000,7 +5000,9 @@
         // Compute a human-friendly date/time string for display
         function getEventDisplayDateTime(event) {
             if (event.event_frequency === 'weekly' && !event.event_time.startsWith('Every')) {
-                return 'Every ' + event.event_time;
+                // Singularize plural weekday names so "Sundays · 2–4 PM" becomes "Every Sunday · 2–4 PM"
+                var time = event.event_time.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)s\b/g, '$1');
+                return 'Every ' + time;
             }
             return event.event_time;
         }
