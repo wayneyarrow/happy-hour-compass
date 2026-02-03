@@ -2834,40 +2834,64 @@
             }
         }
 
+        // Load event data from events.beta.csv and populate eventsData
+        async function loadEventsFromCSV() {
+            try {
+                const response = await fetch('events.beta.csv');
+                const csvText = await response.text();
+                const rows = parseCSV(csvText);
+                if (rows.length < 2) return;
+
+                // Find header row (first row with 'id' as first column)
+                let headerIdx = rows.findIndex(r => r[0].trim() === 'id');
+                if (headerIdx === -1) return;
+
+                const headers = rows[headerIdx].map(h => h.trim());
+                const col = {};
+                headers.forEach((h, i) => { col[h] = i; });
+
+                const newEvents = [];
+                for (let r = headerIdx + 1; r < rows.length; r++) {
+                    const row = rows[r];
+                    const get = function(name) { return col[name] !== undefined ? (row[col[name]] || '').trim() : ''; };
+
+                    const id = get('id');
+                    const venue_id = get('venue_id');
+                    if (!id || !venue_id) continue; // Skip invalid rows
+
+                    newEvents.push({
+                        id: id,
+                        venue_id: venue_id,
+                        title: get('title'),
+                        event_time: get('event_time'),
+                        event_frequency: get('event_frequency'),
+                        description: get('description')
+                    });
+                }
+
+                eventsData = newEvents;
+
+                // Rebuild lookup maps
+                Object.keys(eventsById).forEach(k => delete eventsById[k]);
+                Object.keys(eventsByTitle).forEach(k => delete eventsByTitle[k]);
+                eventsData.forEach(event => {
+                    eventsById[event.id] = event;
+                    eventsByTitle[event.title] = event;
+                });
+
+            } catch (err) {
+                console.error('Failed to load events.beta.csv:', err);
+            }
+        }
+
         // ===== BETA EVENT DATA MODEL =====
         // Normalized event shape matching the locked Beta data model.
         // Each event references a venue via venue_id (must match a venue.id from venues.beta.csv).
         // event_time is a plain human-readable string — no Date parsing.
         // event_frequency is one of: 'weekly' | 'one-off' | 'monthly' | 'seasonal'.
         //
-        // This demo array will be replaced by CSV-loaded data in a future phase.
-
-        const eventsData = [
-            {
-                id: 'kelowna-pretty-not-bad-nfl-game-night',
-                venue_id: 'kelowna-pretty-not-bad',
-                title: 'NFL Game Night',
-                event_time: 'Sundays · 5–11 PM',
-                event_frequency: 'weekly',
-                description: 'Join us every Sunday for NFL game nights! Watch your favorite teams on our big screens while enjoying special pricing on wings, nachos, and game-day drinks.'
-            },
-            {
-                id: 'kelowna-the-keg-wine-tasting',
-                venue_id: 'kelowna-the-keg',
-                title: 'Wine Tasting',
-                event_time: 'Thursdays · 6–9 PM',
-                event_frequency: 'weekly',
-                description: 'Experience our curated wine tasting featuring local Okanagan wines paired with signature appetizers. Learn about wine varieties from our sommelier.'
-            },
-            {
-                id: 'kelowna-kelly-obryans-trivia-night',
-                venue_id: 'kelowna-kelly-obryans-downtown',
-                title: 'Trivia Night',
-                event_time: 'Wednesdays · 7–10 PM',
-                event_frequency: 'weekly',
-                description: 'Test your knowledge at our weekly trivia night! Great for families and groups. Prizes for top teams and special happy hour pricing on food and drinks.'
-            }
-        ];
+        // eventsData is loaded from events.beta.csv at startup (see loadEventsFromCSV)
+        let eventsData = [];
 
         // ===== DATA MODEL LOOKUP HELPERS =====
         // These provide fast lookups by ID and backwards-compatible lookups by name
@@ -5922,7 +5946,7 @@
                 toggleIconSvg.innerHTML = mapPinIcon;
             }
 
-            // Load venues from CSV, then render everything
+            // Load venues and events from CSV, then render everything
             loadVenuesFromCSV().then(function() {
                 // Capture user location for distance calculation, re-render after
                 captureUserLocation().then(function() {
@@ -5936,14 +5960,18 @@
                 renderVenueListView();
                 renderVenueMapView();
 
-                // Render initial events list from data model
-                renderEventsList();
-
                 // Update all listing cards with dynamic HH status
                 updateAllListingHHStatus();
 
                 // Initialize venue filters (will also trigger applyVenueFilters)
                 initVenueFilters();
+
+                // Load events from CSV (depends on venues being loaded first for linking)
+                loadEventsFromCSV().then(function() {
+                    renderEventsList();
+                    syncAllBookmarkIcons();
+                    renderSavedPage();
+                });
 
                 // Initialize saved state - sync all bookmark icons and render saved page
                 syncAllBookmarkIcons();
