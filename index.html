@@ -2148,7 +2148,7 @@
                         <div class="scroll-anchor" id="anchor-event" aria-hidden="true"></div>
                         <h3 class="section-title">Event</h3>
                         <div class="info-box" id="event-details-box">
-                            <strong>Overview</strong><br>
+                            <strong>Event Details</strong><br>
                             Event details will appear here
                         </div>
                     </div>
@@ -2869,6 +2869,20 @@
                     });
                 }
 
+                // Runtime venue_id normalization: fix known mismatches from CSV data
+                // The CSV contains "kettle-river-brewing" but venues.beta.csv uses "kelowna-kettle-river-brewing"
+                const venueIdFixups = { 'kettle-river-brewing': 'kelowna-kettle-river-brewing' };
+                newEvents.forEach(function(ev) {
+                    if (venueIdFixups[ev.venue_id]) {
+                        var oldPrefix = ev.venue_id;
+                        ev.venue_id = venueIdFixups[oldPrefix];
+                        // Update id to keep <venue_id>-<slug> format consistent
+                        if (ev.id.startsWith(oldPrefix + '-')) {
+                            ev.id = ev.venue_id + ev.id.substring(oldPrefix.length);
+                        }
+                    }
+                });
+
                 eventsData = newEvents;
 
                 // Rebuild lookup maps
@@ -3147,8 +3161,8 @@
             // Clear existing event cards
             container.querySelectorAll('.event-item').forEach(el => el.remove());
 
-            // Get events to render (all events if no filter)
-            const eventsToRender = filteredEvents || eventsData;
+            // Get events to render (all events if no filter), excluding past one-off events
+            const eventsToRender = (filteredEvents || eventsData).filter(function(ev) { return !isPastEvent(ev); });
 
             // Show empty state if no events
             if (eventsToRender.length === 0) {
@@ -4446,6 +4460,38 @@
             return false;
         }
 
+        // Check if a one-off event is in the past.
+        // Returns true only for one-off events whose parsed date is before today.
+        // Weekly/recurring events always return false. Unparseable dates return false (permissive).
+        function isPastEvent(event) {
+            if (!event || event.event_frequency !== 'one-off') return false;
+
+            // Try to parse date from event_time strings like:
+            //   "Friday, Feb 27 · 9:30 PM"
+            //   "Sunday, Feb 9 · Doors open 2:00 PM"
+            //   "Saturday, Jan 24 · 6:00 PM"
+            var timeStr = event.event_time || '';
+
+            // Strip everything after the middle dot (·) to isolate the date part
+            var dotIdx = timeStr.indexOf('·');
+            var datePart = dotIdx !== -1 ? timeStr.substring(0, dotIdx).trim() : timeStr.trim();
+
+            // Remove leading day-of-week + comma if present (e.g. "Friday, " → "")
+            datePart = datePart.replace(/^\w+,\s*/, '');
+
+            // datePart should now be like "Feb 27", "Jan 24", "Feb 9"
+            if (!datePart) return false;
+
+            // Parse "Mon DD" with the current year
+            var parsed = new Date(datePart + ', ' + new Date().getFullYear());
+            if (isNaN(parsed.getTime())) return false;
+
+            // Compare to the start of today (midnight) so events today still show
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return parsed < today;
+        }
+
         // Extract day name from event_time string (e.g. "Sundays · 5–11 PM" → "Sunday")
         // Returns empty string if no day name found.
         function extractDayFromEventTime(eventTime) {
@@ -4951,13 +4997,21 @@
             setupEventDetailTabs();
         }
 
+        // Compute a human-friendly date/time string for display
+        function getEventDisplayDateTime(event) {
+            if (event.event_frequency === 'weekly' && !event.event_time.startsWith('Every')) {
+                return 'Every ' + event.event_time;
+            }
+            return event.event_time;
+        }
+
         // Render Event Details box (reusing Happy Hour block structure)
         function renderEventDetailsBox(event) {
             const box = document.getElementById('event-details-box');
 
-            let html = `<strong>Date & Time</strong><br>${event.event_time}`;
-            html += `<br><br><strong>Frequency</strong><br>${event.event_frequency}`;
-            html += `<br><br><strong>Overview</strong><br>${event.description}`;
+            const displayDateTime = getEventDisplayDateTime(event);
+            let html = `<strong>Date & Time</strong><br>${displayDateTime}`;
+            html += `<br><br><strong>Event Details</strong><br>${event.description}`;
 
             box.innerHTML = html;
         }
@@ -5739,11 +5793,11 @@
                 });
             }
 
-            // Render saved events (iterate over IDs, look up event by ID)
+            // Render saved events (iterate over IDs, look up event by ID, skip past one-offs)
             if (hasSavedEvents) {
                 savedEvents.forEach(eventId => {
                     const event = eventsById[eventId];
-                    if (!event) return;
+                    if (!event || isPastEvent(event)) return;
 
                     // Get venue name for the event via venue_id
                     const eventVenue = getVenueForEvent(event);
