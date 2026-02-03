@@ -4854,9 +4854,26 @@
             // Update header
             document.getElementById('event-detail-title').textContent = event.title;
 
-            // Hero image — normalized model has no image field; use gradient
+            // Hero image — use venue's category-based image, gradient fallback if no venue
             const eventHeroImage = document.getElementById('event-hero-image');
-            eventHeroImage.style.backgroundImage = 'linear-gradient(135deg, #ef4444, #f97316)';
+            if (venue) {
+                const imagePath = getVenueImage(venue);
+                eventHeroImage.classList.remove('fallback');
+                const testImage = new Image();
+                testImage.onload = function() {
+                    eventHeroImage.style.backgroundImage = `url('${imagePath}')`;
+                    eventHeroImage.classList.remove('fallback');
+                };
+                testImage.onerror = function() {
+                    eventHeroImage.style.backgroundImage = 'none';
+                    eventHeroImage.classList.add('fallback');
+                };
+                testImage.src = imagePath;
+                eventHeroImage.style.backgroundImage = `url('${imagePath}')`;
+            } else {
+                eventHeroImage.style.backgroundImage = 'linear-gradient(135deg, #ef4444, #f97316)';
+                eventHeroImage.classList.remove('fallback');
+            }
 
             // Update event core info
             document.getElementById('event-name-large').textContent = event.title;
