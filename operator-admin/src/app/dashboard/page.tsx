@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { getOperatorVenues } from "@/lib/getOperatorVenues";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import SignOutButton from "./SignOutButton";
 
 // Server Component — double-checked auth even though middleware already guards.
@@ -101,12 +102,20 @@ export default async function DashboardPage() {
 
         {/* ── Your Venues ──────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-            Your Venues
-          </h3>
-
-          {/* Operator row missing — can't scope venues query */}
-          {!operator && !operatorError && null}
+          {/* Card heading — "Add venue" button appears alongside when venues exist */}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              Your Venues
+            </h3>
+            {operator && venues.length > 0 && (
+              <Link
+                href="/dashboard/venues/new"
+                className="text-xs font-medium px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+              >
+                + Add venue
+              </Link>
+            )}
+          </div>
 
           {venuesError ? (
             <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -118,12 +127,18 @@ export default async function DashboardPage() {
               Resolve the operator account issue above to see your venues.
             </p>
           ) : venues.length === 0 ? (
-            /* Empty state */
-            <div className="py-6 text-center">
+            /* Empty state with primary CTA */
+            <div className="py-8 flex flex-col items-center text-center gap-3">
               <p className="text-sm font-medium text-gray-500">No venues yet</p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-400">
                 You&rsquo;ll see your venues here once they&rsquo;re added.
               </p>
+              <Link
+                href="/dashboard/venues/new"
+                className="mt-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                Create your first venue
+              </Link>
             </div>
           ) : (
             /* Venue list */
