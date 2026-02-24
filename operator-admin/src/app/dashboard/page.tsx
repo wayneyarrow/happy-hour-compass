@@ -155,6 +155,12 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <Link
+                      href={`/dashboard/venues/${v.id}/hours`}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Hours
+                    </Link>
+                    <Link
                       href={`/dashboard/venues/${v.id}/edit`}
                       className="text-xs font-medium text-amber-600 hover:text-amber-700 transition-colors"
                     >
