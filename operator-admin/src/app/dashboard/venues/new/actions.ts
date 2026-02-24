@@ -3,25 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
+import type { VenueFormValues, VenueFormState } from "../_shared/types";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export type VenueFormValues = {
-  name: string;
-  address_line1: string;
-  city: string;
-  region: string;
-  postal_code: string;
-  phone: string;
-  website_url: string;
-};
-
-export type CreateVenueState = {
-  /** Field-level or form-level error messages. */
-  errors?: Partial<Record<keyof VenueFormValues | "form", string>>;
-  /** Preserved form values for re-population after a failed submit. */
-  values?: VenueFormValues;
-};
+// Re-export so any existing imports from this file continue to work.
+export type { VenueFormValues };
+export type CreateVenueState = VenueFormState;
 
 // ── Slug utility ──────────────────────────────────────────────────────────────
 

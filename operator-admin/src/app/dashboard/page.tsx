@@ -144,21 +144,29 @@ export default async function DashboardPage() {
             /* Venue list */
             <ul className="divide-y divide-gray-100">
               {venues.map((v) => (
-                <li key={v.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{v.name}</p>
+                <li key={v.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{v.name}</p>
                     {(v.city || v.region) && (
                       <p className="text-xs text-gray-400 mt-0.5">
                         {[v.city, v.region].filter(Boolean).join(", ")}
                       </p>
                     )}
                   </div>
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      v.is_published ? "bg-green-400" : "bg-gray-300"
-                    }`}
-                    title={v.is_published ? "Published" : "Draft"}
-                  />
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Link
+                      href={`/dashboard/venues/${v.id}/edit`}
+                      className="text-xs font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                    >
+                      Edit
+                    </Link>
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        v.is_published ? "bg-green-400" : "bg-gray-300"
+                      }`}
+                      title={v.is_published ? "Published" : "Draft"}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
