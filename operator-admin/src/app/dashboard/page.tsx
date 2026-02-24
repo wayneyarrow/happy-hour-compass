@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton";
 
@@ -16,7 +17,14 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Simple DB connectivity check — fetch the 10 most recent venues.
+  // Ensure an operators row exists for this user. Idempotent — no-op if the
+  // row already exists. Creates it on first authenticated page load.
+  const { operator, error: operatorError } = await ensureOperatorForSession(
+    supabase,
+    user
+  );
+
+  // DB connectivity check — fetch the 10 most recent venues.
   // Returns an empty array if the table exists but has no rows yet.
   const { data: venues, error: venuesError } = await supabase
     .from("venues")
@@ -51,24 +59,69 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Auth status card */}
+        {/* Operator account card */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-            Session
+            Operator Account
+          </h3>
+
+          {operatorError ? (
+            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <strong>No operator record found for this user.</strong>
+              <p className="mt-1 text-xs text-amber-600">{operatorError}</p>
+            </div>
+          ) : operator ? (
+            <dl className="space-y-1 text-sm">
+              <div className="flex gap-2">
+                <dt className="text-gray-500 w-24 shrink-0">Operator ID</dt>
+                <dd className="text-gray-800 font-mono break-all">
+                  {operator.id}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-gray-500 w-24 shrink-0">Email</dt>
+                <dd className="text-gray-800">{operator.email}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-gray-500 w-24 shrink-0">Role</dt>
+                <dd className="text-gray-800">{operator.role}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-gray-500 w-24 shrink-0">Approved</dt>
+                <dd>
+                  <span
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      operator.is_approved
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {operator.is_approved ? "Yes" : "Pending"}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+        </div>
+
+        {/* Auth session card */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            Auth Session
           </h3>
           <dl className="space-y-1 text-sm">
             <div className="flex gap-2">
-              <dt className="text-gray-500 w-20 shrink-0">User ID</dt>
+              <dt className="text-gray-500 w-24 shrink-0">Auth User ID</dt>
               <dd className="text-gray-800 font-mono break-all">{user.id}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="text-gray-500 w-20 shrink-0">Email</dt>
+              <dt className="text-gray-500 w-24 shrink-0">Email</dt>
               <dd className="text-gray-800">{user.email}</dd>
             </div>
           </dl>
         </div>
 
-        {/* Venues table / DB check */}
+        {/* Venues / DB connectivity check */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
             Venues (DB connectivity check)
