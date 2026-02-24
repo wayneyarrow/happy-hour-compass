@@ -1,11 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
+import { getOperatorVenues } from "@/lib/getOperatorVenues";
 import { redirect } from "next/navigation";
 import SignOutButton from "./SignOutButton";
 
-// This is a Server Component.
-// The middleware already redirects unauthenticated users, but we double-check
-// here so the page is safe even if middleware is ever bypassed.
+// Server Component — double-checked auth even though middleware already guards.
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -17,20 +16,16 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Ensure an operators row exists for this user. Idempotent — no-op if the
-  // row already exists. Creates it on first authenticated page load.
+  // Ensure an operators row exists for this user. Idempotent.
   const { operator, error: operatorError } = await ensureOperatorForSession(
     supabase,
     user
   );
 
-  // DB connectivity check — fetch the 10 most recent venues.
-  // Returns an empty array if the table exists but has no rows yet.
-  const { data: venues, error: venuesError } = await supabase
-    .from("venues")
-    .select("id, name, slug, is_published, created_at")
-    .order("created_at", { ascending: false })
-    .limit(10);
+  // Fetch this operator's venues — only runs when we have a valid operator row.
+  const { venues, error: venuesError } = operator
+    ? await getOperatorVenues(supabase, operator.id)
+    : { venues: [], error: null };
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -59,7 +54,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* Operator account card */}
+        {/* ── Operator Account ─────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
             Operator Account
@@ -104,7 +99,58 @@ export default async function DashboardPage() {
           ) : null}
         </div>
 
-        {/* Auth session card */}
+        {/* ── Your Venues ──────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            Your Venues
+          </h3>
+
+          {/* Operator row missing — can't scope venues query */}
+          {!operator && !operatorError && null}
+
+          {venuesError ? (
+            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <strong>Could not load venues.</strong>
+              <p className="mt-1 text-xs text-amber-600">{venuesError}</p>
+            </div>
+          ) : !operator ? (
+            <p className="text-sm text-gray-400">
+              Resolve the operator account issue above to see your venues.
+            </p>
+          ) : venues.length === 0 ? (
+            /* Empty state */
+            <div className="py-6 text-center">
+              <p className="text-sm font-medium text-gray-500">No venues yet</p>
+              <p className="text-xs text-gray-400 mt-1">
+                You&rsquo;ll see your venues here once they&rsquo;re added.
+              </p>
+            </div>
+          ) : (
+            /* Venue list */
+            <ul className="divide-y divide-gray-100">
+              {venues.map((v) => (
+                <li key={v.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{v.name}</p>
+                    {(v.city || v.region) && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {[v.city, v.region].filter(Boolean).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      v.is_published ? "bg-green-400" : "bg-gray-300"
+                    }`}
+                    title={v.is_published ? "Published" : "Draft"}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* ── Auth Session ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
             Auth Session
@@ -119,51 +165,6 @@ export default async function DashboardPage() {
               <dd className="text-gray-800">{user.email}</dd>
             </div>
           </dl>
-        </div>
-
-        {/* Venues / DB connectivity check */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-            Venues (DB connectivity check)
-          </h3>
-
-          {venuesError ? (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              <strong>Query error:</strong> {venuesError.message}
-              <p className="mt-1 text-xs text-red-500">
-                Make sure you have run the SQL migration and that RLS policies
-                allow authenticated reads.
-              </p>
-            </div>
-          ) : venues && venues.length > 0 ? (
-            <ul className="divide-y divide-gray-100">
-              {venues.map((v) => (
-                <li
-                  key={v.id}
-                  className="py-2 flex items-center justify-between text-sm"
-                >
-                  <span className="text-gray-800 font-medium">{v.name}</span>
-                  <div className="flex items-center gap-3 text-gray-400">
-                    <span className="font-mono text-xs">/{v.slug}</span>
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        v.is_published ? "bg-green-400" : "bg-gray-300"
-                      }`}
-                      title={v.is_published ? "Published" : "Draft"}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-400">
-              No venues yet —{" "}
-              <span className="text-green-600 font-medium">
-                database connection is working.
-              </span>{" "}
-              Add venues via the Supabase dashboard or future admin UI.
-            </p>
-          )}
         </div>
       </div>
     </main>
