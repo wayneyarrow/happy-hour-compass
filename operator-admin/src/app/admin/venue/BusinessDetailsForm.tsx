@@ -1,10 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  updateBusinessDetailsAction,
-  type BusinessDetailsState,
-} from "./actions";
+import { updateBusinessDetailsAction } from "./actions";
+import { type BusinessDetailsState } from "./types";
 
 export type BusinessDetailsInitial = {
   name: string;

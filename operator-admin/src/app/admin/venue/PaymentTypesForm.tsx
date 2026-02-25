@@ -1,11 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  updatePaymentTypesAction,
-  PAYMENT_OPTIONS,
-  type PaymentTypesState,
-} from "./actions";
+import { updatePaymentTypesAction } from "./actions";
+import { PAYMENT_OPTIONS, type PaymentTypesState } from "./types";
 
 type Props = {
   venueId: string;

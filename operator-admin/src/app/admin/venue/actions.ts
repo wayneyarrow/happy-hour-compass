@@ -3,51 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// State types
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type CreateVenueAdminState = {
-  errors?: { form?: string; name?: string };
-  values?: { name: string };
-};
-
-export type BusinessDetailsState = {
-  errors?: Partial<Record<"form" | "name", string>>;
-  values?: {
-    name: string;
-    address_line1: string;
-    city: string;
-    region: string;
-    postal_code: string;
-    phone: string;
-    country: string;
-    latitude: string;
-    longitude: string;
-  };
-};
-
-export type PaymentTypesState = {
-  errors?: { form?: string };
-};
-
-export type LinksState = {
-  errors?: Partial<Record<"form" | "website_url" | "menu_url", string>>;
-  values?: { website_url: string; menu_url: string };
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const PAYMENT_OPTIONS = [
-  "Cash",
-  "Debit",
-  "Visa",
-  "MasterCard",
-  "Amex",
-] as const;
+import {
+  PAYMENT_OPTIONS,
+  type BusinessDetailsState,
+  type CreateVenueAdminState,
+  type LinksState,
+  type PaymentTypesState,
+} from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slug utility (same logic as createVenueAction)

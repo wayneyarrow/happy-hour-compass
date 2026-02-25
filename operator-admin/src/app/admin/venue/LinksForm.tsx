@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { updateLinksAction, type LinksState } from "./actions";
+import { updateLinksAction } from "./actions";
+import { type LinksState } from "./types";
 
 type Props = {
   venueId: string;

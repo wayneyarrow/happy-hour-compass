@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { createVenueAdminAction, type CreateVenueAdminState } from "./actions";
+import { createVenueAdminAction } from "./actions";
+import { type CreateVenueAdminState } from "./types";
 
 const initialState: CreateVenueAdminState = {};
 
