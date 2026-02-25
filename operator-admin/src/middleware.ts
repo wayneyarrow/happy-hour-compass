@@ -5,8 +5,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * Middleware runs on every request (except static assets).
  * Responsibilities:
  *   1. Refresh the Supabase session cookie so it doesn't expire mid-session.
- *   2. Redirect unauthenticated users away from /dashboard/* to /login.
- *   3. Redirect already-authenticated users away from /login to /dashboard.
+ *   2. Redirect unauthenticated users away from /dashboard/* and /admin/* to /login.
+ *   3. Redirect already-authenticated users away from /login to /admin/venue.
  */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -45,18 +45,21 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Guard: unauthenticated users cannot access /dashboard (or sub-paths)
-  if (!user && pathname.startsWith("/dashboard")) {
+  // Guard: unauthenticated users cannot access /dashboard or /admin (or sub-paths)
+  if (
+    !user &&
+    (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))
+  ) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     return NextResponse.redirect(loginUrl);
   }
 
-  // Convenience: authenticated users visiting /login go straight to dashboard
+  // Convenience: authenticated users visiting /login go straight to the admin
   if (user && pathname === "/login") {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = "/dashboard";
-    return NextResponse.redirect(dashboardUrl);
+    const adminUrl = request.nextUrl.clone();
+    adminUrl.pathname = "/admin/venue";
+    return NextResponse.redirect(adminUrl);
   }
 
   return supabaseResponse;

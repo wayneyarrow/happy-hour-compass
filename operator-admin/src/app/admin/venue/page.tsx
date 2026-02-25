@@ -1,0 +1,194 @@
+import { createClient } from "@/lib/supabase/server";
+import { ensureOperatorForSession } from "@/lib/ensureOperator";
+import { redirect } from "next/navigation";
+import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
+import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
+import BusinessDetailsForm from "./BusinessDetailsForm";
+import PaymentTypesForm from "./PaymentTypesForm";
+import LinksForm from "./LinksForm";
+import CreateVenueAdminForm from "./CreateVenueAdminForm";
+
+/**
+ * Extended venue type — includes base columns plus optional new columns
+ * (country, latitude, longitude, payment_types, menu_url) that may not yet
+ * exist in the DB. Using select("*") means Supabase only returns columns
+ * that actually exist; missing columns appear as undefined here.
+ */
+type AdminVenueRow = {
+  id: string;
+  name: string;
+  address_line1?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postal_code?: string | null;
+  phone?: string | null;
+  website_url?: string | null;
+  business_hours?: Record<string, unknown> | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  payment_types?: string[] | null;
+  menu_url?: string | null;
+};
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-base font-semibold text-gray-800 mb-1">{title}</h3>
+      {description && (
+        <p className="text-xs text-gray-400 mb-4">{description}</p>
+      )}
+      {!description && <div className="mb-4" />}
+      {children}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+// Server Component — resolves auth, operator, and venue before rendering.
+// The admin layout also checks auth, but we re-check here for defense-in-depth
+// (consistent with the pattern used throughout the existing codebase).
+export default async function AdminVenuePage() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { operator, error: operatorError } = await ensureOperatorForSession(
+    supabase,
+    user
+  );
+
+  // Load this operator's single venue.
+  // select("*") returns only columns that exist in the DB — safe even when
+  // optional new columns (payment_types, menu_url, etc.) haven't been added yet.
+  // Ownership enforced by the created_by_operator_id filter (+ RLS).
+  const { data: venueData, error: venueError } = operator
+    ? await supabase
+        .from("venues")
+        .select("*")
+        .eq("created_by_operator_id", operator.id)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  const venue = venueData as AdminVenueRow | null;
+
+  return (
+    <div className="max-w-2xl">
+      {/* Page heading */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Venue</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage your venue details, hours, and settings.
+        </p>
+      </div>
+
+      {/* Operator error */}
+      {operatorError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-4 mb-6">
+          <strong>Account error:</strong> {operatorError}
+        </div>
+      )}
+
+      {/* Venue fetch error */}
+      {venueError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-4 mb-6">
+          <strong>Error loading venue:</strong> {venueError.message}
+        </div>
+      )}
+
+      {/* ── No venue yet: setup prompt ────────────────────────────────────── */}
+      {!operatorError && !venueError && operator && !venue && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-1">
+            Set up your venue
+          </h3>
+          <p className="text-sm text-gray-500 mb-5">
+            Start by giving your venue a name. You can fill in all other details
+            once it&rsquo;s created.
+          </p>
+          <CreateVenueAdminForm />
+        </div>
+      )}
+
+      {/* ── Venue sections ────────────────────────────────────────────────── */}
+      {!operatorError && operator && venue && (
+        <div className="space-y-6">
+
+          {/* Section 1: Business details */}
+          <Section title="Business details">
+            <BusinessDetailsForm
+              venueId={venue.id}
+              initialValues={{
+                name:          venue.name            ?? "",
+                address_line1: venue.address_line1   ?? "",
+                city:          venue.city            ?? "",
+                region:        venue.region          ?? "",
+                postal_code:   venue.postal_code     ?? "",
+                phone:         venue.phone           ?? "",
+                country:       venue.country         ?? "",
+                latitude:      venue.latitude  != null ? String(venue.latitude)  : "",
+                longitude:     venue.longitude != null ? String(venue.longitude) : "",
+              }}
+            />
+          </Section>
+
+          {/* Section 2: Business hours
+              BusinessHoursForm is imported unchanged from its original location.
+              On success it redirects to /dashboard, which immediately redirects
+              to /admin/venue — the Cancel link follows the same chain. */}
+          <Section
+            title="Business hours"
+            description={
+              'Check "Closed" for days the venue is not open. ' +
+              "Overnight hours (e.g. 10 PM – 2 AM) are supported."
+            }
+          >
+            <BusinessHoursForm
+              venueId={venue.id}
+              initialHours={(venue.business_hours as BusinessHours) ?? {}}
+            />
+          </Section>
+
+          {/* Section 3: Payment types */}
+          <Section title="Payment types">
+            <PaymentTypesForm
+              venueId={venue.id}
+              initialPaymentTypes={
+                Array.isArray(venue.payment_types) ? venue.payment_types : []
+              }
+            />
+          </Section>
+
+          {/* Section 4: Links */}
+          <Section title="Links">
+            <LinksForm
+              venueId={venue.id}
+              initialValues={{
+                website_url: venue.website_url ?? "",
+                menu_url:    venue.menu_url    ?? "",
+              }}
+            />
+          </Section>
+
+        </div>
+      )}
+    </div>
+  );
+}
