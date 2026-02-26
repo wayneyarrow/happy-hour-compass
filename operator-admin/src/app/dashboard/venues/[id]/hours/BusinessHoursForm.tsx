@@ -232,6 +232,10 @@ export default function BusinessHoursForm({ venueId, initialHours }: Props) {
   const [state, formAction, isPending] = useActionState(boundAction, initialState);
   const [saved, setSaved] = useState(false);
 
+  // Depend on `state` (the object reference) rather than `state.success` (the
+  // boolean value). `useActionState` replaces the state object on every form
+  // submission, so this fires on every save — even when two consecutive saves
+  // both return success: true and the boolean value itself doesn't change.
   useEffect(() => {
     if (state.success) {
       router.refresh();
@@ -239,7 +243,7 @@ export default function BusinessHoursForm({ venueId, initialHours }: Props) {
       const timer = setTimeout(() => setSaved(false), 4000);
       return () => clearTimeout(timer);
     }
-  }, [state.success, router]);
+  }, [state, router]);
 
   // After a failed submit, use the hours the user submitted so their
   // selections are preserved. On first render, use the DB values.
