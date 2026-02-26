@@ -32,7 +32,7 @@ export default function LinksForm({ venueId, initialValues }: Props) {
     if (state.success) {
       router.refresh();
       setSaved(true);
-      const timer = setTimeout(() => setSaved(false), 3000);
+      const timer = setTimeout(() => setSaved(false), 4000);
       return () => clearTimeout(timer);
     }
   }, [state.success, router]);
@@ -100,7 +100,10 @@ export default function LinksForm({ venueId, initialValues }: Props) {
           {isPending ? "Saving…" : "Save links"}
         </button>
         {saved && (
-          <span className="text-sm font-medium text-green-600" role="status">
+          <span
+            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
+            role="status"
+          >
             Saved
           </span>
         )}

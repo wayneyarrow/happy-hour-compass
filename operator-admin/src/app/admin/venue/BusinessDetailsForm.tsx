@@ -13,8 +13,8 @@ export type BusinessDetailsInitial = {
   postal_code: string;
   phone: string;
   country: string;
-  latitude: string;
-  longitude: string;
+  lat: string;
+  lng: string;
 };
 
 type Props = {
@@ -44,7 +44,7 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
     if (state.success) {
       router.refresh();
       setSaved(true);
-      const timer = setTimeout(() => setSaved(false), 3000);
+      const timer = setTimeout(() => setSaved(false), 4000);
       return () => clearTimeout(timer);
     }
   }, [state.success, router]);
@@ -182,7 +182,7 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
         />
       </div>
 
-      {/* Lat / Long */}
+      {/* Lat / Lng */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label htmlFor="bd-lat" className={labelCls}>
@@ -191,11 +191,11 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
           </label>
           <input
             id="bd-lat"
-            name="latitude"
+            name="lat"
             type="number"
             step="any"
             disabled={isPending}
-            defaultValue={v.latitude}
+            defaultValue={v.lat}
             placeholder="49.8880"
             className={inputCls}
           />
@@ -207,11 +207,11 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
           </label>
           <input
             id="bd-lng"
-            name="longitude"
+            name="lng"
             type="number"
             step="any"
             disabled={isPending}
-            defaultValue={v.longitude}
+            defaultValue={v.lng}
             placeholder="-119.4960"
             className={inputCls}
           />
@@ -227,7 +227,10 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
           {isPending ? "Saving…" : "Save details"}
         </button>
         {saved && (
-          <span className="text-sm font-medium text-green-600" role="status">
+          <span
+            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
+            role="status"
+          >
             Saved
           </span>
         )}

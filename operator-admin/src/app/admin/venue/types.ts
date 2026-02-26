@@ -18,8 +18,8 @@ export type BusinessDetailsState = {
     postal_code: string;
     phone: string;
     country: string;
-    latitude: string;
-    longitude: string;
+    lat: string;
+    lng: string;
   };
 };
 

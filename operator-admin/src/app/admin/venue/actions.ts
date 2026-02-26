@@ -113,8 +113,8 @@ export async function updateBusinessDetailsAction(
     postal_code:   (formData.get("postal_code")   as string | null)?.trim() ?? "",
     phone:         (formData.get("phone")         as string | null)?.trim() ?? "",
     country:       (formData.get("country")       as string | null)?.trim() ?? "",
-    latitude:      (formData.get("latitude")      as string | null)?.trim() ?? "",
-    longitude:     (formData.get("longitude")     as string | null)?.trim() ?? "",
+    lat:           (formData.get("lat")           as string | null)?.trim() ?? "",
+    lng:           (formData.get("lng")           as string | null)?.trim() ?? "",
   };
 
   if (!values.name) {
@@ -130,8 +130,8 @@ export async function updateBusinessDetailsAction(
     };
   }
 
-  const lat = values.latitude ? parseFloat(values.latitude) : null;
-  const lng = values.longitude ? parseFloat(values.longitude) : null;
+  const latNum = values.lat ? parseFloat(values.lat) : null;
+  const lngNum = values.lng ? parseFloat(values.lng) : null;
 
   const { error: updateError, count } = await supabase
     .from("venues")
@@ -144,8 +144,8 @@ export async function updateBusinessDetailsAction(
         postal_code:            values.postal_code   || null,
         phone:                  values.phone         || null,
         country:                values.country       || null,
-        latitude:               lat != null && !Number.isNaN(lat) ? lat : null,
-        longitude:              lng != null && !Number.isNaN(lng) ? lng : null,
+        lat:                    latNum != null && !Number.isNaN(latNum) ? latNum : null,
+        lng:                    lngNum != null && !Number.isNaN(lngNum) ? lngNum : null,
         updated_by_operator_id: operator.id,
       },
       { count: "exact" }

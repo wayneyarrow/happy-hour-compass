@@ -10,10 +10,8 @@ import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
 
 /**
- * Extended venue type — includes base columns plus optional new columns
- * (country, latitude, longitude, payment_types, menu_url) that may not yet
- * exist in the DB. Using select("*") means Supabase only returns columns
- * that actually exist; missing columns appear as undefined here.
+ * Venue row as returned by Supabase select("*").
+ * Column names match the actual DB schema (lat/lng, payment_types TEXT).
  */
 type AdminVenueRow = {
   id: string;
@@ -26,17 +24,34 @@ type AdminVenueRow = {
   website_url?: string | null;
   business_hours?: Record<string, unknown> | null;
   country?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  payment_types?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
+  /** TEXT column — stored as a JSON array string, e.g. '["Visa","Cash"]' */
+  payment_types?: string | null;
   menu_url?: string | null;
 };
 
+/**
+ * Parses the `payment_types` TEXT column value back into a string array.
+ *
+ * The column stores a JSON-serialised array written by the Supabase JS client
+ * (e.g. '["Visa","Cash"]'). Reading it back yields a string, not an array,
+ * so we parse it here before passing it to the form.
+ */
+function parsePaymentTypes(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as string[];
+  } catch {
+    // Fallback: treat as comma-separated (original schema intent)
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-// Server Component — resolves auth, operator, and venue before rendering.
-// The admin layout also checks auth, but we re-check here for defense-in-depth
-// (consistent with the pattern used throughout the existing codebase).
 export default async function AdminVenuePage() {
   const supabase = await createClient();
 
@@ -54,9 +69,7 @@ export default async function AdminVenuePage() {
   );
 
   // Load this operator's single venue.
-  // select("*") returns only columns that exist in the DB — safe even when
-  // optional new columns (payment_types, menu_url, etc.) haven't been added yet.
-  // Ownership enforced by the created_by_operator_id filter (+ RLS).
+  // Ownership enforced by created_by_operator_id filter (+ RLS).
   const { data: venueData, error: venueError } = operator
     ? await supabase
         .from("venues")
@@ -67,10 +80,12 @@ export default async function AdminVenuePage() {
 
   const venue = venueData as AdminVenueRow | null;
 
+  // Parse payment_types from TEXT column (JSON array string → string[]).
+  const paymentTypes = parsePaymentTypes(venue?.payment_types);
+
   // Key for PaymentTypesForm — forces remount when stored payment types change
-  // after a client-side router.refresh(), so controlled state re-initialises
-  // from fresh server props and reflects the saved values.
-  const paymentTypesKey = JSON.stringify(venue?.payment_types ?? []);
+  // after router.refresh(), so controlled state re-initialises from fresh props.
+  const paymentTypesKey = JSON.stringify(paymentTypes);
 
   return (
     <div className="max-w-2xl">
@@ -119,23 +134,22 @@ export default async function AdminVenuePage() {
             <BusinessDetailsForm
               venueId={venue.id}
               initialValues={{
-                name:          venue.name            ?? "",
-                address_line1: venue.address_line1   ?? "",
-                city:          venue.city            ?? "",
-                region:        venue.region          ?? "",
-                postal_code:   venue.postal_code     ?? "",
-                phone:         venue.phone           ?? "",
-                country:       venue.country         ?? "",
-                latitude:      venue.latitude  != null ? String(venue.latitude)  : "",
-                longitude:     venue.longitude != null ? String(venue.longitude) : "",
+                name:          venue.name          ?? "",
+                address_line1: venue.address_line1 ?? "",
+                city:          venue.city          ?? "",
+                region:        venue.region        ?? "",
+                postal_code:   venue.postal_code   ?? "",
+                phone:         venue.phone         ?? "",
+                country:       venue.country       ?? "",
+                lat:           venue.lat != null ? String(venue.lat) : "",
+                lng:           venue.lng != null ? String(venue.lng) : "",
               }}
             />
           </AccordionSection>
 
           {/* Section 2: Business hours
-              BusinessHoursForm is imported unchanged from its original location.
-              On success it redirects to /dashboard, which immediately redirects
-              to /admin/venue — the Cancel link follows the same chain. */}
+              BusinessHoursForm is unchanged from its original location.
+              On success it redirects to /dashboard → /admin/venue. */}
           <AccordionSection
             title="Business hours"
             description={
@@ -156,9 +170,7 @@ export default async function AdminVenuePage() {
             <PaymentTypesForm
               key={paymentTypesKey}
               venueId={venue.id}
-              initialPaymentTypes={
-                Array.isArray(venue.payment_types) ? venue.payment_types : []
-              }
+              initialPaymentTypes={paymentTypes}
             />
           </AccordionSection>
 
