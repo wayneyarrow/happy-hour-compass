@@ -7,6 +7,7 @@ import BusinessDetailsForm from "./BusinessDetailsForm";
 import PaymentTypesForm from "./PaymentTypesForm";
 import LinksForm from "./LinksForm";
 import CreateVenueAdminForm from "./CreateVenueAdminForm";
+import AccordionSection from "./AccordionSection";
 
 /**
  * Extended venue type — includes base columns plus optional new columns
@@ -30,29 +31,6 @@ type AdminVenueRow = {
   payment_types?: string[] | null;
   menu_url?: string | null;
 };
-
-// ── Section wrapper ───────────────────────────────────────────────────────────
-
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-base font-semibold text-gray-800 mb-1">{title}</h3>
-      {description && (
-        <p className="text-xs text-gray-400 mb-4">{description}</p>
-      )}
-      {!description && <div className="mb-4" />}
-      {children}
-    </div>
-  );
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +66,11 @@ export default async function AdminVenuePage() {
     : { data: null, error: null };
 
   const venue = venueData as AdminVenueRow | null;
+
+  // Key for PaymentTypesForm — forces remount when stored payment types change
+  // after a client-side router.refresh(), so controlled state re-initialises
+  // from fresh server props and reflects the saved values.
+  const paymentTypesKey = JSON.stringify(venue?.payment_types ?? []);
 
   return (
     <div className="max-w-2xl">
@@ -129,10 +112,10 @@ export default async function AdminVenuePage() {
 
       {/* ── Venue sections ────────────────────────────────────────────────── */}
       {!operatorError && operator && venue && (
-        <div className="space-y-6">
+        <div className="space-y-3">
 
-          {/* Section 1: Business details */}
-          <Section title="Business details">
+          {/* Section 1: Business details — expanded by default */}
+          <AccordionSection title="Business details" defaultOpen>
             <BusinessDetailsForm
               venueId={venue.id}
               initialValues={{
@@ -147,13 +130,13 @@ export default async function AdminVenuePage() {
                 longitude:     venue.longitude != null ? String(venue.longitude) : "",
               }}
             />
-          </Section>
+          </AccordionSection>
 
           {/* Section 2: Business hours
               BusinessHoursForm is imported unchanged from its original location.
               On success it redirects to /dashboard, which immediately redirects
               to /admin/venue — the Cancel link follows the same chain. */}
-          <Section
+          <AccordionSection
             title="Business hours"
             description={
               'Check "Closed" for days the venue is not open. ' +
@@ -164,20 +147,23 @@ export default async function AdminVenuePage() {
               venueId={venue.id}
               initialHours={(venue.business_hours as BusinessHours) ?? {}}
             />
-          </Section>
+          </AccordionSection>
 
-          {/* Section 3: Payment types */}
-          <Section title="Payment types">
+          {/* Section 3: Payment types
+              key forces remount when stored payment_types changes after
+              router.refresh(), ensuring controlled checkboxes re-initialise. */}
+          <AccordionSection title="Payment types">
             <PaymentTypesForm
+              key={paymentTypesKey}
               venueId={venue.id}
               initialPaymentTypes={
                 Array.isArray(venue.payment_types) ? venue.payment_types : []
               }
             />
-          </Section>
+          </AccordionSection>
 
           {/* Section 4: Links */}
-          <Section title="Links">
+          <AccordionSection title="Links">
             <LinksForm
               venueId={venue.id}
               initialValues={{
@@ -185,7 +171,7 @@ export default async function AdminVenuePage() {
                 menu_url:    venue.menu_url    ?? "",
               }}
             />
-          </Section>
+          </AccordionSection>
 
         </div>
       )}

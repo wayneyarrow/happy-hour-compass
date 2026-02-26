@@ -8,6 +8,7 @@ export type CreateVenueAdminState = {
 };
 
 export type BusinessDetailsState = {
+  success?: boolean;
   errors?: Partial<Record<"form" | "name", string>>;
   values?: {
     name: string;
@@ -23,10 +24,12 @@ export type BusinessDetailsState = {
 };
 
 export type PaymentTypesState = {
+  success?: boolean;
   errors?: { form?: string };
 };
 
 export type LinksState = {
+  success?: boolean;
   errors?: Partial<Record<"form" | "website_url" | "menu_url", string>>;
   values?: { website_url: string; menu_url: string };
 };

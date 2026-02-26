@@ -168,7 +168,7 @@ export async function updateBusinessDetailsAction(
     };
   }
 
-  redirect("/admin/venue");
+  return { success: true, values };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ export async function updatePaymentTypesAction(
     };
   }
 
-  redirect("/admin/venue");
+  return { success: true };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,5 +276,5 @@ export async function updateLinksAction(
     };
   }
 
-  redirect("/admin/venue");
+  return { success: true, values };
 }

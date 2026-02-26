@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { updateBusinessDetailsAction } from "./actions";
 import { type BusinessDetailsState } from "./types";
 
@@ -31,11 +32,22 @@ const inputCls =
 const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
 export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
+  const router = useRouter();
   const boundAction = updateBusinessDetailsAction.bind(null, venueId);
   const [state, formAction, isPending] = useActionState(
     boundAction,
     initialState
   );
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (state.success) {
+      router.refresh();
+      setSaved(true);
+      const timer = setTimeout(() => setSaved(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.success, router]);
 
   // On failed submit, restore user's last input; on first render, use DB values.
   const v = state.values ?? initialValues;
@@ -206,13 +218,20 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isPending ? "Saving…" : "Save details"}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isPending ? "Saving…" : "Save details"}
+        </button>
+        {saved && (
+          <span className="text-sm font-medium text-green-600" role="status">
+            Saved
+          </span>
+        )}
+      </div>
     </form>
   );
 }

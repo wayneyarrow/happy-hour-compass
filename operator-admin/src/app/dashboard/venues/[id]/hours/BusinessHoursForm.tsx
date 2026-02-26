@@ -152,24 +152,34 @@ function DayRow({
 
         {/* Time inputs — removed from DOM (and FormData) when closed */}
         {!closed && (
-          <div className="flex flex-wrap items-center gap-2">
-            <TimeInputs
-              day={day}
-              slot="open"
-              defaultHour={openDefaults.hour}
-              defaultMinute={openDefaults.minute}
-              defaultPeriod={openDefaults.period}
-              disabled={isPending}
-            />
-            <span className="text-gray-400 text-sm">–</span>
-            <TimeInputs
-              day={day}
-              slot="close"
-              defaultHour={closeDefaults.hour}
-              defaultMinute={closeDefaults.minute}
-              defaultPeriod={closeDefaults.period}
-              disabled={isPending}
-            />
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide px-1">
+                Open
+              </span>
+              <TimeInputs
+                day={day}
+                slot="open"
+                defaultHour={openDefaults.hour}
+                defaultMinute={openDefaults.minute}
+                defaultPeriod={openDefaults.period}
+                disabled={isPending}
+              />
+            </div>
+            <span className="text-gray-400 text-sm pb-1.5">–</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide px-1">
+                Close
+              </span>
+              <TimeInputs
+                day={day}
+                slot="close"
+                defaultHour={closeDefaults.hour}
+                defaultMinute={closeDefaults.minute}
+                defaultPeriod={closeDefaults.period}
+                disabled={isPending}
+              />
+            </div>
           </div>
         )}
       </div>
