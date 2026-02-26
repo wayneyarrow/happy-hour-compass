@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
-import { redirect } from "next/navigation";
 import { DAYS_OF_WEEK, to24h } from "../../_shared/hoursUtils";
 import type {
   BusinessHours,
@@ -130,6 +129,6 @@ export async function updateBusinessHoursAction(
     };
   }
 
-  // Success — redirect back to dashboard.
-  redirect("/dashboard");
+  // Success — return result so the client can show feedback without navigating.
+  return { success: true, hours };
 }

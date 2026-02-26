@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import Link from "next/link";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   updateBusinessHoursAction,
   type UpdateBusinessHoursState,
@@ -227,8 +227,19 @@ function DaysList({
 
 // ── BusinessHoursForm ──────────────────────────────────────────────────────
 export default function BusinessHoursForm({ venueId, initialHours }: Props) {
+  const router = useRouter();
   const boundAction = updateBusinessHoursAction.bind(null, venueId);
   const [state, formAction, isPending] = useActionState(boundAction, initialState);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (state.success) {
+      router.refresh();
+      setSaved(true);
+      const timer = setTimeout(() => setSaved(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.success, router]);
 
   // After a failed submit, use the hours the user submitted so their
   // selections are preserved. On first render, use the DB values.
@@ -251,8 +262,8 @@ export default function BusinessHoursForm({ venueId, initialHours }: Props) {
         isPending={isPending}
       />
 
-      {/* Submit / cancel */}
-      <div className="flex items-center gap-4 pt-5">
+      {/* Submit + Saved indicator */}
+      <div className="flex items-center gap-3 pt-5">
         <button
           type="submit"
           disabled={isPending}
@@ -260,12 +271,14 @@ export default function BusinessHoursForm({ venueId, initialHours }: Props) {
         >
           {isPending ? "Saving…" : "Save hours"}
         </button>
-        <Link
-          href="/dashboard"
-          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          Cancel
-        </Link>
+        {saved && (
+          <span
+            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
+            role="status"
+          >
+            Saved
+          </span>
+        )}
       </div>
     </form>
   );

@@ -51,6 +51,8 @@ export type BusinessHours = {
 
 /** State returned by the updateBusinessHoursAction server action. */
 export type BusinessHoursFormState = {
+  /** Set to true when the update succeeded — lets the client show feedback. */
+  success?: boolean;
   /** Per-day errors keyed by DayOfWeek, plus an optional "form" key for
    *  top-level errors (auth, DB, etc.). */
   errors?: Partial<Record<DayOfWeek | "form", string>>;
