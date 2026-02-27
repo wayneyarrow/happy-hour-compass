@@ -95,9 +95,10 @@ function parseTimeStr(
 }
 
 function parseTimeRange(range: string): TimeBlock | null {
-  // Split on en-dash (U+2013) or regular hyphen-minus.
-  // Using explicit Unicode escape avoids any source-file encoding ambiguity.
-  const parts = range.trim().split(/\s*[\u2013-]\s*/);
+  // By the time this is called, all dash variants have already been normalized
+  // to plain hyphen-minus in parseHhTimes. Split tolerantly with optional
+  // surrounding whitespace.
+  const parts = range.trim().split(/\s*-\s*/);
   if (parts.length < 2) return null;
   const start = parseTimeStr(parts[0]);
   const end = parseTimeStr(parts[parts.length - 1]);
@@ -116,10 +117,9 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   const states = getDefaultDayStates();
   if (!text?.trim()) return states;
 
-  // Normalize en-dash (U+2013) and em-dash (U+2014) to plain hyphen-minus
-  // so the parser handles both the DB-stored format ("4 PM–6 PM") and any
-  // manually-entered hyphen variants identically.
-  const normalized = text.replace(/[\u2013\u2014]/g, "-");
+  // Normalize all dash variants to plain hyphen-minus before parsing:
+  //   U+2013 en dash, U+2014 em dash, U+2212 minus sign.
+  const normalized = text.replace(/[\u2013\u2014\u2212]/g, "-");
 
   for (const line of normalized.trim().split("\n")) {
     const m = line.match(
