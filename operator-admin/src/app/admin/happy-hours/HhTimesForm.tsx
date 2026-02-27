@@ -383,30 +383,30 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     parseHhTimes(initialHhTimes)
   );
 
-  // Tracks whether the user has made edits since the last save / hydration.
-  // Used to avoid clobbering in-progress edits when another form on the page
-  // triggers router.refresh() and delivers a new initialHhTimes prop.
-  const isDirtyRef = useRef(false);
+  // One-shot hydration latch. Starts false on every mount (including after
+  // navigation away and back, which fully remounts the component tree).
+  // Set to true only when a concrete initialHhTimes value is actually parsed
+  // into state. Once locked, prop changes no longer overwrite user edits.
+  // Never reset — saves do not need to re-hydrate because the form's current
+  // state already reflects exactly what was just saved.
+  const hasHydrated = useRef(false);
 
-  // Re-hydrate when the server delivers a concrete initialHhTimes value.
-  // Guards:
-  //   • null / empty — skip so a transient null during router.refresh() does
-  //     not clear the form back to all-"No happy hour".
-  //   • isDirtyRef — skip while the user has unsaved edits; the success
-  //     handler below resets this flag before calling router.refresh() so
-  //     the post-save re-hydration always runs correctly.
+  // Hydrate internal state from the server-delivered prop.
+  // Runs on mount and on every initialHhTimes change, but applies at most
+  // once per component lifetime:
+  //   • skips if already hydrated (preserves user edits after first load)
+  //   • skips if prop is null/empty (prevents clearing the form on a
+  //     transient null delivered during router.refresh())
   useEffect(() => {
-    if (initialHhTimes != null && !isDirtyRef.current) {
+    if (!hasHydrated.current && initialHhTimes != null) {
       setDayStates(parseHhTimes(initialHhTimes));
+      hasHydrated.current = true;
     }
   }, [initialHhTimes]);
 
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
     if (state.success) {
-      // Clear the dirty flag before refreshing so the hydration effect will
-      // accept the fresh initialHhTimes prop that router.refresh() delivers.
-      isDirtyRef.current = false;
       router.refresh();
       setSaved(true);
       const timer = setTimeout(() => setSaved(false), 4000);
@@ -421,7 +421,6 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   );
 
   function updateDay(day: Day, ds: DayState) {
-    isDirtyRef.current = true; // User has unsaved edits; block prop-driven re-hydration
     setDayStates((prev) => ({ ...prev, [day]: ds }));
   }
 
