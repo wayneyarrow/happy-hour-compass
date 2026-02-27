@@ -40,12 +40,12 @@ const initialState: SpecialsState = {};
 const inputCls =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm " +
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
-  "disabled:opacity-60";
+  "placeholder:text-gray-300 disabled:opacity-60";
 
 const inputErrCls =
   "w-full px-3 py-2 border border-red-400 rounded-lg text-sm " +
   "focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent " +
-  "disabled:opacity-60";
+  "placeholder:text-gray-300 disabled:opacity-60";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 

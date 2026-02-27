@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
@@ -93,6 +94,7 @@ export async function updateTaglineAction(
     };
   }
 
+  revalidatePath("/admin/happy-hours");
   return { success: true, values: { hh_tagline } };
 }
 
@@ -150,6 +152,7 @@ export async function updateHhTimesAction(
     };
   }
 
+  revalidatePath("/admin/happy-hours");
   return { success: true };
 }
 
@@ -280,6 +283,7 @@ export async function updateFoodSpecialsAction(
     };
   }
 
+  revalidatePath("/admin/happy-hours");
   return { success: true };
 }
 
@@ -343,6 +347,8 @@ export async function updateDrinkSpecialsAction(
       },
     };
   }
+
+  revalidatePath("/admin/happy-hours");
 
   return { success: true };
 }
