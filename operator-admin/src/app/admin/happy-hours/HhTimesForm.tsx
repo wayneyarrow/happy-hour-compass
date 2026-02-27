@@ -383,6 +383,15 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     parseHhTimes(initialHhTimes)
   );
 
+  // Re-hydrate from the server-delivered prop on mount AND whenever it changes.
+  // This covers the case where the component stays mounted (HhTimesSection keeps
+  // it alive across accordion toggles) but receives fresh hh_times from a
+  // router.refresh() or when the page remounts after navigation.
+  // User edits are safe: this only fires when initialHhTimes itself changes.
+  useEffect(() => {
+    setDayStates(parseHhTimes(initialHhTimes));
+  }, [initialHhTimes]);
+
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
     if (state.success) {
