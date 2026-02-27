@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateFoodSpecialsAction,
@@ -124,6 +124,8 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [isAutoSaving, startAutoSave] = useTransition();
+  const [reorderError, setReorderError] = useState<string | null>(null);
 
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
@@ -192,11 +194,46 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
     setRowErrors(newErrors);
     setDragIndex(null);
     setDropTarget(null);
+    // Auto-save immediately after reorder
+    autoSaveItems(newItems);
   }
 
   function handleDragEnd() {
     setDragIndex(null);
     setDropTarget(null);
+  }
+
+  // ── Auto-save helpers ────────────────────────────────────────────────────────
+
+  function buildPayload(itemsArr: ItemRow[]): string {
+    return JSON.stringify(
+      itemsArr
+        .filter((item) => item.name.trim() || item.price.trim() || item.notes.trim())
+        .map((item) => ({
+          name: item.name.trim(),
+          ...(item.price.trim() ? { price: item.price.trim() } : {}),
+          ...(item.notes.trim() ? { notes: item.notes.trim() } : {}),
+        }))
+    );
+  }
+
+  function autoSaveItems(itemsToSave: ItemRow[]) {
+    const fd = new FormData();
+    fd.set(
+      type === "food" ? "hh_food_details" : "hh_drink_details",
+      buildPayload(itemsToSave)
+    );
+    startAutoSave(async () => {
+      const result = await boundAction({} as SpecialsState, fd);
+      if (result.success) {
+        setReorderError(null);
+        router.refresh();
+      } else {
+        setReorderError(
+          result.errors?.form ?? "Auto-save failed. Please save manually."
+        );
+      }
+    });
   }
 
   // ── Client-side validation ──────────────────────────────────────────────────
@@ -233,17 +270,8 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
   // ── Payload ─────────────────────────────────────────────────────────────────
 
-  // Build the JSON payload the hidden input carries to the server action.
-  // Completely empty rows are filtered out; items are stored in UI order.
-  const payload = JSON.stringify(
-    items
-      .filter((item) => item.name.trim() || item.price.trim() || item.notes.trim())
-      .map((item) => ({
-        name: item.name.trim(),
-        ...(item.price.trim() ? { price: item.price.trim() } : {}),
-        ...(item.notes.trim() ? { notes: item.notes.trim() } : {}),
-      }))
-  );
+  // Derive the JSON payload the hidden input carries to the server action.
+  const payload = buildPayload(items);
 
   const fieldName =
     type === "food" ? "hh_food_details" : "hh_drink_details";
@@ -416,13 +444,19 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
       <p className="text-xs text-gray-400">{maxHelperText}</p>
 
+      {reorderError && (
+        <p className="text-xs text-red-600" role="alert">
+          {reorderError}
+        </p>
+      )}
+
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || isAutoSaving}
           className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? "Saving…" : saveLabel}
+          {isPending || isAutoSaving ? "Saving…" : saveLabel}
         </button>
         {saved && (
           <span

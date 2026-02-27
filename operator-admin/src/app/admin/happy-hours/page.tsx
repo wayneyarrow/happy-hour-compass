@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
 import AccordionSection from "../venue/AccordionSection";
+import HhTimesSection from "./HhTimesSection";
 import TaglineForm from "./TaglineForm";
 import HhTimesForm from "./HhTimesForm";
 import SpecialsForm from "./SpecialsForm";
@@ -138,8 +139,8 @@ export default async function AdminHappyHoursPage() {
             />
           </AccordionSection>
 
-          {/* Section 2: Happy Hour Times */}
-          <AccordionSection
+          {/* Section 2: Happy Hour Times — uses HhTimesSection (always mounted) */}
+          <HhTimesSection
             title="Happy Hour Times"
             description="Set the days and times when your happy hour is active."
           >
@@ -147,7 +148,7 @@ export default async function AdminHappyHoursPage() {
               venueId={venue.id}
               initialHhTimes={venue.hh_times ?? null}
             />
-          </AccordionSection>
+          </HhTimesSection>
 
           {/* Section 3: Food specials */}
           <AccordionSection title="Food specials">
