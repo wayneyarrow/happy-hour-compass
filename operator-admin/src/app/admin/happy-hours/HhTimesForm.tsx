@@ -65,21 +65,39 @@ function getDefaultDayStates(): Record<Day, DayState> {
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
+// EN DASH (U+2013) — used as the separator in generated hh_times strings.
+const EN_DASH = "\u2013";
+
 function parseTimeStr(
   s: string
 ): { hour: string; minute: string; period: "AM" | "PM" } | null {
+  const trimmed = s.trim().toLowerCase();
+
+  // Gracefully handle "close" / "closing" token from manually-entered data.
+  // Map to 11 PM — a reasonable happy-hour end time in the absence of a
+  // native "close" option in the time selects.
+  if (trimmed === "close" || trimmed === "closing") {
+    return { hour: "11", minute: "00", period: "PM" };
+  }
+
   const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
   if (!m) return null;
+
+  // Pad minute to 2 digits and snap to the nearest valid select option.
+  const raw = (m[2] ?? "0").padStart(2, "0");
+  const minute = (MINUTES as readonly string[]).includes(raw) ? raw : "00";
+
   return {
     hour: m[1],
-    minute: m[2] ?? "00",
+    minute,
     period: m[3].toUpperCase() as "AM" | "PM",
   };
 }
 
 function parseTimeRange(range: string): TimeBlock | null {
-  // Split on en-dash (–) or hyphen-minus, allowing optional surrounding spaces
-  const parts = range.split(/\s*[–\-]\s*/);
+  // Split on en-dash (U+2013) or regular hyphen-minus.
+  // Using explicit Unicode escape avoids any source-file encoding ambiguity.
+  const parts = range.trim().split(/\s*[\u2013-]\s*/);
   if (parts.length < 2) return null;
   const start = parseTimeStr(parts[0]);
   const end = parseTimeStr(parts[parts.length - 1]);
@@ -133,7 +151,8 @@ function formatTime(hour: string, minute: string, period: string): string {
 function formatBlock(b: TimeBlock): string {
   const start = formatTime(b.startHour, b.startMinute, b.startPeriod);
   const end = formatTime(b.endHour, b.endMinute, b.endPeriod);
-  return `${start}–${end}`;
+  // Use the same EN_DASH constant the parser targets so round-trips are exact.
+  return `${start}${EN_DASH}${end}`;
 }
 
 function generateHhTimesText(days: Record<Day, DayState>): string {

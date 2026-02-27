@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateFoodSpecialsAction,
@@ -33,11 +33,6 @@ type Props = {
 
 const MAX_ITEMS = 3;
 
-const EXAMPLE_ROW: Record<"food" | "drink", ItemRow> = {
-  food: { name: "Smash Burger", price: "13", notes: "GF" },
-  drink: { name: "House Pint", price: "5", notes: "" },
-};
-
 const initialState: SpecialsState = {};
 
 // ── Styling ───────────────────────────────────────────────────────────────────
@@ -52,7 +47,7 @@ const inputErrCls =
   "focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent " +
   "disabled:opacity-60";
 
-// ── TrashIcon ─────────────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 function TrashIcon() {
   return (
@@ -74,6 +69,26 @@ function TrashIcon() {
   );
 }
 
+/** Six-dot drag handle icon (2 columns × 3 rows of circles). */
+function DragHandle() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-3.5 h-3.5"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    >
+      <circle cx="5" cy="3.5" r="1.2" />
+      <circle cx="11" cy="3.5" r="1.2" />
+      <circle cx="5" cy="8" r="1.2" />
+      <circle cx="11" cy="8" r="1.2" />
+      <circle cx="5" cy="12.5" r="1.2" />
+      <circle cx="11" cy="12.5" r="1.2" />
+    </svg>
+  );
+}
+
 // ── SpecialsForm ──────────────────────────────────────────────────────────────
 
 export default function SpecialsForm({ venueId, type, initialItems }: Props) {
@@ -91,9 +106,10 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
   );
   const [saved, setSaved] = useState(false);
 
-  // Initialise from props; fall back to example row when there's no saved data
+  // Initialise from saved items. If there is no saved data, start with one
+  // empty row so the placeholder text is visible — NOT pre-filled example values.
   const [items, setItems] = useState<ItemRow[]>(() => {
-    if (initialItems.length === 0) return [{ ...EXAMPLE_ROW[type] }];
+    if (initialItems.length === 0) return [{ name: "", price: "", notes: "" }];
     return initialItems.map((item) => ({
       name: item.name,
       price: item.price ?? "",
@@ -103,6 +119,11 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
   // Per-row validation errors (parallel array to items)
   const [rowErrors, setRowErrors] = useState<(RowError | null)[]>([]);
+
+  // ── Drag-and-drop state ─────────────────────────────────────────────────────
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
 
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
@@ -131,12 +152,51 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
     setItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
     );
-    // Clear error for the edited field immediately
+    // Clear the error for the edited field immediately
     setRowErrors((prev) =>
       prev.map((err, i) =>
         i === index && err ? { ...err, [field]: undefined } : err
       )
     );
+  }
+
+  // ── Drag-and-drop handlers ──────────────────────────────────────────────────
+
+  function handleDragStart(e: React.DragEvent, index: number) {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTarget(index);
+  }
+
+  function handleDrop(e: React.DragEvent, toIndex: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === toIndex) {
+      setDragIndex(null);
+      setDropTarget(null);
+      return;
+    }
+    // Reorder items array
+    const newItems = [...items];
+    const [moved] = newItems.splice(dragIndex, 1);
+    newItems.splice(toIndex, 0, moved);
+    setItems(newItems);
+    // Keep row errors in sync with the new order
+    const newErrors = [...rowErrors];
+    const [movedErr] = newErrors.splice(dragIndex, 1);
+    newErrors.splice(toIndex, 0, movedErr);
+    setRowErrors(newErrors);
+    setDragIndex(null);
+    setDropTarget(null);
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDropTarget(null);
   }
 
   // ── Client-side validation ──────────────────────────────────────────────────
@@ -165,7 +225,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
   // ── Form submit handler ─────────────────────────────────────────────────────
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
     if (!validate()) {
       e.preventDefault();
     }
@@ -173,8 +233,8 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
   // ── Payload ─────────────────────────────────────────────────────────────────
 
-  // Build the JSON payload that the hidden input carries to the server action.
-  // Completely empty rows are filtered out here as well as on the server.
+  // Build the JSON payload the hidden input carries to the server action.
+  // Completely empty rows are filtered out; items are stored in UI order.
   const payload = JSON.stringify(
     items
       .filter((item) => item.name.trim() || item.price.trim() || item.notes.trim())
@@ -218,12 +278,15 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
 
       <p className="text-xs text-gray-400">{helperText}</p>
 
-      {/* Column headers */}
+      {/* Column headers — 5-col grid: handle | name | price | notes | delete */}
       {items.length > 0 && (
-        <div className="grid grid-cols-[1fr_80px_1fr_28px] gap-2 px-0.5">
+        <div className="grid grid-cols-[20px_1fr_80px_1fr_28px] gap-2 px-0.5">
+          <span />
           <span className="text-xs font-medium text-gray-500">Item name</span>
           <span className="text-xs font-medium text-gray-500">Price</span>
-          <span className="text-xs font-medium text-gray-500">Notes</span>
+          <span className="text-xs font-medium text-gray-500">
+            Notes (optional)
+          </span>
           <span />
         </div>
       )}
@@ -232,9 +295,36 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
       <div className="space-y-2">
         {items.map((item, i) => {
           const err = rowErrors[i] ?? null;
+          const isDragging = dragIndex === i;
+          const isTarget =
+            dropTarget === i && dragIndex !== null && dragIndex !== i;
+
           return (
-            <div key={i}>
-              <div className="grid grid-cols-[1fr_80px_1fr_28px] gap-2 items-start">
+            <div
+              key={i}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={(e) => handleDrop(e, i)}
+              onDragLeave={() => setDropTarget(null)}
+              className={`rounded-lg transition-all ${
+                isDragging ? "opacity-40" : ""
+              } ${
+                isTarget
+                  ? "ring-2 ring-amber-400 ring-inset"
+                  : ""
+              }`}
+            >
+              <div className="grid grid-cols-[20px_1fr_80px_1fr_28px] gap-2 items-start">
+                {/* Drag handle — the draggable affordance for the row */}
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, i)}
+                  onDragEnd={handleDragEnd}
+                  className="mt-2.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 select-none transition-colors"
+                  aria-label={`Drag to reorder row ${i + 1}`}
+                >
+                  <DragHandle />
+                </div>
+
                 {/* Name */}
                 <div>
                   <input
@@ -244,6 +334,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
                     maxLength={60}
                     disabled={isPending}
                     placeholder={namePlaceholder}
+                    draggable={false}
                     className={err?.name ? inputErrCls : inputCls}
                     aria-label="Item name"
                   />
@@ -263,6 +354,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
                     maxLength={10}
                     disabled={isPending}
                     placeholder="13"
+                    draggable={false}
                     className={err?.price ? inputErrCls : inputCls}
                     aria-label="Price"
                   />
@@ -282,6 +374,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
                     maxLength={40}
                     disabled={isPending}
                     placeholder="GF, Vegan, 12 oz"
+                    draggable={false}
                     className={err?.notes ? inputErrCls : inputCls}
                     aria-label="Notes"
                   />
@@ -297,6 +390,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
                   type="button"
                   onClick={() => removeItem(i)}
                   disabled={isPending}
+                  draggable={false}
                   className="mt-2 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
                   aria-label={`Remove row ${i + 1}`}
                 >
