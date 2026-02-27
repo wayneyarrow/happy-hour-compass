@@ -425,6 +425,7 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   }
 
   return (
+    <>
     <form action={formAction}>
       {/* Hidden input carries the serialized weekly schedule */}
       <input type="hidden" name="hh_times" value={generatedText} readOnly />
@@ -470,5 +471,56 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
         )}
       </div>
     </form>
+
+    {process.env.NODE_ENV === "development" && (() => {
+      // ── DEBUG PANEL (dev only) ────────────────────────────────────────────
+      const propType = typeof initialHhTimes;
+      const propPreview =
+        initialHhTimes == null
+          ? String(initialHhTimes)         // "null" or "undefined"
+          : JSON.stringify(initialHhTimes).slice(0, 122); // first ~120 chars quoted
+
+      const daysSummary = DAYS.map((day) => {
+        const s = dayStates[day];
+        if (s.noHappyHour) return `${day}: no HH`;
+        const count = s.block2 ? 2 : 1;
+        return `${day}: ${count} block${count > 1 ? "s" : ""}`;
+      });
+      const daysWithBlocks = daysSummary.filter((l) => !l.endsWith("no HH")).length;
+
+      return (
+        <div
+          style={{
+            marginTop: 16,
+            padding: "10px 12px",
+            background: "#fefce8",
+            border: "1px solid #fde047",
+            borderRadius: 8,
+            fontFamily: "monospace",
+            fontSize: 11,
+            lineHeight: 1.6,
+            color: "#713f12",
+          }}
+        >
+          <strong style={{ fontSize: 12 }}>🛠 HhTimesForm debug (dev only)</strong>
+          <br />
+          <strong>initialHhTimes:</strong> [{propType}
+          {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
+          {propPreview}
+          <br />
+          <strong>hasHydrated:</strong> {String(hasHydrated.current)}
+          <br />
+          <strong>days with blocks ({daysWithBlocks}/7):</strong>
+          <br />
+          {daysSummary.map((line) => (
+            <span key={line}>
+              &nbsp;&nbsp;{line}
+              <br />
+            </span>
+          ))}
+        </div>
+      );
+    })()}
+    </>
   );
 }
