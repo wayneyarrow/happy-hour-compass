@@ -116,7 +116,12 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   const states = getDefaultDayStates();
   if (!text?.trim()) return states;
 
-  for (const line of text.trim().split("\n")) {
+  // Normalize en-dash (U+2013) and em-dash (U+2014) to plain hyphen-minus
+  // so the parser handles both the DB-stored format ("4 PM–6 PM") and any
+  // manually-entered hyphen variants identically.
+  const normalized = text.replace(/[\u2013\u2014]/g, "-");
+
+  for (const line of normalized.trim().split("\n")) {
     const m = line.match(
       /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday):\s*(.+)$/
     );
