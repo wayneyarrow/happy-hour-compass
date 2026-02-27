@@ -1,3 +1,7 @@
+// Always fetch fresh venue data — bypasses Next.js full-route and router caches
+// so hh_times is never stale when navigating away and back.
+export const dynamic = "force-dynamic";
+
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
