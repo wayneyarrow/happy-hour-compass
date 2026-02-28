@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateHhTimesAction } from "./actions";
 import type { HhTimesState } from "./types";
@@ -74,8 +74,6 @@ function parseTimeStr(
   const trimmed = s.trim().toLowerCase();
 
   // Gracefully handle "close" / "closing" token from manually-entered data.
-  // Map to 11 PM — a reasonable happy-hour end time in the absence of a
-  // native "close" option in the time selects.
   if (trimmed === "close" || trimmed === "closing") {
     return { hour: "11", minute: "00", period: "PM" };
   }
@@ -83,7 +81,6 @@ function parseTimeStr(
   const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
   if (!m) return null;
 
-  // Pad minute to 2 digits and snap to the nearest valid select option.
   const raw = (m[2] ?? "0").padStart(2, "0");
   const minute = (MINUTES as readonly string[]).includes(raw) ? raw : "00";
 
@@ -95,9 +92,7 @@ function parseTimeStr(
 }
 
 function parseTimeRange(range: string): TimeBlock | null {
-  // By the time this is called, all dash variants have already been normalized
-  // to plain hyphen-minus in parseHhTimes. Split tolerantly with optional
-  // surrounding whitespace.
+  // Dashes are already normalized to hyphen-minus by parseHhTimes.
   const parts = range.trim().split(/\s*-\s*/);
   if (parts.length < 2) return null;
   const start = parseTimeStr(parts[0]);
@@ -117,8 +112,7 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   const states = getDefaultDayStates();
   if (!text?.trim()) return states;
 
-  // Normalize all dash variants to plain hyphen-minus before parsing:
-  //   U+2013 en dash, U+2014 em dash, U+2212 minus sign.
+  // Normalize en dash (U+2013), em dash (U+2014), minus sign (U+2212) → hyphen.
   const normalized = text.replace(/[\u2013\u2014\u2212]/g, "-");
 
   for (const line of normalized.trim().split("\n")) {
@@ -130,7 +124,7 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
     const day = m[1] as Day;
     const content = m[2].trim();
 
-    if (content === "No happy hour") {
+    if (content.toLowerCase() === "no happy hour") {
       states[day] = { ...states[day], noHappyHour: true };
       continue;
     }
@@ -156,7 +150,6 @@ function formatTime(hour: string, minute: string, period: string): string {
 function formatBlock(b: TimeBlock): string {
   const start = formatTime(b.startHour, b.startMinute, b.startPeriod);
   const end = formatTime(b.endHour, b.endMinute, b.endPeriod);
-  // Use the same EN_DASH constant the parser targets so round-trips are exact.
   return `${start}${EN_DASH}${end}`;
 }
 
@@ -384,49 +377,25 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   const [state, formAction, isPending] = useActionState(boundAction, initialState);
   const [saved, setSaved] = useState(false);
 
-  const [dayStates, setDayStates] = useState<Record<Day, DayState>>(() =>
-    parseHhTimes(initialHhTimes)
+  // Default to all-"No happy hour". The effect below hydrates from the prop
+  // as soon as a real string is available.
+  const [dayStates, setDayStates] = useState<Record<Day, DayState>>(
+    getDefaultDayStates
   );
 
-  // ── DEBUG: hydration effect instrumentation ──────────────────────────────
-  const hydrationRunCountRef = useRef(0);
-  type HydrationEvent = { runId: number; reason: string; preview: string };
-  const lastHydrationEventRef = useRef<HydrationEvent | null>(null);
-  // Bumped inside the effect so the debug panel re-renders to show new data.
-  const [, setDebugTick] = useState(0);
-
-  // Sync internal state from the prop whenever initialHhTimes changes.
-  // No "already hydrated" guard — the prop is the source of truth.
-  // While the user is editing, initialHhTimes does not change, so this
-  // effect does not run and user edits are not clobbered.
-  // After Save + router.refresh(), initialHhTimes updates to the new DB
-  // string and the effect runs once, reflecting the freshly saved value.
+  // Prop-driven sync — no guards, no "already hydrated" flag.
+  // Runs whenever initialHhTimes changes. Skips on falsy to avoid wiping
+  // visible state during a transient null (e.g. in-flight router refresh).
+  // While the user edits, initialHhTimes is stable so this never fires.
+  // After Save + router.refresh(), the prop updates to the new DB string and
+  // this runs once, keeping local state aligned with what was just saved.
   useEffect(() => {
-    hydrationRunCountRef.current += 1;
-    const runId = hydrationRunCountRef.current;
-    const preview =
-      initialHhTimes == null
-        ? String(initialHhTimes)
-        : initialHhTimes.slice(0, 100);
-
-    let reason: string;
-
-    if (!initialHhTimes || !initialHhTimes.trim()) {
-      reason = "skipped: falsy initialHhTimes (state unchanged)";
-      lastHydrationEventRef.current = { runId, reason, preview };
-      console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`);
-      setDebugTick((n) => n + 1);
-      return;
-    }
-
-    reason = "hydrated from prop";
-    lastHydrationEventRef.current = { runId, reason, preview };
-    console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`, { preview });
+    if (!initialHhTimes?.trim()) return;
     setDayStates(parseHhTimes(initialHhTimes));
-    setDebugTick((n) => n + 1);
   }, [initialHhTimes]);
 
-  // Fire on every new state object — handles repeated saves correctly
+  // Show Saved badge for 4 s after a successful save; also trigger page refresh
+  // so initialHhTimes updates to the freshly written DB value.
   useEffect(() => {
     if (state.success) {
       router.refresh();
@@ -436,7 +405,7 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     }
   }, [state, router]);
 
-  // Derive the serialized schedule string from current UI state
+  // Derive the serialized schedule string from current UI state.
   const generatedText = useMemo(
     () => generateHhTimesText(dayStates),
     [dayStates]
@@ -448,114 +417,98 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
 
   return (
     <>
-    <form action={formAction}>
-      {/* Hidden input carries the serialized weekly schedule */}
-      <input type="hidden" name="hh_times" value={generatedText} readOnly />
+      <form action={formAction}>
+        {/* Hidden input carries the serialized weekly schedule */}
+        <input type="hidden" name="hh_times" value={generatedText} readOnly />
 
-      {state.errors?.form && (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
-          <strong>Error:</strong> {state.errors.form}
-        </div>
-      )}
-
-      <p className="text-xs text-gray-400 mb-1">
-        Set your happy hour times for each day. You can add up to two time
-        ranges per day.
-      </p>
-
-      <div className="mt-2">
-        {DAYS.map((day) => (
-          <HhDayRow
-            key={day}
-            day={day}
-            dayState={dayStates[day]}
-            isPending={isPending}
-            onChange={(ds) => updateDay(day, ds)}
-          />
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3 pt-4">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isPending ? "Saving…" : "Save times"}
-        </button>
-        {saved && (
-          <span
-            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
-            role="status"
-          >
-            Saved
-          </span>
+        {state.errors?.form && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+            <strong>Error:</strong> {state.errors.form}
+          </div>
         )}
-      </div>
-    </form>
 
-    {process.env.NODE_ENV === "development" && (() => {
-      // ── DEBUG PANEL (dev only) ────────────────────────────────────────────
-      const propType = typeof initialHhTimes;
-      const propPreview =
-        initialHhTimes == null
-          ? String(initialHhTimes)         // "null" or "undefined"
-          : JSON.stringify(initialHhTimes).slice(0, 122); // first ~120 chars quoted
+        <p className="text-xs text-gray-400 mb-1">
+          Set your happy hour times for each day. You can add up to two time
+          ranges per day.
+        </p>
 
-      const daysSummary = DAYS.map((day) => {
-        const s = dayStates[day];
-        if (s.noHappyHour) return `${day}: no HH`;
-        const count = s.block2 ? 2 : 1;
-        return `${day}: ${count} block${count > 1 ? "s" : ""}`;
-      });
-      const daysWithBlocks = daysSummary.filter((l) => !l.endsWith("no HH")).length;
-
-      const ev = lastHydrationEventRef.current;
-
-      return (
-        <div
-          style={{
-            marginTop: 16,
-            padding: "10px 12px",
-            background: "#fefce8",
-            border: "1px solid #fde047",
-            borderRadius: 8,
-            fontFamily: "monospace",
-            fontSize: 11,
-            lineHeight: 1.6,
-            color: "#713f12",
-          }}
-        >
-          <strong style={{ fontSize: 12 }}>🛠 HhTimesForm debug (dev only)</strong>
-          <br />
-          <strong>initialHhTimes:</strong> [{propType}
-          {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
-          {propPreview}
-          <br />
-          <strong>hydration effect runs:</strong> {hydrationRunCountRef.current}
-          <br />
-          <strong>last hydration event:</strong>{" "}
-          {ev ? (
-            <>
-              #{ev.runId} — {ev.reason}
-              <br />
-              &nbsp;&nbsp;preview: {ev.preview || "(empty)"}
-            </>
-          ) : (
-            "(none yet)"
-          )}
-          <br />
-          <strong>days with blocks ({daysWithBlocks}/7):</strong>
-          <br />
-          {daysSummary.map((line) => (
-            <span key={line}>
-              &nbsp;&nbsp;{line}
-              <br />
-            </span>
+        <div className="mt-2">
+          {DAYS.map((day) => (
+            <HhDayRow
+              key={day}
+              day={day}
+              dayState={dayStates[day]}
+              isPending={isPending}
+              onChange={(ds) => updateDay(day, ds)}
+            />
           ))}
         </div>
-      );
-    })()}
+
+        <div className="flex items-center gap-3 pt-4">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? "Saving…" : "Save times"}
+          </button>
+          {saved && (
+            <span
+              className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
+              role="status"
+            >
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+
+      {process.env.NODE_ENV === "development" && (() => {
+        const propType = typeof initialHhTimes;
+        const propPreview =
+          initialHhTimes == null
+            ? String(initialHhTimes)
+            : JSON.stringify(initialHhTimes).slice(0, 120);
+
+        const daysSummary = DAYS.map((day) => {
+          const s = dayStates[day];
+          if (s.noHappyHour) return `${day}: no HH`;
+          const count = s.block2 ? 2 : 1;
+          return `${day}: ${count} block${count > 1 ? "s" : ""}`;
+        });
+        const daysWithBlocks = daysSummary.filter((l) => !l.endsWith("no HH")).length;
+
+        return (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "10px 12px",
+              background: "#fefce8",
+              border: "1px solid #fde047",
+              borderRadius: 8,
+              fontFamily: "monospace",
+              fontSize: 11,
+              lineHeight: 1.6,
+              color: "#713f12",
+            }}
+          >
+            <strong style={{ fontSize: 12 }}>🛠 HhTimesForm debug (dev only)</strong>
+            <br />
+            <strong>initialHhTimes:</strong> [{propType}
+            {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
+            {propPreview}
+            <br />
+            <strong>days with blocks ({daysWithBlocks}/7):</strong>
+            <br />
+            {daysSummary.map((line) => (
+              <span key={line}>
+                &nbsp;&nbsp;{line}
+                <br />
+              </span>
+            ))}
+          </div>
+        );
+      })()}
     </>
   );
 }
