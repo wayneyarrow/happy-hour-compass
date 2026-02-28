@@ -388,26 +388,18 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     parseHhTimes(initialHhTimes)
   );
 
-  // One-shot hydration latch. Starts false on every mount (including after
-  // navigation away and back, which fully remounts the component tree).
-  // Set to true only when a concrete initialHhTimes value is actually parsed
-  // into state. Once locked, prop changes no longer overwrite user edits.
-  // Never reset — saves do not need to re-hydrate because the form's current
-  // state already reflects exactly what was just saved.
-  const hasHydrated = useRef(false);
+  // Capture the prop value at mount time so the effect below can read it
+  // without needing it as a dependency.
+  const initialHhTimesRef = useRef(initialHhTimes);
 
-  // Hydrate internal state from the server-delivered prop.
-  // Runs on mount and on every initialHhTimes change, but applies at most
-  // once per component lifetime:
-  //   • skips if already hydrated (preserves user edits after first load)
-  //   • skips if prop is null/empty (prevents clearing the form on a
-  //     transient null delivered during router.refresh())
+  // Hydrate exactly once per component instance, on mount.
+  // Empty dep array guarantees this runs once regardless of prop updates
+  // (e.g. router.refresh() after save). The ref holds the value that was
+  // present on first render, so there is no stale-closure risk.
   useEffect(() => {
-    if (!hasHydrated.current && initialHhTimes != null) {
-      setDayStates(parseHhTimes(initialHhTimes));
-      hasHydrated.current = true;
-    }
-  }, [initialHhTimes]);
+    setDayStates(parseHhTimes(initialHhTimesRef.current));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
@@ -512,8 +504,6 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
           <strong>initialHhTimes:</strong> [{propType}
           {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
           {propPreview}
-          <br />
-          <strong>hasHydrated:</strong> {String(hasHydrated.current)}
           <br />
           <strong>days with blocks ({daysWithBlocks}/7):</strong>
           <br />
