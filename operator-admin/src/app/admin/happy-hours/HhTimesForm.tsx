@@ -393,15 +393,48 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   // router.refresh() after save, which would otherwise clobber user edits).
   const hasHydratedRef = useRef(false);
 
+  // ── DEBUG: hydration effect instrumentation ──────────────────────────────
+  const hydrationRunCountRef = useRef(0);
+  type HydrationEvent = { runId: number; reason: string; preview: string };
+  const lastHydrationEventRef = useRef<HydrationEvent | null>(null);
+  // Bumped inside the effect so the debug panel re-renders to show new data.
+  const [, setDebugTick] = useState(0);
+
   // Hydrate once, when a concrete initialHhTimes value first becomes available.
   // Watching the prop (not []) handles the case where the parent renders before
   // server data arrives — the effect will fire again when the prop updates from
   // null/empty to the real DB string.
   useEffect(() => {
-    if (hasHydratedRef.current) return;
-    if (!initialHhTimes) return;
+    hydrationRunCountRef.current += 1;
+    const runId = hydrationRunCountRef.current;
+    const preview =
+      initialHhTimes == null
+        ? String(initialHhTimes)
+        : initialHhTimes.slice(0, 100);
+
+    let reason: string;
+
+    if (hasHydratedRef.current) {
+      reason = "skipped: already hydrated";
+      lastHydrationEventRef.current = { runId, reason, preview };
+      console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`, { preview });
+      setDebugTick((n) => n + 1);
+      return;
+    }
+    if (!initialHhTimes) {
+      reason = "skipped: no initialHhTimes";
+      lastHydrationEventRef.current = { runId, reason, preview };
+      console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`);
+      setDebugTick((n) => n + 1);
+      return;
+    }
+
+    reason = "hydrating from string";
+    lastHydrationEventRef.current = { runId, reason, preview };
+    console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`, { preview });
     setDayStates(parseHhTimes(initialHhTimes));
     hasHydratedRef.current = true;
+    setDebugTick((n) => n + 1);
   }, [initialHhTimes]);
 
   // Fire on every new state object — handles repeated saves correctly
@@ -488,6 +521,8 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
       });
       const daysWithBlocks = daysSummary.filter((l) => !l.endsWith("no HH")).length;
 
+      const ev = lastHydrationEventRef.current;
+
       return (
         <div
           style={{
@@ -507,6 +542,19 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
           <strong>initialHhTimes:</strong> [{propType}
           {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
           {propPreview}
+          <br />
+          <strong>hydration effect runs:</strong> {hydrationRunCountRef.current}
+          <br />
+          <strong>last hydration event:</strong>{" "}
+          {ev ? (
+            <>
+              #{ev.runId} — {ev.reason}
+              <br />
+              &nbsp;&nbsp;preview: {ev.preview || "(empty)"}
+            </>
+          ) : (
+            "(none yet)"
+          )}
           <br />
           <strong>days with blocks ({daysWithBlocks}/7):</strong>
           <br />
