@@ -388,11 +388,6 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     parseHhTimes(initialHhTimes)
   );
 
-  // Tracks whether this component instance has already hydrated from the prop.
-  // Prevents re-hydration after the first successful parse (e.g. on
-  // router.refresh() after save, which would otherwise clobber user edits).
-  const hasHydratedRef = useRef(false);
-
   // ── DEBUG: hydration effect instrumentation ──────────────────────────────
   const hydrationRunCountRef = useRef(0);
   type HydrationEvent = { runId: number; reason: string; preview: string };
@@ -400,10 +395,12 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   // Bumped inside the effect so the debug panel re-renders to show new data.
   const [, setDebugTick] = useState(0);
 
-  // Hydrate once, when a concrete initialHhTimes value first becomes available.
-  // Watching the prop (not []) handles the case where the parent renders before
-  // server data arrives — the effect will fire again when the prop updates from
-  // null/empty to the real DB string.
+  // Sync internal state from the prop whenever initialHhTimes changes.
+  // No "already hydrated" guard — the prop is the source of truth.
+  // While the user is editing, initialHhTimes does not change, so this
+  // effect does not run and user edits are not clobbered.
+  // After Save + router.refresh(), initialHhTimes updates to the new DB
+  // string and the effect runs once, reflecting the freshly saved value.
   useEffect(() => {
     hydrationRunCountRef.current += 1;
     const runId = hydrationRunCountRef.current;
@@ -414,26 +411,19 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
 
     let reason: string;
 
-    if (hasHydratedRef.current) {
-      reason = "skipped: already hydrated";
-      lastHydrationEventRef.current = { runId, reason, preview };
-      console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`, { preview });
-      setDebugTick((n) => n + 1);
-      return;
-    }
     if (!initialHhTimes) {
-      reason = "skipped: no initialHhTimes";
+      reason = "empty hh_times — reset to defaults";
       lastHydrationEventRef.current = { runId, reason, preview };
       console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`);
+      setDayStates(getDefaultDayStates());
       setDebugTick((n) => n + 1);
       return;
     }
 
-    reason = "hydrating from string";
+    reason = "hydrated from prop";
     lastHydrationEventRef.current = { runId, reason, preview };
     console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`, { preview });
     setDayStates(parseHhTimes(initialHhTimes));
-    hasHydratedRef.current = true;
     setDebugTick((n) => n + 1);
   }, [initialHhTimes]);
 
