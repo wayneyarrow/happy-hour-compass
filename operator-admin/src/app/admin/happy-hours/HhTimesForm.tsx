@@ -112,29 +112,42 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   const states = getDefaultDayStates();
   if (!text?.trim()) return states;
 
-  // Normalize en dash (U+2013), em dash (U+2014), minus sign (U+2212) → hyphen.
+  // Normalize all dash variants to plain hyphen-minus:
+  //   U+2013 en dash, U+2014 em dash, U+2212 minus sign.
   const normalized = text.replace(/[\u2013\u2014\u2212]/g, "-");
 
-  for (const line of normalized.trim().split("\n")) {
-    const m = line.match(
-      /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday):\s*(.+)$/
-    );
-    if (!m) continue;
+  for (const rawLine of normalized.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
 
-    const day = m[1] as Day;
-    const content = m[2].trim();
+    // Split on the FIRST colon only so that "H:MM AM" in the value is preserved.
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) continue;
 
-    if (content.toLowerCase() === "no happy hour") {
+    const dayName = line.slice(0, colonIdx).trim();
+    const value   = line.slice(colonIdx + 1).trim();
+
+    if (!(DAYS as readonly string[]).includes(dayName)) continue;
+    const day = dayName as Day;
+
+    if (/^no happy hour$/i.test(value)) {
       states[day] = { ...states[day], noHappyHour: true };
       continue;
     }
 
-    states[day].noHappyHour = false;
-    const blocks = content.split(", ");
-    const block1 = parseTimeRange(blocks[0]);
-    if (block1) states[day].block1 = block1;
-    if (blocks[1]) {
-      states[day].block2 = parseTimeRange(blocks[1]) ?? null;
+    // Parse up to two comma-separated time ranges.
+    const timeBlocks: TimeBlock[] = [];
+    for (const part of value.split(",")) {
+      const range = part.trim();
+      if (!range) continue;
+      const tb = parseTimeRange(range);
+      if (tb) timeBlocks.push(tb);
+    }
+
+    if (timeBlocks.length > 0) {
+      states[day].noHappyHour = false;
+      states[day].block1 = timeBlocks[0];
+      states[day].block2 = timeBlocks[1] ?? null;
     }
   }
 
