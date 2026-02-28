@@ -396,11 +396,6 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     getDefaultDayStates
   );
 
-  // DEBUG: last value returned by parseHhTimes so we can compare it against
-  // dayStates in the debug panel and detect whether the bug is in the parser
-  // or in the wiring between parser output and state.
-  const [debugParsedFromProp, setDebugParsedFromProp] = useState<Record<Day, DayState> | null>(null);
-
   // Prop-driven sync — no guards, no "already hydrated" flag.
   // Runs whenever initialHhTimes changes. Skips on falsy to avoid wiping
   // visible state during a transient null (e.g. in-flight router refresh).
@@ -409,9 +404,7 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   // this runs once, keeping local state aligned with what was just saved.
   useEffect(() => {
     if (!initialHhTimes?.trim()) return;
-    const parsed = parseHhTimes(initialHhTimes);
-    setDayStates(parsed);
-    setDebugParsedFromProp(parsed);
+    setDayStates(parseHhTimes(initialHhTimes));
   }, [initialHhTimes]);
 
   // Show Saved badge for 4 s after a successful save; also trigger page refresh
@@ -436,8 +429,7 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   }
 
   return (
-    <>
-      <form action={formAction}>
+    <form action={formAction}>
         {/* Hidden input carries the serialized weekly schedule */}
         <input type="hidden" name="hh_times" value={generatedText} readOnly />
 
@@ -482,65 +474,5 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
           )}
         </div>
       </form>
-
-      {process.env.NODE_ENV === "development" && (() => {
-        const propType = typeof initialHhTimes;
-        const propPreview =
-          initialHhTimes == null
-            ? String(initialHhTimes)
-            : JSON.stringify(initialHhTimes).slice(0, 120);
-
-        // Summarise any Record<Day, DayState> into per-day block counts.
-        function summarise(record: Record<Day, DayState> | null) {
-          if (!record) return { total: 0, lines: DAYS.map((d) => `${d}: (no data)`) };
-          const lines = DAYS.map((day) => {
-            const s = record[day];
-            if (s.noHappyHour) return `${day}: no HH`;
-            const count = s.block2 ? 2 : 1;
-            return `${day}: ${count} block${count > 1 ? "s" : ""}`;
-          });
-          const total = lines.filter((l) => !l.endsWith("no HH") && !l.endsWith("(no data)")).length;
-          return { total, lines };
-        }
-
-        const parsed = summarise(debugParsedFromProp);
-        const current = summarise(dayStates);
-
-        return (
-          <div
-            style={{
-              marginTop: 16,
-              padding: "10px 12px",
-              background: "#fefce8",
-              border: "1px solid #fde047",
-              borderRadius: 8,
-              fontFamily: "monospace",
-              fontSize: 11,
-              lineHeight: 1.6,
-              color: "#713f12",
-            }}
-          >
-            <strong style={{ fontSize: 12 }}>🛠 HhTimesForm debug (dev only)</strong>
-            <br />
-            <strong>initialHhTimes:</strong> [{propType}
-            {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
-            {propPreview}
-            <br />
-            <br />
-            <strong>parsed from initialHhTimes ({parsed.total}/7):</strong>
-            <br />
-            {parsed.lines.map((line) => (
-              <span key={line}>&nbsp;&nbsp;{line}<br /></span>
-            ))}
-            <br />
-            <strong>current dayStates ({current.total}/7):</strong>
-            <br />
-            {current.lines.map((line) => (
-              <span key={line}>&nbsp;&nbsp;{line}<br /></span>
-            ))}
-          </div>
-        );
-      })()}
-    </>
   );
 }
