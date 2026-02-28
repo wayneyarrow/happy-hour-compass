@@ -411,11 +411,10 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
 
     let reason: string;
 
-    if (!initialHhTimes) {
-      reason = "empty hh_times — reset to defaults";
+    if (!initialHhTimes || !initialHhTimes.trim()) {
+      reason = "skipped: falsy initialHhTimes (state unchanged)";
       lastHydrationEventRef.current = { runId, reason, preview };
       console.log(`[HhTimesForm] hydration effect #${runId}: ${reason}`);
-      setDayStates(getDefaultDayStates());
       setDebugTick((n) => n + 1);
       return;
     }
