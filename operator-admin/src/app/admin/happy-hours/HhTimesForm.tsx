@@ -383,6 +383,11 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     getDefaultDayStates
   );
 
+  // DEBUG: last value returned by parseHhTimes so we can compare it against
+  // dayStates in the debug panel and detect whether the bug is in the parser
+  // or in the wiring between parser output and state.
+  const [debugParsedFromProp, setDebugParsedFromProp] = useState<Record<Day, DayState> | null>(null);
+
   // Prop-driven sync — no guards, no "already hydrated" flag.
   // Runs whenever initialHhTimes changes. Skips on falsy to avoid wiping
   // visible state during a transient null (e.g. in-flight router refresh).
@@ -391,7 +396,9 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
   // this runs once, keeping local state aligned with what was just saved.
   useEffect(() => {
     if (!initialHhTimes?.trim()) return;
-    setDayStates(parseHhTimes(initialHhTimes));
+    const parsed = parseHhTimes(initialHhTimes);
+    setDayStates(parsed);
+    setDebugParsedFromProp(parsed);
   }, [initialHhTimes]);
 
   // Show Saved badge for 4 s after a successful save; also trigger page refresh
@@ -470,13 +477,21 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
             ? String(initialHhTimes)
             : JSON.stringify(initialHhTimes).slice(0, 120);
 
-        const daysSummary = DAYS.map((day) => {
-          const s = dayStates[day];
-          if (s.noHappyHour) return `${day}: no HH`;
-          const count = s.block2 ? 2 : 1;
-          return `${day}: ${count} block${count > 1 ? "s" : ""}`;
-        });
-        const daysWithBlocks = daysSummary.filter((l) => !l.endsWith("no HH")).length;
+        // Summarise any Record<Day, DayState> into per-day block counts.
+        function summarise(record: Record<Day, DayState> | null) {
+          if (!record) return { total: 0, lines: DAYS.map((d) => `${d}: (no data)`) };
+          const lines = DAYS.map((day) => {
+            const s = record[day];
+            if (s.noHappyHour) return `${day}: no HH`;
+            const count = s.block2 ? 2 : 1;
+            return `${day}: ${count} block${count > 1 ? "s" : ""}`;
+          });
+          const total = lines.filter((l) => !l.endsWith("no HH") && !l.endsWith("(no data)")).length;
+          return { total, lines };
+        }
+
+        const parsed = summarise(debugParsedFromProp);
+        const current = summarise(dayStates);
 
         return (
           <div
@@ -498,13 +513,17 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
             {typeof initialHhTimes === "string" ? `, len=${initialHhTimes.length}` : ""}]{" "}
             {propPreview}
             <br />
-            <strong>days with blocks ({daysWithBlocks}/7):</strong>
             <br />
-            {daysSummary.map((line) => (
-              <span key={line}>
-                &nbsp;&nbsp;{line}
-                <br />
-              </span>
+            <strong>parsed from initialHhTimes ({parsed.total}/7):</strong>
+            <br />
+            {parsed.lines.map((line) => (
+              <span key={line}>&nbsp;&nbsp;{line}<br /></span>
+            ))}
+            <br />
+            <strong>current dayStates ({current.total}/7):</strong>
+            <br />
+            {current.lines.map((line) => (
+              <span key={line}>&nbsp;&nbsp;{line}<br /></span>
             ))}
           </div>
         );
