@@ -388,18 +388,21 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     parseHhTimes(initialHhTimes)
   );
 
-  // Capture the prop value at mount time so the effect below can read it
-  // without needing it as a dependency.
-  const initialHhTimesRef = useRef(initialHhTimes);
+  // Tracks whether this component instance has already hydrated from the prop.
+  // Prevents re-hydration after the first successful parse (e.g. on
+  // router.refresh() after save, which would otherwise clobber user edits).
+  const hasHydratedRef = useRef(false);
 
-  // Hydrate exactly once per component instance, on mount.
-  // Empty dep array guarantees this runs once regardless of prop updates
-  // (e.g. router.refresh() after save). The ref holds the value that was
-  // present on first render, so there is no stale-closure risk.
+  // Hydrate once, when a concrete initialHhTimes value first becomes available.
+  // Watching the prop (not []) handles the case where the parent renders before
+  // server data arrives — the effect will fire again when the prop updates from
+  // null/empty to the real DB string.
   useEffect(() => {
-    setDayStates(parseHhTimes(initialHhTimesRef.current));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (hasHydratedRef.current) return;
+    if (!initialHhTimes) return;
+    setDayStates(parseHhTimes(initialHhTimes));
+    hasHydratedRef.current = true;
+  }, [initialHhTimes]);
 
   // Fire on every new state object — handles repeated saves correctly
   useEffect(() => {
