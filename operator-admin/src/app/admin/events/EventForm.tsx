@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import { slugify } from "@/lib/slugify";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,15 +106,19 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
 
       if (updateError) {
         console.error("[EventForm] Update failed:", updateError);
-        setError("Failed to save event. Please try again.");
+        setError(updateError.message || "Failed to save event. Please try again.");
         setIsSaving(false);
         return;
       }
     } else {
       // ── Insert new event ───────────────────────────────────────────────────
+      const baseSlug = slugify(formState.title);
+      const slug = baseSlug || crypto.randomUUID(); // fallback if title is empty
+
       const { data: inserted, error: insertError } = await supabase
         .from("events")
-        .insert({
+        .insert([{
+          slug,
           title: formState.title || null,
           description: formState.description || null,
           event_time: formState.eventTime || null,
@@ -122,13 +127,13 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
           venue_id: venueId,
           created_by_operator_id: operatorId,
           updated_by_operator_id: operatorId,
-        })
-        .select("id")
+        }])
+        .select()
         .single();
 
       if (insertError) {
         console.error("[EventForm] Insert failed:", insertError);
-        setError("Failed to create event. Please try again.");
+        setError(insertError.message || "Failed to create event. Please try again.");
         setIsSaving(false);
         return;
       }
