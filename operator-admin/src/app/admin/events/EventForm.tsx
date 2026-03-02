@@ -31,6 +31,7 @@ export type EventRow = {
   is_published: boolean;
   venue_id: string | null;
   created_by_operator_id: string | null;
+  image_url: string | null;
 };
 
 type Props = {

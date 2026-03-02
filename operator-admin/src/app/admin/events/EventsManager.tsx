@@ -12,7 +12,7 @@ import { deleteEventAction } from "./actions";
 // Columns fetched for both the initial server load and subsequent client re-fetches.
 export const EVENT_COLUMNS =
   "id, title, description, first_date, start_time, end_time, recurrence, " +
-  "event_time, event_frequency, is_published, venue_id, " +
+  "event_time, event_frequency, is_published, venue_id, image_url, " +
   "created_by_operator_id, updated_by_operator_id";
 
 /**
