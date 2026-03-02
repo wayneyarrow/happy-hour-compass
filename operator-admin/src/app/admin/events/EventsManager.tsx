@@ -201,7 +201,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="text-xs font-semibold text-red-600 hover:text-red-700 border border-red-300 hover:border-red-400 hover:bg-red-50 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-sm font-semibold text-red-700 hover:text-red-800 border border-red-300 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDeleting ? "Deleting…" : "Delete event"}
                 </button>
