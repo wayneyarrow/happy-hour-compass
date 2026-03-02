@@ -8,6 +8,7 @@ import PaymentTypesForm from "./PaymentTypesForm";
 import LinksForm from "./LinksForm";
 import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
+import VenueImagesSection from "./VenueImagesSection";
 
 /**
  * Venue row as returned by Supabase select("*").
@@ -183,6 +184,14 @@ export default async function AdminVenuePage() {
                 menu_url:    venue.menu_url    ?? "",
               }}
             />
+          </AccordionSection>
+
+          {/* Section 5: Images */}
+          <AccordionSection
+            title="Venue images"
+            description="Upload up to 5 images. The first image is used as the primary image."
+          >
+            <VenueImagesSection venueId={venue.id} />
           </AccordionSection>
 
         </div>
