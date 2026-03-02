@@ -42,7 +42,7 @@ export default async function AdminEventsPage() {
       ? await supabase
           .from("events")
           .select(
-            "id, title, description, event_time, event_frequency, is_published, venue_id, created_by_operator_id"
+            "id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, created_by_operator_id"
           )
           .eq("created_by_operator_id", operator.id)
           .order("created_at", { ascending: true })

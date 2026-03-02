@@ -6,11 +6,15 @@ import { slugify } from "@/lib/slugify";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type Recurrence = "none" | "daily" | "weekly" | "monthly";
+
 type EventFormState = {
   title: string;
+  firstDate: string;   // ISO "YYYY-MM-DD" or ""
+  startTime: string;   // e.g. "7:00 PM" or ""
+  endTime: string;     // e.g. "9:00 PM" or ""
+  recurrence: Recurrence;
   description: string;
-  eventFrequency: string;
-  eventTime: string;
   isPublished: boolean;
 };
 
@@ -18,6 +22,10 @@ export type EventRow = {
   id: string;
   title: string | null;
   description: string | null;
+  first_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  recurrence: string | null;
   event_time: string | null;
   event_frequency: string | null;
   is_published: boolean;
@@ -31,7 +39,127 @@ type Props = {
   venueId: string;
 };
 
-// ── Shared style constants ────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const DESCRIPTION_MAX = 280;
+
+const KNOWN_RECURRENCES = new Set<Recurrence>(["none", "daily", "weekly", "monthly"]);
+
+function toRecurrence(val: string | null | undefined): Recurrence {
+  return val && KNOWN_RECURRENCES.has(val as Recurrence) ? (val as Recurrence) : "none";
+}
+
+// 30-minute increments from 10:00 AM to 11:30 PM
+const TIME_OPTIONS: string[] = (() => {
+  const opts: string[] = [];
+  for (let h = 10; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const hour12 = h > 12 ? h - 12 : h;
+      const period = h >= 12 ? "PM" : "AM";
+      opts.push(`${hour12}:${m === 0 ? "00" : "30"} ${period}`);
+    }
+  }
+  return opts;
+})();
+
+const RECURRENCE_OPTIONS: { value: Recurrence; label: string }[] = [
+  { value: "none",    label: "One-time (no repeat)" },
+  { value: "daily",   label: "Daily" },
+  { value: "weekly",  label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+const EMPTY: EventFormState = {
+  title: "",
+  firstDate: "",
+  startTime: "",
+  endTime: "",
+  recurrence: "none",
+  description: "",
+  isPublished: false,
+};
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+/** Parse "YYYY-MM-DD" as a local date (avoids UTC midnight shifting the day). */
+function parseDateLocal(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  if (!y || !mo || !d) return null;
+  return new Date(y, mo - 1, d);
+}
+
+/** "2026-03-17" → "Tuesday" */
+function weekdayNameFromDate(dateStr: string): string {
+  const d = parseDateLocal(dateStr);
+  if (!d) return "";
+  return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(d);
+}
+
+/** "2026-03-17" → "17th" */
+function dayOfMonthFromDate(dateStr: string): string {
+  const d = parseDateLocal(dateStr);
+  if (!d) return "";
+  const n = d.getDate();
+  const suffix =
+    n === 1 || n === 21 || n === 31 ? "st" :
+    n === 2 || n === 22 ? "nd" :
+    n === 3 || n === 23 ? "rd" : "th";
+  return `${n}${suffix}`;
+}
+
+/** "2026-03-17" → "Mar 17, 2026" */
+function formatDate(dateStr: string): string {
+  const d = parseDateLocal(dateStr);
+  if (!d) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
+}
+
+// ── Preview ───────────────────────────────────────────────────────────────────
+
+function getDateTimePreview(state: EventFormState): string | null {
+  const { firstDate, startTime, endTime, recurrence } = state;
+  if (!firstDate || !startTime) return null;
+  const endPart = endTime ? ` – ${endTime}` : "";
+  switch (recurrence) {
+    case "weekly":
+      return `Every ${weekdayNameFromDate(firstDate)} · ${startTime}${endPart}`;
+    case "daily":
+      return `Every day · ${startTime}${endPart}`;
+    case "monthly":
+      return `Every month on the ${dayOfMonthFromDate(firstDate)} · ${startTime}${endPart}`;
+    case "none":
+    default:
+      return `${formatDate(firstDate)} · ${startTime}${endPart}`;
+  }
+}
+
+// ── Legacy field derivation (backward-compat for consumer app) ─────────────────
+
+function deriveEventTime(startTime: string, endTime: string): string | null {
+  if (!startTime) return null;
+  return endTime ? `${startTime} – ${endTime}` : startTime;
+}
+
+function deriveEventFrequency(recurrence: Recurrence, firstDate: string): string | null {
+  switch (recurrence) {
+    case "weekly":
+      return firstDate ? `Every ${weekdayNameFromDate(firstDate)}` : "Weekly";
+    case "daily":
+      return "Every day";
+    case "monthly":
+      return firstDate ? `Every month on the ${dayOfMonthFromDate(firstDate)}` : "Monthly";
+    case "none":
+    default:
+      return firstDate ? formatDate(firstDate) : null;
+  }
+}
+
+// ── Style constants ───────────────────────────────────────────────────────────
 
 const inputCls =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm " +
@@ -40,19 +168,10 @@ const inputCls =
 
 const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
-const EMPTY: EventFormState = {
-  title: "",
-  description: "",
-  eventFrequency: "",
-  eventTime: "",
-  isPublished: false,
-};
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function EventForm({ initialEvent, operatorId, venueId }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
-  // Tracks the saved event id — null until the first insert succeeds.
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
   );
@@ -61,14 +180,16 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
   const [error, setError] = useState<string | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hydrate form when initialEvent arrives (server SSR data or navigation).
+  // Hydrate from server-loaded event data.
   useEffect(() => {
     if (!initialEvent) return;
     setFormState({
       title: initialEvent.title ?? "",
+      firstDate: initialEvent.first_date ?? "",
+      startTime: initialEvent.start_time ?? "",
+      endTime: initialEvent.end_time ?? "",
+      recurrence: toRecurrence(initialEvent.recurrence),
       description: initialEvent.description ?? "",
-      eventFrequency: initialEvent.event_frequency ?? "",
-      eventTime: initialEvent.event_time ?? "",
       isPublished: initialEvent.is_published ?? false,
     });
     setCurrentEventId(initialEvent.id);
@@ -80,27 +201,53 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     setError(null);
 
-    // Reset any in-flight saved badge timer.
+    // ── Validation ────────────────────────────────────────────────────────
+    if (!formState.firstDate) {
+      setError("Please pick a date for the first occurrence.");
+      return;
+    }
+    if (!formState.startTime) {
+      setError("Please select a start time.");
+      return;
+    }
+    if (formState.endTime) {
+      const si = TIME_OPTIONS.indexOf(formState.startTime);
+      const ei = TIME_OPTIONS.indexOf(formState.endTime);
+      if (si !== -1 && ei !== -1 && ei <= si) {
+        setError("End time must be after the start time.");
+        return;
+      }
+    }
+
+    setIsSaving(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+
+    // ── Derive legacy fields ──────────────────────────────────────────────
+    const event_time = deriveEventTime(formState.startTime, formState.endTime);
+    const event_frequency = deriveEventFrequency(formState.recurrence, formState.firstDate);
+
+    const sharedFields = {
+      title: formState.title || null,
+      description: formState.description || null,
+      first_date: formState.firstDate || null,
+      start_time: formState.startTime || null,
+      end_time: formState.endTime || null,
+      recurrence: formState.recurrence,
+      event_time,
+      event_frequency,
+      is_published: formState.isPublished,
+      updated_by_operator_id: operatorId,
+    };
 
     const supabase = createClient();
 
     if (currentEventId) {
-      // ── Update existing event ──────────────────────────────────────────────
+      // ── Update ──────────────────────────────────────────────────────────
       const { error: updateError } = await supabase
         .from("events")
-        .update({
-          title: formState.title || null,
-          description: formState.description || null,
-          event_time: formState.eventTime || null,
-          event_frequency: formState.eventFrequency || null,
-          is_published: formState.isPublished,
-          updated_at: new Date().toISOString(),
-          updated_by_operator_id: operatorId,
-        })
+        .update({ ...sharedFields, updated_at: new Date().toISOString() })
         .eq("id", currentEventId)
         .eq("created_by_operator_id", operatorId);
 
@@ -111,22 +258,17 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
         return;
       }
     } else {
-      // ── Insert new event ───────────────────────────────────────────────────
+      // ── Insert ──────────────────────────────────────────────────────────
       const baseSlug = slugify(formState.title);
-      const slug = baseSlug || crypto.randomUUID(); // fallback if title is empty
+      const slug = baseSlug || crypto.randomUUID();
 
       const { data: inserted, error: insertError } = await supabase
         .from("events")
         .insert([{
+          ...sharedFields,
           slug,
-          title: formState.title || null,
-          description: formState.description || null,
-          event_time: formState.eventTime || null,
-          event_frequency: formState.eventFrequency || null,
-          is_published: formState.isPublished,
           venue_id: venueId,
           created_by_operator_id: operatorId,
-          updated_by_operator_id: operatorId,
         }])
         .select()
         .single();
@@ -138,7 +280,6 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
         return;
       }
 
-      // Keep the form in update mode for all subsequent saves.
       setCurrentEventId(inserted.id);
     }
 
@@ -146,6 +287,8 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
   };
+
+  const preview = getDateTimePreview(formState);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -155,55 +298,105 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
         </div>
       )}
 
-      {/* Title */}
+      {/* 1. Title */}
       <div>
         <label htmlFor="event-title" className={labelCls}>
-          Title
+          Event name
         </label>
         <input
           id="event-title"
           type="text"
           value={formState.title}
           onChange={(e) => update("title", e.target.value)}
-          placeholder="e.g. Tuesday Trivia Night"
+          placeholder="e.g. Music Bingo"
           disabled={isSaving}
           className={inputCls}
         />
       </div>
 
-      {/* Frequency + Time — side by side on wider screens */}
+      {/* 2. Date of first occurrence */}
+      <div>
+        <label htmlFor="event-first-date" className={labelCls}>
+          Date of first occurrence
+        </label>
+        <input
+          id="event-first-date"
+          type="date"
+          value={formState.firstDate}
+          onChange={(e) => update("firstDate", e.target.value)}
+          disabled={isSaving}
+          className={inputCls}
+        />
+      </div>
+
+      {/* 3. Start time / End time */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="event-frequency" className={labelCls}>
-            Frequency
+          <label htmlFor="event-start-time" className={labelCls}>
+            Start time
           </label>
-          <input
-            id="event-frequency"
-            type="text"
-            value={formState.eventFrequency}
-            onChange={(e) => update("eventFrequency", e.target.value)}
-            placeholder="Every Tuesday"
+          <select
+            id="event-start-time"
+            value={formState.startTime}
+            onChange={(e) => update("startTime", e.target.value)}
             disabled={isSaving}
             className={inputCls}
-          />
+          >
+            <option value="">Select time</option>
+            {TIME_OPTIONS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
         </div>
         <div>
-          <label htmlFor="event-time" className={labelCls}>
-            Time
+          <label htmlFor="event-end-time" className={labelCls}>
+            End time{" "}
+            <span className="text-gray-400 font-normal">(optional)</span>
           </label>
-          <input
-            id="event-time"
-            type="text"
-            value={formState.eventTime}
-            onChange={(e) => update("eventTime", e.target.value)}
-            placeholder="6:30 PM"
+          <select
+            id="event-end-time"
+            value={formState.endTime}
+            onChange={(e) => update("endTime", e.target.value)}
             disabled={isSaving}
             className={inputCls}
-          />
+          >
+            <option value="">No end time</option>
+            {TIME_OPTIONS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Description */}
+      {/* 4. Recurrence */}
+      <div>
+        <label htmlFor="event-recurrence" className={labelCls}>
+          Repeats
+        </label>
+        <select
+          id="event-recurrence"
+          value={formState.recurrence}
+          onChange={(e) => update("recurrence", e.target.value as Recurrence)}
+          disabled={isSaving}
+          className={inputCls}
+        >
+          {RECURRENCE_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Date & Time preview — hidden until both date and start time are set */}
+      {preview && (
+        <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">
+            Date &amp; time preview
+          </p>
+          <p className="text-sm font-medium text-gray-700">{preview}</p>
+        </div>
+      )}
+
+      {/* 5. Description with character limit */}
       <div>
         <label htmlFor="event-description" className={labelCls}>
           Event details{" "}
@@ -213,11 +406,16 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
           id="event-description"
           rows={4}
           value={formState.description}
-          onChange={(e) => update("description", e.target.value)}
+          onChange={(e) =>
+            update("description", e.target.value.slice(0, DESCRIPTION_MAX))
+          }
           placeholder="Describe the event — what to expect, prizes, entry fee, etc."
           disabled={isSaving}
           className={inputCls + " resize-none"}
         />
+        <p className="mt-1 text-xs text-gray-400 text-right tabular-nums">
+          {formState.description.length} / {DESCRIPTION_MAX} characters
+        </p>
       </div>
 
       {/* Published toggle */}
