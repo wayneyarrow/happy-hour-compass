@@ -39,6 +39,8 @@ type Props = {
   venueId: string;
   /** Called after a successful insert or update with the saved event's id. */
   onSaved?: (eventId: string) => void;
+  /** Called after a successful delete. */
+  onDeleted?: () => void;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -172,12 +174,13 @@ const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function EventForm({ initialEvent, operatorId, venueId, onSaved }: Props) {
+export default function EventForm({ initialEvent, operatorId, venueId, onSaved, onDeleted }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,6 +296,33 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
     onSaved?.(savedId);
+  };
+
+  const handleDelete = async () => {
+    if (!currentEventId) return;
+    const confirmed = window.confirm(
+      "Delete this event? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setError(null);
+
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", currentEventId)
+      .eq("created_by_operator_id", operatorId);
+
+    if (deleteError) {
+      console.error("[EventForm] Delete failed:", deleteError);
+      setError(deleteError.message || "Failed to delete event. Please try again.");
+      setIsDeleting(false);
+      return;
+    }
+
+    onDeleted?.();
   };
 
   const preview = getDateTimePreview(formState);
@@ -457,7 +487,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || isDeleting}
           className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSaving ? "Saving…" : "Save event"}
@@ -471,6 +501,20 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
           </span>
         )}
       </div>
+
+      {/* Delete button — only shown when editing an existing event */}
+      {currentEventId && (
+        <div className="pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting || isSaving}
+            className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? "Deleting…" : "Delete event"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
