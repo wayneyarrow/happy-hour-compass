@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import EventForm from "./EventForm";
 import type { EventRow } from "./EventForm";
+import { deleteEventAction } from "./actions";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,9 +38,11 @@ type Props = {
 };
 
 export default function EventsManager({ initialEvents, operatorId, venueId }: Props) {
+  const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const selectedEvent = events.find((e) => e.id === selectedId) ?? null;
 
@@ -70,11 +74,30 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
     setMode("idle");
   };
 
-  // After a successful delete, refresh the list and return to the idle empty state.
-  const handleDeleted = async () => {
-    await refreshList();
-    setSelectedId(null);
-    setMode("idle");
+  // Confirm → server action delete → router.refresh() → reset to idle.
+  const handleDelete = async () => {
+    if (!selectedId) return;
+    const confirmed = window.confirm(
+      "Delete this event? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteEventAction(selectedId);
+      // revalidatePath was called server-side; router.refresh() picks it up.
+      router.refresh();
+      setSelectedId(null);
+      setMode("idle");
+      // Also update the local list immediately so the row disappears without
+      // waiting for the router refresh to complete.
+      setEvents((prev) => prev.filter((e) => e.id !== selectedId));
+    } catch (err) {
+      console.error("[EventsManager] Delete failed:", err);
+      alert("Failed to delete event. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -168,9 +191,23 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
           </div>
         ) : (
           <>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              {mode === "creating" ? "New event" : "Edit event"}
-            </h3>
+            {/* Header row: label on left, Delete button on right (edit mode only) */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {mode === "creating" ? "New event" : "Edit event"}
+              </h3>
+              {mode === "editing" && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="text-xs font-medium text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? "Deleting…" : "Delete"}
+                </button>
+              )}
+            </div>
+
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               {/*
                 key={selectedId ?? "new"} forces a clean remount whenever the
@@ -183,7 +220,6 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
                 operatorId={operatorId}
                 venueId={venueId}
                 onSaved={handleSaved}
-                onDeleted={handleDeleted}
               />
             </div>
           </>
