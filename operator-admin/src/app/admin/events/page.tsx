@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import EventForm from "./EventForm";
+import EventsManager, { EVENT_COLUMNS } from "./EventsManager";
 import type { EventRow } from "./EventForm";
 
 export default async function AdminEventsPage() {
@@ -35,30 +35,26 @@ export default async function AdminEventsPage() {
 
   const venue = venueData as { id: string; name: string } | null;
 
-  // Load the operator's first event (v1: one event per operator).
-  // Ownership enforced by created_by_operator_id — no venue join needed.
-  const { data: eventData, error: eventError } =
+  // Load ALL events for this operator, newest first_date first.
+  const { data: eventsData, error: eventsError } =
     operator && venue
       ? await supabase
           .from("events")
-          .select(
-            "id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, created_by_operator_id"
-          )
+          .select("id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, created_by_operator_id, updated_by_operator_id")
           .eq("created_by_operator_id", operator.id)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle()
+          .order("first_date", { ascending: false })
+          .order("title", { ascending: true })
       : { data: null, error: null };
 
-  const initialEvent = eventData as EventRow | null;
+  const initialEvents = (eventsData as EventRow[] | null) ?? [];
 
   return (
-    <div className="max-w-2xl">
+    <div>
       {/* Page heading */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Events</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Manage your recurring event details.
+          Manage events for your venue.
         </p>
       </div>
 
@@ -83,7 +79,7 @@ export default async function AdminEventsPage() {
             No venue set up yet
           </p>
           <p className="text-xs text-gray-400 mt-1 mb-4">
-            Set up your venue before adding an event.
+            Set up your venue before adding events.
           </p>
           <Link
             href="/admin/venue"
@@ -94,23 +90,21 @@ export default async function AdminEventsPage() {
         </div>
       )}
 
-      {/* Non-fatal event load error — let the user create a new one anyway */}
-      {operator && venue && eventError && (
+      {/* Non-fatal event load error */}
+      {operator && venue && eventsError && (
         <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
-          <strong>Note:</strong> Could not load existing event data. You can
-          still fill in the form to create one.
+          <strong>Note:</strong> Could not load existing events. You can still
+          create a new one.
         </div>
       )}
 
-      {/* Event form */}
+      {/* Events manager — list + form */}
       {!operatorError && operator && venue && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <EventForm
-            initialEvent={initialEvent}
-            operatorId={operator.id}
-            venueId={venue.id}
-          />
-        </div>
+        <EventsManager
+          initialEvents={initialEvents}
+          operatorId={operator.id}
+          venueId={venue.id}
+        />
       )}
     </div>
   );

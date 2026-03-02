@@ -37,6 +37,8 @@ type Props = {
   initialEvent?: EventRow | null;
   operatorId: string;
   venueId: string;
+  /** Called after a successful insert or update with the saved event's id. */
+  onSaved?: (eventId: string) => void;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -170,7 +172,7 @@ const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function EventForm({ initialEvent, operatorId, venueId }: Props) {
+export default function EventForm({ initialEvent, operatorId, venueId, onSaved }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
@@ -242,6 +244,7 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
     };
 
     const supabase = createClient();
+    let savedId: string;
 
     if (currentEventId) {
       // ── Update ──────────────────────────────────────────────────────────
@@ -257,6 +260,8 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
         setIsSaving(false);
         return;
       }
+
+      savedId = currentEventId;
     } else {
       // ── Insert ──────────────────────────────────────────────────────────
       const baseSlug = slugify(formState.title);
@@ -281,11 +286,13 @@ export default function EventForm({ initialEvent, operatorId, venueId }: Props) 
       }
 
       setCurrentEventId(inserted.id);
+      savedId = inserted.id;
     }
 
     setIsSaving(false);
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
+    onSaved?.(savedId);
   };
 
   const preview = getDateTimePreview(formState);
