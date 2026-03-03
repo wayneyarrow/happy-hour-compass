@@ -191,20 +191,43 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
           </div>
         ) : (
           <>
-            {/* Header row: label on left, Delete button on right (edit mode only) */}
+            {/* Header row: label on left, actions on right (edit mode only) */}
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 {mode === "creating" ? "New event" : "Edit event"}
               </h3>
               {mode === "editing" && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="text-sm font-semibold text-red-700 hover:text-red-800 border border-red-300 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isDeleting ? "Deleting…" : "Delete event"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`/venue/${venueId}?preview=true`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+                  >
+                    <span>Preview</span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-3.5 w-3.5"
+                    >
+                      <path d="M7 17L17 7" />
+                      <path d="M7 7h10v10" />
+                    </svg>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="text-sm font-semibold text-red-700 hover:text-red-800 border border-red-300 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDeleting ? "Deleting…" : "Delete event"}
+                  </button>
+                </div>
               )}
             </div>
 
