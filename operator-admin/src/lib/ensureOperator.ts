@@ -4,6 +4,8 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 export type OperatorRow = {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   name: string | null;
   is_approved: boolean;
   role: string;
@@ -11,7 +13,7 @@ export type OperatorRow = {
   updated_at: string;
 };
 
-const OPERATOR_SELECT = "id, email, name, is_approved, role, created_at, updated_at";
+const OPERATOR_SELECT = "id, email, first_name, last_name, name, is_approved, role, created_at, updated_at";
 
 /**
  * Ensures an `operators` row exists for the current authenticated user.
@@ -70,12 +72,17 @@ export async function ensureOperatorForSession(
   }
 
   // ── Step 2: Insert a new row ──────────────────────────────────────────────
-  // Only `email` is required; all other columns use Postgres defaults:
-  //   name → null, is_approved → false, role → 'operator',
-  //   created_at / updated_at → NOW()
+  // `email` is required; name fields come from user_metadata when present.
+  // Other columns use Postgres defaults:
+  //   is_approved → false, role → 'operator', created_at / updated_at → NOW()
+  const meta = user.user_metadata ?? {};
+  const firstName = (typeof meta.first_name === "string" ? meta.first_name.trim() : "") || null;
+  const lastName  = (typeof meta.last_name  === "string" ? meta.last_name.trim()  : "") || null;
+  const fullName  = [firstName, lastName].filter(Boolean).join(" ") || null;
+
   const { data: inserted, error: insertError } = await supabase
     .from("operators")
-    .insert({ email })
+    .insert({ email, first_name: firstName, last_name: lastName, name: fullName })
     .select(OPERATOR_SELECT)
     .single();
 
