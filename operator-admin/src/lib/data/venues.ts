@@ -367,7 +367,7 @@ export async function getVenueWithEventsForConsumerById(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours"
       )
-      .eq("slug", id);
+      .eq("id", id);
 
     if (!options?.includeUnpublished) {
       query = query.eq("is_published", true);
