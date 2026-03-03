@@ -54,6 +54,14 @@ export default async function AdminAccountPage() {
               <dd className="text-gray-800">{operator.email}</dd>
             </div>
             <div className="flex gap-2">
+              <dt className="text-gray-400 w-28 shrink-0">Name</dt>
+              <dd className="text-gray-800">
+                {[operator.first_name, operator.last_name].filter(Boolean).join(" ") ||
+                  operator.name ||
+                  operator.email}
+              </dd>
+            </div>
+            <div className="flex gap-2">
               <dt className="text-gray-400 w-28 shrink-0">Role</dt>
               <dd className="text-gray-800">{operator.role}</dd>
             </div>
