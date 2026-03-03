@@ -29,9 +29,9 @@ export default async function AdminLayout({
           <Image
             src="/logo.png"
             alt="Happy Hour Compass"
-            width={40}
-            height={40}
-            className="h-10 w-auto rounded-md shrink-0"
+            width={48}
+            height={48}
+            className="h-12 w-auto rounded-md shrink-0"
           />
           <div className="flex flex-col leading-tight">
             <p className="text-lg font-bold text-gray-900">Happy Hour Compass</p>
