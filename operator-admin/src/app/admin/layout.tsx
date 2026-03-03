@@ -25,17 +25,17 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-slate-100 flex flex-col">
       {/* ── Top header ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200 shadow-sm px-6 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center">
           <Image
-            src="/logo.png"
-            alt="Happy Hour Compass"
-            width={64}
-            height={64}
-            className="h-16 w-auto rounded-md shrink-0"
+            src="/hhc-icon.png"
+            alt="Happy Hour Compass logo"
+            width={32}
+            height={32}
+            className="h-8 w-auto shrink-0"
           />
-          <div className="flex flex-col leading-tight">
-            <p className="text-lg font-bold text-gray-900">Happy Hour Compass</p>
-            <p className="text-xs text-gray-400 mt-0.5">Operator Admin</p>
+          <div className="ml-3 flex flex-col leading-tight">
+            <span className="text-lg font-semibold text-slate-900">Happy Hour Compass</span>
+            <span className="text-xs text-slate-500">Operator Admin</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
