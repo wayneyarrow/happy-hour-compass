@@ -29,11 +29,11 @@ export default async function AdminLayout({
           <Image
             src="/logo.png"
             alt="Happy Hour Compass"
-            width={36}
-            height={36}
-            className="rounded-md shrink-0"
+            width={40}
+            height={40}
+            className="h-10 w-auto rounded-md shrink-0"
           />
-          <div>
+          <div className="flex flex-col leading-tight">
             <p className="text-lg font-bold text-gray-900">Happy Hour Compass</p>
             <p className="text-xs text-gray-400 mt-0.5">Operator Admin</p>
           </div>
