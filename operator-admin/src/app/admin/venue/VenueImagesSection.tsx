@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  processImageFile,
+  ImageTooLargeError,
+  InvalidImageTypeError,
+} from "@/lib/imageProcessing";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,12 +75,33 @@ export default function VenueImagesSection({ venueId }: Props) {
     const toUpload = Array.from(files).slice(0, slots);
 
     for (const file of toUpload) {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `venues/${venueId}/${crypto.randomUUID()}.${ext}`;
+      // ── Process (resize + compress) before upload ─────────────────────────
+      let blob: Blob;
+      try {
+        blob = await processImageFile(file, {
+          maxWidth: 1600,
+          maxSizeBytes: 1.5 * 1024 * 1024,
+        });
+      } catch (err) {
+        if (err instanceof InvalidImageTypeError) {
+          setError("Please upload a valid image file.");
+        } else if (err instanceof ImageTooLargeError) {
+          setError(
+            "This image is too large even after compression. Please choose a smaller image."
+          );
+        } else {
+          setError("Failed to process image. Please try again.");
+        }
+        setUploading(false);
+        return;
+      }
+
+      // Always store as .jpg (output is always JPEG after processing).
+      const path = `venues/${venueId}/${crypto.randomUUID()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
-        .upload(path, file, { cacheControl: "3600", upsert: false });
+        .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: "image/jpeg" });
 
       if (uploadError) {
         setError(`Upload failed: ${uploadError.message}`);

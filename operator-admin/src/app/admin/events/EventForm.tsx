@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { slugify } from "@/lib/slugify";
+import {
+  processImageFile,
+  ImageTooLargeError,
+  InvalidImageTypeError,
+} from "@/lib/imageProcessing";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -318,12 +323,34 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
     setIsUploadingImage(true);
     if (imageInputRef.current) imageInputRef.current.value = "";
 
+    // ── Process (resize + compress) before upload ─────────────────────────
+    let blob: Blob;
+    try {
+      blob = await processImageFile(file, {
+        maxWidth: 1600,
+        maxSizeBytes: 1.5 * 1024 * 1024,
+      });
+    } catch (err) {
+      if (err instanceof InvalidImageTypeError) {
+        setImageError("Please upload a valid image file.");
+      } else if (err instanceof ImageTooLargeError) {
+        setImageError(
+          "This image is too large even after compression. Please choose a smaller image."
+        );
+      } else {
+        setImageError("Failed to process image. Please try again.");
+      }
+      setIsUploadingImage(false);
+      return;
+    }
+
     const supabase = createClient();
-    const path = `events/${currentEventId}/${Date.now()}-${file.name}`;
+    // Always store as .jpg (output is always JPEG after processing).
+    const path = `events/${currentEventId}/${Date.now()}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("venue-images")
-      .upload(path, file, { cacheControl: "3600", upsert: true });
+      .upload(path, blob, { cacheControl: "3600", upsert: true, contentType: "image/jpeg" });
 
     if (uploadError) {
       console.error("[EventForm] Image upload failed:", uploadError);
