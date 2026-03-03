@@ -5,17 +5,20 @@ import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  params: { id: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function VenuePage({ params, searchParams }: PageProps) {
-  const isPreview =
-    searchParams?.preview === "true" ||
-    (Array.isArray(searchParams?.preview) &&
-      searchParams.preview.includes("true"));
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
 
-  const venue = await getVenueWithEventsForConsumerById(params.id, {
+  const isPreview =
+    resolvedSearchParams.preview === "true" ||
+    (Array.isArray(resolvedSearchParams.preview) &&
+      resolvedSearchParams.preview.includes("true"));
+
+  const venue = await getVenueWithEventsForConsumerById(id, {
     includeUnpublished: isPreview,
   });
 
