@@ -100,14 +100,27 @@ export default async function AdminVenuePage() {
             Manage your venue details, hours, and settings.
           </p>
         </div>
-        {venue && (
+        {venue?.id && (
           <a
             href={`/venue/${venue.id}?preview=true`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium whitespace-nowrap"
+            className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
           >
-            Preview
+            <span>Preview</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M7 17L17 7" />
+              <path d="M7 7h10v10" />
+            </svg>
           </a>
         )}
       </div>
