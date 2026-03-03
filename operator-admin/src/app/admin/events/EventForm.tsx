@@ -187,6 +187,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hydrate from server-loaded event data.
@@ -229,6 +230,12 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
         setError("End time must be after the start time.");
         return;
       }
+    }
+
+    // ── Image required to publish ─────────────────────────────────────────
+    if (formState.isPublished && !imageUrl) {
+      setError("An event image is required to publish. Upload an image first, or save as unpublished.");
+      return;
     }
 
     setIsSaving(true);
@@ -346,6 +353,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
     }
 
     setImageUrl(publicUrl);
+    setPublishError(null); // image requirement now met — clear any publish error
     setIsUploadingImage(false);
   };
 
@@ -617,30 +625,43 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
       </div>
 
       {/* Published toggle */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={formState.isPublished}
-          onClick={() => update("isPublished", !formState.isPublished)}
-          disabled={isSaving}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-            formState.isPublished ? "bg-amber-500" : "bg-gray-200"
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-              formState.isPublished ? "translate-x-5" : "translate-x-0"
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={formState.isPublished}
+            onClick={() => {
+              // Block turning on published when no image is present.
+              if (!formState.isPublished && !imageUrl) {
+                setPublishError("You must add an event image before publishing.");
+                return;
+              }
+              setPublishError(null);
+              update("isPublished", !formState.isPublished);
+            }}
+            disabled={isSaving}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              formState.isPublished ? "bg-amber-500" : "bg-gray-200"
             }`}
-          />
-        </button>
-        <span className="text-sm font-medium text-gray-700">
-          {formState.isPublished ? "Published" : "Unpublished"}
-        </span>
-        {!formState.isPublished && (
-          <span className="text-xs text-gray-400">
-            Visible only to you until published.
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                formState.isPublished ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-gray-700">
+            {formState.isPublished ? "Published" : "Unpublished"}
           </span>
+          {!formState.isPublished && (
+            <span className="text-xs text-gray-400">
+              Visible only to you until published.
+            </span>
+          )}
+        </div>
+        {publishError && (
+          <p className="text-sm text-red-600">{publishError}</p>
         )}
       </div>
 

@@ -9,6 +9,7 @@ import LinksForm from "./LinksForm";
 import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
 import VenueImagesSection from "./VenueImagesSection";
+import VenuePublishSection from "./VenuePublishSection";
 
 /**
  * Venue row as returned by Supabase select("*").
@@ -30,6 +31,7 @@ type AdminVenueRow = {
   /** TEXT column — stored as a JSON array string, e.g. '["Visa","Cash"]' */
   payment_types?: string | null;
   menu_url?: string | null;
+  is_published?: boolean | null;
 };
 
 /**
@@ -192,6 +194,18 @@ export default async function AdminVenuePage() {
             description="Upload up to 5 images. The first image is used as the primary image."
           >
             <VenueImagesSection venueId={venue.id} />
+          </AccordionSection>
+
+          {/* Section 6: Publish — requires at least one venue image */}
+          <AccordionSection
+            title="Publish"
+            description="Make your venue visible to the public. At least one venue image is required."
+          >
+            <VenuePublishSection
+              venueId={venue.id}
+              operatorId={operator.id}
+              initialIsPublished={venue.is_published ?? false}
+            />
           </AccordionSection>
 
         </div>
