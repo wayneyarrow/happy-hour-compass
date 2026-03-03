@@ -11,6 +11,8 @@ export default function LoginPage() {
   const supabase = createClient();
 
   const [mode, setMode] = useState<Mode>("signin");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,7 +37,21 @@ export default function LoginPage() {
         router.refresh();
       }
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
+      if (!firstName.trim() || !lastName.trim()) {
+        setErrorMsg("Please enter your first and last name.");
+        setLoading(false);
+        return;
+      }
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+          },
+        },
+      });
       if (error) {
         setErrorMsg(error.message);
       } else {
@@ -94,6 +110,47 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="first-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  First name
+                </label>
+                <input
+                  id="first-name"
+                  type="text"
+                  required
+                  autoComplete="given-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Jane"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="last-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Last name
+                </label>
+                <input
+                  id="last-name"
+                  type="text"
+                  required
+                  autoComplete="family-name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Smith"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label
               htmlFor="email"
