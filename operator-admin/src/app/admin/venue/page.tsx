@@ -93,11 +93,23 @@ export default async function AdminVenuePage() {
   return (
     <div className="max-w-2xl">
       {/* Page heading */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Venue</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Manage your venue details, hours, and settings.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Venue</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage your venue details, hours, and settings.
+          </p>
+        </div>
+        {venue && (
+          <a
+            href={`/venue/${venue.id}?preview=true`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium whitespace-nowrap"
+          >
+            Preview
+          </a>
+        )}
       </div>
 
       {/* Operator error */}
