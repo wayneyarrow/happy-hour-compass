@@ -22,15 +22,15 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
       {/* ── Top header ─────────────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+      <header className="bg-white border-b border-slate-200 shadow-sm px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <Image
             src="/logo.png"
             alt="Happy Hour Compass"
-            width={28}
-            height={28}
+            width={36}
+            height={36}
             className="rounded-md shrink-0"
           />
           <div>
@@ -49,7 +49,7 @@ export default async function AdminLayout({
       {/* ── Sidebar + content ──────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         <AdminSideNav />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-6 md:p-8">{children}</main>
       </div>
     </div>
   );

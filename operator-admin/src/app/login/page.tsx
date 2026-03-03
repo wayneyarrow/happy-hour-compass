@@ -69,12 +69,12 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         {/* Logo — centered above the card */}
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-8">
           <Image
             src="/logo.png"
             alt="Happy Hour Compass"
-            width={56}
-            height={56}
+            width={80}
+            height={80}
             className="rounded-xl"
           />
         </div>

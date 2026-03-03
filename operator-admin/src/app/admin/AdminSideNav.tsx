@@ -20,7 +20,7 @@ export default function AdminSideNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="w-52 shrink-0 bg-white border-r border-gray-200 overflow-y-auto py-4">
+    <nav className="w-52 shrink-0 bg-slate-100 border-r border-slate-200 overflow-y-auto py-4">
       <ul className="space-y-0.5 px-3">
         {NAV_ITEMS.map(({ label, href }) => {
           const isActive = pathname === href || pathname.startsWith(href + "/");
