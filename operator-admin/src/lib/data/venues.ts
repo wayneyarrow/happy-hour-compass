@@ -12,6 +12,10 @@
 import fs from "fs";
 import path from "path";
 import { createAdminClient } from "@/lib/supabase/server";
+import {
+  type ConsumerEvent,
+  getEventsForConsumerVenues,
+} from "@/lib/data/events";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -45,6 +49,7 @@ export type ConsumerVenue = {
   hoursWeekly: Record<string, string>;
   specialsFood: string[];
   specialsDrinks: string[];
+  events: ConsumerEvent[];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +276,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     ),
     specialsFood: parseSpecials(row.hh_food_details as string | null),
     specialsDrinks: parseSpecials(row.hh_drink_details as string | null),
+    events: [], // populated by getPublishedVenuesForConsumer after event fetch
   };
 }
 
@@ -294,7 +300,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
     const { data, error } = await supabase
       .from("venues")
       .select(
-        "slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
+        "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours"
       )
       .eq("is_published", true)
@@ -305,10 +311,34 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       return [];
     }
 
+    const rows = data ?? [];
+
+    // Map venue rows to ConsumerVenue (events: [] initially)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data ?? []).map((row: Record<string, any>) =>
+    const venues = rows.map((row: Record<string, any>) =>
       rowToConsumerVenue(row)
     );
+
+    // Collect DB UUIDs (venues.id) — distinct from the consumer-facing slug
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const venueUuids = rows.map((r: Record<string, any>) => r.id as string);
+
+    // Fetch all published events for these venues in a single query
+    const allEvents = await getEventsForConsumerVenues(venueUuids);
+
+    // Build a UUID → venue-array-index map for O(1) attachment
+    const uuidToIdx: Record<string, number> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows.forEach((r: Record<string, any>, i: number) => {
+      uuidToIdx[r.id as string] = i;
+    });
+
+    for (const event of allEvents) {
+      const idx = uuidToIdx[event.venueId];
+      if (idx !== undefined) venues[idx].events.push(event);
+    }
+
+    return venues;
   } catch (err) {
     console.error("[getPublishedVenuesForConsumer] Unexpected error:", err);
     return [];
@@ -424,6 +454,7 @@ export function getVenuesFromCsv(): ConsumerVenue[] {
               .map((s) => s.trim())
               .filter(Boolean)
           : [],
+        events: [], // CSV path does not provide structured event data
       });
     }
 

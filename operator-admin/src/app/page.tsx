@@ -40,6 +40,20 @@ export default async function ConsumerHomePage() {
                     {venue.happyHourTagline}
                   </p>
                 )}
+                {venue.events.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                    {venue.events.map((event) => (
+                      <li key={event.id}>
+                        <span className="font-medium">{event.title}</span>
+                        {event.nextOccurrenceLabel && (
+                          <span className="ml-1 text-gray-500">
+                            · {event.nextOccurrenceLabel}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
