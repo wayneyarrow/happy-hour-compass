@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 
@@ -66,7 +67,19 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+      <div className="w-full max-w-md">
+        {/* Logo — centered above the card */}
+        <div className="flex justify-center mb-6">
+          <Image
+            src="/logo.png"
+            alt="Happy Hour Compass"
+            width={56}
+            height={56}
+            className="rounded-xl"
+          />
+        </div>
+
+        <div className="bg-white p-8 rounded-xl shadow-md">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">
@@ -214,7 +227,8 @@ export default function LoginPage() {
               : "Create Account"}
           </button>
         </form>
-      </div>
+        </div>{/* end card */}
+      </div>{/* end max-w-md wrapper */}
     </main>
   );
 }

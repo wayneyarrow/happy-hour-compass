@@ -5,7 +5,7 @@ export default function AdminMarketingPage() {
       <p className="text-sm text-gray-500 mb-6">
         Promotions, featured placements, and campaign tools.
       </p>
-      <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
         <p className="text-sm font-medium text-gray-600">Coming soon</p>
         <p className="text-xs text-gray-400 mt-1">
           Marketing and promotion tools will be available here.

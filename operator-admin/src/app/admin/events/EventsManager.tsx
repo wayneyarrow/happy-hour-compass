@@ -119,14 +119,14 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
         </div>
 
         {events.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
             <p className="text-sm font-medium text-gray-600">No events yet</p>
             <p className="text-xs text-gray-400 mt-1">
               Click &ldquo;+ New event&rdquo; to create your first event.
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <ul className="divide-y divide-gray-100">
               {events.map((event) => {
                 const isSelected = event.id === selectedId;
@@ -183,7 +183,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
       <div>
         {mode === "idle" ? (
           /* Empty state — shown on initial load and after any save or delete */
-          <div className="bg-white rounded-xl border border-gray-200 px-8 py-12 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-8 py-12 text-center">
             <p className="text-sm font-semibold text-gray-700">No event selected</p>
             <p className="text-sm text-gray-400 mt-1.5">
               Choose an event on the left or create a new one to get started.
@@ -208,7 +208,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               {/*
                 key={selectedId ?? "new"} forces a clean remount whenever the
                 selection changes, giving EventForm a fresh empty state for "New

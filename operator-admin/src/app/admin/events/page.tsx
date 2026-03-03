@@ -74,7 +74,7 @@ export default async function AdminEventsPage() {
 
       {/* No venue yet */}
       {!operatorError && !venueError && operator && !venue && (
-        <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
           <p className="text-sm font-medium text-gray-700">
             No venue set up yet
           </p>

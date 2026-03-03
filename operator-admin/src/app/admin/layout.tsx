@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import AdminSideNav from "./AdminSideNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
 
@@ -24,9 +25,18 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Top header ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
-        <div>
-          <p className="text-lg font-bold text-gray-900">Happy Hour Compass</p>
-          <p className="text-xs text-gray-400 mt-0.5">Operator Admin</p>
+        <div className="flex items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="Happy Hour Compass"
+            width={28}
+            height={28}
+            className="rounded-md shrink-0"
+          />
+          <div>
+            <p className="text-lg font-bold text-gray-900">Happy Hour Compass</p>
+            <p className="text-xs text-gray-400 mt-0.5">Operator Admin</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 hidden sm:block">
