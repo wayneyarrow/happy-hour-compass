@@ -178,6 +178,12 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
   );
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    initialEvent?.image_url ?? null
+  );
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +202,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
       isPublished: initialEvent.is_published ?? false,
     });
     setCurrentEventId(initialEvent.id);
+    setImageUrl(initialEvent.image_url ?? null);
   }, [initialEvent]);
 
   function update<K extends keyof EventFormState>(key: K, value: EventFormState[K]) {
@@ -294,6 +301,89 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
     onSaved?.(savedId);
+  };
+
+  // ── Image upload / remove ─────────────────────────────────────────────────
+
+  const handleImageUpload = async (file: File) => {
+    if (!currentEventId) return;
+    setImageError(null);
+    setIsUploadingImage(true);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+
+    const supabase = createClient();
+    const path = `events/${currentEventId}/${Date.now()}-${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("venue-images")
+      .upload(path, file, { cacheControl: "3600", upsert: true });
+
+    if (uploadError) {
+      console.error("[EventForm] Image upload failed:", uploadError);
+      setImageError(`Upload failed: ${uploadError.message}`);
+      setIsUploadingImage(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("venue-images")
+      .getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from("events")
+      .update({ image_url: publicUrl })
+      .eq("id", currentEventId)
+      .eq("created_by_operator_id", operatorId);
+
+    if (updateError) {
+      console.error("[EventForm] image_url update failed:", updateError);
+      setImageError(`Failed to save image: ${updateError.message}`);
+      // Best-effort: remove the just-uploaded file to avoid orphans.
+      await supabase.storage.from("venue-images").remove([path]);
+      setIsUploadingImage(false);
+      return;
+    }
+
+    setImageUrl(publicUrl);
+    setIsUploadingImage(false);
+  };
+
+  const handleImageRemove = async () => {
+    if (!currentEventId) return;
+    setImageError(null);
+    setIsUploadingImage(true);
+
+    const supabase = createClient();
+
+    const { error: updateError } = await supabase
+      .from("events")
+      .update({ image_url: null })
+      .eq("id", currentEventId)
+      .eq("created_by_operator_id", operatorId);
+
+    if (updateError) {
+      console.error("[EventForm] image_url remove failed:", updateError);
+      setImageError(`Failed to remove image: ${updateError.message}`);
+      setIsUploadingImage(false);
+      return;
+    }
+
+    // Best-effort: also delete the file from storage.
+    if (imageUrl) {
+      try {
+        const urlObj = new URL(imageUrl);
+        const match = urlObj.pathname.match(/\/public\/[^/]+\/(.+)$/);
+        if (match?.[1]) {
+          await supabase.storage.from("venue-images").remove([match[1]]);
+        }
+      } catch {
+        // Non-fatal — the DB row is already cleared.
+      }
+    }
+
+    setImageUrl(null);
+    setIsUploadingImage(false);
   };
 
   const preview = getDateTimePreview(formState);
@@ -424,6 +514,106 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
         <p className="mt-1 text-xs text-gray-400 text-right tabular-nums">
           {formState.description.length} / {DESCRIPTION_MAX} characters
         </p>
+      </div>
+
+      {/* 6. Event image */}
+      <div className="pt-2 border-t border-gray-100">
+        {/* Shared hidden file input — triggered by both Upload and Replace */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          disabled={isUploadingImage || isSaving}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImageUpload(file);
+          }}
+        />
+
+        <p className={labelCls}>
+          Event image{" "}
+          <span className="text-gray-400 font-normal">(required to publish)</span>
+        </p>
+        <p className="text-xs text-gray-400 mb-3">
+          Upload a single image for the event listing and detail page.
+        </p>
+
+        {imageError && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+            {imageError}
+          </div>
+        )}
+
+        {!currentEventId ? (
+          /* New event — must save first */
+          <div>
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-sm font-medium cursor-not-allowed"
+            >
+              Save event to upload image
+            </button>
+            <p className="text-xs text-gray-400 mt-2">
+              Save the event details first, then you can upload an image.
+            </p>
+          </div>
+        ) : imageUrl ? (
+          /* Image exists — show thumbnail + Replace / Remove controls */
+          <div className="flex items-start gap-4">
+            <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt="Event image"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isUploadingImage || isSaving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploadingImage ? "Uploading…" : "Replace image"}
+              </button>
+              <button
+                type="button"
+                onClick={handleImageRemove}
+                disabled={isUploadingImage || isSaving}
+                className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Remove image
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* No image yet */
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isUploadingImage || isSaving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg
+              className="w-4 h-4 shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4"
+              />
+            </svg>
+            {isUploadingImage ? "Uploading…" : "Upload image"}
+          </button>
+        )}
       </div>
 
       {/* Published toggle */}
