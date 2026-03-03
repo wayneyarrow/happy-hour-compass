@@ -345,6 +345,65 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
   }
 }
 
+/**
+ * Fetches a single venue by its slug from Supabase, with optional preview.
+ *
+ * In normal mode (includeUnpublished = false / unset) only published venues
+ * are returned.  In preview mode (includeUnpublished = true) unpublished
+ * venues are also returned — this is intended for the operator preview flow.
+ *
+ * Always uses the service-role client to bypass RLS.
+ * Returns null on any error or when the venue is not found.
+ */
+export async function getVenueWithEventsForConsumerById(
+  id: string,
+  options?: { includeUnpublished?: boolean }
+): Promise<ConsumerVenue | null> {
+  try {
+    const supabase = createAdminClient();
+    let query = supabase
+      .from("venues")
+      .select(
+        "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
+          "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours"
+      )
+      .eq("slug", id);
+
+    if (!options?.includeUnpublished) {
+      query = query.eq("is_published", true);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (query as any).maybeSingle();
+
+    if (error) {
+      console.error(
+        "[getVenueWithEventsForConsumerById] Supabase error:",
+        error
+      );
+      return null;
+    }
+
+    if (!data) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = data as Record<string, any>;
+    const venue = rowToConsumerVenue(row);
+
+    // Fetch events using the DB UUID (row.id), not the slug
+    const venueUuid = row.id as string;
+    venue.events = await getEventsForConsumerVenues([venueUuid]);
+
+    return venue;
+  } catch (err) {
+    console.error(
+      "[getVenueWithEventsForConsumerById] Unexpected error:",
+      err
+    );
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CSV fallback path
 // ─────────────────────────────────────────────────────────────────────────────

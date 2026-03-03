@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { USE_SUPABASE_VENUES } from "@/lib/flags";
 import {
   getPublishedVenuesForConsumer,
@@ -27,33 +28,34 @@ export default async function ConsumerHomePage() {
         ) : (
           <ul className="space-y-4">
             {venues.map((venue) => (
-              <li
-                key={venue.id}
-                className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
-              >
-                <h2 className="font-semibold text-gray-900">{venue.name}</h2>
-                {venue.city && (
-                  <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
-                )}
-                {venue.happyHourTagline && (
-                  <p className="text-sm text-amber-700 mt-1">
-                    {venue.happyHourTagline}
-                  </p>
-                )}
-                {venue.events.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                    {venue.events.map((event) => (
-                      <li key={event.id}>
-                        <span className="font-medium">{event.title}</span>
-                        {event.nextOccurrenceLabel && (
-                          <span className="ml-1 text-gray-500">
-                            · {event.nextOccurrenceLabel}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <li key={venue.id}>
+                <Link href={`/venue/${venue.id}`}>
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
+                    <h2 className="font-semibold text-gray-900">{venue.name}</h2>
+                    {venue.city && (
+                      <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
+                    )}
+                    {venue.happyHourTagline && (
+                      <p className="text-sm text-amber-700 mt-1">
+                        {venue.happyHourTagline}
+                      </p>
+                    )}
+                    {venue.events.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                        {venue.events.map((event) => (
+                          <li key={event.id}>
+                            <span className="font-medium">{event.title}</span>
+                            {event.nextOccurrenceLabel && (
+                              <span className="ml-1 text-gray-500">
+                                · {event.nextOccurrenceLabel}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>
