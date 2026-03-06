@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { VenueList } from "./VenueList";
 
 // Force a fresh Supabase query on every request — no static or router cache.
 export const dynamic = "force-dynamic";
@@ -32,39 +33,7 @@ export default async function ConsumerHomePage() {
         {venues.length === 0 ? (
           <p className="text-gray-500 text-sm">No venues available right now.</p>
         ) : (
-          <ul className="space-y-4">
-            {venues.map((venue) => (
-              <li key={venue.id}>
-                <Link href={`/venue/${venue.id}`}>
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
-                    <h2 className="font-semibold text-gray-900">{venue.name}</h2>
-                    {venue.city && (
-                      <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
-                    )}
-                    {venue.happyHourTagline && (
-                      <p className="text-sm text-amber-700 mt-1">
-                        {venue.happyHourTagline}
-                      </p>
-                    )}
-                    {venue.events.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                        {venue.events.map((event) => (
-                          <li key={event.id}>
-                            <span className="font-medium">{event.title}</span>
-                            {event.nextOccurrenceLabel && (
-                              <span className="ml-1 text-gray-500">
-                                · {event.nextOccurrenceLabel}
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <VenueList venues={venues} />
         )}
       </div>
     </main>
