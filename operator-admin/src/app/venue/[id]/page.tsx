@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
+import { VenueDistance } from "./VenueDistance";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -110,9 +111,17 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         )}
 
         {/* Status / meta line */}
-        {statusParts.length > 0 && (
+        {(statusParts.length > 0 ||
+          (venue.latitude !== null && venue.longitude !== null)) && (
           <p className="text-xs text-gray-400 mb-3">
             {statusParts.join(" \u2022 ")}
+            {venue.latitude !== null && venue.longitude !== null && (
+              <VenueDistance
+                lat={venue.latitude}
+                lng={venue.longitude}
+                separator={statusParts.length > 0 ? " \u2022 " : ""}
+              />
+            )}
           </p>
         )}
 
