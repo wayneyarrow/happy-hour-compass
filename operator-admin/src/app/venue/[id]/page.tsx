@@ -59,6 +59,14 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     venue.specialsFood.length > 0 ||
     venue.specialsDrinks.length > 0;
 
+  const hasInfoData = [
+    venue.address,
+    venue.phone,
+    venue.websiteUrl,
+    venue.menuUrl,
+    venue.paymentMethods,
+  ].some(Boolean);
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Hero image */}
@@ -112,6 +120,61 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
                   />
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Info section */}
+        {hasInfoData && (
+          <section className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Info</h2>
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {venue.address && (
+                <div className="px-4 py-3">
+                  <p className="text-xs text-gray-400 mb-0.5">Address</p>
+                  <p className="text-sm text-gray-800">{venue.address}</p>
+                </div>
+              )}
+              {venue.phone && (
+                <div className="px-4 py-3">
+                  <a
+                    href={`tel:${venue.phone}`}
+                    className="text-sm text-amber-700 hover:underline"
+                  >
+                    {venue.phone}
+                  </a>
+                </div>
+              )}
+              {venue.websiteUrl && (
+                <div className="px-4 py-3">
+                  <a
+                    href={venue.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-amber-700 hover:underline"
+                  >
+                    Website ↗
+                  </a>
+                </div>
+              )}
+              {venue.menuUrl && (
+                <div className="px-4 py-3">
+                  <a
+                    href={venue.menuUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-amber-700 hover:underline"
+                  >
+                    Menu ↗
+                  </a>
+                </div>
+              )}
+              {venue.paymentMethods && (
+                <div className="px-4 py-3">
+                  <p className="text-xs text-gray-400 mb-0.5">Payment</p>
+                  <p className="text-sm text-gray-800">{venue.paymentMethods}</p>
+                </div>
+              )}
             </div>
           </section>
         )}
