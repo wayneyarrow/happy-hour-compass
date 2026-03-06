@@ -98,9 +98,43 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         )}
 
         {venue.happyHourTagline && (
-          <p className="text-base text-amber-700 mb-6">
+          <p className="text-base text-amber-700 mb-4">
             {venue.happyHourTagline}
           </p>
+        )}
+
+        {/* Action buttons */}
+        {(venue.phone || venue.websiteUrl || venue.address) && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {venue.phone && (
+              <a
+                href={`tel:${venue.phone}`}
+                className="inline-block px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Call
+              </a>
+            )}
+            {venue.websiteUrl && (
+              <a
+                href={venue.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Website
+              </a>
+            )}
+            {venue.address && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Directions
+              </a>
+            )}
+          </div>
         )}
 
         {/* Additional images gallery */}
