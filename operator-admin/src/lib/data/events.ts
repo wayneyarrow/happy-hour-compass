@@ -305,11 +305,31 @@ export type ConsumerEventListItem = {
 };
 
 /**
+ * Returns 0 (upcoming), 1 (past), or 2 (undated) for sorting.
+ *
+ * Recurring events are always treated as upcoming because they continue to
+ * fire regardless of when first_date falls. One-off events (recurrence "none"
+ * or absent) are past when first_date < today.
+ */
+function upcomingBucket(
+  firstDate: string | null,
+  recurrence: string | null,
+  today: string
+): 0 | 1 | 2 {
+  if (!firstDate) return 2;
+  const isRecurring = recurrence && recurrence !== "none";
+  if (isRecurring || firstDate >= today) return 0;
+  return 1;
+}
+
+/**
  * Fetches all published events for the consumer events discovery page.
  *
  * Joins the parent venue to include the venue name alongside each event.
- * Ordered by first_date ascending (nulls last) then title for a stable,
- * user-friendly sort. Returns an empty array on any error.
+ * Sorts in application code so that upcoming events appear first (soonest to
+ * farthest), followed by past one-off events, then undated events last.
+ * Recurring events are always treated as upcoming. Returns an empty array on
+ * any error.
  */
 export async function getPublishedEventsForConsumer(): Promise<
   ConsumerEventListItem[]
@@ -326,7 +346,6 @@ export async function getPublishedEventsForConsumer(): Promise<
           "venues(name)"
       )
       .eq("is_published", true)
-      .order("first_date", { ascending: true, nullsFirst: false })
       .order("title", { ascending: true });
 
     if (error) {
@@ -334,8 +353,35 @@ export async function getPublishedEventsForConsumer(): Promise<
       return [];
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data ?? []).map((row: Record<string, any>) => ({
+    const rows = (data ?? []) as Record<string, any>[];
+
+    rows.sort((a, b) => {
+      const bA = upcomingBucket(a.first_date, a.recurrence, today);
+      const bB = upcomingBucket(b.first_date, b.recurrence, today);
+      if (bA !== bB) return bA - bB;
+
+      if (bA === 0) {
+        // Upcoming: soonest first; undated recurring after dated upcoming
+        const dA = a.first_date as string | null;
+        const dB = b.first_date as string | null;
+        if (dA && dB && dA !== dB) return dA < dB ? -1 : 1;
+        if (dA && !dB) return -1;
+        if (!dA && dB) return 1;
+      } else if (bA === 1) {
+        // Past: most recent first
+        const dA = a.first_date as string;
+        const dB = b.first_date as string;
+        if (dA !== dB) return dA < dB ? 1 : -1;
+      }
+
+      // Tie-break: title alphabetical (already DB-sorted)
+      return 0;
+    });
+
+    return rows.map((row: Record<string, any>) => ({
       id: row.id as string,
       title: (row.title as string) ?? "",
       description: (row.description as string | null) ?? null,
