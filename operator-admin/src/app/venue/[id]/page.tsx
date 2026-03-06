@@ -26,9 +26,24 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     notFound();
   }
 
+  const [heroImage, ...additionalImages] = venue.images;
+
   return (
     <main className="min-h-screen bg-gray-50">
-      <div className="max-w-md mx-auto py-8 px-4">
+      {/* Hero image */}
+      {heroImage && (
+        <div className="w-full bg-gray-200">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={heroImage.url}
+            alt={venue.name}
+            className="w-full object-cover"
+            style={{ maxHeight: "320px" }}
+          />
+        </div>
+      )}
+
+      <div className="max-w-md mx-auto py-6 px-4">
         {isPreview && (
           <div className="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
             Preview mode — this venue may not be publicly visible yet.
@@ -47,6 +62,27 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           <p className="text-base text-amber-700 mb-6">
             {venue.happyHourTagline}
           </p>
+        )}
+
+        {/* Additional images gallery */}
+        {additionalImages.length > 0 && (
+          <section className="mb-6">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {additionalImages.map((img, i) => (
+                <div
+                  key={i}
+                  className="shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-gray-200"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.url}
+                    alt={`${venue.name} photo ${i + 2}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {venue.events.length > 0 ? (

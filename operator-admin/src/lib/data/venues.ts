@@ -16,6 +16,11 @@ import {
 // Public type
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A single venue image ordered by sort_order from the media table. */
+export type ConsumerVenueImage = {
+  url: string;
+};
+
 /**
  * The venue shape consumed by the consumer UI.
  * Matches the object constructed by loadVenuesFromCSV() in index.html.
@@ -45,6 +50,13 @@ export type ConsumerVenue = {
   specialsFood: string[];
   specialsDrinks: string[];
   events: ConsumerEvent[];
+  /**
+   * Ordered venue images from the media table (type = 'venue_image').
+   * First element is the hero image. Populated only by single-venue fetches;
+   * the list fetch leaves this as [] to avoid N+1 queries on the home page.
+   * Future plan limits can be applied by slicing this array before rendering.
+   */
+  images: ConsumerVenueImage[];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,7 +283,8 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     ),
     specialsFood: parseSpecials(row.hh_food_details as string | null),
     specialsDrinks: parseSpecials(row.hh_drink_details as string | null),
-    events: [], // populated by getPublishedVenuesForConsumer after event fetch
+    events: [],  // populated by callers after event fetch
+    images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
   };
 }
 
@@ -385,9 +398,24 @@ export async function getVenueWithEventsForConsumerById(
     const row = data as Record<string, any>;
     const venue = rowToConsumerVenue(row);
 
-    // Fetch events using the DB UUID (row.id), not the slug
+    // Fetch events and images using the DB UUID (row.id), not the slug
     const venueUuid = row.id as string;
-    venue.events = await getEventsForConsumerVenues([venueUuid]);
+
+    const [events, imageData] = await Promise.all([
+      getEventsForConsumerVenues([venueUuid]),
+      supabase
+        .from("media")
+        .select("url")
+        .eq("venue_id", venueUuid)
+        .eq("type", "venue_image")
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    venue.events = events;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    venue.images = (imageData.data ?? []).map((r: Record<string, any>) => ({
+      url: r.url as string,
+    }));
 
     return venue;
   } catch (err) {
