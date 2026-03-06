@@ -34,6 +34,22 @@ export type ConsumerEvent = {
   nextOccurrenceLabel: string;
 };
 
+/**
+ * Full event detail shape for the consumer event detail page.
+ * Includes venue context needed to render the page and link back.
+ */
+export type ConsumerEventDetail = {
+  id: string;
+  title: string;
+  description: string | null;
+  nextOccurrenceLabel: string;
+  /** Hero image URL from events.image_url (nullable). */
+  imageUrl: string | null;
+  /** Venue UUID — matches venues.id; used for the /venue/[id] back-link. */
+  venueId: string;
+  venueName: string;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers — occurrence label builder
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +160,80 @@ function buildOccurrenceLabel(row: ScheduleRow): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main helper
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches a single event by UUID for the consumer event detail page.
+ *
+ * In normal mode only published events are returned. In preview mode
+ * (includeUnpublished = true) unpublished events are also returned.
+ *
+ * Returns null on any error or when the event is not found.
+ */
+export async function getEventForConsumerById(
+  id: string,
+  options?: { includeUnpublished?: boolean }
+): Promise<ConsumerEventDetail | null> {
+  try {
+    const supabase = createAdminClient();
+
+    let query = supabase
+      .from("events")
+      .select(
+        "id, venue_id, title, description, image_url, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency"
+      )
+      .eq("id", id);
+
+    if (!options?.includeUnpublished) {
+      query = query.eq("is_published", true);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (query as any).maybeSingle();
+
+    if (error) {
+      console.error("[getEventForConsumerById] Supabase error:", error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = data as Record<string, any>;
+    const venueId = row.venue_id as string;
+
+    // Fetch the venue name for context display and back-link.
+    const { data: venueRow } = await supabase
+      .from("venues")
+      .select("name")
+      .eq("id", venueId)
+      .maybeSingle();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const venueName = ((venueRow as Record<string, any> | null)?.name as string) ?? "";
+
+    return {
+      id: row.id as string,
+      title: (row.title as string) ?? "",
+      description: (row.description as string | null) ?? null,
+      nextOccurrenceLabel: buildOccurrenceLabel({
+        first_date: row.first_date as string | null,
+        start_time: row.start_time as string | null,
+        end_time: row.end_time as string | null,
+        recurrence: row.recurrence as string | null,
+        event_time: row.event_time as string | null,
+        event_frequency: row.event_frequency as string | null,
+      }),
+      imageUrl: (row.image_url as string | null) ?? null,
+      venueId,
+      venueName,
+    };
+  } catch (err) {
+    console.error("[getEventForConsumerById] Unexpected error:", err);
+    return null;
+  }
+}
 
 /**
  * Fetches published events for the given venue UUIDs.

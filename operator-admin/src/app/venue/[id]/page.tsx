@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 
 // Never serve a stale version — preview mode must always read live DB data.
@@ -187,7 +188,12 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
                   key={event.id}
                   className="bg-white rounded-xl border border-gray-200 p-4"
                 >
-                  <div className="font-medium">{event.title}</div>
+                  <Link
+                    href={`/event/${event.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {event.title}
+                  </Link>
                   {event.nextOccurrenceLabel && (
                     <div className="text-gray-500 mt-0.5">
                       {event.nextOccurrenceLabel}
