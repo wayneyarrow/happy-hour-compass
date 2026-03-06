@@ -353,8 +353,16 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
   }
 }
 
+const VENUE_DETAIL_SELECT =
+  "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
+  "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours";
+
 /**
- * Fetches a single venue by its slug from Supabase, with optional preview.
+ * Fetches a single venue by route param from Supabase, with optional preview.
+ *
+ * Resolution order:
+ *   1. Try slug lookup (matches the consumer-facing URL format).
+ *   2. Fall back to raw id (UUID) lookup for direct / legacy URLs.
  *
  * In normal mode (includeUnpublished = false / unset) only published venues
  * are returned.  In preview mode (includeUnpublished = true) unpublished
@@ -364,38 +372,38 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
  * Returns null on any error or when the venue is not found.
  */
 export async function getVenueWithEventsForConsumerById(
-  id: string,
+  routeParam: string,
   options?: { includeUnpublished?: boolean }
 ): Promise<ConsumerVenue | null> {
   try {
     const supabase = createAdminClient();
-    let query = supabase
-      .from("venues")
-      .select(
-        "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
-          "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours"
-      )
-      .eq("id", id);
-
-    if (!options?.includeUnpublished) {
-      query = query.eq("is_published", true);
-    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (query as any).maybeSingle();
-
-    if (error) {
-      console.error(
-        "[getVenueWithEventsForConsumerById] Supabase error:",
-        error
-      );
-      return null;
+    async function queryVenue(field: "slug" | "id"): Promise<Record<string, any> | null> {
+      let q = supabase
+        .from("venues")
+        .select(VENUE_DETAIL_SELECT)
+        .eq(field, routeParam);
+      if (!options?.includeUnpublished) {
+        q = q.eq("is_published", true);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (q as any).maybeSingle();
+      if (error) {
+        console.error(
+          `[getVenueWithEventsForConsumerById] Supabase error (${field}):`,
+          error
+        );
+        return null;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data as Record<string, any>) ?? null;
     }
 
-    if (!data) return null;
+    const row = (await queryVenue("slug")) ?? (await queryVenue("id"));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const row = data as Record<string, any>;
+    if (!row) return null;
+
     const venue = rowToConsumerVenue(row);
 
     // Fetch events and images using the DB UUID (row.id), not the slug
