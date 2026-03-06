@@ -287,3 +287,74 @@ export async function getEventsForConsumerVenues(
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Events discovery
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Shape returned for each event on the consumer /events discovery page. */
+export type ConsumerEventListItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  nextOccurrenceLabel: string;
+  imageUrl: string | null;
+  /** Venue UUID — used for grouping and linking. */
+  venueId: string;
+  venueName: string;
+};
+
+/**
+ * Fetches all published events for the consumer events discovery page.
+ *
+ * Joins the parent venue to include the venue name alongside each event.
+ * Ordered by first_date ascending (nulls last) then title for a stable,
+ * user-friendly sort. Returns an empty array on any error.
+ */
+export async function getPublishedEventsForConsumer(): Promise<
+  ConsumerEventListItem[]
+> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        "id, venue_id, title, description, image_url, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, " +
+          "venues(name)"
+      )
+      .eq("is_published", true)
+      .order("first_date", { ascending: true, nullsFirst: false })
+      .order("title", { ascending: true });
+
+    if (error) {
+      console.error("[getPublishedEventsForConsumer] Supabase error:", error);
+      return [];
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((row: Record<string, any>) => ({
+      id: row.id as string,
+      title: (row.title as string) ?? "",
+      description: (row.description as string | null) ?? null,
+      nextOccurrenceLabel: buildOccurrenceLabel({
+        first_date: row.first_date as string | null,
+        start_time: row.start_time as string | null,
+        end_time: row.end_time as string | null,
+        recurrence: row.recurrence as string | null,
+        event_time: row.event_time as string | null,
+        event_frequency: row.event_frequency as string | null,
+      }),
+      imageUrl: (row.image_url as string | null) ?? null,
+      venueId: row.venue_id as string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      venueName:
+        ((row.venues as Record<string, any> | null)?.name as string) ?? "",
+    }));
+  } catch (err) {
+    console.error("[getPublishedEventsForConsumer] Unexpected error:", err);
+    return [];
+  }
+}
