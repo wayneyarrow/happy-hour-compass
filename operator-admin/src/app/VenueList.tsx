@@ -21,6 +21,8 @@ function haversineKm(
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+type VenueWithDist = { venue: ConsumerVenue; dist: number | null };
+
 type Props = {
   venues: ConsumerVenue[];
 };
@@ -32,7 +34,9 @@ type Props = {
  * unavailable, denied, or any venue lacks coordinates.
  */
 export function VenueList({ venues }: Props) {
-  const [sorted, setSorted] = useState(venues);
+  const [sorted, setSorted] = useState<VenueWithDist[]>(
+    () => venues.map((v) => ({ venue: v, dist: null }))
+  );
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -56,7 +60,7 @@ export function VenueList({ venues }: Props) {
           return a.dist - b.dist;
         });
 
-        setSorted(withDist.map((x) => x.venue));
+        setSorted(withDist);
       },
       () => {
         // Permission denied or error — keep original order.
@@ -67,13 +71,18 @@ export function VenueList({ venues }: Props) {
 
   return (
     <ul className="space-y-4">
-      {sorted.map((venue) => (
+      {sorted.map(({ venue, dist }) => (
         <li key={venue.id}>
           <Link href={`/venue/${venue.id}`}>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
               <h2 className="font-semibold text-gray-900">{venue.name}</h2>
               {venue.city && (
-                <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {venue.city}
+                  {dist !== null && (
+                    <span> · {dist.toFixed(1)} km</span>
+                  )}
+                </p>
               )}
               {venue.happyHourTagline && (
                 <p className="text-sm text-amber-700 mt-1">
