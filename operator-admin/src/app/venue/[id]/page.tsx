@@ -9,6 +9,27 @@ type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
+const HH_DAY_ORDER = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+/** Converts "HH:MM" (24h) to a short display string like "4 PM" or "4:30 PM". */
+function fmt12h(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return m === 0 ? `${h} ${ampm}` : `${h}:${mStr} ${ampm}`;
+}
+
 export default async function VenuePage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
@@ -27,6 +48,16 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
   }
 
   const [heroImage, ...additionalImages] = venue.images;
+
+  // Days with at least one happy hour slot, in canonical Sun→Sat order.
+  const hhActiveDays = HH_DAY_ORDER.filter(
+    (day) => (venue.happyHourWeekly[day]?.length ?? 0) > 0
+  );
+
+  const hasHappyHourData =
+    hhActiveDays.length > 0 ||
+    venue.specialsFood.length > 0 ||
+    venue.specialsDrinks.length > 0;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -81,6 +112,66 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
                   />
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Happy Hour section */}
+        {hasHappyHourData && (
+          <section className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">
+              Happy Hour
+            </h2>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+              {hhActiveDays.length > 0 && (
+                <div className="space-y-1.5">
+                  {hhActiveDays.map((day) => (
+                    <div key={day} className="flex gap-3 text-sm">
+                      <span className="w-8 shrink-0 text-gray-500">
+                        {day.slice(0, 3)}
+                      </span>
+                      <span className="text-gray-800">
+                        {venue.happyHourWeekly[day]
+                          .map(
+                            (s) =>
+                              `${fmt12h(s.start)}\u2013${fmt12h(s.end)}`
+                          )
+                          .join(", ")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {venue.specialsFood.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+                    Food
+                  </p>
+                  <ul className="space-y-1">
+                    {venue.specialsFood.map((item, i) => (
+                      <li key={i} className="text-sm text-gray-800">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {venue.specialsDrinks.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+                    Drinks
+                  </p>
+                  <ul className="space-y-1">
+                    {venue.specialsDrinks.map((item, i) => (
+                      <li key={i} className="text-sm text-gray-800">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </section>
         )}
