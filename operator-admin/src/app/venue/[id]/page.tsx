@@ -67,6 +67,18 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     venue.paymentMethods,
   ].some(Boolean);
 
+  // True when the venue has any hours-related data (HH schedule or business hours).
+  // Used to show an "Hours Available" placeholder in the status line.
+  const hasHoursData =
+    hasHappyHourData ||
+    Object.values(venue.hoursWeekly).some((h) => h !== "CLOSED");
+
+  // Status line parts — join with " • " when multiple items are present.
+  // Structured as an array so additional items (e.g. real type/category from a
+  // future DB column) can be pushed without restructuring the render logic.
+  const statusParts: string[] = [];
+  if (hasHoursData) statusParts.push("Hours Available");
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Hero image */}
@@ -94,7 +106,14 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         </h1>
 
         {venue.city && (
-          <p className="text-sm text-gray-500 mb-2">{venue.city}</p>
+          <p className="text-sm text-gray-500 mb-0.5">{venue.city}</p>
+        )}
+
+        {/* Status / meta line */}
+        {statusParts.length > 0 && (
+          <p className="text-xs text-gray-400 mb-3">
+            {statusParts.join(" \u2022 ")}
+          </p>
         )}
 
         {venue.happyHourTagline && (
