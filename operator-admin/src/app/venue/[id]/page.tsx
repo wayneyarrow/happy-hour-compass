@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 
 // Never serve a stale version — preview mode must always read live DB data.
@@ -175,43 +174,6 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
               )}
             </div>
           </section>
-        )}
-
-        {venue.events.length > 0 ? (
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Events
-            </h2>
-            <ul className="space-y-2 text-sm text-gray-800">
-              {venue.events.map((event) => (
-                <li
-                  key={event.id}
-                  className="bg-white rounded-xl border border-gray-200 p-4"
-                >
-                  <Link
-                    href={`/event/${event.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {event.title}
-                  </Link>
-                  {event.nextOccurrenceLabel && (
-                    <div className="text-gray-500 mt-0.5">
-                      {event.nextOccurrenceLabel}
-                    </div>
-                  )}
-                  {event.description && (
-                    <div className="text-gray-600 mt-1 text-xs">
-                      {event.description}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : (
-          <p className="text-sm text-gray-500">
-            No events listed yet for this venue.
-          </p>
         )}
       </div>
     </main>
