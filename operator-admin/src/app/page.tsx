@@ -1,17 +1,11 @@
 import Link from "next/link";
-import { USE_SUPABASE_VENUES } from "@/lib/flags";
-import {
-  getPublishedVenuesForConsumer,
-  getVenuesFromCsv,
-} from "@/lib/data/venues";
+import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 
 // Force a fresh Supabase query on every request — no static or router cache.
 export const dynamic = "force-dynamic";
 
 export default async function ConsumerHomePage() {
-  const venues = USE_SUPABASE_VENUES
-    ? await getPublishedVenuesForConsumer()
-    : getVenuesFromCsv();
+  const venues = await getPublishedVenuesForConsumer();
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">

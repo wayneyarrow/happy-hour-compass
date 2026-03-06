@@ -1,16 +1,11 @@
 /**
  * Server-side venue data helpers for the consumer app.
  *
- * Two paths:
- *   getPublishedVenuesForConsumer() — Supabase (service-role client, bypasses RLS)
- *   getVenuesFromCsv()             — legacy CSV fallback (venues.beta.csv in repo root)
- *
- * Both return ConsumerVenue[], the same shape the static HTML app constructs
- * from loadVenuesFromCSV() in index.html.
+ * All data is loaded from Supabase using the service-role client, which
+ * bypasses RLS. The consumer app has no authenticated session; a public-read
+ * policy will be added in a future migration.
  */
 
-import fs from "fs";
-import path from "path";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   type ConsumerEvent,
@@ -401,125 +396,5 @@ export async function getVenueWithEventsForConsumerById(
       err
     );
     return null;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CSV fallback path
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Minimal RFC-4180 CSV parser sufficient for venues.beta.csv. */
-function parseCSV(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuote = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuote = false;
-        }
-      } else {
-        field += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuote = true;
-      } else if (ch === ",") {
-        row.push(field);
-        field = "";
-      } else if (ch === "\n" || (ch === "\r" && text[i + 1] === "\n")) {
-        if (ch === "\r") i++;
-        row.push(field);
-        field = "";
-        rows.push(row);
-        row = [];
-      } else {
-        field += ch;
-      }
-    }
-  }
-  // Flush trailing content
-  if (field || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-/**
- * Reads venues from venues.beta.csv located one level above the Next.js
- * project root (i.e. in the happy-hour-compass repo root).
- *
- * Only used when USE_SUPABASE_VENUES is false.
- */
-export function getVenuesFromCsv(): ConsumerVenue[] {
-  try {
-    const csvPath = path.join(process.cwd(), "..", "venues.beta.csv");
-    const csvText = fs.readFileSync(csvPath, "utf-8");
-    const rows = parseCSV(csvText);
-    if (rows.length < 2) return [];
-
-    const headerIdx = rows.findIndex((r) => r[0].trim() === "id");
-    if (headerIdx === -1) return [];
-
-    const headers = rows[headerIdx].map((h) => h.trim());
-    const col: Record<string, number> = {};
-    headers.forEach((h, i) => {
-      col[h] = i;
-    });
-
-    const get = (row: string[], name: string) =>
-      col[name] !== undefined ? (row[col[name]] ?? "").trim() : "";
-
-    const venues: ConsumerVenue[] = [];
-    for (let r = headerIdx + 1; r < rows.length; r++) {
-      const row = rows[r];
-      const id = get(row, "id");
-      if (!id) continue;
-
-      venues.push({
-        id,
-        name: get(row, "name"),
-        type: get(row, "type") || "Restaurant",
-        city: get(row, "city"),
-        area: get(row, "area"),
-        latitude: parseFloat(get(row, "latitude")) || null,
-        longitude: parseFloat(get(row, "longitude")) || null,
-        address: get(row, "address"),
-        phone: get(row, "phone"),
-        websiteUrl: get(row, "url"),
-        menuUrl: get(row, "menu_url"),
-        paymentMethods: get(row, "payment_types"),
-        happyHourTagline: get(row, "happy_hour_tagline"),
-        happyHourWeekly: parseHhTimes(get(row, "happy_hour_times")),
-        hoursWeekly: {}, // CSV does not carry business_hours in beta file
-        specialsFood: get(row, "happy_hour_food_details")
-          ? get(row, "happy_hour_food_details")
-              .split("\n")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : [],
-        specialsDrinks: get(row, "happy_hour_drink_details")
-          ? get(row, "happy_hour_drink_details")
-              .split("\n")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : [],
-        events: [], // CSV path does not provide structured event data
-      });
-    }
-
-    return venues;
-  } catch (err) {
-    console.error("[getVenuesFromCsv] Failed to read CSV:", err);
-    return [];
   }
 }
