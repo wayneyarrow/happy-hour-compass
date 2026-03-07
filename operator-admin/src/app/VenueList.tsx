@@ -62,12 +62,40 @@ function getOpenStatus(
   return nowMin >= open && nowMin < close ? "Open Now" : "Closed";
 }
 
+// ─── happy hour helpers ───────────────────────────────────────────────────────
+
+/** Converts a 24h "HH:MM" string to a short display like "4 PM" or "4:30 PM". */
+function fmt12h(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return m === 0 ? `${h} ${ampm}` : `${h}:${mStr} ${ampm}`;
+}
+
+/**
+ * Returns the formatted earliest happy hour start time for today,
+ * or null if the venue has no happy hour today.
+ */
+function getHhStartToday(
+  happyHourWeekly: Record<string, Array<{ start: string; end: string }>>
+): string | null {
+  const dayName = DAYS[new Date().getDay()];
+  const slots = happyHourWeekly[dayName];
+  if (!slots || slots.length === 0) return null;
+  const earliest = slots.slice().sort((a, b) => a.start.localeCompare(b.start))[0];
+  return fmt12h(earliest.start);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 type VenueWithDist = {
   venue: ConsumerVenue;
   dist: number | null;
   openStatus: string | null;
+  hhStartToday: string | null;
 };
 
 type Props = {
@@ -76,26 +104,33 @@ type Props = {
 
 /**
  * Renders the venue discovery list.
- * On mount, computes open/closed status from business hours and requests
- * browser geolocation to re-sort venues nearest-first.
- * Falls back gracefully when either is unavailable.
+ * On mount, computes open/closed status and today's earliest HH start time
+ * from business/happy-hour data, and requests browser geolocation to
+ * re-sort venues nearest-first. Falls back gracefully when unavailable.
  */
 export function VenueList({ venues }: Props) {
   const [sorted, setSorted] = useState<VenueWithDist[]>(
-    () => venues.map((v) => ({ venue: v, dist: null, openStatus: null }))
+    () =>
+      venues.map((v) => ({
+        venue: v,
+        dist: null,
+        openStatus: null,
+        hhStartToday: null,
+      }))
   );
 
-  // Compute open/closed status client-side after hydration.
+  // Compute client-side derived values after hydration.
   useEffect(() => {
     setSorted((prev) =>
       prev.map((item) => ({
         ...item,
         openStatus: getOpenStatus(item.venue.hoursWeekly),
+        hhStartToday: getHhStartToday(item.venue.happyHourWeekly),
       }))
     );
   }, []);
 
-  // Request geolocation and re-sort nearest-first, preserving openStatus.
+  // Request geolocation and re-sort nearest-first, preserving derived values.
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -131,7 +166,7 @@ export function VenueList({ venues }: Props) {
 
   return (
     <ul className="space-y-4">
-      {sorted.map(({ venue, dist, openStatus }) => (
+      {sorted.map(({ venue, dist, openStatus, hhStartToday }) => (
         <li key={venue.id}>
           <Link href={`/venue/${venue.id}`}>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
@@ -153,6 +188,11 @@ export function VenueList({ venues }: Props) {
               {venue.happyHourTagline && (
                 <p className="text-sm text-amber-700 mt-1">
                   {venue.happyHourTagline}
+                </p>
+              )}
+              {hhStartToday && (
+                <p className="text-sm text-orange-600 mt-1">
+                  Happy hour starts at {hhStartToday}
                 </p>
               )}
               {venue.events.length > 0 && (
