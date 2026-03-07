@@ -30,21 +30,14 @@ function toIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function fmtFieldDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+/** Parse ISO date string to local day-of-week (0=Sun … 6=Sat). */
+function dowFromIso(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay();
 }
 
-function thisWeekendIsos(): string[] {
-  const today = new Date();
-  const dow = today.getDay();
-  const offset = (n: number) => {
-    const dt = new Date(today);
-    dt.setDate(today.getDate() + n);
-    return toIso(dt);
-  };
-  if (dow === 6) return [offset(0), offset(1)];
-  if (dow === 0) return [offset(-1), offset(0)];
-  return [offset(6 - dow), offset(7 - dow)];
+function fmtFieldDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 /** Ordered grid cells for the calendar month. null = empty leading cell. */
@@ -59,10 +52,49 @@ function buildCalendarCells(month: Date): Array<Date | null> {
   return cells;
 }
 
-// ─── Filter helper ────────────────────────────────────────────────────────────
+// ─── Filter helpers ───────────────────────────────────────────────────────────
 
-const isRecurring = (e: ConsumerEventListItem) =>
-  e.recurrence != null && e.recurrence !== "none";
+/**
+ * Does the event happen on the given day-of-week?
+ * Mirrors the original legacy logic: derive the event's day from firstDate
+ * (regardless of whether it's recurring or one-off). Events with no firstDate
+ * are shown permissively, just like the original "return true" fallback.
+ * Daily recurring events always match.
+ */
+function eventOccursOnDow(e: ConsumerEventListItem, dow: number): boolean {
+  if (e.recurrence === "daily") return true;
+  if (e.firstDate == null) return true; // permissive — matches original fallback
+  return dowFromIso(e.firstDate) === dow;
+}
+
+/**
+ * Does the event have any occurrence within the [start, end] date range?
+ * - One-offs (recurrence "none"): exact firstDate within range.
+ * - Recurring: check if the event's day-of-week appears anywhere in the range
+ *   (mirrors original eventDayFallsInRange logic).
+ * - Daily: always matches.
+ * - No firstDate: permissive.
+ */
+function eventOccursInRange(
+  e: ConsumerEventListItem,
+  start: Date,
+  end: Date
+): boolean {
+  if (e.recurrence === "daily") return true;
+  if (e.firstDate == null) return true;
+  if (e.recurrence === "none" || !e.recurrence) {
+    // One-off: exact date must fall within range
+    return e.firstDate >= toIso(start) && e.firstDate <= toIso(end);
+  }
+  // Recurring: does the event's day-of-week appear anywhere in the range?
+  const eventDow = dowFromIso(e.firstDate);
+  const cur = new Date(start);
+  while (cur <= end) {
+    if (cur.getDay() === eventDow) return true;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -72,8 +104,6 @@ type Props = {
 
 export function EventsDiscovery({ events }: Props) {
   const today = todayDate();
-  const todayStr = toIso(today);
-  const weekendDates = thisWeekendIsos();
 
   // ── Search (hidden by default, toggled by header icon) ────────────────────
   const [searchOpen, setSearchOpen] = useState(false);
@@ -90,6 +120,25 @@ export function EventsDiscovery({ events }: Props) {
   // ── Filter chips ────────────────────────────────────────────────────────────
   const [happeningTodayActive, setHappeningTodayActive] = useState(false);
   const [thisWeekendActive, setThisWeekendActive] = useState(false);
+
+  // Chip toggle: activating a chip clears the calendar (matches original behavior).
+  function toggleHappeningToday() {
+    setHappeningTodayActive((v) => !v);
+    setCalAppliedStart(null);
+    setCalAppliedEnd(null);
+    setCalSelectedStart(null);
+    setCalSelectedEnd(null);
+    if (calendarOpen) setCalendarOpen(false);
+  }
+
+  function toggleThisWeekend() {
+    setThisWeekendActive((v) => !v);
+    setCalAppliedStart(null);
+    setCalAppliedEnd(null);
+    setCalSelectedStart(null);
+    setCalSelectedEnd(null);
+    if (calendarOpen) setCalendarOpen(false);
+  }
 
   // ── Calendar state ──────────────────────────────────────────────────────────
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -144,8 +193,10 @@ export function EventsDiscovery({ events }: Props) {
     if (!calSelectedStart || !calSelectedEnd) return;
     setCalAppliedStart(calSelectedStart);
     setCalAppliedEnd(calSelectedEnd);
+    // Clear chip selections when calendar is applied (matches original behavior)
+    setHappeningTodayActive(false);
+    setThisWeekendActive(false);
     setCalendarOpen(false);
-    // TODO: wire applied range into event filter pipeline
   }
 
   function clearCalendarRange() {
@@ -154,7 +205,9 @@ export function EventsDiscovery({ events }: Props) {
     setCalAppliedStart(null);
     setCalAppliedEnd(null);
     setCalendarOpen(false);
-    // TODO: clear date filter from event filter pipeline
+    // Reset to "Happening Today" chip (matches original clearCalendarRange behavior)
+    setHappeningTodayActive(true);
+    setThisWeekendActive(false);
   }
 
   function getDayState(
@@ -183,6 +236,8 @@ export function EventsDiscovery({ events }: Props) {
     calendarMonth.getMonth() === today.getMonth();
 
   // ── Filter pipeline ────────────────────────────────────────────────────────
+  const todayDow = today.getDay();
+
   const filtered = events
     .filter((e) =>
       searchTerm
@@ -190,13 +245,24 @@ export function EventsDiscovery({ events }: Props) {
           e.venueName.toLowerCase().includes(searchTerm.toLowerCase())
         : true
     )
+    // "Happening Today": original logic — match events whose day-of-week equals
+    // today's day-of-week (permissive for undated events; always pass daily).
     .filter((e) =>
-      happeningTodayActive ? isRecurring(e) || e.firstDate === todayStr : true
+      happeningTodayActive ? eventOccursOnDow(e, todayDow) : true
     )
+    // "This Weekend": original logic — Saturday (6) or Sunday (0) events,
+    // regardless of specific weekend dates (permissive for undated events).
     .filter((e) =>
       thisWeekendActive
-        ? isRecurring(e) ||
-          (e.firstDate != null && weekendDates.includes(e.firstDate))
+        ? eventOccursOnDow(e, 0) || eventOccursOnDow(e, 6)
+        : true
+    )
+    // Calendar date range: one-offs must fall within range; recurring events
+    // match if their day-of-week appears anywhere in the range (mirrors original
+    // eventDayFallsInRange logic).
+    .filter((e) =>
+      calAppliedStart && calAppliedEnd
+        ? eventOccursInRange(e, calAppliedStart, calAppliedEnd)
         : true
     );
 
@@ -302,12 +368,12 @@ export function EventsDiscovery({ events }: Props) {
               {
                 label: "Happening Today",
                 active: happeningTodayActive,
-                toggle: () => setHappeningTodayActive((v) => !v),
+                toggle: toggleHappeningToday,
               },
               {
                 label: "This Weekend",
                 active: thisWeekendActive,
-                toggle: () => setThisWeekendActive((v) => !v),
+                toggle: toggleThisWeekend,
               },
             ] as const
           ).map(({ label, active, toggle }) => (
