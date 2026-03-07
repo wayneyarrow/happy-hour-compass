@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 import { VenueDistance } from "./VenueDistance";
+import { VenueOpenStatus } from "./VenueOpenStatus";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -68,17 +69,9 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     venue.paymentMethods,
   ].some(Boolean);
 
-  // True when the venue has any hours-related data (HH schedule or business hours).
-  // Used to show an "Hours Available" placeholder in the status line.
   const hasHoursData =
     hasHappyHourData ||
     Object.values(venue.hoursWeekly).some((h) => h !== "CLOSED");
-
-  // Status line parts — join with " • " when multiple items are present.
-  // Structured as an array so additional items (e.g. real type/category from a
-  // future DB column) can be pushed without restructuring the render logic.
-  const statusParts: string[] = [];
-  if (hasHoursData) statusParts.push("Hours Available");
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -111,15 +104,17 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         )}
 
         {/* Status / meta line */}
-        {(statusParts.length > 0 ||
+        {(hasHoursData ||
           (venue.latitude !== null && venue.longitude !== null)) && (
           <p className="text-xs text-gray-400 mb-3">
-            {statusParts.join(" \u2022 ")}
+            {hasHoursData && (
+              <VenueOpenStatus hoursWeekly={venue.hoursWeekly} />
+            )}
             {venue.latitude !== null && venue.longitude !== null && (
               <VenueDistance
                 lat={venue.latitude}
                 lng={venue.longitude}
-                separator={statusParts.length > 0 ? " \u2022 " : ""}
+                separator={hasHoursData ? " \u2022 " : ""}
               />
             )}
           </p>
