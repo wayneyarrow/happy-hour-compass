@@ -65,6 +65,8 @@ export function VenueDiscovery({ venues }: Props) {
   const [sportsBarsActive, setSportsBarsActive] = useState(false);
   const [happeningNowActive, setHappeningNowActive] = useState(false);
   const [nearMeActive, setNearMeActive] = useState(false);
+  const [fineDiningActive, setFineDiningActive] = useState(false);
+  const [underTenActive, setUnderTenActive] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const isMap = view === "map";
 
@@ -92,6 +94,16 @@ export function VenueDiscovery({ venues }: Props) {
       // Venues without coordinates are included (original behavior)
       if (v.latitude === null || v.longitude === null) return true;
       return haversineKm(userLocation.lat, userLocation.lng, v.latitude, v.longitude) <= NEAR_ME_RADIUS_KM;
+    })
+    .filter((v) =>
+      fineDiningActive
+        ? v.establishmentType?.toLowerCase() === "fine dining"
+        : true
+    )
+    .filter((v) => {
+      if (!underTenActive) return true;
+      const allSpecials = [...v.specialsFood, ...v.specialsDrinks];
+      return allSpecials.some((item) => /\$[1-9](?:\.\d{2})?(?:\s|$|[^0-9])/.test(item));
     });
 
   function handleNearMeClick() {
@@ -167,11 +179,15 @@ export function VenueDiscovery({ venues }: Props) {
                 const isNearMeChip = chip === "Near Me";
                 const isOpenNowChip = chip === "Open Now";
                 const isSportsBarsChip = chip === "Sports Bars";
+                const isFineDiningChip = chip === "Fine Dining";
+                const isUnderTenChip = chip === "Under $10";
                 const isActive =
                   (isHappeningNowChip && happeningNowActive) ||
                   (isNearMeChip && nearMeActive) ||
                   (isOpenNowChip && openNowActive) ||
-                  (isSportsBarsChip && sportsBarsActive);
+                  (isSportsBarsChip && sportsBarsActive) ||
+                  (isFineDiningChip && fineDiningActive) ||
+                  (isUnderTenChip && underTenActive);
                 return (
                   <button
                     key={chip}
@@ -185,6 +201,10 @@ export function VenueDiscovery({ venues }: Props) {
                         ? () => setOpenNowActive((v) => !v)
                         : isSportsBarsChip
                         ? () => setSportsBarsActive((v) => !v)
+                        : isFineDiningChip
+                        ? () => setFineDiningActive((v) => !v)
+                        : isUnderTenChip
+                        ? () => setUnderTenActive((v) => !v)
                         : undefined
                     }
                     className={
