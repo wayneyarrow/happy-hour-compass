@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
-import { VenueList, getOpenStatus, isHappeningNow } from "./VenueList";
+import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
 
 type View = "list" | "map";
 
@@ -64,7 +64,11 @@ export function VenueDiscovery({ venues }: Props) {
   const [openNowActive, setOpenNowActive] = useState(false);
   const [sportsBarsActive, setSportsBarsActive] = useState(false);
   const [happeningNowActive, setHappeningNowActive] = useState(false);
+  const [nearMeActive, setNearMeActive] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const isMap = view === "map";
+
+  const NEAR_ME_RADIUS_KM = 25;
 
   const filteredVenues = venues
     .filter((v) =>
@@ -82,7 +86,31 @@ export function VenueDiscovery({ venues }: Props) {
       sportsBarsActive
         ? v.establishmentType?.toLowerCase().includes("sports bar")
         : true
+    )
+    .filter((v) => {
+      if (!nearMeActive || !userLocation) return true;
+      // Venues without coordinates are included (original behavior)
+      if (v.latitude === null || v.longitude === null) return true;
+      return haversineKm(userLocation.lat, userLocation.lng, v.latitude, v.longitude) <= NEAR_ME_RADIUS_KM;
+    });
+
+  function handleNearMeClick() {
+    if (nearMeActive) {
+      setNearMeActive(false);
+      return;
+    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
+        setNearMeActive(true);
+      },
+      () => {
+        // Permission denied or error — do not activate filter
+      },
+      { timeout: 5000, maximumAge: 60_000 }
     );
+  }
 
   return (
     <>
@@ -136,10 +164,12 @@ export function VenueDiscovery({ venues }: Props) {
             <div className="chips-inner flex gap-2 w-max pb-0.5">
               {FILTER_CHIPS.map((chip) => {
                 const isHappeningNowChip = chip === "Happening Now";
+                const isNearMeChip = chip === "Near Me";
                 const isOpenNowChip = chip === "Open Now";
                 const isSportsBarsChip = chip === "Sports Bars";
                 const isActive =
                   (isHappeningNowChip && happeningNowActive) ||
+                  (isNearMeChip && nearMeActive) ||
                   (isOpenNowChip && openNowActive) ||
                   (isSportsBarsChip && sportsBarsActive);
                 return (
@@ -149,6 +179,8 @@ export function VenueDiscovery({ venues }: Props) {
                     onClick={
                       isHappeningNowChip
                         ? () => setHappeningNowActive((v) => !v)
+                        : isNearMeChip
+                        ? handleNearMeClick
                         : isOpenNowChip
                         ? () => setOpenNowActive((v) => !v)
                         : isSportsBarsChip
