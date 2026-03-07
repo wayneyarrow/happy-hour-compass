@@ -58,21 +58,25 @@ export default async function ConsumerHomePage() {
               />
             </div>
 
-            {/* List / Map toggle */}
-            <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden shrink-0 text-xs font-semibold">
-              <button
-                type="button"
-                className="px-3.5 py-2.5 bg-amber-500 text-white"
+            {/* View toggle — single button showing opposite view (original design) */}
+            <button
+              type="button"
+              className="flex items-center gap-1.5 h-12 px-3 bg-white border border-gray-300 rounded-xl text-sm font-medium text-blue-500 shadow-sm hover:bg-gray-50 transition-colors shrink-0"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-[18px] h-[18px] shrink-0"
               >
-                List
-              </button>
-              <button
-                type="button"
-                className="px-3.5 py-2.5 text-gray-500 hover:bg-gray-50 transition-colors"
-              >
-                Map
-              </button>
-            </div>
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              Map
+            </button>
           </div>
 
           {/* Filter label */}
