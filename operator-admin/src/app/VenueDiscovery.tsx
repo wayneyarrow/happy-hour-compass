@@ -6,6 +6,7 @@ import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueLi
 
 type View = "list" | "map";
 
+
 const FILTER_CHIPS = [
   "Happening Now",
   "Near Me",
@@ -100,11 +101,7 @@ export function VenueDiscovery({ venues }: Props) {
         ? v.establishmentType?.toLowerCase() === "fine dining"
         : true
     )
-    .filter((v) => {
-      if (!underTenActive) return true;
-      const allSpecials = [...v.specialsFood, ...v.specialsDrinks];
-      return allSpecials.some((item) => /\$[1-9](?:\.\d{2})?(?:\s|$|[^0-9])/.test(item));
-    });
+    .filter((v) => (underTenActive ? v.hasUnderTenItem : true));
 
   function handleNearMeClick() {
     if (nearMeActive) {

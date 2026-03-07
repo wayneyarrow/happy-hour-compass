@@ -51,6 +51,8 @@ export type ConsumerVenue = {
   hoursWeekly: Record<string, string>;
   specialsFood: string[];
   specialsDrinks: string[];
+  /** True if any happy hour food or drink item has a numeric price strictly below $10. */
+  hasUnderTenItem: boolean;
   events: ConsumerEvent[];
   /**
    * Ordered venue images from the media table (type = 'venue_image').
@@ -227,6 +229,44 @@ function mapBusinessHours(
 type SpecialItem = { name: string; price?: string; notes?: string };
 
 /**
+ * Returns true if any item in the raw specials data has a numeric price < 10.
+ *
+ * Handles two formats — must mirror parseSpecials() so the filter agrees with
+ * what the detail page actually renders:
+ *   1. JSON array  [{name, price?, notes?}]  — current admin format
+ *   2. Legacy newline-split plain text        — pre-JSON import data
+ */
+function rawSpecialsHaveUnderTen(raw: string | null): boolean {
+  if (!raw?.trim()) return false;
+
+  // ── JSON path (current format) ───────────────────────────────────────────
+  try {
+    const items = JSON.parse(raw) as SpecialItem[];
+    if (Array.isArray(items)) {
+      return items.some((it) => {
+        // Use String() in case a legacy import stored price as a number
+        const price = parseFloat(String(it.price ?? "").replace(/^\$/, ""));
+        return !isNaN(price) && price < 10;
+      });
+    }
+    // Valid JSON but not an array — fall through to plain-text check
+  } catch {
+    // Not valid JSON — fall through to plain-text check
+  }
+
+  // ── Legacy plain-text path (mirrors parseSpecials fallback) ──────────────
+  // Items are one per line; prices appear as "Name — 8", "Name — $8 (GF)", etc.
+  return raw.split("\n").some((line) => {
+    const t = line.trim();
+    if (!t) return false;
+    // Match a price value after: " — ", " - ", or a leading "$"
+    const m = t.match(/(?:[\u2014\u2013\-]\s*|\$)(\d+(?:\.\d+)?)/);
+    if (!m) return false;
+    return parseFloat(m[1]) < 10;
+  });
+}
+
+/**
  * Parses hh_food_details / hh_drink_details from the DB.
  * DB format: JSON array [{name, price?, notes?}]
  * Falls back to newline-split plain text for legacy/CSV data.
@@ -286,6 +326,9 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     ),
     specialsFood: parseSpecials(row.hh_food_details as string | null),
     specialsDrinks: parseSpecials(row.hh_drink_details as string | null),
+    hasUnderTenItem:
+      rawSpecialsHaveUnderTen(row.hh_food_details as string | null) ||
+      rawSpecialsHaveUnderTen(row.hh_drink_details as string | null),
     events: [],  // populated by callers after event fetch
     images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
   };
