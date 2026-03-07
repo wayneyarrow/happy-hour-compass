@@ -62,6 +62,7 @@ export function VenueDiscovery({ venues }: Props) {
   const [view, setView] = useState<View>("list");
   const [searchTerm, setSearchTerm] = useState("");
   const [openNowActive, setOpenNowActive] = useState(false);
+  const [sportsBarsActive, setSportsBarsActive] = useState(false);
   const isMap = view === "map";
 
   const filteredVenues = venues
@@ -72,6 +73,12 @@ export function VenueDiscovery({ venues }: Props) {
     )
     .filter((v) =>
       openNowActive ? getOpenStatus(v.hoursWeekly) === "Open Now" : true
+    )
+    .filter((v) =>
+      // "Sports Bars" chip → matches stored value "Sports Bar" (singular)
+      sportsBarsActive
+        ? v.establishmentType?.toLowerCase().includes("sports bar")
+        : true
     );
 
   return (
@@ -126,7 +133,10 @@ export function VenueDiscovery({ venues }: Props) {
             <div className="chips-inner flex gap-2 w-max pb-0.5">
               {FILTER_CHIPS.map((chip) => {
                 const isOpenNowChip = chip === "Open Now";
-                const isActive = isOpenNowChip && openNowActive;
+                const isSportsBarsChip = chip === "Sports Bars";
+                const isActive =
+                  (isOpenNowChip && openNowActive) ||
+                  (isSportsBarsChip && sportsBarsActive);
                 return (
                   <button
                     key={chip}
@@ -134,6 +144,8 @@ export function VenueDiscovery({ venues }: Props) {
                     onClick={
                       isOpenNowChip
                         ? () => setOpenNowActive((v) => !v)
+                        : isSportsBarsChip
+                        ? () => setSportsBarsActive((v) => !v)
                         : undefined
                     }
                     className={
