@@ -31,6 +31,8 @@ export type ConsumerVenue = {
   name: string;
   /** Venue category — defaults to "Restaurant" (not stored in DB) */
   type: string;
+  /** Operator-selected establishment type, e.g. "Pub", "Cocktail Bar". */
+  establishmentType: string;
   city: string;
   /** Neighbourhood / district — defaults to "" (not stored in DB) */
   area: string;
@@ -267,6 +269,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     id: (row.slug as string) ?? "",
     name: (row.name as string) ?? "",
     type: "Restaurant",
+    establishmentType: (row.establishment_type as string) ?? "Restaurant and Bar",
     city: (row.city as string) ?? "",
     area: "",
     latitude: typeof row.lat === "number" ? row.lat : null,
@@ -309,7 +312,8 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .from("venues")
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
-          "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours"
+          "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
+          "establishment_type"
       )
       .eq("is_published", true)
       .order("name", { ascending: true });
@@ -355,7 +359,8 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 
 const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
-  "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours";
+  "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
+  "establishment_type";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.
