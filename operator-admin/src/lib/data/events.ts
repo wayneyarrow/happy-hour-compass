@@ -302,6 +302,10 @@ export type ConsumerEventListItem = {
   /** Venue UUID — used for grouping and linking. */
   venueId: string;
   venueName: string;
+  /** ISO date string "YYYY-MM-DD" — used by client-side date filters. */
+  firstDate: string | null;
+  /** Recurrence pattern — recurring events pass all date filters. */
+  recurrence: string | null;
 };
 
 /**
@@ -398,6 +402,8 @@ export async function getPublishedEventsForConsumer(): Promise<
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       venueName:
         ((row.venues as Record<string, any> | null)?.name as string) ?? "",
+      firstDate: (row.first_date as string | null) ?? null,
+      recurrence: (row.recurrence as string | null) ?? null,
     }));
   } catch (err) {
     console.error("[getPublishedEventsForConsumer] Unexpected error:", err);

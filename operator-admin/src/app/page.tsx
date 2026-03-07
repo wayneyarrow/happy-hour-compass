@@ -1,5 +1,6 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { VenueDiscovery } from "./VenueDiscovery";
+import { ConsumerNav } from "./ConsumerNav";
 
 // Force a fresh Supabase query on every request — no static or router cache.
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export default async function ConsumerHomePage() {
   const venues = await getPublishedVenuesForConsumer();
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 pb-20">
       <style>{`
         @keyframes chip-scroll-hint {
           0%   { transform: translateX(0); }
@@ -23,6 +24,7 @@ export default async function ConsumerHomePage() {
       `}</style>
 
       <VenueDiscovery venues={venues} />
+      <ConsumerNav />
     </main>
   );
 }
