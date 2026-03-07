@@ -45,6 +45,23 @@ function parseAmPm(s: string): number | null {
   return h * 60 + min;
 }
 
+/** Returns true if a happy hour slot is currently active (matches original calculateHappyHourStatus). */
+export function isHappeningNow(
+  happyHourWeekly: Record<string, Array<{ start: string; end: string }>>
+): boolean {
+  const now = new Date();
+  const dayName = DAYS[now.getDay()];
+  const slots = happyHourWeekly[dayName];
+  if (!slots || slots.length === 0) return false;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return slots.some((slot) => {
+    const [sh, sm] = slot.start.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = slot.end === "close" ? 1440 : (() => { const [eh, em] = slot.end.split(":").map(Number); return eh * 60 + em; })();
+    return nowMin >= startMin && nowMin < endMin;
+  });
+}
+
 /** Returns "Open Now", "Closed", or null (hours unavailable / unparseable). */
 export function getOpenStatus(
   hoursWeekly: Record<string, string>

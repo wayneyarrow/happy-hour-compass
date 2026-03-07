@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
-import { VenueList, getOpenStatus } from "./VenueList";
+import { VenueList, getOpenStatus, isHappeningNow } from "./VenueList";
 
 type View = "list" | "map";
 
@@ -63,6 +63,7 @@ export function VenueDiscovery({ venues }: Props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [openNowActive, setOpenNowActive] = useState(false);
   const [sportsBarsActive, setSportsBarsActive] = useState(false);
+  const [happeningNowActive, setHappeningNowActive] = useState(false);
   const isMap = view === "map";
 
   const filteredVenues = venues
@@ -72,10 +73,12 @@ export function VenueDiscovery({ venues }: Props) {
         : true
     )
     .filter((v) =>
+      happeningNowActive ? isHappeningNow(v.happyHourWeekly) : true
+    )
+    .filter((v) =>
       openNowActive ? getOpenStatus(v.hoursWeekly) === "Open Now" : true
     )
     .filter((v) =>
-      // "Sports Bars" chip → matches stored value "Sports Bar" (singular)
       sportsBarsActive
         ? v.establishmentType?.toLowerCase().includes("sports bar")
         : true
@@ -132,9 +135,11 @@ export function VenueDiscovery({ venues }: Props) {
           <div className="chips-scroll overflow-x-auto -mx-4 px-4">
             <div className="chips-inner flex gap-2 w-max pb-0.5">
               {FILTER_CHIPS.map((chip) => {
+                const isHappeningNowChip = chip === "Happening Now";
                 const isOpenNowChip = chip === "Open Now";
                 const isSportsBarsChip = chip === "Sports Bars";
                 const isActive =
+                  (isHappeningNowChip && happeningNowActive) ||
                   (isOpenNowChip && openNowActive) ||
                   (isSportsBarsChip && sportsBarsActive);
                 return (
@@ -142,7 +147,9 @@ export function VenueDiscovery({ venues }: Props) {
                     key={chip}
                     type="button"
                     onClick={
-                      isOpenNowChip
+                      isHappeningNowChip
+                        ? () => setHappeningNowActive((v) => !v)
+                        : isOpenNowChip
                         ? () => setOpenNowActive((v) => !v)
                         : isSportsBarsChip
                         ? () => setSportsBarsActive((v) => !v)
