@@ -20,8 +20,29 @@ export type BusinessDetailsState = {
     country: string;
     lat: string;
     lng: string;
+    establishment_type: string;
   };
 };
+
+export const ESTABLISHMENT_TYPE_OPTIONS = [
+  "Fast Casual",
+  "Pub",
+  "Bar",
+  "Brewery",
+  "Winery",
+  "Cocktail Bar",
+  "Wine Bar",
+  "Cafe",
+  "Bistro",
+  "Lounge",
+  "Sports Bar",
+  "Restaurant and Bar",
+  "Casual Dining",
+  "Fine Dining",
+  "Family Dining",
+  "Taproom",
+  "Other",
+] as const;
 
 export type PaymentTypesState = {
   success?: boolean;

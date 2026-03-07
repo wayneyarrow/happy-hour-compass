@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateBusinessDetailsAction } from "./actions";
-import { type BusinessDetailsState } from "./types";
+import { ESTABLISHMENT_TYPE_OPTIONS, type BusinessDetailsState } from "./types";
 
 export type BusinessDetailsInitial = {
   name: string;
@@ -15,6 +15,7 @@ export type BusinessDetailsInitial = {
   country: string;
   lat: string;
   lng: string;
+  establishment_type: string;
 };
 
 type Props = {
@@ -216,6 +217,26 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
             className={inputCls}
           />
         </div>
+      </div>
+
+      {/* Establishment Type */}
+      <div>
+        <label htmlFor="bd-establishment-type" className={labelCls}>
+          Establishment type
+        </label>
+        <select
+          id="bd-establishment-type"
+          name="establishment_type"
+          disabled={isPending}
+          defaultValue={v.establishment_type || "Restaurant and Bar"}
+          className={inputCls}
+        >
+          {ESTABLISHMENT_TYPE_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex items-center gap-3">

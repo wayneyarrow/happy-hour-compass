@@ -32,6 +32,7 @@ type AdminVenueRow = {
   payment_types?: string | null;
   menu_url?: string | null;
   is_published?: boolean | null;
+  establishment_type?: string | null;
 };
 
 /**
@@ -162,15 +163,16 @@ export default async function AdminVenuePage() {
             <BusinessDetailsForm
               venueId={venue.id}
               initialValues={{
-                name:          venue.name          ?? "",
-                address_line1: venue.address_line1 ?? "",
-                city:          venue.city          ?? "",
-                region:        venue.region        ?? "",
-                postal_code:   venue.postal_code   ?? "",
-                phone:         venue.phone         ?? "",
-                country:       venue.country       ?? "",
-                lat:           venue.lat != null ? String(venue.lat) : "",
-                lng:           venue.lng != null ? String(venue.lng) : "",
+                name:               venue.name               ?? "",
+                address_line1:      venue.address_line1      ?? "",
+                city:               venue.city               ?? "",
+                region:             venue.region             ?? "",
+                postal_code:        venue.postal_code        ?? "",
+                phone:              venue.phone              ?? "",
+                country:            venue.country            ?? "",
+                lat:                venue.lat != null ? String(venue.lat) : "",
+                lng:                venue.lng != null ? String(venue.lng) : "",
+                establishment_type: venue.establishment_type ?? "Restaurant and Bar",
               }}
             />
           </AccordionSection>

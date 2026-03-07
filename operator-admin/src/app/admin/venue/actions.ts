@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
 import {
+  ESTABLISHMENT_TYPE_OPTIONS,
   PAYMENT_OPTIONS,
   type BusinessDetailsState,
   type CreateVenueAdminState,
@@ -105,16 +106,20 @@ export async function updateBusinessDetailsAction(
   _prevState: BusinessDetailsState,
   formData: FormData
 ): Promise<BusinessDetailsState> {
+  const rawEstType = (formData.get("establishment_type") as string | null)?.trim() ?? "";
   const values = {
-    name:          (formData.get("name")          as string | null)?.trim() ?? "",
-    address_line1: (formData.get("address_line1") as string | null)?.trim() ?? "",
-    city:          (formData.get("city")          as string | null)?.trim() ?? "",
-    region:        (formData.get("region")        as string | null)?.trim() ?? "",
-    postal_code:   (formData.get("postal_code")   as string | null)?.trim() ?? "",
-    phone:         (formData.get("phone")         as string | null)?.trim() ?? "",
-    country:       (formData.get("country")       as string | null)?.trim() ?? "",
-    lat:           (formData.get("lat")           as string | null)?.trim() ?? "",
-    lng:           (formData.get("lng")           as string | null)?.trim() ?? "",
+    name:               (formData.get("name")          as string | null)?.trim() ?? "",
+    address_line1:      (formData.get("address_line1") as string | null)?.trim() ?? "",
+    city:               (formData.get("city")          as string | null)?.trim() ?? "",
+    region:             (formData.get("region")        as string | null)?.trim() ?? "",
+    postal_code:        (formData.get("postal_code")   as string | null)?.trim() ?? "",
+    phone:              (formData.get("phone")         as string | null)?.trim() ?? "",
+    country:            (formData.get("country")       as string | null)?.trim() ?? "",
+    lat:                (formData.get("lat")           as string | null)?.trim() ?? "",
+    lng:                (formData.get("lng")           as string | null)?.trim() ?? "",
+    establishment_type: (ESTABLISHMENT_TYPE_OPTIONS as readonly string[]).includes(rawEstType)
+      ? rawEstType
+      : "Restaurant and Bar",
   };
 
   if (!values.name) {
@@ -146,6 +151,7 @@ export async function updateBusinessDetailsAction(
         country:                values.country       || null,
         lat:                    latNum != null && !Number.isNaN(latNum) ? latNum : null,
         lng:                    lngNum != null && !Number.isNaN(lngNum) ? lngNum : null,
+        establishment_type:     values.establishment_type,
         updated_by_operator_id: operator.id,
       },
       { count: "exact" }
