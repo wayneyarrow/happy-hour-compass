@@ -46,7 +46,7 @@ function parseAmPm(s: string): number | null {
 }
 
 /** Returns "Open Now", "Closed", or null (hours unavailable / unparseable). */
-function getOpenStatus(
+export function getOpenStatus(
   hoursWeekly: Record<string, string>
 ): "Open Now" | "Closed" | null {
   const now = new Date();

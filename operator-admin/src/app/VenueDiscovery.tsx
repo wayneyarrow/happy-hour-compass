@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
-import { VenueList } from "./VenueList";
+import { VenueList, getOpenStatus } from "./VenueList";
 
 type View = "list" | "map";
 
@@ -61,13 +61,18 @@ type Props = {
 export function VenueDiscovery({ venues }: Props) {
   const [view, setView] = useState<View>("list");
   const [searchTerm, setSearchTerm] = useState("");
+  const [openNowActive, setOpenNowActive] = useState(false);
   const isMap = view === "map";
 
-  const filteredVenues = searchTerm
-    ? venues.filter((v) =>
-        v.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : venues;
+  const filteredVenues = venues
+    .filter((v) =>
+      searchTerm
+        ? v.name.toLowerCase().includes(searchTerm.toLowerCase())
+        : true
+    )
+    .filter((v) =>
+      openNowActive ? getOpenStatus(v.hoursWeekly) === "Open Now" : true
+    );
 
   return (
     <>
@@ -119,15 +124,28 @@ export function VenueDiscovery({ venues }: Props) {
           {/* Scrollable chip row — bleeds to screen edges on mobile */}
           <div className="chips-scroll overflow-x-auto -mx-4 px-4">
             <div className="chips-inner flex gap-2 w-max pb-0.5">
-              {FILTER_CHIPS.map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  className="px-3.5 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50 transition-colors shrink-0"
-                >
-                  {chip}
-                </button>
-              ))}
+              {FILTER_CHIPS.map((chip) => {
+                const isOpenNowChip = chip === "Open Now";
+                const isActive = isOpenNowChip && openNowActive;
+                return (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={
+                      isOpenNowChip
+                        ? () => setOpenNowActive((v) => !v)
+                        : undefined
+                    }
+                    className={
+                      isActive
+                        ? "px-3.5 py-1.5 rounded-full border border-blue-500 bg-blue-500 text-xs font-semibold text-white whitespace-nowrap shadow-[0_2px_4px_rgba(59,130,246,0.3)] shrink-0 transition-colors"
+                        : "px-3.5 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50 transition-colors shrink-0"
+                    }
+                  >
+                    {chip}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
