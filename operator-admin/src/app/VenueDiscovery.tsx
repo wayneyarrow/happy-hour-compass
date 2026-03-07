@@ -127,9 +127,9 @@ export function VenueDiscovery({ venues }: Props) {
 
       {/* Content area */}
       <div className="max-w-2xl mx-auto px-4 py-6">
-        {isMap ? (
-          /* Map placeholder */
-          <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white text-center py-20 px-6">
+        {isMap && (
+          /* Map placeholder — matches original: 300px, rounded-lg, emerald border */
+          <div className="flex flex-col items-center justify-center h-[300px] rounded-lg border-[3px] border-emerald-500 bg-white mb-5">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -137,31 +137,33 @@ export function VenueDiscovery({ venues }: Props) {
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="w-12 h-12 text-gray-300 mb-4"
+              className="w-10 h-10 text-gray-300 mb-3"
             >
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
               <circle cx="12" cy="10" r="3" />
             </svg>
-            <p className="text-base font-semibold text-gray-700">
+            <p className="text-sm font-medium text-gray-400">
               Map view coming next
             </p>
-            <p className="text-sm text-gray-400 mt-1">
-              Interactive map functionality will be wired in a future update.
-            </p>
           </div>
+        )}
+
+        {/* Venue count (map mode) or section label (list mode) */}
+        {isMap ? (
+          <p className="text-sm text-gray-500 mb-5">
+            {venues.length} venue{venues.length !== 1 ? "s" : ""} found nearby
+          </p>
         ) : (
-          <>
-            <p className="text-sm font-semibold text-gray-700 mb-4">
-              All Venues
-            </p>
-            {venues.length === 0 ? (
-              <p className="text-gray-500 text-sm">
-                No venues available right now.
-              </p>
-            ) : (
-              <VenueList venues={venues} />
-            )}
-          </>
+          <p className="text-sm font-semibold text-gray-700 mb-4">
+            All Venues
+          </p>
+        )}
+
+        {/* Venue list — shown in both modes */}
+        {venues.length === 0 ? (
+          <p className="text-gray-500 text-sm">No venues available right now.</p>
+        ) : (
+          <VenueList venues={venues} />
         )}
       </div>
     </>
