@@ -3,6 +3,7 @@ import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 import { VenueDistance } from "./VenueDistance";
 import { VenueOpenStatus } from "./VenueOpenStatus";
 import { ConsumerNav } from "../../ConsumerNav";
+import { BookmarkButton } from "../../BookmarkButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -103,9 +104,12 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           </div>
         )}
 
-        <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-          {venue.name}
-        </h1>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {venue.name}
+          </h1>
+          <BookmarkButton venueId={id} />
+        </div>
 
         {venue.city && (
           <p className="text-sm text-gray-500 mb-0.5">{venue.city}</p>

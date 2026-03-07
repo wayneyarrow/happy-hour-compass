@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { ConsumerEventListItem } from "@/lib/data/events";
+import { BookmarkButton } from "./BookmarkButton";
 
 type Props = {
   events: ConsumerEventListItem[];
@@ -170,27 +171,32 @@ export function EventsDiscovery({ events }: Props) {
                         style={{ maxHeight: "140px" }}
                       />
                     )}
-                    {/* Title — bold, matches .event-title */}
-                    <p className="font-semibold text-gray-900 text-base leading-snug mb-0.5">
-                      {event.title}
-                    </p>
-                    {/* Venue — blue, matches .event-venue */}
-                    {event.venueName && (
-                      <p className="text-sm font-medium text-blue-500 mb-0.5">
-                        {event.venueName}
-                      </p>
-                    )}
-                    {/* Schedule — gray, matches .event-time */}
-                    {event.nextOccurrenceLabel && (
-                      <p className="text-sm text-gray-500">
-                        {event.nextOccurrenceLabel}
-                      </p>
-                    )}
-                    {event.description && (
-                      <p className="text-sm text-gray-500 mt-1.5 line-clamp-2">
-                        {event.description}
-                      </p>
-                    )}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {/* Title — bold, matches .event-title */}
+                        <p className="font-semibold text-gray-900 text-base leading-snug mb-0.5">
+                          {event.title}
+                        </p>
+                        {/* Venue — blue, matches .event-venue */}
+                        {event.venueName && (
+                          <p className="text-sm font-medium text-blue-500 mb-0.5">
+                            {event.venueName}
+                          </p>
+                        )}
+                        {/* Schedule — gray, matches .event-time */}
+                        {event.nextOccurrenceLabel && (
+                          <p className="text-sm text-gray-500">
+                            {event.nextOccurrenceLabel}
+                          </p>
+                        )}
+                        {event.description && (
+                          <p className="text-sm text-gray-500 mt-1.5 line-clamp-2">
+                            {event.description}
+                          </p>
+                        )}
+                      </div>
+                      <BookmarkButton venueId={event.venueId} />
+                    </div>
                   </div>
                 </Link>
               </li>

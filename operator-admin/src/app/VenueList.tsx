@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
+import { BookmarkButton } from "./BookmarkButton";
 
 export function haversineKm(
   lat1: number,
@@ -207,31 +208,36 @@ export function VenueList({ venues }: Props) {
         <li key={venue.id}>
           <Link href={`/venue/${venue.id}`}>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
-              <h2 className="font-semibold text-gray-900">{venue.name}</h2>
-              {venue.city && (
-                <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
-              )}
-              {(openStatus !== null || dist !== null || venue.establishmentType) && (
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {[
-                    openStatus,
-                    dist !== null ? `${dist.toFixed(1)} km` : null,
-                    venue.establishmentType || null,
-                  ]
-                    .filter(Boolean)
-                    .join(" \u2022 ")}
-                </p>
-              )}
-              {venue.happyHourTagline && (
-                <p className="text-sm text-amber-700 mt-1">
-                  {venue.happyHourTagline}
-                </p>
-              )}
-              {hhStartToday && (
-                <p className="text-sm text-orange-600 mt-1">
-                  Happy hour starts at {hhStartToday}
-                </p>
-              )}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-semibold text-gray-900">{venue.name}</h2>
+                  {venue.city && (
+                    <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
+                  )}
+                  {(openStatus !== null || dist !== null || venue.establishmentType) && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {[
+                        openStatus,
+                        dist !== null ? `${dist.toFixed(1)} km` : null,
+                        venue.establishmentType || null,
+                      ]
+                        .filter(Boolean)
+                        .join(" \u2022 ")}
+                    </p>
+                  )}
+                  {venue.happyHourTagline && (
+                    <p className="text-sm text-amber-700 mt-1">
+                      {venue.happyHourTagline}
+                    </p>
+                  )}
+                  {hhStartToday && (
+                    <p className="text-sm text-orange-600 mt-1">
+                      Happy hour starts at {hhStartToday}
+                    </p>
+                  )}
+                </div>
+                <BookmarkButton venueId={venue.id} />
+              </div>
             </div>
           </Link>
         </li>

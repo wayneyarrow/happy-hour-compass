@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getEventForConsumerById } from "@/lib/data/events";
 import { ConsumerNav } from "../../ConsumerNav";
+import { BookmarkButton } from "../../BookmarkButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export default async function EventPage({ params, searchParams }: PageProps) {
         <h1 className="flex-1 text-lg font-bold text-gray-900">
           Event Details
         </h1>
+        <BookmarkButton venueId={event.venueId} />
       </div>
 
       {isPreview && (
