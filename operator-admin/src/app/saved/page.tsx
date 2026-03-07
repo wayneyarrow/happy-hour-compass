@@ -1,0 +1,33 @@
+import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { SavedVenueList } from "./SavedVenueList";
+import { ConsumerNav } from "../ConsumerNav";
+
+// Always read fresh data — saved venues must reflect current DB state.
+export const dynamic = "force-dynamic";
+
+export default async function SavedPage() {
+  const venues = await getPublishedVenuesForConsumer();
+
+  return (
+    <main className="min-h-screen bg-gray-50 pb-20">
+      {/* Page header — matches original .page-header sticky */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4">
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-xl font-bold text-gray-900">Saved</h1>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {/*
+          SavedVenueList reads savedVenues from localStorage and
+          filters the full venue list to only show bookmarked venues.
+          The allVenues prop passes the full list so client-side lookup
+          matches the original renderSavedPage() in-memory pattern.
+        */}
+        <SavedVenueList allVenues={venues} />
+      </div>
+
+      <ConsumerNav />
+    </main>
+  );
+}
