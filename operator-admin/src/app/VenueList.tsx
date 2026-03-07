@@ -130,6 +130,26 @@ export function VenueList({ venues }: Props) {
     );
   }, []);
 
+  // Sync sorted when the venues prop changes (e.g. search filtering narrows the list).
+  // Keep items that are still in the filtered set (preserving computed dist/status);
+  // add any new items (shouldn't happen during search, but handles edge cases).
+  useEffect(() => {
+    setSorted((prev) => {
+      const venueIds = new Set(venues.map((v) => v.id));
+      const kept = prev.filter((item) => venueIds.has(item.venue.id));
+      const keptIds = new Set(kept.map((item) => item.venue.id));
+      const added = venues
+        .filter((v) => !keptIds.has(v.id))
+        .map((v) => ({
+          venue: v,
+          dist: null,
+          openStatus: getOpenStatus(v.hoursWeekly),
+          hhStartToday: getHhStartToday(v.happyHourWeekly),
+        }));
+      return [...kept, ...added];
+    });
+  }, [venues]);
+
   // Request geolocation and re-sort nearest-first, preserving derived values.
   useEffect(() => {
     if (!navigator.geolocation) return;

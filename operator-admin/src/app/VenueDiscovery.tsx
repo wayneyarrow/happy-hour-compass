@@ -60,7 +60,14 @@ type Props = {
 
 export function VenueDiscovery({ venues }: Props) {
   const [view, setView] = useState<View>("list");
+  const [searchTerm, setSearchTerm] = useState("");
   const isMap = view === "map";
+
+  const filteredVenues = searchTerm
+    ? venues.filter((v) =>
+        v.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : venues;
 
   return (
     <>
@@ -87,6 +94,8 @@ export function VenueDiscovery({ venues }: Props) {
               <input
                 type="search"
                 placeholder="Search venues..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
               />
             </div>
@@ -151,7 +160,7 @@ export function VenueDiscovery({ venues }: Props) {
         {/* Venue count (map mode) or section label (list mode) */}
         {isMap ? (
           <p className="text-sm text-gray-500 mb-5">
-            {venues.length} venue{venues.length !== 1 ? "s" : ""} found nearby
+            {filteredVenues.length} venue{filteredVenues.length !== 1 ? "s" : ""} found nearby
           </p>
         ) : (
           <p className="text-sm font-semibold text-gray-700 mb-4">
@@ -159,11 +168,22 @@ export function VenueDiscovery({ venues }: Props) {
           </p>
         )}
 
-        {/* Venue list — shown in both modes */}
-        {venues.length === 0 ? (
-          <p className="text-gray-500 text-sm">No venues available right now.</p>
+        {/* Venue list or empty state — shown in both modes */}
+        {filteredVenues.length === 0 ? (
+          searchTerm ? (
+            /* Empty state — matches original: 🔍 icon, "No matches" title, hint body */
+            <div className="flex flex-col items-center justify-center text-center py-16 px-10">
+              <div className="text-5xl opacity-50 mb-4">🔍</div>
+              <p className="text-lg font-semibold text-gray-700 mb-2">No matches</p>
+              <p className="text-sm text-gray-500">
+                Try clearing filters or searching a different area.
+              </p>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No venues available right now.</p>
+          )
         ) : (
-          <VenueList venues={venues} />
+          <VenueList venues={filteredVenues} />
         )}
       </div>
     </>
