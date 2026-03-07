@@ -1,12 +1,16 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { SavedVenueList } from "./SavedVenueList";
 import { ConsumerNav } from "../ConsumerNav";
 
-// Always read fresh data — saved venues must reflect current DB state.
+// Always read fresh data — saved state must reflect current DB state.
 export const dynamic = "force-dynamic";
 
 export default async function SavedPage() {
-  const venues = await getPublishedVenuesForConsumer();
+  const [venues, events] = await Promise.all([
+    getPublishedVenuesForConsumer(),
+    getPublishedEventsForConsumer(),
+  ]);
 
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
@@ -19,12 +23,12 @@ export default async function SavedPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/*
-          SavedVenueList reads savedVenues from localStorage and
-          filters the full venue list to only show bookmarked venues.
-          The allVenues prop passes the full list so client-side lookup
-          matches the original renderSavedPage() in-memory pattern.
+          SavedVenueList reads savedVenues + savedEvents from localStorage
+          and filters both lists to only show bookmarked items.
+          Full lists are passed server-side so client-side lookup mirrors
+          the original renderSavedPage() in-memory pattern.
         */}
-        <SavedVenueList allVenues={venues} />
+        <SavedVenueList allVenues={venues} allEvents={events} />
       </div>
 
       <ConsumerNav />

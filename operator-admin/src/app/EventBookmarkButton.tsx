@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 
-const STORAGE_KEY = "savedVenues";
+const STORAGE_KEY = "savedEvents";
 
-function getSavedVenues(): Set<string> {
+function getSavedEvents(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
     return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"));
@@ -13,53 +13,51 @@ function getSavedVenues(): Set<string> {
   }
 }
 
-function persistSavedVenues(ids: Set<string>) {
+function persistSavedEvents(ids: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
   // Notify same-tab listeners (storage event only fires cross-tab)
   window.dispatchEvent(new CustomEvent("hhc:savedChanged"));
 }
 
 type Props = {
-  venueId: string;
+  eventId: string;
   className?: string;
 };
 
 /**
- * Bookmark button that saves/unsaves a venue to localStorage.
+ * Bookmark button for saving/unsaving individual events to localStorage.
  *
- * Reuses the original index.html pattern:
- * - Storage key: "savedVenues" (Set of venue IDs)
- * - SVG path matches original bookmark icon
- * - Unsaved: outline, gray-300 (#d1d5db)
- * - Saved: filled, orange-500 (#f97316)
- * - stopPropagation prevents parent <Link> from firing
+ * Mirrors the original index.html pattern for savedEvents (separate Set from savedVenues).
+ * - Storage key: "savedEvents" (Set of event IDs)
+ * - Same SVG path and colors as BookmarkButton
+ * - Dispatches "hhc:savedChanged" custom event so the Saved page
+ *   can update immediately in the same tab
  */
-export function BookmarkButton({ venueId, className = "" }: Props) {
+export function EventBookmarkButton({ eventId, className = "" }: Props) {
   const [saved, setSaved] = useState(false);
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
-    setSaved(getSavedVenues().has(venueId));
-  }, [venueId]);
+    setSaved(getSavedEvents().has(eventId));
+  }, [eventId]);
 
   function toggle(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const ids = getSavedVenues();
-    if (ids.has(venueId)) {
-      ids.delete(venueId);
+    const ids = getSavedEvents();
+    if (ids.has(eventId)) {
+      ids.delete(eventId);
     } else {
-      ids.add(venueId);
+      ids.add(eventId);
     }
-    persistSavedVenues(ids);
-    setSaved(ids.has(venueId));
+    persistSavedEvents(ids);
+    setSaved(ids.has(eventId));
   }
 
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={saved ? "Remove from saved" : "Save venue"}
+      aria-label={saved ? "Remove from saved" : "Save event"}
       className={`flex items-center justify-center shrink-0 rounded-full transition-colors ${className}`}
       style={{ width: 28, height: 28, padding: 4 }}
     >

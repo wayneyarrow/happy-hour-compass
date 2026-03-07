@@ -3,14 +3,17 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
+import type { ConsumerEventListItem } from "@/lib/data/events";
 import { VenueList } from "../VenueList";
+import { EventCard } from "../EventCard";
 
-const STORAGE_KEY = "savedVenues";
+const VENUES_KEY = "savedVenues";
+const EVENTS_KEY = "savedEvents";
 
-function getSavedVenueIds(): Set<string> {
+function getSavedIds(key: string): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"));
+    return new Set(JSON.parse(localStorage.getItem(key) || "[]"));
   } catch {
     return new Set();
   }
@@ -18,49 +21,68 @@ function getSavedVenueIds(): Set<string> {
 
 type Props = {
   allVenues: ConsumerVenue[];
+  allEvents: ConsumerEventListItem[];
 };
 
 /**
- * Reads savedVenues from localStorage (same key as BookmarkButton),
- * filters the full venue list down to saved ones, and renders them
- * using the same VenueList component used on the discovery page.
+ * Combined Saved page content — renders Saved Venues and Saved Events sections.
  *
- * Mirrors the original index.html renderSavedPage() pattern:
- * venues were already loaded in memory; saved IDs acted as a filter.
+ * Reads savedVenues + savedEvents from localStorage (same keys as
+ * BookmarkButton and EventBookmarkButton) and filters the full venue/event
+ * lists to only show bookmarked items. Mirrors the original index.html
+ * renderSavedPage() in-memory lookup pattern.
+ *
+ * Listens for:
+ * - "hhc:savedChanged" custom event — same-tab updates (BookmarkButton /
+ *   EventBookmarkButton dispatch this on each toggle)
+ * - "storage" — cross-tab sync
  */
-export function SavedVenueList({ allVenues }: Props) {
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+export function SavedVenueList({ allVenues, allEvents }: Props) {
+  const [savedVenueIds, setSavedVenueIds] = useState<Set<string>>(new Set());
+  const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
 
+  function refresh() {
+    setSavedVenueIds(getSavedIds(VENUES_KEY));
+    setSavedEventIds(getSavedIds(EVENTS_KEY));
+  }
+
   useEffect(() => {
-    setSavedIds(getSavedVenueIds());
+    refresh();
     setHydrated(true);
 
-    // Sync when bookmarks change in other tabs (storage event fires cross-tab only)
     function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) {
-        setSavedIds(getSavedVenueIds());
-      }
+      if (e.key === VENUES_KEY || e.key === EVENTS_KEY) refresh();
     }
+    function onSavedChanged() {
+      refresh();
+    }
+
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("hhc:savedChanged", onSavedChanged);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("hhc:savedChanged", onSavedChanged);
+    };
   }, []);
 
-  // Avoid flash: wait for localStorage read before rendering
+  // Avoid flash before localStorage read
   if (!hydrated) return null;
 
-  const savedVenues = allVenues.filter((v) => savedIds.has(v.id));
+  const savedVenues = allVenues.filter((v) => savedVenueIds.has(v.id));
+  const savedEvents = allEvents.filter((e) => savedEventIds.has(e.id));
+  const hasAnything = savedVenues.length > 0 || savedEvents.length > 0;
 
-  if (savedVenues.length === 0) {
+  // Overall empty state — matches original index.html favorites empty state
+  if (!hasAnything) {
     return (
-      /* Empty state — matches original .empty-state: 🔖 icon, title, body, action */
       <div className="flex flex-col items-center justify-center text-center py-16 px-10">
         <div className="text-5xl opacity-50 mb-4">🔖</div>
         <p className="text-lg font-semibold text-gray-700 mb-2">
           No saved places yet
         </p>
         <p className="text-sm text-gray-500 mb-6">
-          Tap the bookmark on a venue to save it here.
+          Tap the bookmark on a venue or event to save it here.
         </p>
         <Link
           href="/"
@@ -73,13 +95,34 @@ export function SavedVenueList({ allVenues }: Props) {
   }
 
   return (
-    <>
-      <p className="text-sm font-semibold text-gray-700 mb-4">
-        Saved Venues
-      </p>
-      <VenueList venues={savedVenues} />
+    <div className="space-y-8">
+      {/* Saved Venues section */}
+      {savedVenues.length > 0 && (
+        <section>
+          <p className="text-sm font-semibold text-gray-700 mb-4">
+            Saved Venues
+          </p>
+          <VenueList venues={savedVenues} />
+        </section>
+      )}
 
-      {/* TODO: SavedEventList goes here once saved-events phase is implemented */}
-    </>
+      {/* Saved Events section */}
+      <section>
+        <p className="text-sm font-semibold text-gray-700 mb-4">
+          Saved Events
+        </p>
+        {savedEvents.length === 0 ? (
+          <p className="text-sm text-gray-500">No saved events yet.</p>
+        ) : (
+          <ul className="space-y-px">
+            {savedEvents.map((event) => (
+              <li key={event.id}>
+                <EventCard event={event} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }
