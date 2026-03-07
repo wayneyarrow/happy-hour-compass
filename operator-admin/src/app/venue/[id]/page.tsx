@@ -21,6 +21,13 @@ const HH_DAY_ORDER = [
   "Saturday",
 ] as const;
 
+/** Formats a 10-digit phone string as "(XXX) XXX-XXXX"; returns raw value if not 10 digits. */
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length !== 10) return phone;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 /** Converts "HH:MM" (24h) to a short display string like "4 PM" or "4:30 PM". */
 function fmt12h(hhmm: string): string {
   const [hStr, mStr] = hhmm.split(":");
@@ -221,7 +228,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
                     href={`tel:${venue.phone}`}
                     className="text-sm text-amber-700 hover:underline"
                   >
-                    {venue.phone}
+                    {formatPhone(venue.phone)}
                   </a>
                 </div>
               )}
