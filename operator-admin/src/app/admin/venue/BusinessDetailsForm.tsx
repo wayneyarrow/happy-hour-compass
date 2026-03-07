@@ -25,6 +25,14 @@ type Props = {
 
 const initialState: BusinessDetailsState = {};
 
+function formatPhoneDisplay(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 const inputCls =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm " +
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
@@ -40,6 +48,10 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
     initialState
   );
   const [saved, setSaved] = useState(false);
+  const [phoneDisplay, setPhoneDisplay] = useState(() =>
+    formatPhoneDisplay(initialValues.phone)
+  );
+  const [phoneError, setPhoneError] = useState("");
 
   useEffect(() => {
     if (state.success) {
@@ -50,11 +62,31 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
     }
   }, [state.success, router]);
 
+  // Re-format phone display if a failed save restores state.values
+  useEffect(() => {
+    if (state.values?.phone !== undefined) {
+      setPhoneDisplay(formatPhoneDisplay(state.values.phone));
+    }
+  }, [state.values?.phone]);
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPhoneDisplay(formatPhoneDisplay(e.target.value));
+    setPhoneError("");
+  }
+
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    const digits = phoneDisplay.replace(/\D/g, "");
+    if (digits.length > 0 && digits.length !== 10) {
+      e.preventDefault();
+      setPhoneError("Please enter a valid 10-digit phone number.");
+    }
+  }
+
   // On failed submit, restore user's last input; on first render, use DB values.
   const v = state.values ?? initialValues;
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onSubmit={handleSubmit} className="space-y-5">
       {state.errors?.form && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           <strong>Error:</strong> {state.errors.form}
@@ -174,13 +206,19 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
         </label>
         <input
           id="bd-phone"
-          name="phone"
           type="tel"
           disabled={isPending}
-          defaultValue={v.phone}
-          placeholder="+1 250 555 0100"
+          value={phoneDisplay}
+          onChange={handlePhoneChange}
+          placeholder="(250) 555-7895"
           className={inputCls}
         />
+        <input type="hidden" name="phone" value={phoneDisplay.replace(/\D/g, "")} />
+        {phoneError && (
+          <p className="mt-1 text-xs text-red-600" role="alert">
+            {phoneError}
+          </p>
+        )}
       </div>
 
       {/* Lat / Lng */}
