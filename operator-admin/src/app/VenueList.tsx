@@ -174,15 +174,15 @@ export function VenueList({ venues }: Props) {
               {venue.city && (
                 <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
               )}
-              {(openStatus !== null || dist !== null) && (
+              {(openStatus !== null || dist !== null || venue.establishmentType) && (
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {openStatus}
-                  {dist !== null && (
-                    <span>
-                      {openStatus ? " \u2022 " : ""}
-                      {dist.toFixed(1)} km
-                    </span>
-                  )}
+                  {[
+                    openStatus,
+                    dist !== null ? `${dist.toFixed(1)} km` : null,
+                    venue.establishmentType || null,
+                  ]
+                    .filter(Boolean)
+                    .join(" \u2022 ")}
                 </p>
               )}
               {venue.happyHourTagline && (

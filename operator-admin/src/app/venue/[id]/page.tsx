@@ -105,7 +105,8 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
 
         {/* Status / meta line */}
         {(hasHoursData ||
-          (venue.latitude !== null && venue.longitude !== null)) && (
+          (venue.latitude !== null && venue.longitude !== null) ||
+          venue.establishmentType) && (
           <p className="text-xs text-gray-400 mb-3">
             {hasHoursData && (
               <VenueOpenStatus hoursWeekly={venue.hoursWeekly} />
@@ -116,6 +117,14 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
                 lng={venue.longitude}
                 separator={hasHoursData ? " \u2022 " : ""}
               />
+            )}
+            {venue.establishmentType && (
+              <span>
+                {(hasHoursData ||
+                  (venue.latitude !== null && venue.longitude !== null)) &&
+                  " \u2022 "}
+                {venue.establishmentType}
+              </span>
             )}
           </p>
         )}
