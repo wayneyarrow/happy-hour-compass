@@ -5,52 +5,54 @@ import { useState, useEffect, useRef, useCallback } from "react";
 type ChipId = "event" | "venue";
 
 /**
- * Approximate height (px) of the two sticky bars:
- *   sticky header  ~61 px  (py-4 + 18 px text + 1 px border)
- *   jump-chips nav ~80 px  (py-3 + "Jump to" label + chip row)
+ * Trigger line (px from viewport top).
  *
- * Used to exclude the covered area from visible-pixel calculations so
- * the active-section comparison is based only on what the user can
- * actually see below the sticky UI.
+ * Sticky header  ~61 px  (py-4 + 18 px title text + 1 px border)
+ * Jump-chips nav ~80 px  (py-3 + "Jump to" label + chip row)
+ * Total           141 px
+ *
+ * Venue becomes active when its top edge crosses upward through this line,
+ * i.e. when the Venue section starts occupying the top of the visible area.
  */
-const STICKY_HEIGHT = 141;
+const TRIGGER = 141;
 
 /**
- * Returns how many pixels of `el` are visible in the viewport below the
- * sticky bars. Zero when the element is fully above or fully below the fold.
+ * Returns the active chip based purely on where the Venue section top
+ * sits relative to the trigger line.
+ *
+ *   venueTop ≤ TRIGGER  →  "venue"  (Venue has entered the content area)
+ *   venueTop  > TRIGGER  →  "event"  (still above the Venue section)
+ *
+ * This is the only comparison needed for a two-section page. It is
+ * symmetric: scroll down crosses the line once → Venue active; scroll
+ * back up crosses back → Event active. No priority rules, no area math.
  */
-function visiblePx(el: Element): number {
-  const r = el.getBoundingClientRect();
-  return Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, STICKY_HEIGHT));
+function resolveActive(): ChipId {
+  const venueEl = document.getElementById("section-venue");
+  if (!venueEl) return "event";
+  return venueEl.getBoundingClientRect().top <= TRIGGER ? "venue" : "event";
 }
 
 /**
- * Jump-to navigation chips for the event detail page.
+ * Why the previous "visible pixels" approach was wrong
+ * ─────────────────────────────────────────────────────
+ * visiblePx(venue) > visiblePx(event) sounds symmetric but isn't on this
+ * page. When the Event section is tall (long description), its lower portion
+ * stays in the viewport while the Venue section's upper portion is still
+ * below the fold. The crossover only occurs when Venue has accumulated enough
+ * visible pixels to exceed Event's remaining pixels — which can happen with
+ * Venue's heading as far as 350–400 px down the screen (bottom third), well
+ * after the user perceives Venue as the active section.
  *
- * Active-section source of truth (scroll)
- * ─────────────────────────────────────────
- * On each scroll event, we measure how many pixels of #section-event and
- * #section-venue are visible below the sticky bars. Whichever section shows
- * more pixels wins. This produces a single deterministic crossover point —
- * exactly when the two visible heights are equal — so the chip switches at
- * the natural midpoint between sections with no early / late / flickering.
- *
- * Previous IntersectionObserver approach
- * ───────────────────────────────────────
- * The prior implementation tracked section *presence* in a detection zone
- * and applied an "event always wins when both are visible" priority rule.
- * This caused asymmetric timing:
- *   • scrolling down → switch too late  (event only lost after it fully
- *     exited the detection zone, even when venue was already dominant)
- *   • scrolling up   → switch too early (event won the moment its bottom
- *     re-entered the zone, even when venue still filled the screen)
+ * The threshold rule switches the instant the Venue heading enters the top of
+ * the content area, which is exactly what feels natural.
  *
  * Click lock
  * ──────────
  * Clicking a chip sets activeId immediately (instant feedback) and locks
- * the scroll handler for ~900 ms so mid-scroll recalculations don't revert
- * the chip while the page is still traveling to the target section. After the
- * lock releases, one final sync call aligns the chip with the actual position.
+ * the scroll handler for ~900 ms so scroll events fired during smooth
+ * scrolling cannot flip the chip back. One final sync after the lock
+ * releases aligns the chip with the actual settled position.
  */
 export function JumpChips() {
   const [activeId, setActiveId] = useState<ChipId>("event");
@@ -59,10 +61,7 @@ export function JumpChips() {
 
   const syncFromScroll = useCallback(() => {
     if (clickLockRef.current) return;
-    const eventEl = document.getElementById("section-event");
-    const venueEl = document.getElementById("section-venue");
-    if (!eventEl || !venueEl) return;
-    setActiveId(visiblePx(venueEl) > visiblePx(eventEl) ? "venue" : "event");
+    setActiveId(resolveActive());
   }, []);
 
   useEffect(() => {
@@ -73,15 +72,12 @@ export function JumpChips() {
 
   const scrollToSection = useCallback(
     (id: ChipId) => {
-      // Instant chip feedback on tap.
       setActiveId(id);
 
-      // Lock the scroll handler so in-flight scroll events don't flip the chip.
       clickLockRef.current = true;
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
       lockTimerRef.current = setTimeout(() => {
         clickLockRef.current = false;
-        // One final sync after scroll settles to catch any layout shift.
         syncFromScroll();
       }, 900);
 
