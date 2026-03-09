@@ -1,60 +1,109 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 type ChipId = "event" | "venue";
 
 /**
  * Jump-to navigation chips for the event detail page.
  *
- * Mirrors the original app's #event-tabs behavior:
- *  - Active chip fills with blue (#3b82f6), white text, semibold
- *    (.section-nav-item.active)
- *  - Scroll listener updates the active chip as the user scrolls between
- *    #section-event and #section-venue (handleEventDetailScroll logic)
- *  - Clicking a chip smooth-scrolls to the target section and sets it active
- *    (scrollToEventSection logic)
+ * Active-state source of truth
+ * ─────────────────────────────
+ * Active section is tracked with IntersectionObserver rather than a scroll
+ * event listener. This eliminates the per-frame math (`scrollY + offset`)
+ * that caused flicker: during a smooth scroll the math would resolve to the
+ * wrong section mid-flight and flip the chip back.
+ *
+ * Detection zone: rootMargin "-130px 0px -50% 0px" creates a horizontal strip
+ * from 130 px (just past both sticky bars) to the midpoint of the viewport.
+ * A section is "active" when any part of it occupies this strip. "event"
+ * is always prioritised over "venue" when both are visible (event is above).
+ *
+ * Click lock
+ * ──────────
+ * Clicking a chip sets activeId immediately (instant feedback) AND locks the
+ * observer for ~900 ms via clickLockRef. This prevents scroll events fired
+ * during smooth scrolling from triggering observer callbacks that would flip
+ * the chip back to the previous section before the scroll settles.
  */
 export function JumpChips() {
   const [activeId, setActiveId] = useState<ChipId>("event");
+  const clickLockRef = useRef(false);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateActiveFromScroll = useCallback(() => {
-    const eventSection = document.getElementById("section-event");
-    const venueSection = document.getElementById("section-venue");
-    if (!eventSection || !venueSection) return;
+  useEffect(() => {
+    const visibleSections = new Set<ChipId>();
 
-    // Use 160px offset to account for the two sticky bars (header ~61px + chips nav ~80px).
-    // Matches original's "scrollTop + 100" threshold relative to the inner scroll container.
-    const scrollOffset = window.scrollY + 160;
-    const venueTop =
-      venueSection.getBoundingClientRect().top + window.scrollY;
-    const eventTop =
-      eventSection.getBoundingClientRect().top + window.scrollY;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // While a click-triggered scroll is in flight, ignore observer updates
+        // so the chip doesn't flicker mid-scroll.
+        if (clickLockRef.current) return;
 
-    if (scrollOffset >= venueTop) {
-      setActiveId("venue");
-    } else if (scrollOffset >= eventTop) {
-      setActiveId("event");
+        entries.forEach((entry) => {
+          const rawId = (entry.target.getAttribute("id") ?? "").replace(
+            "section-",
+            ""
+          ) as ChipId;
+          if (entry.isIntersecting) {
+            visibleSections.add(rawId);
+          } else {
+            visibleSections.delete(rawId);
+          }
+        });
+
+        // "event" wins when both are visible — it is always above "venue".
+        if (visibleSections.has("event")) {
+          setActiveId("event");
+        } else if (visibleSections.has("venue")) {
+          setActiveId("venue");
+        }
+        // If neither intersects (scrolled past both) keep current state — no flicker.
+      },
+      {
+        // Strip from 130 px below viewport top (past both sticky bars) down to
+        // the midpoint. Sections taller than this strip are still detected because
+        // threshold:0 fires on any overlap, not just full containment.
+        rootMargin: "-130px 0px -50% 0px",
+        threshold: 0,
+      }
+    );
+
+    const ids: ChipId[] = ["event", "venue"];
+    ids.forEach((id) => {
+      const el = document.getElementById(`section-${id}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToSection = useCallback((id: ChipId) => {
+    // 1. Instant visual feedback on tap.
+    setActiveId(id);
+
+    // 2. Suppress IntersectionObserver for the scroll duration so mid-scroll
+    //    intersection states don't revert the chip to the previous section.
+    clickLockRef.current = true;
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    lockTimerRef.current = setTimeout(() => {
+      clickLockRef.current = false;
+    }, 900);
+
+    // 3. Smooth-scroll, subtracting 150 px to clear both sticky bars.
+    const section = document.getElementById(`section-${id}`);
+    if (section) {
+      const top = section.getBoundingClientRect().top + window.scrollY - 150;
+      window.scrollTo({ top, behavior: "smooth" });
     }
   }, []);
 
+  // Cleanup lock timer on unmount.
   useEffect(() => {
-    window.addEventListener("scroll", updateActiveFromScroll, { passive: true });
-    // Set initial active state on mount
-    updateActiveFromScroll();
-    return () => window.removeEventListener("scroll", updateActiveFromScroll);
-  }, [updateActiveFromScroll]);
-
-  const scrollToSection = (id: ChipId) => {
-    const section = document.getElementById(`section-${id}`);
-    if (section) {
-      // Subtract ~150px so the section scrolls below both sticky bars.
-      const top =
-        section.getBoundingClientRect().top + window.scrollY - 150;
-      window.scrollTo({ top, behavior: "smooth" });
-    }
-    setActiveId(id);
-  };
+    return () => {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
+  }, []);
 
   const chips: { id: ChipId; label: string }[] = [
     { id: "event", label: "Event" },
@@ -69,7 +118,6 @@ export function JumpChips() {
           <button
             key={id}
             onClick={() => scrollToSection(id)}
-            /* .section-nav-item / .section-nav-item.active */
             className={`flex-1 text-center border-[1.5px] rounded-[20px] px-5 py-2.5 text-[14px] transition-all ${
               isActive
                 ? "bg-blue-500 border-blue-500 text-white font-semibold"
