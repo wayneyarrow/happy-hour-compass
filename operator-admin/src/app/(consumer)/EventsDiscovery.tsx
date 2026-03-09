@@ -545,10 +545,8 @@ export function EventsDiscovery({ events }: Props) {
         </div>
       )}
 
-      {/* ── Content area ─────────────────────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <p className="text-sm font-semibold text-gray-700 mb-4">All Events</p>
-
+      {/* ── Content area — matches original .content { padding: 20px } ──── */}
+      <div className="px-5 py-5">
         {filtered.length === 0 ? (
           /* Empty state — matches original: 🎉 icon, "No events found" */
           <div className="flex flex-col items-center justify-center text-center py-16 px-10">
@@ -563,7 +561,7 @@ export function EventsDiscovery({ events }: Props) {
             </p>
           </div>
         ) : (
-          <ul className="space-y-px">
+          <ul>
             {filtered.map((event) => (
               <li key={event.id}>
                 <EventCard event={event} />
