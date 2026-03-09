@@ -18,21 +18,31 @@ type ChipId = "event" | "venue";
  * from the chips element itself, then attaches the listener and scrolls it.
  *
  * ─── Active-state rule ───────────────────────────────────────────────────────
- * getBoundingClientRect() is always viewport-relative, regardless of which
- * container is scrolling. So the rule is:
+ * Uses a section-dominance check rather than a fixed trigger line.
  *
- *   triggerLine  = chipsBar.getBoundingClientRect().bottom
- *                  (the actual rendered bottom of the sticky chips bar — no
- *                  hardcoded pixel values)
- *   venueSectionTop = section-venue.getBoundingClientRect().top
+ * The page is not tall enough for section-venue's top edge to ever reach
+ * chipsBar.BCR.bottom in the scroll container — the computed scroll target
+ * always exceeds maxScrollTop, so the browser clamps and the position-based
+ * trigger is never satisfied.
  *
- *   if (venueSectionTop <= triggerLine) → active = "venue"
- *   else                               → active = "event"
+ * Instead: whichever section occupies more visible pixels in the content area
+ * (below chips bar, above container bottom) is the active section.
+ *
+ *   contentTop    = chipsBar.BCR.bottom
+ *   contentBottom = container.BCR.bottom
+ *   visiblePx(el) = max(0, min(el.BCR.bottom, contentBottom) − max(el.BCR.top, contentTop))
+ *   active = visiblePx(venue) > visiblePx(event) ? "venue" : "event"
+ *
+ * At scrollTop=0:  event fills most of the visible area, venue is off-screen → event.
+ * At maxScrollTop: venue occupies ~340px, event ~267px → venue.
  *
  * ─── Click scroll ────────────────────────────────────────────────────────────
- * Position the anchor within the scroll container:
- *   scrollTop = anchor.BCR.top - container.BCR.top + container.scrollTop - 10
- * Then call container.scrollTo({ top, behavior: "smooth" }).
+ * Event: scroll to top=0 (event content is at the top of the page).
+ * Venue: scroll to maxScrollTop (venue is at the end; any computed target
+ *        targeting h3 at chipsBar.bottom exceeds maxScrollTop anyway).
+ *
+ * Both cases land in unambiguous dominance territory for their section,
+ * so the post-scroll sync always confirms the clicked chip.
  */
 export function JumpChips() {
   const [activeId, setActiveId] = useState<ChipId>("event");
@@ -54,17 +64,25 @@ export function JumpChips() {
 
   const syncFromScroll = useCallback(() => {
     if (clickLockRef.current) return;
+    const eventSection = document.getElementById("section-event");
     const venueSection = document.getElementById("section-venue");
     // containerRef.current is the flex-gap div; its parentElement is the sticky chips bar div.
     const chipsBar = containerRef.current?.parentElement;
-    if (!venueSection || !chipsBar) return;
+    const container = scrollContainerRef.current;
+    if (!eventSection || !venueSection || !chipsBar || !container) return;
 
-    // Trigger line: the actual rendered bottom of the sticky chips bar.
-    // No hardcoded pixel value — measured from the live DOM every call.
-    const triggerLine = chipsBar.getBoundingClientRect().bottom;
-    const venueSectionTop = venueSection.getBoundingClientRect().top;
+    // Content area: between chips bar bottom and container bottom.
+    const contentTop = chipsBar.getBoundingClientRect().bottom;
+    const contentBottom = container.getBoundingClientRect().bottom;
 
-    setActiveId(venueSectionTop <= triggerLine ? "venue" : "event");
+    // Pixel height of each section currently visible within the content area.
+    const visiblePx = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return Math.max(0, Math.min(r.bottom, contentBottom) - Math.max(r.top, contentTop));
+    };
+
+    // Venue wins when it shows more pixels than Event. Tie → keep Event (default).
+    setActiveId(visiblePx(venueSection) > visiblePx(eventSection) ? "venue" : "event");
   }, []);
 
   useEffect(() => {
@@ -92,16 +110,27 @@ export function JumpChips() {
         syncFromScroll();
       }, 900);
 
-      const anchor = document.getElementById(`anchor-${id}`);
+      // Click targets use explicit positions rather than h3-targeting math.
+      //
+      // The computed h3 target for Venue (h3.abs − stickyOffset) always exceeds
+      // maxScrollTop because the page is not tall enough to bring venue's heading
+      // to the chips bar line. The browser clamps the target, the section lands
+      // further down than the (now-fixed) dominance trigger expects, causing the
+      // chip to flip back.
+      //
+      // Explicit targets are unambiguous and always land in dominant territory:
+      //   Event → top=0         event section is at the top of the page; fully dominant.
+      //   Venue → maxScrollTop  venue section is at the end; dominant at max scroll.
       const container = scrollContainerRef.current;
-      if (anchor && container) {
-        // Compute anchor's position within the scroll container.
-        const top =
-          anchor.getBoundingClientRect().top -
-          container.getBoundingClientRect().top +
-          container.scrollTop -
-          10;
-        container.scrollTo({ top, behavior: "smooth" });
+      if (!container) return;
+
+      if (id === "event") {
+        container.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        container.scrollTo({
+          top: container.scrollHeight - container.clientHeight,
+          behavior: "smooth",
+        });
       }
     },
     [syncFromScroll]
