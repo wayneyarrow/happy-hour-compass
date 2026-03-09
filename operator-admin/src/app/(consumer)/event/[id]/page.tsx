@@ -195,6 +195,26 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           className="px-5 py-5 min-h-[300px]"
           style={{ scrollMarginTop: 150 }}
         >
+          {/*
+            Scroll anchor — mirrors the original app's .scroll-anchor pattern.
+            position:relative + negative top pulls the anchor element above the
+            section heading so that:
+              • clicking a chip scrolls to (anchor_absPos − 10), landing the
+                section heading just below the sticky bars (same as original's
+                scrollTo(anchor.offsetTop − 10))
+              • the scroll handler fires at (scrollY + 100 >= anchor_absPos),
+                which triggers at the same relative position as the original's
+                scrollTop + 100 >= anchor.offsetTop rule.
+            The −196 px offset bakes in our total sticky height (141 px) plus
+            the original's 56 px container-start buffer so click landing and
+            trigger timing match the original's visual behavior exactly.
+          */}
+          {/* eslint-disable-next-line jsx-a11y/aria-hidden-on-focusable */}
+          <div
+            id="anchor-event"
+            aria-hidden="true"
+            style={{ position: "relative", top: -196, height: 1 }}
+          />
           {/* .section-title: 18px bold gray-900, margin-bottom 16px */}
           <h3 className="text-[18px] font-bold text-gray-900 mb-4">Event</h3>
 
@@ -241,6 +261,13 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           className="px-5 py-5 min-h-[300px]"
           style={{ scrollMarginTop: 150 }}
         >
+          {/* Scroll anchor — same pattern as #anchor-event above */}
+          {/* eslint-disable-next-line jsx-a11y/aria-hidden-on-focusable */}
+          <div
+            id="anchor-venue"
+            aria-hidden="true"
+            style={{ position: "relative", top: -196, height: 1 }}
+          />
           <h3 className="text-[18px] font-bold text-gray-900 mb-4">Venue</h3>
 
           {/* Info rows — matches original .venue-info-details:

@@ -5,75 +5,86 @@ import { useState, useEffect, useRef, useCallback } from "react";
 type ChipId = "event" | "venue";
 
 /**
- * Trigger line (px from viewport top).
+ * Jump-to navigation chips — Event and Venue.
  *
- * Sticky header  ~61 px  (py-4 + 18 px title text + 1 px border)
- * Jump-chips nav ~80 px  (py-3 + "Jump to" label + chip row)
- * Total           141 px
+ * ─── Scroll container ────────────────────────────────────────────────────────
+ * The consumer layout wraps all page content in a `flex-1 overflow-y-auto` div
+ * (consumer/layout.tsx line 26). The outer shell is `overflow-hidden`, so
+ * `window` never scrolls. All previous implementations that used
+ * `window.addEventListener("scroll")` and `window.scrollTo()` were silently
+ * broken — the listener never fired and the scroll calls did nothing.
  *
- * Venue becomes active when its top edge crosses upward through this line,
- * i.e. when the Venue section starts occupying the top of the visible area.
- */
-const TRIGGER = 141;
-
-/**
- * Returns the active chip based purely on where the Venue section top
- * sits relative to the trigger line.
+ * This implementation finds the real scroll container by walking up the DOM
+ * from the chips element itself, then attaches the listener and scrolls it.
  *
- *   venueTop ≤ TRIGGER  →  "venue"  (Venue has entered the content area)
- *   venueTop  > TRIGGER  →  "event"  (still above the Venue section)
+ * ─── Active-state rule ───────────────────────────────────────────────────────
+ * getBoundingClientRect() is always viewport-relative, regardless of which
+ * container is scrolling. So the rule is:
  *
- * This is the only comparison needed for a two-section page. It is
- * symmetric: scroll down crosses the line once → Venue active; scroll
- * back up crosses back → Event active. No priority rules, no area math.
- */
-function resolveActive(): ChipId {
-  const venueEl = document.getElementById("section-venue");
-  if (!venueEl) return "event";
-  return venueEl.getBoundingClientRect().top <= TRIGGER ? "venue" : "event";
-}
-
-/**
- * Why the previous "visible pixels" approach was wrong
- * ─────────────────────────────────────────────────────
- * visiblePx(venue) > visiblePx(event) sounds symmetric but isn't on this
- * page. When the Event section is tall (long description), its lower portion
- * stays in the viewport while the Venue section's upper portion is still
- * below the fold. The crossover only occurs when Venue has accumulated enough
- * visible pixels to exceed Event's remaining pixels — which can happen with
- * Venue's heading as far as 350–400 px down the screen (bottom third), well
- * after the user perceives Venue as the active section.
+ *   triggerLine  = chipsBar.getBoundingClientRect().bottom
+ *                  (the actual rendered bottom of the sticky chips bar — no
+ *                  hardcoded pixel values)
+ *   venueSectionTop = section-venue.getBoundingClientRect().top
  *
- * The threshold rule switches the instant the Venue heading enters the top of
- * the content area, which is exactly what feels natural.
+ *   if (venueSectionTop <= triggerLine) → active = "venue"
+ *   else                               → active = "event"
  *
- * Click lock
- * ──────────
- * Clicking a chip sets activeId immediately (instant feedback) and locks
- * the scroll handler for ~900 ms so scroll events fired during smooth
- * scrolling cannot flip the chip back. One final sync after the lock
- * releases aligns the chip with the actual settled position.
+ * ─── Click scroll ────────────────────────────────────────────────────────────
+ * Position the anchor within the scroll container:
+ *   scrollTop = anchor.BCR.top - container.BCR.top + container.scrollTop - 10
+ * Then call container.scrollTo({ top, behavior: "smooth" }).
  */
 export function JumpChips() {
   const [activeId, setActiveId] = useState<ChipId>("event");
   const clickLockRef = useRef(false);
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+
+  /** Walk up the DOM to find the nearest element with overflow-y auto or scroll. */
+  function findScrollContainer(el: HTMLElement): HTMLElement | null {
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+      const overflowY = window.getComputedStyle(p).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return p;
+      p = p.parentElement;
+    }
+    return null;
+  }
 
   const syncFromScroll = useCallback(() => {
     if (clickLockRef.current) return;
-    setActiveId(resolveActive());
+    const venueSection = document.getElementById("section-venue");
+    // containerRef.current is the flex-gap div; its parentElement is the sticky chips bar div.
+    const chipsBar = containerRef.current?.parentElement;
+    if (!venueSection || !chipsBar) return;
+
+    // Trigger line: the actual rendered bottom of the sticky chips bar.
+    // No hardcoded pixel value — measured from the live DOM every call.
+    const triggerLine = chipsBar.getBoundingClientRect().bottom;
+    const venueSectionTop = venueSection.getBoundingClientRect().top;
+
+    setActiveId(venueSectionTop <= triggerLine ? "venue" : "event");
   }, []);
 
   useEffect(() => {
-    window.addEventListener("scroll", syncFromScroll, { passive: true });
-    syncFromScroll();
-    return () => window.removeEventListener("scroll", syncFromScroll);
+    const scrollContainer = containerRef.current
+      ? findScrollContainer(containerRef.current)
+      : null;
+    scrollContainerRef.current = scrollContainer;
+
+    // Listen on the real scroll container, not window.
+    const target: EventTarget = scrollContainer ?? window;
+    target.addEventListener("scroll", syncFromScroll, { passive: true });
+    syncFromScroll(); // set initial state
+    return () => target.removeEventListener("scroll", syncFromScroll);
   }, [syncFromScroll]);
 
   const scrollToSection = useCallback(
     (id: ChipId) => {
       setActiveId(id);
 
+      // Suppress syncFromScroll during smooth scroll travel.
       clickLockRef.current = true;
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
       lockTimerRef.current = setTimeout(() => {
@@ -81,10 +92,16 @@ export function JumpChips() {
         syncFromScroll();
       }, 900);
 
-      const section = document.getElementById(`section-${id}`);
-      if (section) {
-        const top = section.getBoundingClientRect().top + window.scrollY - 150;
-        window.scrollTo({ top, behavior: "smooth" });
+      const anchor = document.getElementById(`anchor-${id}`);
+      const container = scrollContainerRef.current;
+      if (anchor && container) {
+        // Compute anchor's position within the scroll container.
+        const top =
+          anchor.getBoundingClientRect().top -
+          container.getBoundingClientRect().top +
+          container.scrollTop -
+          10;
+        container.scrollTo({ top, behavior: "smooth" });
       }
     },
     [syncFromScroll]
@@ -102,7 +119,7 @@ export function JumpChips() {
   ];
 
   return (
-    <div className="flex gap-2">
+    <div ref={containerRef} className="flex gap-2">
       {chips.map(({ id, label }) => {
         const isActive = activeId === id;
         return (
