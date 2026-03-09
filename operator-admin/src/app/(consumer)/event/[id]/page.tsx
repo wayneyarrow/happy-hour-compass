@@ -3,6 +3,8 @@ import Link from "next/link";
 import { getEventForConsumerById } from "@/lib/data/events";
 import { EventBookmarkButton } from "../../EventBookmarkButton";
 import { ShareButton } from "./ShareButton";
+import { JumpChips } from "./JumpChips";
+import { BusinessHoursRow } from "./BusinessHoursRow";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -172,24 +174,13 @@ export default async function EventPage({ params, searchParams }: PageProps) {
       {/* ── Jump chips nav ─────────────────────────────────────────────────────
           Matches original .venue-section-nav.venue-tabs:
           sticky top (below header), bg-white, padding 12px 16px, border-bottom.
-          Chips: .section-nav-item — flex-1, border 1.5px gray-300, rounded-[20px],
-          px-5 py-2.5, 14px medium gray-500; hover: border-gray-400 bg-gray-50 */}
+          Active chip fills blue — handled by the JumpChips client component. */}
       <div className="sticky top-[61px] z-[9] bg-white px-4 py-3 border-b border-gray-200">
         {/* "Jump to" — .venue-nav-label: 12px semibold uppercase tracking-[0.5px] gray-500 */}
         <p className="text-[12px] font-semibold uppercase tracking-[0.5px] text-gray-500 mb-2">
           Jump to
         </p>
-        <div className="flex gap-2">
-          {(["Event", "Venue"] as const).map((label) => (
-            <a
-              key={label}
-              href={`#section-${label.toLowerCase()}`}
-              className="flex-1 text-center border-[1.5px] border-gray-300 rounded-[20px] px-5 py-2.5 text-sm font-medium text-gray-500 hover:border-gray-400 hover:bg-gray-50 transition-all"
-            >
-              {label}
-            </a>
-          ))}
-        </div>
+        <JumpChips />
       </div>
 
       {/* ── Content sections ───────────────────────────────────────────────────
@@ -256,24 +247,9 @@ export default async function EventPage({ params, searchParams }: PageProps) {
               flat list with dividers, .info-list-row / .info-list-row-action */}
           <div className="flex flex-col">
 
-            {/* Business Hours row — shows non-CLOSED days */}
+            {/* Business Hours row — Open now / Closed status + expandable weekly schedule */}
             {openDays.length > 0 && (
-              <div className="flex items-start justify-between py-4 border-b border-gray-100">
-                <div className="flex-1 min-w-0">
-                  {/* .info-row-label: 11px semibold gray-500 uppercase tracking-[0.8px] */}
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Business Hours
-                  </p>
-                  <div className="text-[15px] text-gray-900 leading-[1.5] space-y-0.5">
-                    {openDays.map((day) => (
-                      <div key={day} className="flex justify-between gap-4">
-                        <span className="text-gray-500 text-sm w-24 shrink-0">{day}</span>
-                        <span className="text-sm">{event.venueHoursWeekly[day]}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <BusinessHoursRow hoursWeekly={event.venueHoursWeekly} />
             )}
 
             {/* Address row — tappable, opens Google Maps */}
@@ -387,16 +363,6 @@ export default async function EventPage({ params, searchParams }: PageProps) {
                 </div>
               </a>
             )}
-
-            {/* View venue link — not in original but useful navigation in a multi-page app */}
-            <div className="pt-5">
-              <Link
-                href={`/venue/${event.venueId}`}
-                className="inline-block px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
-              >
-                View full venue →
-              </Link>
-            </div>
 
           </div>
         </div>
