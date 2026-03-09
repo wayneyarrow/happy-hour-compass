@@ -38,11 +38,17 @@ type ChipId = "event" | "venue";
  *
  * ─── Click scroll ────────────────────────────────────────────────────────────
  * Event: scroll to top=0 (event content is at the top of the page).
- * Venue: scroll to maxScrollTop (venue is at the end; any computed target
- *        targeting h3 at chipsBar.bottom exceeds maxScrollTop anyway).
  *
- * Both cases land in unambiguous dominance territory for their section,
- * so the post-scroll sync always confirms the clicked chip.
+ * Venue: target = headingAbs − stickyOffset, clamped to maxScrollTop.
+ *   headingAbs   = h3.BCR.top − container.BCR.top + container.scrollTop
+ *   stickyOffset = getComputedStyle(chipsBar).top + chipsBar.BCR.height
+ *                  (CSS top value + rendered height — NOT chipsBar.BCR.bottom)
+ *
+ *   chipsBar.BCR.bottom must NOT be used here: on the first click the chips bar
+ *   is not yet sticky (natural flow position ~555px), making BCR.bottom ~414px
+ *   larger than the correct sticky value (~141px) and causing the target to
+ *   under-scroll. The CSS top approach gives the correct sticky bottom regardless
+ *   of current scroll position.
  */
 export function JumpChips() {
   const [activeId, setActiveId] = useState<ChipId>("event");
@@ -110,27 +116,45 @@ export function JumpChips() {
         syncFromScroll();
       }, 900);
 
-      // Click targets use explicit positions rather than h3-targeting math.
+      // Event: scroll to top=0 (event content is near the top of the page).
       //
-      // The computed h3 target for Venue (h3.abs − stickyOffset) always exceeds
-      // maxScrollTop because the page is not tall enough to bring venue's heading
-      // to the chips bar line. The browser clamps the target, the section lands
-      // further down than the (now-fixed) dominance trigger expects, causing the
-      // chip to flip back.
+      // Venue: target the Venue <h3> heading to land flush with the chips bar.
+      //   target = headingAbs − stickyOffset
+      //   clamped to maxScrollTop as a ceiling (handles short pages).
       //
-      // Explicit targets are unambiguous and always land in dominant territory:
-      //   Event → top=0         event section is at the top of the page; fully dominant.
-      //   Venue → maxScrollTop  venue section is at the end; dominant at max scroll.
+      // Previously this was always maxScrollTop, which overshot on longer event
+      // descriptions (maxScrollTop > h3Target), hiding the heading above the chips
+      // bar. Using the h3 target with a Math.min clamp corrects the landing.
       const container = scrollContainerRef.current;
       if (!container) return;
 
       if (id === "event") {
         container.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        container.scrollTo({
-          top: container.scrollHeight - container.clientHeight,
-          behavior: "smooth",
-        });
+        const heading = document.querySelector("#section-venue h3") as HTMLElement | null;
+        const chipsBar = containerRef.current?.parentElement;
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        if (heading && chipsBar) {
+          const containerTop = container.getBoundingClientRect().top;
+          const headingAbs =
+            heading.getBoundingClientRect().top - containerTop + container.scrollTop;
+          // Do NOT use chipsBar.BCR.bottom here — on the first click the chips bar
+          // has not yet become sticky (it sticks only after scrolling past its natural
+          // flow position, ~414px down). BCR.bottom at scrollTop=0 returns the natural
+          // position (~555px), giving a stickyOffset that's ~414px too large and an
+          // h3Target that's far too small. The second click works only because the bar
+          // is already sticky by then, giving the correct 141px.
+          //
+          // Instead, derive the sticky bottom from the bar's CSS top + rendered height.
+          // This is constant and correct regardless of current scroll position.
+          const stickyOffset =
+            parseFloat(window.getComputedStyle(chipsBar).top) +
+            chipsBar.getBoundingClientRect().height;
+          const top = Math.min(maxScroll, Math.max(0, headingAbs - stickyOffset));
+          container.scrollTo({ top, behavior: "smooth" });
+        } else {
+          container.scrollTo({ top: maxScroll, behavior: "smooth" });
+        }
       }
     },
     [syncFromScroll]
