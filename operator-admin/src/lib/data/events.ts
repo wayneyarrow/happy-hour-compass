@@ -48,6 +48,14 @@ export type ConsumerEventDetail = {
   /** Venue UUID — matches venues.id; used for the /venue/[id] back-link. */
   venueId: string;
   venueName: string;
+  // Venue context — drives action buttons and venue info rows on the detail page.
+  venueAddress: string;
+  venuePhone: string;
+  venueWebsiteUrl: string;
+  venueMenuUrl: string;
+  venuePaymentMethods: string;
+  /** Business hours keyed by day name — "H:MM AM – H:MM PM" or "CLOSED". */
+  venueHoursWeekly: Record<string, string>;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,6 +165,55 @@ function buildOccurrenceLabel(row: ScheduleRow): string {
   return legacyParts.join(" ");
 }
 
+// ─── Venue context helpers ────────────────────────────────────────────────────
+
+const EVENT_VENUE_DAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday",
+  "Thursday", "Friday", "Saturday",
+] as const;
+type EventVenueDay = (typeof EVENT_VENUE_DAYS)[number];
+
+/** Converts "HH:MM" 24-hour string to display format like "4 PM" or "4:30 PM". */
+function hhmmTo12hDisplay(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return m === 0 ? `${h} ${ampm}` : `${h}:${mStr} ${ampm}`;
+}
+
+/** Maps the business_hours JSONB column to a day → display-string record. */
+function mapDbHours(
+  raw: Record<string, { open: string; close: string } | null> | null
+): Record<string, string> {
+  const weekly: Record<string, string> = {};
+  EVENT_VENUE_DAYS.forEach((d) => {
+    weekly[d] = "CLOSED";
+  });
+  if (!raw) return weekly;
+  for (const [dayLower, slot] of Object.entries(raw)) {
+    const day = (dayLower.charAt(0).toUpperCase() + dayLower.slice(1)) as EventVenueDay;
+    if (!EVENT_VENUE_DAYS.includes(day)) continue;
+    weekly[day] = slot
+      ? `${hhmmTo12hDisplay(slot.open)} \u2013 ${hhmmTo12hDisplay(slot.close)}`
+      : "CLOSED";
+  }
+  return weekly;
+}
+
+/** Parses the payment_types TEXT column (stored as JSON array) to a comma string. */
+function parsePaymentTypesStr(raw: string | null): string {
+  if (!raw) return "";
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as string[]).join(", ") : String(raw);
+  } catch {
+    return String(raw);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,15 +260,17 @@ export async function getEventForConsumerById(
     const row = data as Record<string, any>;
     const venueId = row.venue_id as string;
 
-    // Fetch the venue name for context display and back-link.
+    // Fetch venue context for detail page rendering (action buttons + info rows).
     const { data: venueRow } = await supabase
       .from("venues")
-      .select("name")
+      .select(
+        "name, address_line1, phone, website_url, menu_url, payment_types, business_hours"
+      )
       .eq("id", venueId)
       .maybeSingle();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const venueName = ((venueRow as Record<string, any> | null)?.name as string) ?? "";
+    const vr = (venueRow as Record<string, any> | null) ?? {};
 
     return {
       id: row.id as string,
@@ -227,7 +286,15 @@ export async function getEventForConsumerById(
       }),
       imageUrl: (row.image_url as string | null) ?? null,
       venueId,
-      venueName,
+      venueName: (vr.name as string) ?? "",
+      venueAddress: (vr.address_line1 as string) ?? "",
+      venuePhone: (vr.phone as string) ?? "",
+      venueWebsiteUrl: (vr.website_url as string) ?? "",
+      venueMenuUrl: (vr.menu_url as string) ?? "",
+      venuePaymentMethods: parsePaymentTypesStr(vr.payment_types as string | null),
+      venueHoursWeekly: mapDbHours(
+        vr.business_hours as Record<string, { open: string; close: string } | null> | null
+      ),
     };
   } catch (err) {
     console.error("[getEventForConsumerById] Unexpected error:", err);
