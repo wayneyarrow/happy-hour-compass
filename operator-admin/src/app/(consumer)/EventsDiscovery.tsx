@@ -561,7 +561,7 @@ export function EventsDiscovery({ events }: Props) {
             </p>
           </div>
         ) : (
-          <ul>
+          <ul className="[&>li]:block">
             {filtered.map((event) => (
               <li key={event.id}>
                 <EventCard event={event} />

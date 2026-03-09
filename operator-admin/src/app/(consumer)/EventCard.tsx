@@ -17,7 +17,7 @@ type Props = {
  */
 export function EventCard({ event }: Props) {
   return (
-    <Link href={`/event/${event.id}`}>
+    <Link href={`/event/${event.id}`} className="block">
       <div className="bg-white rounded-lg p-[14px] mb-px border-b border-gray-100 hover:bg-[#fafbfc] transition-colors cursor-pointer">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
