@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
           // First, reflect new cookies onto the request so downstream
           // server code can read them within this request cycle.
           cookiesToSet.forEach(({ name, value }) =>
