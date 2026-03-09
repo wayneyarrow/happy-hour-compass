@@ -22,3 +22,20 @@ Happy Hour Compass makes it easy to find the best food and drink deals near you:
 - **Vanilla JavaScript** - Interactive functionality and state management
 - **Leaflet.js** - Interactive maps for venue discovery and location display
 - **OpenStreetMap** - Map tile provider for geographical data
+
+## Deployment Troubleshooting
+
+### Supabase "Invalid API key" error
+
+If Vercel runtime logs show "Invalid API key" and the consumer app loads with no venues or events:
+
+1. Open Supabase → Project Settings → API
+2. Copy the **Secret Key**
+3. Go to Vercel → Project → Settings → Environment Variables
+4. Ensure `SUPABASE_SECRET_KEY` matches the Supabase secret key exactly
+5. Remove any accidental prefix such as `SUPABASE_SECRET_KEY=` from the value
+6. Redeploy the latest deployment in Vercel
+
+**Notes:**
+- Even a single incorrect character (O vs 0, etc.) will cause authentication failure.
+- Environment variable changes require a redeploy before taking effect.
