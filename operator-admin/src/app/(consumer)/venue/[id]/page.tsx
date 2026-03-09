@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 import { VenueDistance } from "./VenueDistance";
 import { VenueOpenStatus } from "./VenueOpenStatus";
-import { ConsumerNav } from "../../ConsumerNav";
 import { BookmarkButton } from "../../BookmarkButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
@@ -83,7 +82,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     Object.values(venue.hoursWeekly).some((h) => h !== "CLOSED");
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <main className="bg-gray-50">
       {/* Hero image */}
       {heroImage && (
         <div className="w-full bg-gray-200">
@@ -320,7 +319,6 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           </section>
         )}
       </div>
-      <ConsumerNav />
     </main>
   );
 }

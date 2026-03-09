@@ -1,8 +1,6 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { SavedVenueList } from "./SavedVenueList";
-import { ConsumerNav } from "../ConsumerNav";
-
 // Always read fresh data — saved state must reflect current DB state.
 export const dynamic = "force-dynamic";
 
@@ -13,7 +11,7 @@ export default async function SavedPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <main className="bg-gray-50">
       {/* Page header — matches original .page-header sticky */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4">
         <div className="max-w-2xl mx-auto">
@@ -31,7 +29,6 @@ export default async function SavedPage() {
         <SavedVenueList allVenues={venues} allEvents={events} />
       </div>
 
-      <ConsumerNav />
     </main>
   );
 }

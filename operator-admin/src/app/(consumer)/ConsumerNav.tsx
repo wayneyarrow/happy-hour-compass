@@ -16,7 +16,7 @@ export function ConsumerNav() {
     pathname.startsWith("/events") || pathname.startsWith("/event");
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-50">
+    <nav className="bg-white border-t border-gray-200 flex shrink-0">
       {/* Search tab */}
       <Link
         href="/"

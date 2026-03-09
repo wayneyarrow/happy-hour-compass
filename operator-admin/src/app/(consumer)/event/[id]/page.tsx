@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getEventForConsumerById } from "@/lib/data/events";
-import { ConsumerNav } from "../../ConsumerNav";
 import { EventBookmarkButton } from "../../EventBookmarkButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
@@ -30,7 +29,7 @@ export default async function EventPage({ params, searchParams }: PageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white pb-20">
+    <main className="bg-white">
 
       {/* Detail page header — matches original .detail-page-header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 flex items-center px-5 py-4">
@@ -128,7 +127,6 @@ export default async function EventPage({ params, searchParams }: PageProps) {
 
       </div>
 
-      <ConsumerNav />
     </main>
   );
 }
