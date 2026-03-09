@@ -253,8 +253,8 @@ function parseCoord(raw: string): number | null {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // CSV is one directory above operator-admin (at repo root level)
-  const csvPath = path.resolve(process.cwd(), "../venues.beta.csv");
+  // CSV lives in original-app/ (one level up from operator-admin, then into original-app)
+  const csvPath = path.resolve(process.cwd(), "../original-app/venues.beta.csv");
 
   if (!fs.existsSync(csvPath)) {
     console.error(`ERROR: CSV not found at ${csvPath}`);

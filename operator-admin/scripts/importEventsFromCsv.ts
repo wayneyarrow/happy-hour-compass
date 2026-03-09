@@ -407,7 +407,8 @@ function mapRecurrence(eventFrequency: string): string {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const csvPath = path.resolve(process.cwd(), "../events.beta.csv");
+  // CSV lives in original-app/ (one level up from operator-admin, then into original-app)
+  const csvPath = path.resolve(process.cwd(), "../original-app/events.beta.csv");
 
   if (!fs.existsSync(csvPath)) {
     console.error(`ERROR: CSV not found at ${csvPath}`);
