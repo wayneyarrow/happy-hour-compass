@@ -22,6 +22,13 @@ function persistSavedEvents(ids: Set<string>) {
 type Props = {
   eventId: string;
   className?: string;
+  /**
+   * "list"   — compact row size: 28×28px button, 18px SVG, gray-300 default stroke.
+   *            Used in EventCard list rows.
+   * "header" — header tap-target size: 44×44px min button, 22px SVG, gray-500 default
+   *            stroke, hover background. Matches original .header-icon-btn sizing.
+   */
+  variant?: "list" | "header";
 };
 
 /**
@@ -33,7 +40,7 @@ type Props = {
  * - Dispatches "hhc:savedChanged" custom event so the Saved page
  *   can update immediately in the same tab
  */
-export function EventBookmarkButton({ eventId, className = "" }: Props) {
+export function EventBookmarkButton({ eventId, className = "", variant = "list" }: Props) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -53,22 +60,28 @@ export function EventBookmarkButton({ eventId, className = "" }: Props) {
     setSaved(ids.has(eventId));
   }
 
+  const isHeader = variant === "header";
+
   return (
     <button
       type="button"
       onClick={toggle}
       aria-label={saved ? "Remove from saved" : "Save event"}
-      className={`flex items-center justify-center shrink-0 rounded-full transition-colors ${className}`}
-      style={{ width: 28, height: 28, padding: 4 }}
+      className={`flex items-center justify-center shrink-0 rounded-full transition-colors ${isHeader ? "hover:bg-gray-100" : ""} ${className}`}
+      style={
+        isHeader
+          ? { minWidth: 44, minHeight: 44, padding: 8 }
+          : { width: 28, height: 28, padding: 4 }
+      }
     >
       <svg
         viewBox="0 0 24 24"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          width: 18,
-          height: 18,
+          width: isHeader ? 22 : 18,
+          height: isHeader ? 22 : 18,
           fill: saved ? "#f97316" : "none",
-          stroke: saved ? "#f97316" : "#d1d5db",
+          stroke: saved ? "#f97316" : isHeader ? "#6b7280" : "#d1d5db",
           strokeWidth: 2,
           transition: "fill 0.2s, stroke 0.2s",
         }}
