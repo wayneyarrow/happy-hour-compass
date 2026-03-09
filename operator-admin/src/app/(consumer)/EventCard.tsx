@@ -19,15 +19,6 @@ export function EventCard({ event }: Props) {
   return (
     <Link href={`/event/${event.id}`}>
       <div className="bg-white rounded-lg p-[14px] mb-px border-b border-gray-100 hover:bg-[#fafbfc] transition-colors cursor-pointer">
-        {event.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={event.imageUrl}
-            alt={event.title}
-            className="w-full object-cover rounded mb-3"
-            style={{ maxHeight: "140px" }}
-          />
-        )}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             {/* Title — matches .event-title: 700 weight, 17px, line-height 1.2 */}
@@ -43,11 +34,6 @@ export function EventCard({ event }: Props) {
             {/* Schedule — matches .event-time: 13px, gray-500 */}
             {event.nextOccurrenceLabel && (
               <p className="text-[13px] text-gray-500">{event.nextOccurrenceLabel}</p>
-            )}
-            {event.description && (
-              <p className="text-[13px] text-gray-500 mt-1.5 line-clamp-2">
-                {event.description}
-              </p>
             )}
           </div>
           <EventBookmarkButton eventId={event.id} />
