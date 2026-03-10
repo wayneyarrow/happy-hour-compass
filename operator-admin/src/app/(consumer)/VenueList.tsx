@@ -80,31 +80,34 @@ export function getOpenStatus(
   return nowMin >= open && nowMin < close ? "Open Now" : "Closed";
 }
 
-// ─── happy hour helpers ───────────────────────────────────────────────────────
-
-/** Converts a 24h "HH:MM" string to a short display like "4 PM" or "4:30 PM". */
-function fmt12h(hhmm: string): string {
-  const [hStr, mStr] = hhmm.split(":");
-  let h = parseInt(hStr, 10);
-  const m = parseInt(mStr, 10);
-  const ampm = h >= 12 ? "PM" : "AM";
-  if (h > 12) h -= 12;
-  if (h === 0) h = 12;
-  return m === 0 ? `${h} ${ampm}` : `${h}:${mStr} ${ampm}`;
-}
+// ─── image helpers ────────────────────────────────────────────────────────────
 
 /**
- * Returns the formatted earliest happy hour start time for today,
- * or null if the venue has no happy hour today.
+ * Maps establishment type to a placeholder image path.
+ * Mirrors original getVenueImage() logic from index.html.
  */
-function getHhStartToday(
-  happyHourWeekly: Record<string, Array<{ start: string; end: string }>>
-): string | null {
-  const dayName = DAYS[new Date().getDay()];
-  const slots = happyHourWeekly[dayName];
-  if (!slots || slots.length === 0) return null;
-  const earliest = slots.slice().sort((a, b) => a.start.localeCompare(b.start))[0];
-  return fmt12h(earliest.start);
+function getVenueImageSrc(establishmentType: string): string {
+  const t = establishmentType.toLowerCase();
+  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
+  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
+  if (t.includes("brewery")) return "/images/casual-dining-1.jpg";
+  if (t.includes("pub")) return "/images/sports-bar-1.jpg";
+  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
+  return "/images/casual-dining-1.jpg";
+}
+
+// ─── specials helper ──────────────────────────────────────────────────────────
+
+/**
+ * Returns short specials text for a listing card.
+ * Mirrors original getVenueShortSpecials() logic from index.html.
+ */
+function getShortSpecials(venue: ConsumerVenue): string {
+  if (venue.happyHourTagline) return venue.happyHourTagline;
+  const food = venue.specialsFood[0] ?? "";
+  const drinks = venue.specialsDrinks[0] ?? "";
+  if (food && drinks) return `${food}, ${drinks}`;
+  return food || drinks || "Happy Hour Specials";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,7 +116,6 @@ type VenueWithDist = {
   venue: ConsumerVenue;
   dist: number | null;
   openStatus: string | null;
-  hhStartToday: string | null;
 };
 
 type Props = {
@@ -122,9 +124,8 @@ type Props = {
 
 /**
  * Renders the venue discovery list.
- * On mount, computes open/closed status and today's earliest HH start time
- * from business/happy-hour data, and requests browser geolocation to
- * re-sort venues nearest-first. Falls back gracefully when unavailable.
+ * Card layout mirrors original index.html .listing-item structure:
+ * 72×72 image | name + bookmark / offer text / meta (badge · distance · category)
  */
 export function VenueList({ venues }: Props) {
   const [sorted, setSorted] = useState<VenueWithDist[]>(
@@ -133,7 +134,6 @@ export function VenueList({ venues }: Props) {
         venue: v,
         dist: null,
         openStatus: null,
-        hhStartToday: null,
       }))
   );
 
@@ -143,14 +143,11 @@ export function VenueList({ venues }: Props) {
       prev.map((item) => ({
         ...item,
         openStatus: getOpenStatus(item.venue.hoursWeekly),
-        hhStartToday: getHhStartToday(item.venue.happyHourWeekly),
       }))
     );
   }, []);
 
   // Sync sorted when the venues prop changes (e.g. search filtering narrows the list).
-  // Keep items that are still in the filtered set (preserving computed dist/status);
-  // add any new items (shouldn't happen during search, but handles edge cases).
   useEffect(() => {
     setSorted((prev) => {
       const venueIds = new Set(venues.map((v) => v.id));
@@ -162,7 +159,6 @@ export function VenueList({ venues }: Props) {
           venue: v,
           dist: null,
           openStatus: getOpenStatus(v.hoursWeekly),
-          hhStartToday: getHhStartToday(v.happyHourWeekly),
         }));
       return [...kept, ...added];
     });
@@ -203,45 +199,84 @@ export function VenueList({ venues }: Props) {
   }, [venues]);
 
   return (
-    <ul className="space-y-4">
-      {sorted.map(({ venue, dist, openStatus, hhStartToday }) => (
-        <li key={venue.id}>
-          <Link href={`/venue/${venue.id}`}>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold text-gray-900">{venue.name}</h2>
-                  {venue.city && (
-                    <p className="text-xs text-gray-500 mt-0.5">{venue.city}</p>
-                  )}
-                  {(openStatus !== null || dist !== null || venue.establishmentType) && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {[
-                        openStatus,
-                        dist !== null ? `${dist.toFixed(1)} km` : null,
-                        venue.establishmentType || null,
-                      ]
-                        .filter(Boolean)
-                        .join(" \u2022 ")}
-                    </p>
-                  )}
-                  {venue.happyHourTagline && (
-                    <p className="text-sm text-amber-700 mt-1">
-                      {venue.happyHourTagline}
-                    </p>
-                  )}
-                  {hhStartToday && (
-                    <p className="text-sm text-orange-600 mt-1">
-                      Happy hour starts at {hhStartToday}
-                    </p>
-                  )}
+    <ul>
+      {sorted.map(({ venue, dist, openStatus }) => {
+        const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
+        const shortSpecials = getShortSpecials(venue);
+
+        return (
+          <li key={venue.id}>
+            {/* Card mirrors original .listing-item: white, 8px radius, 14px padding, border-bottom divider */}
+            <Link href={`/venue/${venue.id}`} className="block">
+              <div className="bg-white rounded-[8px] p-[14px] mb-px border-b border-[#f3f4f6] flex gap-3 cursor-pointer hover:bg-[#fafbfc] transition-colors">
+
+                {/* Venue image — mirrors original .listing-image: 72×72, 8px radius */}
+                <div className="w-[72px] h-[72px] rounded-[8px] flex-shrink-0 overflow-hidden bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageSrc}
+                    alt={venue.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <BookmarkButton venueId={venue.id} />
+
+                {/* Content — mirrors original .listing-content: flex column, gap 4px */}
+                <div className="flex-1 flex flex-col gap-[4px] min-w-0">
+
+                  {/* Header row: name + bookmark — mirrors .listing-header */}
+                  <div className="flex justify-between items-center mb-[2px]">
+                    <div
+                      className="font-bold text-[17px] text-[#111827] leading-[1.2] flex-1 min-w-0 break-words"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {venue.name}
+                    </div>
+                    <BookmarkButton venueId={venue.id} />
+                  </div>
+
+                  {/* Offer text — mirrors .listing-offer: bold, dark #111827, line-clamp 2 */}
+                  <div
+                    className="text-[#111827] font-bold text-[14px] leading-[1.3]"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {shortSpecials}
+                  </div>
+
+                  {/* Meta row — mirrors .listing-meta: status badge · distance · category */}
+                  <div className="flex items-center gap-[3px] text-[12px] text-[#9ca3af] flex-nowrap min-w-0">
+                    {openStatus === "Open Now" && (
+                      <span className="inline-block px-[6px] py-[2px] rounded bg-[#dcfce7] text-[#166534] text-[11px] font-medium flex-shrink-0">
+                        Open Now
+                      </span>
+                    )}
+                    {dist !== null && (
+                      <span className="text-[#3b82f6] text-[12px] font-medium flex-shrink-0 whitespace-nowrap">
+                        {dist.toFixed(1)} km
+                      </span>
+                    )}
+                    {venue.establishmentType && (
+                      <span className="text-[#6b7280] text-[11px] overflow-hidden text-ellipsis whitespace-nowrap min-w-0 shrink">
+                        &bull; {venue.establishmentType}
+                      </span>
+                    )}
+                  </div>
+
+                </div>
               </div>
-            </div>
-          </Link>
-        </li>
-      ))}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }
