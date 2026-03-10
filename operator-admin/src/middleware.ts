@@ -5,8 +5,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * Middleware runs on every request (except static assets).
  * Responsibilities:
  *   1. Refresh the Supabase session cookie so it doesn't expire mid-session.
- *   2. Redirect unauthenticated users away from /dashboard/* and /admin/* to /login.
+ *   2. Redirect unauthenticated users away from /dashboard/*, /admin/*, and
+ *      /control-panel/* to /login.
  *   3. Redirect already-authenticated users away from /login to /admin/venue.
+ *
+ * Note: /control-panel/* has an additional allowlist check inside its layout.tsx.
+ * The middleware only enforces authentication; the layout enforces CP-admin access.
  */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -45,10 +49,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Guard: unauthenticated users cannot access /dashboard or /admin (or sub-paths)
+  // Guard: unauthenticated users cannot access /dashboard, /admin, or /control-panel
   if (
     !user &&
-    (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))
+    (pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/control-panel"))
   ) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
