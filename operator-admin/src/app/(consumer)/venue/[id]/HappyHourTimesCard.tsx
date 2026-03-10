@@ -189,40 +189,40 @@ export function HappyHourTimesCard({ happyHourWeekly, specialsFood, specialsDrin
             })}
           </div>
         )}
-      </div>
 
-      {/* Happy Hour Specials — rendered outside the blue box, matches original */}
-      {hasSpecials && (
-        <div className="text-[14px] text-[#111827]">
-          {/* .hh-section-heading: 14px bold #111827, margin-top 20px */}
-          <div className="text-[14px] font-bold text-[#111827] mt-5 mb-3">
-            Happy Hour Specials
+        {/* Happy Hour Specials — inside the blue card, same background as Times section */}
+        {hasSpecials && (
+          <div className="text-[14px] text-[#111827]">
+            {/* .hh-section-heading: 14px bold #111827, margin-top 20px */}
+            <div className="text-[14px] font-bold text-[#111827] mt-5 mb-3">
+              Happy Hour Specials
+            </div>
+
+            {specialsFood.length > 0 && (
+              <div>
+                {/* "Food" sub-heading: 13px semibold #374151, mt-3 */}
+                <div className="mt-3 text-[13px] font-semibold text-[#374151]">Food</div>
+                {specialsFood.map((item, i) => (
+                  <div key={i} className="mt-1 text-[14px] text-[#111827]">
+                    &bull; {item}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {specialsDrinks.length > 0 && (
+              <div>
+                <div className="mt-3 text-[13px] font-semibold text-[#374151]">Drinks</div>
+                {specialsDrinks.map((item, i) => (
+                  <div key={i} className="mt-1 text-[14px] text-[#111827]">
+                    &bull; {item}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
-          {specialsFood.length > 0 && (
-            <div>
-              {/* "Food" sub-heading: 13px semibold #374151, mt-3 */}
-              <div className="mt-3 text-[13px] font-semibold text-[#374151]">Food</div>
-              {specialsFood.map((item, i) => (
-                <div key={i} className="mt-1 text-[14px] text-[#111827]">
-                  &bull; {item}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {specialsDrinks.length > 0 && (
-            <div>
-              <div className="mt-3 text-[13px] font-semibold text-[#374151]">Drinks</div>
-              {specialsDrinks.map((item, i) => (
-                <div key={i} className="mt-1 text-[14px] text-[#111827]">
-                  &bull; {item}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }
