@@ -13,13 +13,11 @@ export default async function SavedPage() {
   return (
     <main className="bg-gray-50">
       {/* Page header — matches original .page-header sticky */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-xl font-bold text-gray-900">Saved</h1>
-        </div>
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 px-5 py-4 flex items-center">
+        <h1 className="text-xl font-bold text-gray-900">Saved</h1>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="px-5 py-5">
         {/*
           SavedVenueList reads savedVenues + savedEvents from localStorage
           and filters both lists to only show bookmarked items.
@@ -28,7 +26,6 @@ export default async function SavedPage() {
         */}
         <SavedVenueList allVenues={venues} allEvents={events} />
       </div>
-
     </main>
   );
 }

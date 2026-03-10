@@ -106,14 +106,12 @@ export function SavedVenueList({ allVenues, allEvents }: Props) {
         </section>
       )}
 
-      {/* Saved Events section */}
-      <section>
-        <p className="text-sm font-semibold text-gray-700 mb-4">
-          Saved Events
-        </p>
-        {savedEvents.length === 0 ? (
-          <p className="text-sm text-gray-500">No saved events yet.</p>
-        ) : (
+      {/* Saved Events section — only rendered when there are saved events */}
+      {savedEvents.length > 0 && (
+        <section>
+          <p className="text-sm font-semibold text-gray-700 mb-4">
+            Saved Events
+          </p>
           <ul className="space-y-px">
             {savedEvents.map((event) => (
               <li key={event.id}>
@@ -121,8 +119,8 @@ export function SavedVenueList({ allVenues, allEvents }: Props) {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
