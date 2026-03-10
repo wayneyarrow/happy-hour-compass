@@ -1,7 +1,18 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, useActionState } from "react";
 import Link from "next/link";
+
+/**
+ * Formats a phone string as (XXX) XXX-XXXX while the user types.
+ * Strips all non-digits, caps at 10, and applies North American formatting.
+ */
+function formatPhoneInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length < 4) return digits;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 import { submitClaimAction, type ClaimFormState } from "./actions";
 
 const ROLE_OPTIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
@@ -26,6 +37,7 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
     boundAction,
     {}
   );
+  const [phoneValue, setPhoneValue] = useState("");
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -71,7 +83,7 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
 
   // ── Claim form ────────────────────────────────────────────────────────────
   return (
-    <form action={formAction} noValidate className="px-5 pt-6 pb-12">
+    <form action={formAction} className="px-5 pt-6 pb-12">
       {/* General error banner */}
       {state.error && (
         <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
@@ -162,8 +174,12 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
             id="phone"
             name="phone"
             type="tel"
+            inputMode="tel"
             autoComplete="tel"
+            placeholder="(250) 555-1234"
             required
+            value={phoneValue}
+            onChange={(e) => setPhoneValue(formatPhoneInput(e.target.value))}
             className={INPUT_CLASS}
           />
           {state.fieldErrors?.phone && (
