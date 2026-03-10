@@ -367,6 +367,21 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
 
       </div>
 
+      {/* ── Claim section ─────────────────────────────────────────────────────
+          Only shown for unclaimed (seeded) venues. Hidden once claimed_at is set.
+          Kept subtle — this is for operators discovering their venue, not consumers. */}
+      {venue.claimedAt === null && (
+        <div className="px-5 pt-4 pb-8 border-t border-gray-100">
+          <p className="text-[12px] text-gray-400 mb-2">Own this venue?</p>
+          <Link
+            href={`/venue/${id}/claim`}
+            className="text-[14px] font-medium text-blue-500 hover:text-blue-600 transition-colors"
+          >
+            Claim this venue
+          </Link>
+        </div>
+      )}
+
     </main>
   );
 }

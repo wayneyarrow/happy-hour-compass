@@ -61,6 +61,13 @@ export type ConsumerVenue = {
    * Future plan limits can be applied by slicing this array before rendering.
    */
   images: ConsumerVenueImage[];
+  /**
+   * Timestamp (ISO string) when a claim was approved and operator access was
+   * granted.  Null means the venue is unclaimed and the claim flow is available.
+   * Only populated by single-venue fetches (getVenueWithEventsForConsumerById).
+   * List fetches leave this as null to avoid widening the listing query.
+   */
+  claimedAt: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,6 +338,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
       rawSpecialsHaveUnderTen(row.hh_drink_details as string | null),
     events: [],  // populated by callers after event fetch
     images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
+    claimedAt: (row.claimed_at as string | null) ?? null,
   };
 }
 
@@ -403,7 +411,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-  "establishment_type";
+  "establishment_type, claimed_at";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.
