@@ -1,5 +1,6 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { VenueDiscovery } from "./VenueDiscovery";
+import { WelcomeGate } from "./WelcomeGate";
 
 // Force a fresh Supabase query on every request — no static or router cache.
 export const dynamic = "force-dynamic";
@@ -22,7 +23,15 @@ export default async function ConsumerHomePage() {
         .chips-scroll { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      <VenueDiscovery venues={venues} />
+      {/*
+        WelcomeGate checks hhc_has_launched in localStorage:
+        - First visit:      home screen (logo + tagline + CTA) until button clicked
+        - Subsequent visit: splash screen (logo only, 1.2 s + 0.3 s fade)
+        - After gate:       VenueDiscovery renders normally
+      */}
+      <WelcomeGate>
+        <VenueDiscovery venues={venues} />
+      </WelcomeGate>
     </main>
   );
 }
