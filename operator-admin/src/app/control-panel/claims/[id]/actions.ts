@@ -139,7 +139,7 @@ export async function reviewClaimAction(
     // Step 3: if email failed, roll back all changed fields to their prior values
     // so the claim is left in exactly the state it was before this action.
     if (!emailResult.ok) {
-      console.error("[reviewClaimAction] Approval email failed — rolling back DB.");
+      console.error("[reviewClaimAction] Approval email failed — rolling back DB.", { resendError: emailResult.error });
 
       const { error: rollbackError } = await supabase
         .from("venue_claims")
