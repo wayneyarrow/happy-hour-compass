@@ -1,4 +1,5 @@
 import { ConsumerNav } from "./ConsumerNav";
+import { RecoveryRedirect } from "./RecoveryRedirect";
 
 /**
  * Consumer app shell layout.
@@ -24,6 +25,7 @@ export default function ConsumerLayout({
       <div className="flex flex-col h-dvh w-full md:w-[375px] md:h-[812px] bg-white md:rounded-[30px] md:shadow-[0_10px_30px_rgba(0,0,0,0.3)] overflow-hidden">
         {/* Scrollable content area */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          <RecoveryRedirect />
           {children}
         </div>
         {/* Bottom nav — sits at the bottom of the shell, not fixed to viewport */}

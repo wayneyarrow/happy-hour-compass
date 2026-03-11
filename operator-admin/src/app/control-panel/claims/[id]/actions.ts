@@ -287,7 +287,10 @@ export async function reviewClaimAction(
   // /auth/callback exchanges the code for a session, then redirects to
   // /operator/create-password where the operator sets their password.
   const appUrl = getAppUrl();
-  const redirectTo = `${appUrl}/auth/callback?next=/operator/create-password`;
+  // Point directly at the password setup page. Supabase's recovery flow appends
+  // #access_token=...&type=recovery to this URL (hash-fragment redirect), so no
+  // /auth/callback PKCE hop is needed — the page handles the hash token directly.
+  const redirectTo = `${appUrl}/operator/create-password`;
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
     type:    "recovery",

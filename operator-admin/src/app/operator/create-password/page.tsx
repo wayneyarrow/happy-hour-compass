@@ -11,17 +11,21 @@ import { createClient } from "@/lib/supabase/browser";
  * Password setup page for newly onboarded operators arriving via the
  * Supabase recovery link sent at claim approval time.
  *
- * Flow:
+ * Session flow (hash-fragment / implicit):
  *   1. Claimant clicks "Set up my password →" in approval email.
- *   2. Supabase verifies the recovery token and redirects to /auth/callback.
- *   3. /auth/callback exchanges the PKCE code for a session (sets cookies).
- *   4. User is redirected here with an active Supabase session.
- *   5. User sets their password via supabase.auth.updateUser({ password }).
- *   6. User is redirected to /admin/venue — their operator account is ready.
+ *   2. Supabase's /auth/v1/verify verifies the recovery token.
+ *   3. Supabase redirects here with tokens in the URL hash:
+ *        /operator/create-password#access_token=...&refresh_token=...&type=recovery
+ *   4. @supabase/ssr's createBrowserClient detects the hash asynchronously and
+ *      fires SIGNED_IN via onAuthStateChange. A concurrent getSession() call
+ *      catches the session if hash processing finishes first.
+ *   5. Once a session is confirmed, the password form is shown.
+ *   6. On submit: supabase.auth.updateUser({ password }).
+ *   7. Redirect to /admin/venue — operator account is ready.
  *
- * Session check: reads from the Supabase browser client (cookie-based session
- * set by the /auth/callback route handler). Shows an error state if no session
- * is present (link expired or already used).
+ * The session detection uses a "first-wins" race between getSession() and
+ * onAuthStateChange to handle both hash tokens and pre-existing sessions
+ * (e.g., page refreshed after a partial flow).
  */
 export default function CreatePasswordPage() {
   const router = useRouter();
@@ -36,14 +40,38 @@ export default function CreatePasswordPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setHasSession(!!session);
+    // "First-wins" race between two paths so we handle both:
+    //   A) Hash-fragment session (#access_token=...) — Supabase detects this
+    //      asynchronously and fires SIGNED_IN via onAuthStateChange.
+    //   B) Pre-existing cookie session (e.g. page refresh) — getSession()
+    //      returns immediately.
+    // Whichever resolves first settles the state; the other is ignored.
+    let settled = false;
+
+    function settle(session: boolean) {
+      if (settled) return;
+      settled = true;
+      setHasSession(session);
       setSessionChecked(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+          settle(!!session);
+        }
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      settle(!!session);
     });
+
+    return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
     setError(null);
 
