@@ -5,15 +5,16 @@
  *
  * Required env vars:
  *   RESEND_API_KEY   — from your Resend dashboard (resend.com/api-keys)
- *   EMAIL_FROM       — verified sender address, e.g. "Happy Hour Compass <hello@yourdomain.com>"
  *
  * Optional env var (for the activation link base URL):
  *   APP_URL          — e.g. "https://happyhourcompass.com"
  *                      Falls back to VERCEL_URL (auto-set by Vercel) or localhost.
  *
+ * Sender: always uses onboarding@resend.dev (Resend's shared sender, no domain
+ * verification required). Switch to a verified domain when ready by updating
+ * DEFAULT_FROM below.
+ *
  * Resend free tier: 3,000 emails/month, 100/day.
- * Domain verification required for production sending.
- * During development, send only to addresses registered on your Resend account.
  */
 
 import { Resend } from "resend";
@@ -47,7 +48,7 @@ export async function sendApprovalEmail({
 }): Promise<{ ok: boolean; error?: string }> {
   const appUrl = getAppUrl();
   const activateUrl = `${appUrl}/activate-account?token=${token}`;
-  const from = process.env.EMAIL_FROM ?? DEFAULT_FROM;
+  const from = DEFAULT_FROM;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
