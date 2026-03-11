@@ -8,10 +8,10 @@ import SignOutButton from "@/app/dashboard/SignOutButton";
 /**
  * Admin Control Panel shell layout — wraps every page under /control-panel/*.
  *
- * Access gate (two layers):
- *   1. Middleware: redirects unauthenticated users to /login.
- *   2. Here: checks the CONTROL_PANEL_ADMIN_EMAILS allowlist. Authenticated
- *      users who are not CP admins are redirected away silently.
+ * Access gate (single layer — middleware does NOT guard /control-panel):
+ *   Both checks happen here. Any visitor who is not an authenticated CP admin
+ *   is redirected to "/" silently. We never redirect to "/login" from here
+ *   because that is the Operator Admin login, which is a separate surface.
  */
 export default async function ControlPanelLayout({
   children,
@@ -23,13 +23,8 @@ export default async function ControlPanelLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Layer 1: must be authenticated
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Layer 2: must be a Control Panel admin
-  if (!isControlPanelAdmin(user.email)) {
+  // Not authenticated, or not in the CP-admin allowlist — same outcome either way.
+  if (!user || !isControlPanelAdmin(user.email)) {
     redirect("/");
   }
 
