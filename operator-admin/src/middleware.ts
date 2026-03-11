@@ -5,12 +5,14 @@ import { NextResponse, type NextRequest } from "next/server";
  * Middleware runs on every request (except static assets).
  * Responsibilities:
  *   1. Refresh the Supabase session cookie so it doesn't expire mid-session.
- *   2. Redirect unauthenticated users away from /dashboard/*, /admin/*, and
- *      /control-panel/* to /login.
+ *   2. Redirect unauthenticated users away from /dashboard/* and /admin/* to /login.
  *   3. Redirect already-authenticated users away from /login to /admin/venue.
  *
- * Note: /control-panel/* has an additional allowlist check inside its layout.tsx.
- * The middleware only enforces authentication; the layout enforces CP-admin access.
+ * Route protection boundaries:
+ *   /admin/*         — Operator Admin. Middleware enforces authentication here.
+ *   /control-panel/* — Admin Control Panel. NOT guarded by middleware; its own
+ *                      layout.tsx handles both authentication and CP-admin allowlist.
+ *   /activate-account — Public. No auth required.
  */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -49,12 +51,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Guard: unauthenticated users cannot access /dashboard, /admin, or /control-panel
+  // Guard: unauthenticated users cannot access /dashboard or /admin.
+  // /control-panel is intentionally excluded — it manages its own auth in layout.tsx.
   if (
     !user &&
     (pathname.startsWith("/dashboard") ||
-      pathname.startsWith("/admin") ||
-      pathname.startsWith("/control-panel"))
+      pathname.startsWith("/admin"))
   ) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
