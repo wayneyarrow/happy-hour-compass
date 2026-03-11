@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getClaimById } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
+import ReviewActionsPanel from "./ReviewActionsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -290,35 +291,11 @@ export default async function ClaimDetailPage({
             )}
           </Section>
 
-          {/* Actions — scaffold for next task */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-1">
-              Review actions
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">
-              Actions will be enabled in the next task.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                disabled
-                className="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg text-sm opacity-40 cursor-not-allowed"
-              >
-                Approve
-              </button>
-              <button
-                disabled
-                className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm opacity-40 cursor-not-allowed"
-              >
-                Request more info
-              </button>
-              <button
-                disabled
-                className="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg text-sm opacity-40 cursor-not-allowed"
-              >
-                Reject
-              </button>
-            </div>
-          </div>
+          <ReviewActionsPanel
+            claimId={claim.id}
+            initialNotes={claim.review_notes}
+            currentStatus={claim.status}
+          />
 
         </div>
 
