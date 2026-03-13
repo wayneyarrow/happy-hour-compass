@@ -23,8 +23,15 @@ export default async function ControlPanelLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Not authenticated, or not in the CP-admin allowlist — same outcome either way.
-  if (!user || !isControlPanelAdmin(user.email)) {
+  // Unauthenticated — send to the operator login page so the admin can sign in.
+  if (!user) {
+    console.error("[ControlPanel] Unauthenticated access — redirecting to /login.");
+    redirect("/login");
+  }
+
+  // Authenticated but not in the CP-admin allowlist — bounce to consumer home.
+  if (!isControlPanelAdmin(user.email)) {
+    console.error("[ControlPanel] Authenticated user is not a CP admin — redirecting to /.");
     redirect("/");
   }
 
