@@ -242,6 +242,20 @@ function parsePaymentTypes(raw: string): string | null {
   return items.length > 0 ? JSON.stringify(items) : null;
 }
 
+// ── Specials guardrail ─────────────────────────────────────────────────────────
+// Enforces the free-plan limit of 3 food specials and 3 drink specials.
+// The plain-text format stores one item per newline; trimming to 3 lines
+// before insert prevents seeded venues from ever exceeding the admin UI limit.
+
+const MAX_SPECIALS = 3;
+
+function trimSpecialsToThree(raw: string | null): string | null {
+  if (!raw?.trim()) return null;
+  const lines = raw.split("\n").filter((l) => l.trim());
+  if (lines.length <= MAX_SPECIALS) return raw.trim();
+  return lines.slice(0, MAX_SPECIALS).join("\n");
+}
+
 // ── Coordinate helper ──────────────────────────────────────────────────────────
 
 function parseCoord(raw: string): number | null {
@@ -361,8 +375,8 @@ async function main() {
       business_hours: businessHoursJson,         // parsed JSONB object
       hh_times: orNull(get(row, "happy_hour_times")),       // plain text as-is
       hh_tagline: orNull(get(row, "happy_hour_tagline")),
-      hh_food_details: orNull(get(row, "happy_hour_food_details")),   // plain text
-      hh_drink_details: orNull(get(row, "happy_hour_drink_details")), // plain text
+      hh_food_details: trimSpecialsToThree(get(row, "happy_hour_food_details")),   // capped at 3
+      hh_drink_details: trimSpecialsToThree(get(row, "happy_hour_drink_details")), // capped at 3
       // hours: legacy TEXT column — intentionally omitted (see mapping doc)
       is_published: true,
       // created_by_operator_id / updated_by_operator_id: NULL for CSV imports

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "import:venues": "tsx scripts/importVenuesFromCsv.ts",
-    "import:events": "tsx scripts/importEventsFromCsv.ts"
+    "import:events": "tsx scripts/importEventsFromCsv.ts",
+    "trim:specials": "tsx scripts/trimSeededSpecials.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
