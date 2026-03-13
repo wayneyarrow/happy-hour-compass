@@ -16,16 +16,15 @@ import { createClient } from "@/lib/supabase/browser";
  *   2. Supabase's /auth/v1/verify verifies the recovery token.
  *   3. Supabase redirects here with tokens in the URL hash:
  *        /operator/create-password#access_token=...&refresh_token=...&type=recovery
- *   4. @supabase/ssr's createBrowserClient detects the hash asynchronously and
- *      fires SIGNED_IN via onAuthStateChange. A concurrent getSession() call
- *      catches the session if hash processing finishes first.
+ *   4. On mount the page explicitly parses the hash and calls setSession() so
+ *      the session is established immediately, regardless of whether
+ *      createBrowserClient auto-detects hash tokens in this context.
  *   5. Once a session is confirmed, the password form is shown.
  *   6. On submit: supabase.auth.updateUser({ password }).
  *   7. Redirect to /admin/venue — operator account is ready.
  *
- * The session detection uses a "first-wins" race between getSession() and
- * onAuthStateChange to handle both hash tokens and pre-existing sessions
- * (e.g., page refreshed after a partial flow).
+ * Fallback: if no hash tokens are found (e.g. page refresh after exchange),
+ * getSession() is used — handles a pre-existing cookie session.
  */
 export default function CreatePasswordPage() {
   const router = useRouter();
@@ -40,34 +39,42 @@ export default function CreatePasswordPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // "First-wins" race between two paths so we handle both:
-    //   A) Hash-fragment session (#access_token=...) — Supabase detects this
-    //      asynchronously and fires SIGNED_IN via onAuthStateChange.
-    //   B) Pre-existing cookie session (e.g. page refresh) — getSession()
-    //      returns immediately.
-    // Whichever resolves first settles the state; the other is ignored.
-    let settled = false;
+    async function init() {
+      // --- Path A: explicit hash-fragment recovery token handling ---
+      // Supabase recovery links redirect with tokens in the URL hash.
+      // Parse and call setSession() explicitly — do not rely on the browser
+      // client auto-detecting hash tokens, which is unreliable in this context.
+      const hash = window.location.hash.slice(1); // strip leading "#"
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        const type = params.get("type");
 
-    function settle(session: boolean) {
-      if (settled) return;
-      settled = true;
-      setHasSession(session);
+        if (type === "recovery" && accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          // Remove tokens from the address bar so they are not reprocessed
+          // on refresh and are not visible in browser history.
+          window.history.replaceState(null, "", window.location.pathname);
+
+          setHasSession(!sessionError);
+          setSessionChecked(true);
+          return;
+        }
+      }
+
+      // --- Path B: fallback for pre-existing cookie session ---
+      // Handles the "page refreshed after tokens were already exchanged" case.
+      const { data: { session } } = await supabase.auth.getSession();
+      setHasSession(!!session);
       setSessionChecked(true);
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-          settle(!!session);
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      settle(!!session);
-    });
-
-    return () => subscription.unsubscribe();
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,7 +106,7 @@ export default function CreatePasswordPage() {
     router.refresh();
   }
 
-  // Loading — checking session
+  // Loading — exchanging hash tokens / checking session
   if (!sessionChecked) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50">
