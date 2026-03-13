@@ -262,6 +262,19 @@ export async function reviewClaimAction(
   // created_by_operator_id is required for the admin venue page to display
   // the venue for this operator. claimed_by / claimed_at record provenance.
   const now = new Date().toISOString();
+
+  // Step 4a: Enforce one-venue-per-operator invariant.
+  // Unlink any other venues currently owned by this operator before linking
+  // the approved venue. This ensures /admin/venue always resolves to exactly
+  // one row, even when the same email is re-used across test runs or when an
+  // operator previously created their own venue via the self-serve flow.
+  // This is a no-op for fresh operators who have no prior venues.
+  await supabase
+    .from("venues")
+    .update({ created_by_operator_id: null })
+    .eq("created_by_operator_id", authUserId)
+    .neq("id", venueId);
+
   const { error: venueError } = await supabase
     .from("venues")
     .update({
