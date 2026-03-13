@@ -49,7 +49,8 @@ function parseSpecials(raw: string | null | undefined): HhItem[] {
           typeof item.name === "string"
       )
     ) {
-      return parsed as HhItem[];
+      // Cap at 3 — the UI supports at most 3 specials per type.
+      return (parsed as HhItem[]).slice(0, 3);
     }
   } catch {
     // Legacy plain text: split by newline into simple items

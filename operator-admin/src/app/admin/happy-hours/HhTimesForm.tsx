@@ -108,6 +108,48 @@ function parseTimeRange(range: string): TimeBlock | null {
   };
 }
 
+/**
+ * Expands a day-part string (already dash-normalised) into the individual Day
+ * values it covers. Handles:
+ *   • Single day:   "Monday"
+ *   • Range:        "Monday - Thursday"  (wraps if end < start, e.g. "Friday - Sunday")
+ *   • "Daily" / "Everyday"  → all 7 days
+ *   • "Weekdays"             → Monday – Friday
+ *
+ * Returns [] if the input cannot be resolved, so the caller can skip the line.
+ */
+function parseDayRange(rawDayPart: string): Day[] {
+  const dayPart = rawDayPart.trim();
+
+  // "Daily" / "Everyday" → all 7 days
+  if (/^(daily|everyday)$/i.test(dayPart)) return [...DAYS];
+
+  // "Weekdays" → Monday – Friday
+  if (/^weekdays$/i.test(dayPart)) {
+    return DAYS.filter((d) => d !== "Saturday" && d !== "Sunday");
+  }
+
+  // "Monday - Thursday" → range of consecutive days.
+  // After normalisation the separator is always hyphen-minus.
+  const dashIdx = dayPart.indexOf("-");
+  if (dashIdx !== -1) {
+    const startName = dayPart.slice(0, dashIdx).trim();
+    const endName   = dayPart.slice(dashIdx + 1).trim();
+    const si = (DAYS as readonly string[]).indexOf(startName);
+    const ei = (DAYS as readonly string[]).indexOf(endName);
+    if (si !== -1 && ei !== -1) {
+      if (si <= ei) return DAYS.slice(si, ei + 1) as Day[];
+      // Range wraps past Saturday back to Sunday (e.g. "Friday - Sunday")
+      return [...DAYS.slice(si), ...DAYS.slice(0, ei + 1)] as Day[];
+    }
+  }
+
+  // Single day name
+  if ((DAYS as readonly string[]).includes(dayPart)) return [dayPart as Day];
+
+  return [];
+}
+
 function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   const states = getDefaultDayStates();
   if (!text?.trim()) return states;
@@ -115,6 +157,11 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   // Normalize all dash variants to plain hyphen-minus:
   //   U+2013 en dash, U+2014 em dash, U+2212 minus sign.
   const normalized = text.replace(/[\u2013\u2014\u2212]/g, "-");
+
+  // Accumulate time blocks per day so multiple lines that cover the same day
+  // (e.g. "Daily: 2 PM - 6 PM" followed by "Daily: 9 PM - Close") stack
+  // correctly into block1 / block2 rather than overwriting each other.
+  const dayBlocks: Partial<Record<Day, TimeBlock[]>> = {};
 
   for (const rawLine of normalized.split("\n")) {
     const line = rawLine.trim();
@@ -124,30 +171,41 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
 
-    const dayName = line.slice(0, colonIdx).trim();
+    const dayPart = line.slice(0, colonIdx).trim();
     const value   = line.slice(colonIdx + 1).trim();
 
-    if (!(DAYS as readonly string[]).includes(dayName)) continue;
-    const day = dayName as Day;
+    const days = parseDayRange(dayPart);
+    if (days.length === 0) continue;
 
     if (/^no happy hour$/i.test(value)) {
-      states[day] = { ...states[day], noHappyHour: true };
+      // Explicit close — clear any previously accumulated blocks for these days.
+      for (const day of days) dayBlocks[day] = [];
       continue;
     }
 
-    // Parse up to two comma-separated time ranges.
+    // Parse up to two comma-separated time ranges per line.
     const timeBlocks: TimeBlock[] = [];
     for (const part of value.split(",")) {
-      const range = part.trim();
-      if (!range) continue;
-      const tb = parseTimeRange(range);
+      const tb = parseTimeRange(part.trim());
       if (tb) timeBlocks.push(tb);
     }
 
     if (timeBlocks.length > 0) {
+      for (const day of days) {
+        if (!dayBlocks[day]) dayBlocks[day] = [];
+        dayBlocks[day]!.push(...timeBlocks);
+      }
+    }
+  }
+
+  // Apply accumulated blocks to the final states map.
+  for (const [day, blocks] of Object.entries(dayBlocks) as [Day, TimeBlock[]][]) {
+    if (!blocks || blocks.length === 0) {
+      states[day].noHappyHour = true;
+    } else {
       states[day].noHappyHour = false;
-      states[day].block1 = timeBlocks[0];
-      states[day].block2 = timeBlocks[1] ?? null;
+      states[day].block1 = blocks[0];
+      states[day].block2 = blocks[1] ?? null;
     }
   }
 

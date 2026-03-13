@@ -219,7 +219,8 @@ function validateAndParseItems(raw: string): {
     });
   }
 
-  return { items };
+  // Enforce the 3-item UI maximum on the server side as well.
+  return { items: items.slice(0, 3) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
