@@ -25,6 +25,54 @@ type HappyHoursVenueRow = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
+ * Parses a single line of legacy plain-text specials into a structured HhItem.
+ *
+ * Handles the formats found in seeded CSV data:
+ *   Leading price:  "$13 Smash Burger (GF)"  → { name: "Smash Burger", price: "13", notes: "GF" }
+ *   Trailing price: "Chips + Salsa $6"        → { name: "Chips + Salsa", price: "6" }
+ *   Price + notes:  "Fries $5 (French or Truffle)" → { name: "Fries", price: "5", notes: "French or Truffle" }
+ *   No price:       "Select appetizers discounted"  → { name: "Select appetizers discounted" }
+ */
+function parseLegacySpecialLine(line: string): HhItem {
+  const raw = line.trim();
+
+  // Step 1: strip trailing parenthetical into notes
+  //   e.g. "$13 Smash Burger (GF)"  → text="$13 Smash Burger", notes="GF"
+  //        "Fries $5 (French or Truffle)" → text="Fries $5", notes="French or Truffle"
+  let notes: string | undefined;
+  let text = raw;
+  const parenMatch = raw.match(/\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) {
+    const candidate = parenMatch[1].trim();
+    if (candidate) notes = candidate;
+    text = raw.slice(0, parenMatch.index!).trim();
+  }
+
+  // Step 2: trailing price token — "Item name $9.50"
+  const trailing = text.match(/^(.+?)\s+\$(\d+(?:\.\d+)?)$/);
+  if (trailing) {
+    return {
+      name: trailing[1].trim(),
+      price: trailing[2],
+      ...(notes ? { notes } : {}),
+    };
+  }
+
+  // Step 3: leading price token — "$9.50 Item name"
+  const leading = text.match(/^\$(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (leading) {
+    return {
+      name: leading[2].trim(),
+      price: leading[1],
+      ...(notes ? { notes } : {}),
+    };
+  }
+
+  // Step 4: no price found — full text is the name; re-absorb parens
+  return { name: notes ? `${text} (${notes})` : text };
+}
+
+/**
  * Parses the hh_food_details / hh_drink_details TEXT column into structured
  * items for the SpecialsForm.
  *
@@ -53,12 +101,12 @@ function parseSpecials(raw: string | null | undefined): HhItem[] {
       return (parsed as HhItem[]).slice(0, 3);
     }
   } catch {
-    // Legacy plain text: split by newline into simple items
+    // Legacy plain text: split by newline, parse price/notes from each line.
     return raw
       .split("\n")
       .filter((line) => line.trim())
       .slice(0, 3)
-      .map((line) => ({ name: line.trim() }));
+      .map(parseLegacySpecialLine);
   }
 
   return [];
