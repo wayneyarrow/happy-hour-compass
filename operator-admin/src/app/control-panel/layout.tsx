@@ -9,9 +9,12 @@ import SignOutButton from "@/app/dashboard/SignOutButton";
  * Admin Control Panel shell layout — wraps every page under /control-panel/*.
  *
  * Access gate (single layer — middleware does NOT guard /control-panel):
- *   Both checks happen here. Any visitor who is not an authenticated CP admin
- *   is redirected to "/" silently. We never redirect to "/login" from here
- *   because that is the Operator Admin login, which is a separate surface.
+ *   1. No session       → redirect /login  (shared operator login page)
+ *   2. Not allowlisted  → redirect /       (consumer home; no information leak)
+ *   3. Allowlisted      → render layout
+ *
+ * Allowlist: CONTROL_PANEL_ADMIN_EMAILS env var (comma or newline separated).
+ * Ensure it is enabled for the Production environment in the Vercel dashboard.
  */
 export default async function ControlPanelLayout({
   children,
