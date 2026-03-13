@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
+import { sendClaimNotificationEmail } from "@/lib/email";
 
 export type ClaimFormState = {
   success?: boolean;
@@ -67,17 +68,17 @@ export async function submitClaimAction(
   const supabase = createAdminClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function queryVenue(field: "slug" | "id"): Promise<Record<string, any> | null> {
+  async function queryVenueFull(field: "slug" | "id"): Promise<Record<string, any> | null> {
     const { data } = await supabase
       .from("venues")
-      .select("id, claimed_at")
+      .select("id, name, claimed_at")
       .eq(field, venueRouteParam)
       .eq("is_published", true)
       .maybeSingle();
     return data ?? null;
   }
 
-  const venueRow = (await queryVenue("slug")) ?? (await queryVenue("id"));
+  const venueRow = (await queryVenueFull("slug")) ?? (await queryVenueFull("id"));
 
   if (!venueRow) {
     return { error: "Venue not found." };
@@ -89,7 +90,7 @@ export async function submitClaimAction(
   }
 
   // ── Insert claim record ───────────────────────────────────────────────────
-  const { error: insertError } = await supabase
+  const { data: insertedClaim, error: insertError } = await supabase
     .from("venue_claims")
     .insert({
       venue_id:   venueRow.id as string,
@@ -100,7 +101,9 @@ export async function submitClaimAction(
       email,
       ip_address: ip,
       status:     "pending",
-    });
+    })
+    .select("id")
+    .single();
 
   if (insertError) {
     // 23505 = unique_violation — partial unique index on (venue_id) WHERE status = 'pending'
@@ -112,6 +115,27 @@ export async function submitClaimAction(
     console.error("[submitClaimAction] Insert error:", insertError);
     return { error: "Something went wrong. Please try again." };
   }
+
+  // ── Notify founder — fire-and-forget; email failure must not block the claim ─
+  const submittedAt = new Date().toLocaleString("en-CA", {
+    timeZone: "America/Vancouver",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  sendClaimNotificationEmail({
+    claimId:       insertedClaim.id as string,
+    venueName:     venueRow.name as string,
+    firstName,
+    lastName,
+    claimantEmail: email,
+    phone,
+    submittedAt,
+  }).then(({ ok, error: emailErr }) => {
+    if (!ok) {
+      console.error("[submitClaimAction] Founder notification failed:", emailErr);
+    }
+  });
 
   return { success: true };
 }
