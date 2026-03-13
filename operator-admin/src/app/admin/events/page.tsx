@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import EventsManager, { EVENT_COLUMNS } from "./EventsManager";
+import EventsManager from "./EventsManager";
 import type { EventRow } from "./EventForm";
 
 export default async function AdminEventsPage() {
@@ -35,13 +35,15 @@ export default async function AdminEventsPage() {
 
   const venue = venueData as { id: string; name: string } | null;
 
-  // Load ALL events for this operator, newest first_date first.
+  // Load events for this venue only, newest first_date first.
+  // Filter by venue_id (not created_by_operator_id) so only this venue's
+  // events appear, even if the operator has events linked to other venues.
   const { data: eventsData, error: eventsError } =
     operator && venue
       ? await supabase
           .from("events")
           .select("id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, image_url, created_by_operator_id, updated_by_operator_id")
-          .eq("created_by_operator_id", operator.id)
+          .eq("venue_id", venue.id)
           .order("first_date", { ascending: false })
           .order("title", { ascending: true })
       : { data: null, error: null };

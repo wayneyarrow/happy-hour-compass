@@ -61,7 +61,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
     const { data } = await supabase
       .from("events")
       .select(EVENT_COLUMNS)
-      .eq("created_by_operator_id", operatorId)
+      .eq("venue_id", venueId)
       .order("first_date", { ascending: false })
       .order("title", { ascending: true });
     setEvents((data as unknown as EventRow[]) ?? []);
