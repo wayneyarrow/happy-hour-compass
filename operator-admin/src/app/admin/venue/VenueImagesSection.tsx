@@ -21,13 +21,31 @@ type MediaRow = {
 const BUCKET = "venue-images";
 const MAX_IMAGES = 5;
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Maps establishment type to the same placeholder image path used on the
+ * consumer detail page. Mirrors getVenueImageSrc() in venue/[id]/page.tsx.
+ */
+function getPlaceholderImageSrc(establishmentType: string): string {
+  const t = establishmentType.toLowerCase();
+  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
+  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
+  if (t.includes("brewery")) return "/images/casual-dining-1.jpg";
+  if (t.includes("pub")) return "/images/sports-bar-1.jpg";
+  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
+  return "/images/casual-dining-1.jpg";
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type Props = {
   venueId: string | null | undefined;
+  /** Used to show the correct placeholder preview when no images are uploaded. */
+  establishmentType?: string | null;
 };
 
-export default function VenueImagesSection({ venueId }: Props) {
+export default function VenueImagesSection({ venueId, establishmentType }: Props) {
   const [images, setImages] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -278,9 +296,27 @@ export default function VenueImagesSection({ venueId }: Props) {
       {loading ? (
         <p className="text-sm text-gray-400">Loading images…</p>
       ) : images.length === 0 ? (
-        <p className="text-sm text-gray-400">
-          No images yet. Upload your first image above.
-        </p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-4 items-start">
+          {/* Placeholder preview */}
+          <div className="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-amber-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={getPlaceholderImageSrc(establishmentType ?? "")}
+              alt="Current placeholder"
+              className="w-full h-full object-cover opacity-75"
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-amber-800 mb-0.5">
+              No venue photos uploaded yet
+            </p>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              Your public listing currently shows a generic placeholder image
+              based on your venue type. Upload real venue photos above to
+              replace it.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {images.map((img, i) => (

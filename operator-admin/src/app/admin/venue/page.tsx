@@ -220,7 +220,10 @@ export default async function AdminVenuePage() {
             title="Venue images"
             description="Upload up to 5 images. The first image is used as the primary image."
           >
-            <VenueImagesSection venueId={venue.id} />
+            <VenueImagesSection
+              venueId={venue.id}
+              establishmentType={venue.establishment_type}
+            />
           </AccordionSection>
 
           {/* Section 6: Publish — requires at least one venue image */}
