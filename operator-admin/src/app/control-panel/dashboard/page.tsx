@@ -16,8 +16,8 @@ const SECTIONS = [
   {
     title: "Operators",
     href: "/control-panel/operators",
-    description: "View operator accounts, approval status, and activity.",
-    status: "soon" as const,
+    description: "View operator accounts, approval status, and linked venues.",
+    status: "active" as const,
   },
   {
     title: "Settings",
