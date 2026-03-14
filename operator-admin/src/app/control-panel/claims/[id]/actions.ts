@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { sendPasswordSetupEmail } from "@/lib/email";
+import { sendPasswordSetupEmail, sendRequestMoreInfoEmail } from "@/lib/email";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,6 +166,40 @@ export async function reviewClaimAction(
 
     revalidatePath("/control-panel/claims");
     revalidatePath(`/control-panel/claims/${claimId}`);
+
+    // ── Send "request more info" email to claimant (fire-and-forget) ──────────
+    // Email failure must not block the review action — the status update has
+    // already committed.  Errors are logged for monitoring.
+    if (action === "needs_more_info") {
+      (async () => {
+        const { data: claim } = await supabase
+          .from("venue_claims")
+          .select("email, first_name, venue_id")
+          .eq("id", claimId)
+          .single();
+
+        if (!claim) {
+          console.error("[reviewClaimAction] Could not fetch claim for more-info email.", { claimId });
+          return;
+        }
+
+        const { data: venue } = await supabase
+          .from("venues")
+          .select("name")
+          .eq("id", claim.venue_id as string)
+          .single();
+
+        const result = await sendRequestMoreInfoEmail({
+          to:        claim.email as string,
+          firstName: (claim.first_name as string | null) || "there",
+          venueName: (venue?.name as string | null) || "your venue",
+        });
+
+        if (!result.ok) {
+          console.error("[reviewClaimAction] Request more info email failed:", result.error);
+        }
+      })();
+    }
 
     return { success: true, successAction: ACTION_LABELS[action] };
   }

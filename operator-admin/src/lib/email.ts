@@ -250,6 +250,131 @@ Happy Hour Compass Control Panel`;
   }
 }
 
+// ── Request more info email ────────────────────────────────────────────────────
+
+/**
+ * Sends a professional "more information needed" email to the claimant when
+ * the founder selects the Request More Info action during claim review.
+ */
+export async function sendRequestMoreInfoEmail({
+  to,
+  firstName,
+  venueName,
+}: {
+  to: string;
+  firstName: string;
+  venueName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const from = DEFAULT_FROM;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">More information needed</h1>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hello ${firstName},</p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for submitting a request to claim <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
+          </p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Before we can approve the request, we just need a bit of information to confirm that you&rsquo;re authorized to manage this venue listing.
+          </p>
+
+          <p style="margin:0 0 12px;font-size:15px;color:#475569;line-height:1.6;">
+            Please reply to this email with one of the following:
+          </p>
+
+          <ul style="margin:0 0 24px;padding-left:20px;font-size:15px;color:#475569;line-height:2;">
+            <li>a photo of the venue&rsquo;s business licence</li>
+            <li>a photo of the venue&rsquo;s liquor licence</li>
+            <li>a utility bill showing the business name and address</li>
+            <li>an email sent from the venue&rsquo;s official business domain</li>
+            <li>confirmation from the venue&rsquo;s website or social media account</li>
+          </ul>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            These documents are used only to verify the claim request and are not stored or shared.
+          </p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Once we receive the information, we&rsquo;ll review the request and get your venue set up as quickly as possible.
+          </p>
+
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            If you have any questions, feel free to reply directly to this email.
+          </p>
+
+          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Thanks again,</p>
+          <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because you submitted a venue claim on Happy Hour Compass.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hello ${firstName},
+
+Thanks for submitting a request to claim ${venueName} on Happy Hour Compass.
+
+Before we can approve the request, we just need a bit of information to confirm that you're authorized to manage this venue listing.
+
+Please reply to this email with one of the following:
+
+- a photo of the venue's business licence
+- a photo of the venue's liquor licence
+- a utility bill showing the business name and address
+- an email sent from the venue's official business domain
+- confirmation from the venue's website or social media account
+
+These documents are used only to verify the claim request and are not stored or shared.
+
+Once we receive the information, we'll review the request and get your venue set up as quickly as possible.
+
+If you have any questions, feel free to reply directly to this email.
+
+Thanks again,
+
+Wayne
+Founder, Happy Hour Compass`;
+
+  try {
+    const resend = getResend();
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject: "More information needed to verify your venue claim",
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[sendRequestMoreInfoEmail] Resend error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[sendRequestMoreInfoEmail] Unexpected error:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({
