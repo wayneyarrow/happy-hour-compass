@@ -115,11 +115,14 @@ function hhmmTo12h(hhmm: string): string {
 
 /**
  * Expands a day-part string to an array of full day names.
- * Handles single days ("Monday"), ranges ("Monday – Friday"), and "Daily".
+ * Handles single days ("Monday"), ranges ("Monday – Friday"), "Daily", "Everyday", and "Weekdays".
  */
 function expandDayRange(dayPart: string): Day[] {
   const t = dayPart.trim();
-  if (t.toLowerCase() === "daily") return [...DAYS];
+  // "Daily" / "Everyday" → all 7 days (matches admin HhTimesForm.parseDayRange)
+  if (/^(daily|everyday)$/i.test(t)) return [...DAYS];
+  // "Weekdays" → Monday – Friday
+  if (/^weekdays?$/i.test(t)) return DAYS.filter((d) => d !== "Saturday" && d !== "Sunday");
 
   // Range: "Monday – Friday" (EN dash) or "Monday - Friday" (hyphen)
   const rangeMatch = t.match(/^(.+?)\s*[\u2013\-]\s*(.+)$/);
