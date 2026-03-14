@@ -10,8 +10,8 @@ const SECTIONS = [
   {
     title: "Venues",
     href: "/control-panel/venues",
-    description: "Browse and manage all venues on the platform.",
-    status: "soon" as const,
+    description: "Browse all venues on the platform — published status, claim state, and linked operator.",
+    status: "active" as const,
   },
   {
     title: "Operators",
