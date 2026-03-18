@@ -150,6 +150,40 @@ function expandDayRange(dayPart: string): Day[] {
 }
 
 /**
+ * Expands the scraper-seeded compact hh_times format into line-per-day text
+ * that parseHhTimes can consume without modification.
+ *
+ * Scraper compact format (single line, two blocks separated by "|"):
+ *   "3pm - 6pm & 8pm - close | 3pm - 5pm & 9pm - close"
+ *
+ * Assumed day mapping (beta convention, matches Kin and Folk import):
+ *   block 0 → Sunday–Thursday
+ *   block 1 → Friday–Saturday
+ *
+ * Within each block, "&" separates time slots (equivalent to "," in admin format).
+ */
+function expandScraperCompactHhTimes(text: string): string {
+  const blocks = text.split("|").map((b) => b.trim());
+  const dayGroups: Day[][] = [
+    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
+    ["Friday", "Saturday"],
+  ];
+  const lines: string[] = [];
+  blocks.forEach((block, i) => {
+    if (i >= dayGroups.length) return;
+    // Replace "&" with "," so multi-slot parsing in parseHhTimes works as-is
+    const slots = block
+      .split("&")
+      .map((s) => s.trim())
+      .join(", ");
+    for (const day of dayGroups[i]) {
+      lines.push(`${day}: ${slots}`);
+    }
+  });
+  return lines.join("\n");
+}
+
+/**
  * Parses the hh_times plain-text weekly schedule into happyHourWeekly.
  *
  * Admin-generated format (one line per day):
@@ -158,6 +192,9 @@ function expandDayRange(dayPart: string): Day[] {
  *
  * Also handles legacy CSV formats with day ranges:
  *   "Monday – Friday: 4 PM–6 PM"
+ *
+ * Also handles scraper compact format (single line, pipe-separated blocks):
+ *   "3pm - 6pm & 8pm - close | 3pm - 5pm & 9pm - close"
  */
 function parseHhTimes(
   text: string | null
@@ -168,6 +205,11 @@ function parseHhTimes(
   });
 
   if (!text?.trim()) return weekly;
+
+  // Scraper compact format: single line with pipe-separated blocks (no newlines)
+  if (!text.includes("\n") && text.includes("|")) {
+    text = expandScraperCompactHhTimes(text);
+  }
 
   for (const line of text
     .split("\n")
@@ -277,16 +319,24 @@ function rawSpecialsHaveUnderTen(raw: string | null): boolean {
 }
 
 /**
+ * Splits plain-text specials by the appropriate delimiter.
+ * Scraper-seeded data uses pipe ("|"); legacy data uses newlines.
+ */
+function splitSpecialsText(raw: string): string[] {
+  const delimiter = raw.includes("|") ? "|" : "\n";
+  return raw.split(delimiter).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
  * Parses hh_food_details / hh_drink_details from the DB.
  * DB format: JSON array [{name, price?, notes?}]
- * Falls back to newline-split plain text for legacy/CSV data.
+ * Falls back to pipe-split or newline-split plain text for legacy/scraper data.
  */
 function parseSpecials(raw: string | null): string[] {
   if (!raw?.trim()) return [];
   try {
     const items = JSON.parse(raw) as SpecialItem[];
-    if (!Array.isArray(items))
-      return raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (!Array.isArray(items)) return splitSpecialsText(raw);
     return items
       .filter((it) => it?.name)
       .map((it) => {
@@ -296,7 +346,7 @@ function parseSpecials(raw: string | null): string[] {
         return s;
       });
   } catch {
-    return raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    return splitSpecialsText(raw);
   }
 }
 
