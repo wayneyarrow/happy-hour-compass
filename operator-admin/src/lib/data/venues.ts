@@ -184,6 +184,39 @@ function expandScraperCompactHhTimes(text: string): string {
 }
 
 /**
+ * Expands the scraper-seeded grouped-day hh_times format into line-per-day text.
+ *
+ * Grouped-day format (single line, pipe-separated blocks with explicit day labels):
+ *   "Sunday–Thursday: 3pm - 6pm & 8pm - close | Friday & Saturday: 3pm - 5pm & 9pm - close"
+ *
+ * Each block has the form "DaySpec: timeSlots" where:
+ *   - DaySpec may be a range ("Sunday–Thursday"), a "&"-joined list ("Friday & Saturday"),
+ *     or a single day name.
+ *   - timeSlots uses "&" as the slot separator (converted to "," for parseHhTimes).
+ */
+function expandScraperGroupedHhTimes(text: string): string {
+  const lines: string[] = [];
+  for (const block of text.split("|").map((b) => b.trim())) {
+    const colonIdx = block.indexOf(":");
+    if (colonIdx === -1) continue;
+    const daySpec = block.substring(0, colonIdx).trim();
+    const timeStr = block.substring(colonIdx + 1).trim();
+    // Convert "&"-separated slots to "," for parseHhTimes slot splitting
+    const slots = timeStr
+      .split("&")
+      .map((s) => s.trim())
+      .join(", ");
+    // Day spec may be "&"-joined (e.g. "Friday & Saturday") — expand each part
+    for (const part of daySpec.split("&").map((s) => s.trim())) {
+      for (const day of expandDayRange(part)) {
+        lines.push(`${day}: ${slots}`);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
  * Parses the hh_times plain-text weekly schedule into happyHourWeekly.
  *
  * Admin-generated format (one line per day):
@@ -206,9 +239,17 @@ function parseHhTimes(
 
   if (!text?.trim()) return weekly;
 
-  // Scraper compact format: single line with pipe-separated blocks (no newlines)
+  // Scraper format: single line with pipe-separated blocks (no newlines)
+  // Grouped-day format has explicit day labels before each block's colon
+  // (e.g. "Sunday–Thursday: 3pm - 6pm & 8pm - close | Friday & Saturday: 3pm - 5pm & 9pm - close").
+  // Compact format has no day labels (e.g. "3pm - 6pm & 8pm - close | 3pm - 5pm & 9pm - close").
   if (!text.includes("\n") && text.includes("|")) {
-    text = expandScraperCompactHhTimes(text);
+    const firstBlock = text.split("|")[0].trim();
+    if (/^(sun|mon|tue|wed|thu|fri|sat|daily|everyday|weekday)/i.test(firstBlock)) {
+      text = expandScraperGroupedHhTimes(text);
+    } else {
+      text = expandScraperCompactHhTimes(text);
+    }
   }
 
   for (const line of text
