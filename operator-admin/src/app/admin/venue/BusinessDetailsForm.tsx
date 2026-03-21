@@ -186,15 +186,16 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
           <label htmlFor="bd-country" className={labelCls}>
             Country
           </label>
-          <input
+          <select
             id="bd-country"
             name="country"
-            type="text"
             disabled={isPending}
-            defaultValue={v.country}
-            placeholder="Canada"
+            defaultValue={v.country || "CA"}
             className={inputCls}
-          />
+          >
+            <option value="CA">Canada</option>
+            <option value="US">United States</option>
+          </select>
         </div>
       </div>
 
