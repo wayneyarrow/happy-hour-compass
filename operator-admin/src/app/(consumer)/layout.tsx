@@ -24,7 +24,7 @@ export default function ConsumerLayout({
       {/* Phone frame */}
       <div className="flex flex-col h-dvh w-full md:w-[375px] md:h-[812px] bg-white md:rounded-[30px] md:shadow-[0_10px_30px_rgba(0,0,0,0.3)] overflow-hidden">
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div id="consumer-scroll" className="flex-1 overflow-y-auto overscroll-contain">
           <RecoveryRedirect />
           {children}
         </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
+import { VenueMapView } from "./VenueMapView";
 
 type View = "list" | "map";
 
@@ -70,6 +71,18 @@ export function VenueDiscovery({ venues }: Props) {
   const [underTenActive, setUnderTenActive] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const isMap = view === "map";
+
+  // When switching to map view, reset the scroll container to top.
+  // Google Maps JS API calculates overlay positions using window.pageYOffset (= 0),
+  // not the CSS overflow container's scrollTop. A non-zero scrollTop causes all
+  // markers to appear shifted by that offset relative to the tile layer.
+  useEffect(() => {
+    if (isMap) {
+      document
+        .getElementById("consumer-scroll")
+        ?.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [isMap]);
 
   const NEAR_ME_RADIUS_KM = 25;
 
@@ -274,32 +287,8 @@ export function VenueDiscovery({ venues }: Props) {
       {/* Content area — mirrors .content: padding 20px */}
       <div style={{ padding: "20px 20px 140px" }}>
         {isMap && (
-          /* Map placeholder — matches original: 300px, rounded-lg, emerald border */
-          <div
-            className="flex flex-col items-center justify-center mb-5"
-            style={{
-              height: 300,
-              borderRadius: 8,
-              border: "3px solid #10b981",
-              background: "white",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-gray-300 mb-3"
-              style={{ width: 40, height: 40 }}
-            >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-            <p className="text-sm font-medium text-gray-400">
-              Map view coming next
-            </p>
+          <div className="mb-5">
+            <VenueMapView venues={filteredVenues} />
           </div>
         )}
 
@@ -310,7 +299,9 @@ export function VenueDiscovery({ venues }: Props) {
           </p>
         )}
 
-        {/* Venue list or empty state */}
+        {/* Venue list or empty state — list is hidden in map mode to prevent
+            the scroll container from accumulating scrollTop, which would
+            shift Google Maps marker overlays relative to the tile layer. */}
         {filteredVenues.length === 0 ? (
           searchTerm ? (
             /* Empty state — mirrors original: 🔍 icon, "No matches" title, hint body */
@@ -325,7 +316,7 @@ export function VenueDiscovery({ venues }: Props) {
             <p className="text-gray-500 text-sm">No venues available right now.</p>
           )
         ) : (
-          <VenueList venues={filteredVenues} />
+          !isMap && <VenueList venues={filteredVenues} />
         )}
       </div>
     </>
