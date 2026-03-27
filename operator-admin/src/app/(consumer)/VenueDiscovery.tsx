@@ -72,6 +72,56 @@ export function VenueDiscovery({ venues }: Props) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const isMap = view === "map";
 
+  // Restore the list scroll position when returning from a venue detail page.
+  // The position is saved to sessionStorage on venue card click (VenueList.tsx)
+  // because Next.js scroll restoration only applies to window, not this custom
+  // overflow container (#consumer-scroll in the layout).
+  useEffect(() => {
+    const saved = sessionStorage.getItem("hhc_list_scroll");
+    if (!saved) return;
+    const top = parseInt(saved, 10);
+
+    // Position is 0 or unparseable — nothing to restore; consume the key.
+    if (!top) {
+      sessionStorage.removeItem("hhc_list_scroll");
+      return;
+    }
+
+    const el = document.getElementById("consumer-scroll");
+    if (!el) return;
+
+    // Bounded rAF retry loop.
+    //
+    // IMPORTANT — do NOT remove the sessionStorage key upfront.
+    // React Strict Mode double-invokes effects in development:
+    //   1. effect run 1 queues rAF_1
+    //   2. Strict Mode cleanup fires before rAF_1 runs → cancelAnimationFrame(rAF_1)
+    //   3. effect run 2 fires
+    // If the key were removed in run 1, run 2 would find nothing and bail out.
+    // Instead, remove the key only when tryRestore actually executes (success
+    // or exhaustion), so run 2 can still find and use the saved position.
+    //
+    // Why direct scrollTop assignment instead of scrollTo({ behavior:"instant" }):
+    // direct assignment bypasses any CSS scroll-behavior:smooth on the container.
+    let rafId: number;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20; // ~333 ms at 60 fps
+
+    function tryRestore() {
+      el!.scrollTop = top;
+      if (el!.scrollTop >= top - 1 || attempts >= MAX_ATTEMPTS) {
+        // Reached target or gave up — consume the key either way.
+        sessionStorage.removeItem("hhc_list_scroll");
+        return;
+      }
+      attempts++;
+      rafId = requestAnimationFrame(tryRestore);
+    }
+
+    rafId = requestAnimationFrame(tryRestore);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
   // When switching to map view, reset the scroll container to top.
   // Google Maps JS API calculates overlay positions using window.pageYOffset (= 0),
   // not the CSS overflow container's scrollTop. A non-zero scrollTop causes all

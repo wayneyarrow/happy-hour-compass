@@ -207,7 +207,14 @@ export function VenueList({ venues }: Props) {
         return (
           <li key={venue.id}>
             {/* Card mirrors original .listing-item: white, 8px radius, 14px padding, border-bottom divider */}
-            <Link href={`/venue/${venue.id}`} className="block">
+            <Link
+              href={`/venue/${venue.id}`}
+              className="block"
+              onClick={() => {
+                const el = document.getElementById("consumer-scroll");
+                if (el) sessionStorage.setItem("hhc_list_scroll", String(el.scrollTop));
+              }}
+            >
               <div className="bg-white rounded-[8px] p-[14px] mb-px border-b border-[#f3f4f6] flex gap-3 cursor-pointer hover:bg-[#fafbfc] transition-colors">
 
                 {/* Venue image — mirrors original .listing-image: 72×72, 8px radius */}

@@ -7,6 +7,7 @@ import { VenueJumpChips } from "./VenueJumpChips";
 import { VenueDetailMeta } from "./VenueDetailMeta";
 import { HappyHourTimesCard } from "./HappyHourTimesCard";
 import { BusinessHoursRow } from "../../event/[id]/BusinessHoursRow";
+import { BackButton } from "./BackButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -83,13 +84,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           padding: 16px 20px, border-bottom: 1px solid #e5e7eb, flex, space-between */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 flex items-center px-5 py-4">
         {/* Back button — .detail-back-btn: blue-500, 24px bold */}
-        <Link
-          href="/"
-          className="text-blue-500 text-2xl font-bold leading-none shrink-0"
-          aria-label="Back to venues"
-        >
-          ←
-        </Link>
+        <BackButton />
         {/* Title — .detail-page-title: 18px bold gray-900, flex-1, ml-3 (12px) */}
         <h1 className="flex-1 text-[18px] font-bold text-gray-900 ml-3 truncate">
           {venue.name}

@@ -24,7 +24,11 @@ export default function ConsumerLayout({
       {/* Phone frame */}
       <div className="flex flex-col h-dvh w-full md:w-[375px] md:h-[812px] bg-white md:rounded-[30px] md:shadow-[0_10px_30px_rgba(0,0,0,0.3)] overflow-hidden">
         {/* Scrollable content area */}
-        <div id="consumer-scroll" className="flex-1 overflow-y-auto overscroll-contain">
+        {/* overflow-anchor:none — prevents CSS Scroll Anchoring from shifting
+            scrollTop when VenueList reorders items via async geolocation sort.
+            Without this, restored near-bottom positions are silently adjusted
+            by the browser after the geolocation callback fires. */}
+        <div id="consumer-scroll" className="flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]">
           <RecoveryRedirect />
           {children}
         </div>

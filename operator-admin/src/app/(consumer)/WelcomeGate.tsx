@@ -22,6 +22,9 @@ import Image from "next/image";
  */
 
 const STORAGE_KEY = "hhc_has_launched";
+// Session key: set after the gate is passed so in-session navigations back to /
+// don't re-trigger the splash screen (fixes back button + search icon reset bug).
+const SESSION_KEY = "hhc_session_active";
 
 // Nav bar height approximation used to size the welcome screens so they
 // visually fill the frame (matches original .screen { height: 100% }).
@@ -39,6 +42,13 @@ export function WelcomeGate({ children }: Props) {
   const [phase, setPhase] = useState<Phase>("loading");
 
   useEffect(() => {
+    // Already past the gate this session (e.g. user navigated back from a venue
+    // detail page or tapped the search icon). Skip all intro screens immediately.
+    if (sessionStorage.getItem(SESSION_KEY)) {
+      setPhase("done");
+      return;
+    }
+
     const hasLaunched = localStorage.getItem(STORAGE_KEY);
 
     if (!hasLaunched) {
@@ -50,6 +60,7 @@ export function WelcomeGate({ children }: Props) {
       const fadeTimer = setTimeout(() => {
         setPhase("splash-fade");
         const doneTimer = setTimeout(() => {
+          sessionStorage.setItem(SESSION_KEY, "true");
           setPhase("done");
         }, 300); // matches original CSS transition: 0.3s
         return () => clearTimeout(doneTimer);
@@ -60,6 +71,7 @@ export function WelcomeGate({ children }: Props) {
 
   function handleCta() {
     localStorage.setItem(STORAGE_KEY, "true");
+    sessionStorage.setItem(SESSION_KEY, "true");
     setPhase("done");
   }
 
