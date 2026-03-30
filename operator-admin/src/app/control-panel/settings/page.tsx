@@ -1,4 +1,7 @@
+export const dynamic = "force-dynamic";
+
 import { QaPublishPanel } from "./QaPublishPanel";
+import { QaHhReviewPanel } from "./QaHhReviewPanel";
 
 export default function ControlPanelSettingsPage() {
   return (
@@ -11,6 +14,7 @@ export default function ControlPanelSettingsPage() {
       </div>
       <div className="space-y-6">
         <QaPublishPanel />
+        <QaHhReviewPanel />
       </div>
     </div>
   );
