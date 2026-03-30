@@ -239,6 +239,13 @@ function parseHhTimes(
 
   if (!text?.trim()) return weekly;
 
+  // Normalize Unicode space variants to ASCII space, strip CR characters, and trim
+  // leading/trailing whitespace (including any trailing newline that Supabase appends
+  // to text fields).  Without the trim, a trailing \n makes text.includes("\n") true
+  // and bypasses the pipe-expansion branch, causing the entire pipe-delimited string
+  // to be treated as one malformed line and all days to fall back to "No happy hour".
+  text = text.replace(/[\u00A0\u202F\u2009\u2007]/g, " ").replace(/\r/g, "").trim();
+
   // Scraper format: single line with pipe-separated blocks (no newlines)
   // Grouped-day format has explicit day labels before each block's colon
   // (e.g. "Sunday–Thursday: 3pm - 6pm & 8pm - close | Friday & Saturday: 3pm - 5pm & 9pm - close").
@@ -276,12 +283,22 @@ function parseHhTimes(
 
     const days = expandDayRange(dayPart);
 
-    // Multiple comma-separated slots: "4 PM–6 PM, 9 PM–11 PM"
-    for (const slotStr of timePart.split(",").map((s) => s.trim())) {
+    // Multiple comma- or &-separated slots: "4 PM–6 PM, 9 PM–11 PM" or "4 PM–6 PM & 9 PM–11 PM"
+    for (const slotStr of timePart.split(/[,&]/).map((s) => s.trim()).filter(Boolean)) {
       const m = slotStr.match(/^(.+?)\s*[\u2013\-]\s*(.+)$/);
       if (!m) continue;
-      const start = parse12hToHHMM(m[1].trim());
-      const end = parse12hToHHMM(m[2].trim());
+      const rawStart = m[1].trim();
+      const rawEnd = m[2].trim();
+      // Import pipeline uses trailing-period notation: "3:00 - 5:00 PM" means 3:00 PM – 5:00 PM.
+      // If start has no am/pm suffix but end does, inherit the end's period for the start.
+      const startForParse = /\s*(am|pm)\s*$/i.test(rawStart)
+        ? rawStart
+        : (() => {
+            const p = rawEnd.match(/\s*(am|pm)\s*$/i)?.[1];
+            return p ? `${rawStart} ${p}` : rawStart;
+          })();
+      const start = parse12hToHHMM(startForParse);
+      const end = parse12hToHHMM(rawEnd);
       if (start && end) {
         for (const day of days) weekly[day].push({ start, end });
       }
@@ -324,21 +341,28 @@ type SpecialItem = { name: string; price?: string; notes?: string };
 /**
  * Returns true if any item in the raw specials data has a numeric price < 10.
  *
- * Handles two formats — must mirror parseSpecials() so the filter agrees with
+ * Handles three formats — must mirror parseSpecials() so the filter agrees with
  * what the detail page actually renders:
- *   1. JSON array  [{name, price?, notes?}]  — current admin format
- *   2. Legacy newline-split plain text        — pre-JSON import data
+ *   1. JSON object array  [{name, price?, notes?}]  — current admin format
+ *   2. JSON string array  ["Wings — $8", ...]       — some enrichment outputs
+ *   3. Legacy newline-split plain text               — pre-JSON import data
  */
 function rawSpecialsHaveUnderTen(raw: string | null): boolean {
   if (!raw?.trim()) return false;
 
   // ── JSON path (current format) ───────────────────────────────────────────
   try {
-    const items = JSON.parse(raw) as SpecialItem[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = JSON.parse(raw) as any[];
     if (Array.isArray(items)) {
       return items.some((it) => {
-        // Use String() in case a legacy import stored price as a number
-        const price = parseFloat(String(it.price ?? "").replace(/^\$/, ""));
+        if (typeof it === "string") {
+          // String item: extract price from "Name — $8" or "Name — 8"
+          const m = it.match(/(?:[\u2014\u2013\-]\s*|\$)(\d+(?:\.\d+)?)/);
+          return m ? parseFloat(m[1]) < 10 : false;
+        }
+        // Object item: use String() in case a legacy import stored price as a number
+        const price = parseFloat(String((it as SpecialItem).price ?? "").replace(/^\$/, ""));
         return !isNaN(price) && price < 10;
       });
     }
@@ -370,22 +394,31 @@ function splitSpecialsText(raw: string): string[] {
 
 /**
  * Parses hh_food_details / hh_drink_details from the DB.
- * DB format: JSON array [{name, price?, notes?}]
- * Falls back to pipe-split or newline-split plain text for legacy/scraper data.
+ * DB formats:
+ *   1. JSON object array  [{name, price?, notes?}]  — current admin format
+ *   2. JSON string array  ["Wings — $8", ...]       — some enrichment outputs
+ *   3. Legacy pipe- or newline-split plain text      — pre-JSON import data
  */
 function parseSpecials(raw: string | null): string[] {
   if (!raw?.trim()) return [];
   try {
-    const items = JSON.parse(raw) as SpecialItem[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = JSON.parse(raw) as any[];
     if (!Array.isArray(items)) return splitSpecialsText(raw);
     return items
-      .filter((it) => it?.name)
-      .map((it) => {
-        let s = it.name;
-        if (it.price) s += ` — ${it.price}`;
-        if (it.notes) s += ` (${it.notes})`;
+      .filter((it) => it != null)
+      .map((it): string | null => {
+        // String item (e.g. from some enrichment outputs): use as-is
+        if (typeof it === "string") return it.trim() || null;
+        // Object item: format with optional price and notes
+        const obj = it as SpecialItem;
+        if (!obj.name) return null;
+        let s = obj.name;
+        if (obj.price) s += ` — ${obj.price}`;
+        if (obj.notes) s += ` (${obj.notes})`;
         return s;
-      });
+      })
+      .filter((s): s is string => s !== null && s.length > 0);
   } catch {
     return splitSpecialsText(raw);
   }

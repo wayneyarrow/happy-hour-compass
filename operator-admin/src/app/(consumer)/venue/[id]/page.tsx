@@ -210,6 +210,11 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           {/* .section-title: 18px bold gray-900, margin-bottom 16px */}
           <h3 className="text-[18px] font-bold text-gray-900 mb-4">Happy Hour</h3>
 
+          {/* HH tagline — short summary like "Half-price apps & $5 beers 4–6 PM" */}
+          {venue.happyHourTagline && (
+            <p className="text-[14px] text-[#374151] mb-3">{venue.happyHourTagline}</p>
+          )}
+
           {/* Blue info card with HH times + schedule toggle + specials.
               Mirrors renderHappyHourSection() from original index.html. */}
           <HappyHourTimesCard

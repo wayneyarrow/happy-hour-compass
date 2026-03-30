@@ -121,12 +121,29 @@ export function HappyHourTimesCard({ happyHourWeekly, specialsFood, specialsDrin
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<HHStatus | null>(null);
 
+  // True when at least one day has parsed time slots.
+  const hasAnySlotsInWeekly = Object.values(happyHourWeekly).some(
+    (slots) => slots.length > 0
+  );
+
   // Calculate client-side so it uses browser's local time.
   useEffect(() => {
     setStatus(calculateHappyHourStatus(happyHourWeekly));
   }, [happyHourWeekly]);
 
   const hasSpecials = specialsFood.length > 0 || specialsDrinks.length > 0;
+
+  // Nothing to render — show a minimal fallback rather than an empty blue box.
+  if (!hasAnySlotsInWeekly && !hasSpecials) {
+    return (
+      <div
+        className="rounded-[8px] p-4 mb-5 text-[14px] text-[#374151] leading-[1.5]"
+        style={{ background: "#dbeafe" }}
+      >
+        Happy hour information not available.
+      </div>
+    );
+  }
 
   return (
     <>
@@ -135,13 +152,16 @@ export function HappyHourTimesCard({ happyHourWeekly, specialsFood, specialsDrin
         className="rounded-[8px] p-4 mb-5 text-[14px] text-[#111827] leading-[1.5]"
         style={{ background: "#dbeafe" }}
       >
-        {/* "Happy Hour Times" heading — .hh-section-heading: 14px bold #111827 mb-3 */}
-        <div className="text-[14px] font-bold text-[#111827] mb-3">
-          Happy Hour Times
-        </div>
+        {/* "Happy Hour Times" heading + today status + schedule toggle —
+            only rendered when there are actual parsed time slots. */}
+        {hasAnySlotsInWeekly && (
+          <div className="text-[14px] font-bold text-[#111827] mb-3">
+            Happy Hour Times
+          </div>
+        )}
 
         {/* Today status row + Show full schedule toggle — .hh-header-row */}
-        {status && (
+        {hasAnySlotsInWeekly && status && (
           <div className="flex items-baseline justify-between gap-3 mb-1">
             {/* .hh-status-left: flex, baseline, gap 6px */}
             <div className="flex-1 flex items-baseline gap-1.5 flex-wrap">
