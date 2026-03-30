@@ -95,9 +95,16 @@ function parseTimeRange(range: string): TimeBlock | null {
   // Dashes are already normalized to hyphen-minus by parseHhTimes.
   const parts = range.trim().split(/\s*-\s*/);
   if (parts.length < 2) return null;
-  const start = parseTimeStr(parts[0]);
   const end = parseTimeStr(parts[parts.length - 1]);
-  if (!start || !end) return null;
+  if (!end) return null;
+  // Trailing-period notation from imports: "3:00 - 5:00 PM" — only the end
+  // carries AM/PM; inherit it for the start when parseTimeStr would otherwise fail.
+  let start = parseTimeStr(parts[0]);
+  if (!start) {
+    const p = parts[parts.length - 1].match(/\s*(am|pm)\s*$/i)?.[1];
+    if (p) start = parseTimeStr(`${parts[0].trim()} ${p}`);
+  }
+  if (!start) return null;
   return {
     startHour: start.hour,
     startMinute: start.minute,
@@ -158,12 +165,28 @@ function parseHhTimes(text: string | null | undefined): Record<Day, DayState> {
   //   U+2013 en dash, U+2014 em dash, U+2212 minus sign.
   const normalized = text.replace(/[\u2013\u2014\u2212]/g, "-");
 
+  // If stored in pipe-delimited import format (no newlines, pipe-separated day
+  // blocks), expand to one line per day so the loop below handles it normally.
+  // Format: "Monday: 3:00 - 5:00 PM | Tuesday: 3:00 - 5:00 PM | ..."
+  // Compact-pipe (no day labels, e.g. "2pm - 5pm | 9pm - close") expands to
+  // lines with no colon → they are skipped by the colonIdx check below, so
+  // compact-pipe venues still show "No happy hour" (correct: days unknown).
+  const textToSplit =
+    !normalized.trim().includes("\n") && normalized.includes("|")
+      ? normalized
+          .trim()
+          .split("|")
+          .map((b) => b.trim())
+          .filter(Boolean)
+          .join("\n")
+      : normalized;
+
   // Accumulate time blocks per day so multiple lines that cover the same day
   // (e.g. "Daily: 2 PM - 6 PM" followed by "Daily: 9 PM - Close") stack
   // correctly into block1 / block2 rather than overwriting each other.
   const dayBlocks: Partial<Record<Day, TimeBlock[]>> = {};
 
-  for (const rawLine of normalized.split("\n")) {
+  for (const rawLine of textToSplit.split("\n")) {
     const line = rawLine.trim();
     if (!line) continue;
 
