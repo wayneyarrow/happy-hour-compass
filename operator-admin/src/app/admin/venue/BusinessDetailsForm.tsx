@@ -52,6 +52,11 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
     formatPhoneDisplay(initialValues.phone)
   );
   const [phoneError, setPhoneError] = useState("");
+  // Controlled state for establishment type — defaultValue alone doesn't update
+  // the DOM after React 19's automatic form reset on successful action submission.
+  const [estType, setEstType] = useState(
+    initialValues.establishment_type || "Restaurant and Bar"
+  );
 
   useEffect(() => {
     if (state.success) {
@@ -61,6 +66,13 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
       return () => clearTimeout(timer);
     }
   }, [state.success, router]);
+
+  // Keep controlled select in sync when the action returns a new value or when
+  // the server refreshes initialValues after router.refresh().
+  const vEstType = (state.values ?? initialValues).establishment_type || "Restaurant and Bar";
+  useEffect(() => {
+    setEstType(vEstType);
+  }, [vEstType]);
 
   // Re-format phone display if a failed save restores state.values
   useEffect(() => {
@@ -267,7 +279,8 @@ export default function BusinessDetailsForm({ venueId, initialValues }: Props) {
           id="bd-establishment-type"
           name="establishment_type"
           disabled={isPending}
-          defaultValue={v.establishment_type || "Restaurant and Bar"}
+          value={estType}
+          onChange={(e) => setEstType(e.target.value)}
           className={inputCls}
         >
           {ESTABLISHMENT_TYPE_OPTIONS.map((opt) => (
