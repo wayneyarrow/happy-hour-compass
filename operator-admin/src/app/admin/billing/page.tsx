@@ -1,3 +1,5 @@
+export const metadata = { title: "Billing" };
+
 export default function AdminBillingPage() {
   return (
     <div className="max-w-xl">

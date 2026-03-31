@@ -1,3 +1,5 @@
+export const metadata = { title: "Analytics" };
+
 export default function AdminAnalyticsPage() {
   return (
     <div className="max-w-xl">

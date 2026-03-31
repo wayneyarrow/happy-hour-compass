@@ -1,5 +1,6 @@
 // Always fetch fresh data — bypasses Next.js full-route and router caches.
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Events" };
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";

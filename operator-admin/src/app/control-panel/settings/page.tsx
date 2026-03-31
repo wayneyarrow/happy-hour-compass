@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Settings" };
 
 import { QaPublishPanel } from "./QaPublishPanel";
 import { QaHhReviewPanel } from "./QaHhReviewPanel";

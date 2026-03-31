@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { EventsDiscovery } from "../EventsDiscovery";
+
+export const metadata: Metadata = { title: "Events" };
 
 export const dynamic = "force-dynamic";
 

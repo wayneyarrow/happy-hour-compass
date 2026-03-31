@@ -1,3 +1,5 @@
+export const metadata = { title: "Images" };
+
 export default function AdminImagesPage() {
   return (
     <div className="max-w-xl">

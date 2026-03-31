@@ -1,3 +1,5 @@
+export const metadata = { title: "Marketing" };
+
 export default function AdminMarketingPage() {
   return (
     <div className="max-w-xl">

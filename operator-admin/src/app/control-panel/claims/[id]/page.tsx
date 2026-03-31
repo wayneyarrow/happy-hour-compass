@@ -4,6 +4,7 @@ import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/
 import ReviewActionsPanel from "./ReviewActionsPanel";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Claim Review" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s — Control Panel",
+    default: "Control Panel — Happy Hour Compass",
+  },
+};
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import ControlPanelSideNav from "./ControlPanelSideNav";

@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Venues" };
 
 import { createAdminClient } from "@/lib/supabase/server";
 import VenuesTable, { type VenueRow } from "./VenuesTable";

@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Happy Hour Compass – Operator Admin",
-  description: "Operator admin portal for Happy Hour Compass",
+  title: {
+    template: "%s — Happy Hour Compass",
+    default: "Happy Hour Compass",
+  },
+  description: "Happy Hour Compass — find the best happy hours near you.",
 };
 
 export default function RootLayout({

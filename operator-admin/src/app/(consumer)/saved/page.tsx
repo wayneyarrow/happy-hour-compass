@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { SavedVenueList } from "./SavedVenueList";
+
+export const metadata: Metadata = { title: "Saved" };
 // Always read fresh data — saved state must reflect current DB state.
 export const dynamic = "force-dynamic";
 

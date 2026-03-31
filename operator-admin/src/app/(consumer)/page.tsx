@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { VenueDiscovery } from "./VenueDiscovery";
 import { WelcomeGate } from "./WelcomeGate";
+
+export const metadata: Metadata = {
+  title: { absolute: "Happy Hour Compass" },
+};
 
 // Force a fresh Supabase query on every request — no static or router cache.
 export const dynamic = "force-dynamic";

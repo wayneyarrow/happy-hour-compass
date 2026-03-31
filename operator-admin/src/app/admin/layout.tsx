@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import AdminSideNav from "./AdminSideNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s — Operator Admin",
+    default: "Operator Admin — Happy Hour Compass",
+  },
+};
 
 // Admin shell layout — wraps every page under /admin/*.
 // Performs a server-side auth check so unauthenticated requests are caught

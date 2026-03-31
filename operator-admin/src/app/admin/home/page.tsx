@@ -1,3 +1,5 @@
+export const metadata = { title: "Home" };
+
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";

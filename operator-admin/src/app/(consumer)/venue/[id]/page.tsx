@@ -12,6 +12,14 @@ import { BackButton } from "./BackButton";
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata(
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const venue = await getVenueWithEventsForConsumerById(id);
+  return { title: venue?.name ?? "Venue" };
+}
+
 type PageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

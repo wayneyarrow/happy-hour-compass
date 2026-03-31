@@ -1,3 +1,5 @@
+export const metadata = { title: "Users" };
+
 export default function AdminUsersPage() {
   return (
     <div className="max-w-xl">
