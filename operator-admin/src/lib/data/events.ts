@@ -334,8 +334,13 @@ export async function getEventsForConsumerVenues(
       return [];
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data ?? []).map((row: Record<string, any>) => ({
+    return (data ?? []).filter((row: Record<string, any>) => {
+      const isRecurring = row.recurrence && row.recurrence !== "none";
+      return isRecurring || !row.first_date || (row.first_date as string) >= today;
+    }).map((row: Record<string, any>) => ({
       id: row.id as string,
       venueId: row.venue_id as string,
       title: (row.title as string) ?? "",
@@ -427,7 +432,12 @@ export async function getPublishedEventsForConsumer(): Promise<
     const today = new Date().toISOString().slice(0, 10);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = (data ?? []) as Record<string, any>[];
+    const allRows = (data ?? []) as Record<string, any>[];
+
+    // Exclude past one-off events (bucket 1). Recurring events always show.
+    const rows = allRows.filter(
+      (row) => upcomingBucket(row.first_date, row.recurrence, today) !== 1
+    );
 
     rows.sort((a, b) => {
       const bA = upcomingBucket(a.first_date, a.recurrence, today);
