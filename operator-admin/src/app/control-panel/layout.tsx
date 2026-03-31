@@ -61,7 +61,7 @@ export default async function ControlPanelLayout({
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 hidden sm:block">{user.email}</span>
-          <SignOutButton />
+          <SignOutButton redirectTo="/control-panel-login" />
         </div>
       </header>
 
