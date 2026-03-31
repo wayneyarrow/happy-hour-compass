@@ -13,8 +13,9 @@
  *   - Stores country = "CA" (all beta venues are in BC, Canada).
  *   - business_hours is parsed from multi-line text → JSONB.
  *   - payment_types is serialised to a JSON array string.
- *   - hh_food_details / hh_drink_details are stored as plain text (parseSpecials
- *     in the consumer app handles both plain-text and JSON formats).
+ *   - hh_food_details / hh_drink_details are normalised to JSON object arrays
+ *     [{name, price?, notes?}] — the same format produced by the Operator Admin
+ *     form — so claimed venues load pre-structured data immediately.
  *
  * This script is intentionally self-contained — it does not import from the
  * Next.js app's @/lib paths because those modules depend on next/headers and
@@ -242,18 +243,95 @@ function parsePaymentTypes(raw: string): string | null {
   return items.length > 0 ? JSON.stringify(items) : null;
 }
 
-// ── Specials guardrail ─────────────────────────────────────────────────────────
-// Enforces the free-plan limit of 3 food specials and 3 drink specials.
-// The plain-text format stores one item per newline; trimming to 3 lines
-// before insert prevents seeded venues from ever exceeding the admin UI limit.
+// ── Specials normalisation ─────────────────────────────────────────────────────
+// Parses CSV specials text (one item per newline) into the JSON object array
+// format [{name, price?, notes?}] used by the Operator Admin form.  Enforces
+// the free-plan limit of 3 items per type.
+//
+// parseLegacySpecialLine is ported from admin/happy-hours/page.tsx so the
+// transformation logic stays identical across import and admin loading.
 
 const MAX_SPECIALS = 3;
 
-function trimSpecialsToThree(raw: string | null): string | null {
+type HhItem = { name: string; price?: string; notes?: string };
+
+/**
+ * Applies Title Case to a string only when it contains no uppercase letters.
+ * Preserves intentional casing: brand names, acronyms ("IPA", "BBQ"), and
+ * already-capitalised items are returned unchanged.
+ * Ported from safeToTitleCase() in admin/happy-hours/page.tsx.
+ */
+function safeToTitleCase(s: string): string {
+  if (s === s.toLowerCase()) {
+    return s.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return s;
+}
+
+/**
+ * Parses one line of CSV specials text into a structured HhItem.
+ * Ported from parseLegacySpecialLine() in admin/happy-hours/page.tsx.
+ */
+function parseLegacySpecialLine(line: string): HhItem {
+  const raw = line.trim();
+
+  // Step 1: strip trailing parenthetical into notes
+  let notes: string | undefined;
+  let text = raw;
+  const parenMatch = raw.match(/\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) {
+    const candidate = parenMatch[1].trim();
+    if (candidate) notes = candidate;
+    text = raw.slice(0, parenMatch.index!).trim();
+  }
+
+  // Step 2: trailing price token — "Item name $9.50"
+  const trailing = text.match(/^(.+?)\s+\$(\d+(?:\.\d+)?)$/);
+  if (trailing) {
+    return {
+      name: safeToTitleCase(trailing[1].trim()),
+      price: trailing[2],
+      ...(notes ? { notes } : {}),
+    };
+  }
+
+  // Step 3: leading price token — "$9.50 Item name"
+  // Guard: skip discount phrases ("$3 off X") and price ranges ("$4.95 – $12 X").
+  const leading = text.match(/^\$(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (leading) {
+    const remainingName = leading[2].trim();
+    const looksLikeDiscountOrRange =
+      /^off\s/i.test(remainingName) ||
+      remainingName.startsWith("$") ||
+      remainingName.startsWith("–") ||
+      remainingName.startsWith("—") ||
+      remainingName.startsWith("-");
+    if (!looksLikeDiscountOrRange) {
+      return {
+        name: safeToTitleCase(remainingName),
+        price: leading[1],
+        ...(notes ? { notes } : {}),
+      };
+    }
+  }
+
+  // Step 4: no clean price found — full text is the name; re-absorb parens
+  return { name: safeToTitleCase(notes ? `${text} (${notes})` : text) };
+}
+
+/**
+ * Parses and normalises CSV specials text into a JSON object array capped at
+ * MAX_SPECIALS items.  Returns null when the input is blank.
+ */
+function normalizeSpecialsToJson(raw: string | null): string | null {
   if (!raw?.trim()) return null;
-  const lines = raw.split("\n").filter((l) => l.trim());
-  if (lines.length <= MAX_SPECIALS) return raw.trim();
-  return lines.slice(0, MAX_SPECIALS).join("\n");
+  const items = raw
+    .split("\n")
+    .filter((l) => l.trim())
+    .slice(0, MAX_SPECIALS)
+    .map(parseLegacySpecialLine)
+    .filter((it) => it.name.trim());
+  return items.length > 0 ? JSON.stringify(items) : null;
 }
 
 // ── Coordinate helper ──────────────────────────────────────────────────────────
@@ -375,8 +453,8 @@ async function main() {
       business_hours: businessHoursJson,         // parsed JSONB object
       hh_times: orNull(get(row, "happy_hour_times")),       // plain text as-is
       hh_tagline: orNull(get(row, "happy_hour_tagline")),
-      hh_food_details: trimSpecialsToThree(get(row, "happy_hour_food_details")),   // capped at 3
-      hh_drink_details: trimSpecialsToThree(get(row, "happy_hour_drink_details")), // capped at 3
+      hh_food_details: normalizeSpecialsToJson(get(row, "happy_hour_food_details")),
+      hh_drink_details: normalizeSpecialsToJson(get(row, "happy_hour_drink_details")),
       // hours: legacy TEXT column — intentionally omitted (see mapping doc)
       is_published: true,
       // created_by_operator_id / updated_by_operator_id: NULL for CSV imports

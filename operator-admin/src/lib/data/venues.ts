@@ -393,6 +393,26 @@ function splitSpecialsText(raw: string): string[] {
 }
 
 /**
+ * Prefixes a bare numeric price string with "$" (e.g. "9" → "$9", "7.25" → "$7.25").
+ * Strings already starting with "$" or containing non-numeric content are returned as-is.
+ */
+function normalizePriceForDisplay(price: string): string {
+  return /^\d+(?:\.\d+)?$/.test(price.trim()) ? `$${price.trim()}` : price;
+}
+
+/**
+ * Applies Title Case to a string only when it contains no uppercase letters.
+ * Preserves intentional casing: brand names, acronyms ("IPA", "BBQ"), and
+ * already-capitalised items are returned unchanged.
+ */
+function safeToTitleCase(s: string): string {
+  if (s === s.toLowerCase()) {
+    return s.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return s;
+}
+
+/**
  * Parses hh_food_details / hh_drink_details from the DB.
  * DB formats:
  *   1. JSON object array  [{name, price?, notes?}]  — current admin format
@@ -408,19 +428,20 @@ function parseSpecials(raw: string | null): string[] {
     return items
       .filter((it) => it != null)
       .map((it): string | null => {
-        // String item (e.g. from some enrichment outputs): use as-is
-        if (typeof it === "string") return it.trim() || null;
-        // Object item: format with optional price and notes
+        // String item (e.g. from some enrichment outputs): normalise casing then use.
+        if (typeof it === "string") return safeToTitleCase(it.trim()) || null;
+        // Object item: format with optional price and notes.
+        // Price is stored as a bare number by the admin form; add "$" for display.
         const obj = it as SpecialItem;
         if (!obj.name) return null;
-        let s = obj.name;
-        if (obj.price) s += ` — ${obj.price}`;
+        let s = safeToTitleCase(obj.name);
+        if (obj.price) s += ` — ${normalizePriceForDisplay(obj.price)}`;
         if (obj.notes) s += ` (${obj.notes})`;
         return s;
       })
       .filter((s): s is string => s !== null && s.length > 0);
   } catch {
-    return splitSpecialsText(raw);
+    return splitSpecialsText(raw).map(safeToTitleCase);
   }
 }
 

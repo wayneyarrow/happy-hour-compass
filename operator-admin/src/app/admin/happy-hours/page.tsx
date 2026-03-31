@@ -33,6 +33,18 @@ type HappyHoursVenueRow = {
  *   Price + notes:  "Fries $5 (French or Truffle)" → { name: "Fries", price: "5", notes: "French or Truffle" }
  *   No price:       "Select appetizers discounted"  → { name: "Select appetizers discounted" }
  */
+/**
+ * Applies Title Case to a string only when it contains no uppercase letters.
+ * Preserves intentional casing: brand names, acronyms ("IPA", "BBQ"), and
+ * already-capitalised items are returned unchanged.
+ */
+function safeToTitleCase(s: string): string {
+  if (s === s.toLowerCase()) {
+    return s.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return s;
+}
+
 function parseLegacySpecialLine(line: string): HhItem {
   const raw = line.trim();
 
@@ -52,24 +64,36 @@ function parseLegacySpecialLine(line: string): HhItem {
   const trailing = text.match(/^(.+?)\s+\$(\d+(?:\.\d+)?)$/);
   if (trailing) {
     return {
-      name: trailing[1].trim(),
+      name: safeToTitleCase(trailing[1].trim()),
       price: trailing[2],
       ...(notes ? { notes } : {}),
     };
   }
 
   // Step 3: leading price token — "$9.50 Item name"
+  // Guard: don't extract the leading amount as a price when the remaining text
+  // looks like a discount phrase ("$3 off Corona") or a price range
+  // ("$4.95 – $12.95 Selected Appetizers") — keep the whole line as the name.
   const leading = text.match(/^\$(\d+(?:\.\d+)?)\s+(.+)$/);
   if (leading) {
-    return {
-      name: leading[2].trim(),
-      price: leading[1],
-      ...(notes ? { notes } : {}),
-    };
+    const remainingName = leading[2].trim();
+    const looksLikeDiscountOrRange =
+      /^off\s/i.test(remainingName) ||
+      remainingName.startsWith("$") ||
+      remainingName.startsWith("–") ||
+      remainingName.startsWith("—") ||
+      remainingName.startsWith("-");
+    if (!looksLikeDiscountOrRange) {
+      return {
+        name: safeToTitleCase(remainingName),
+        price: leading[1],
+        ...(notes ? { notes } : {}),
+      };
+    }
   }
 
-  // Step 4: no price found — full text is the name; re-absorb parens
-  return { name: notes ? `${text} (${notes})` : text };
+  // Step 4: no clean price found — full text is the name; re-absorb parens
+  return { name: safeToTitleCase(notes ? `${text} (${notes})` : text) };
 }
 
 /**
