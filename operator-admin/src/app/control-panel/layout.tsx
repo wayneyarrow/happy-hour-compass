@@ -7,6 +7,7 @@ export const metadata: Metadata = {
     template: "%s — Control Panel",
     default: "Control Panel — Happy Hour Compass",
   },
+  icons: { icon: "/hhc-icon.png" },
 };
 import { redirect } from "next/navigation";
 import Image from "next/image";

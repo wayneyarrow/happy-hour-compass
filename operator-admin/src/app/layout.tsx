@@ -7,6 +7,7 @@ export const metadata: Metadata = {
     default: "Happy Hour Compass",
   },
   description: "Happy Hour Compass — find the best happy hours near you.",
+  icons: { icon: "/hhc-icon.png" },
 };
 
 export default function RootLayout({
