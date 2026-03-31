@@ -184,7 +184,7 @@ export default async function ClaimDetailPage({
     );
   }
 
-  const signals = computeTrustSignals(claim);
+  const signals = await computeTrustSignals(claim);
 
   return (
     <div className="max-w-6xl">

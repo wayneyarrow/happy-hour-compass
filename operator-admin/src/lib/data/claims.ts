@@ -38,6 +38,9 @@ export type ClaimDetail = {
     city: string | null;
     region: string | null;
     postal_code: string | null;
+    country: string | null;
+    lat: number | null;
+    lng: number | null;
     claimed_at: string | null;
     claimed_by: string | null;
   } | null;
@@ -113,7 +116,7 @@ export async function getClaimById(id: string): Promise<{
        created_at, updated_at,
        venues (
          name, website_url, phone, address_line1,
-         city, region, postal_code, claimed_at, claimed_by
+         city, region, postal_code, country, lat, lng, claimed_at, claimed_by
        )`
     )
     .eq("id", id)
@@ -136,6 +139,9 @@ export async function getClaimById(id: string): Promise<{
     city: string | null;
     region: string | null;
     postal_code: string | null;
+    country: string | null;
+    lat: number | null;
+    lng: number | null;
     claimed_at: string | null;
     claimed_by: string | null;
   };
@@ -174,6 +180,9 @@ export async function getClaimById(id: string): Promise<{
           city: venue.city,
           region: venue.region,
           postal_code: venue.postal_code,
+          country: venue.country,
+          lat: venue.lat,
+          lng: venue.lng,
           claimed_at: venue.claimed_at,
           claimed_by: venue.claimed_by,
         }

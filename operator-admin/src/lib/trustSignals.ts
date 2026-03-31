@@ -68,7 +68,7 @@ export function normalizePhone(phone: string | null | undefined): string {
 // ── Signal builders ──────────────────────────────────────────────────────────
 
 function emailDomainSignal(
-  claimantEmail: string,
+  _claimantEmail: string,
   venueWebsite: string | null | undefined,
   emailDomain: string,
   isPublic: boolean
@@ -171,15 +171,174 @@ function phoneSignal(
   };
 }
 
-function ipSignal(ip: string | null | undefined): TrustSignal {
-  return {
-    key: "ip",
-    label: "IP address",
-    status: "neutral",
-    detail: ip
-      ? `Submitted from ${ip}. Geolocation check not yet enabled.`
-      : "No IP captured. Geolocation check not yet enabled.",
-  };
+// ── Country normalization ─────────────────────────────────────────────────────
+
+/**
+ * Maps ISO-2 codes and common aliases (lowercased) → canonical ISO-2 key.
+ * Covers the countries most likely to appear in venue data or ip-api responses.
+ */
+const COUNTRY_ALIASES: Record<string, string> = {
+  // Canada
+  ca: "ca", canada: "ca",
+  // United States
+  us: "us", usa: "us", "united states": "us", "united states of america": "us",
+  // United Kingdom
+  gb: "gb", uk: "gb", "united kingdom": "gb", "great britain": "gb",
+  // Australia
+  au: "au", australia: "au",
+  // New Zealand
+  nz: "nz", "new zealand": "nz",
+  // Mexico
+  mx: "mx", mexico: "mx",
+  // France
+  fr: "fr", france: "fr",
+  // Germany
+  de: "de", germany: "de",
+  // Japan
+  jp: "jp", japan: "jp",
+  // Ireland
+  ie: "ie", ireland: "ie",
+};
+
+/** Human-readable name for display, keyed by canonical ISO-2. */
+const COUNTRY_NAMES: Record<string, string> = {
+  ca: "Canada",
+  us: "United States",
+  gb: "United Kingdom",
+  au: "Australia",
+  nz: "New Zealand",
+  mx: "Mexico",
+  fr: "France",
+  de: "Germany",
+  jp: "Japan",
+  ie: "Ireland",
+};
+
+/** Returns a canonical ISO-2 key for comparison, or the lowercased input if unknown. */
+function normalizeCountry(value: string): string {
+  const key = value.trim().toLowerCase();
+  return COUNTRY_ALIASES[key] ?? key;
+}
+
+/** Returns the reviewer-facing display name for a country value. */
+function displayCountry(value: string): string {
+  const canonical = normalizeCountry(value);
+  return COUNTRY_NAMES[canonical] ?? value;
+}
+
+// ── IP geolocation ────────────────────────────────────────────────────────────
+
+type GeoResult =
+  | { ok: true; city: string; region: string; country: string; lat: number; lon: number }
+  | { ok: false };
+
+/** Returns false for private/loopback IPs that ip-api cannot resolve. */
+function isPrivateIp(ip: string): boolean {
+  return /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|localhost$)/i.test(ip);
+}
+
+async function geolocateIp(ip: string): Promise<GeoResult> {
+  if (!ip || isPrivateIp(ip)) return { ok: false };
+  try {
+    const res = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,regionName,city,lat,lon`,
+      { next: { revalidate: 3600 } }
+    );
+    if (!res.ok) return { ok: false };
+    const data = await res.json();
+    if (data.status !== "success") return { ok: false };
+    return {
+      ok: true,
+      city: data.city ?? "",
+      region: data.regionName ?? "",
+      country: data.country ?? "",
+      lat: data.lat,
+      lon: data.lon,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function ipGeoSignal(
+  ip: string | null | undefined,
+  venueLat: number | null | undefined,
+  venueLng: number | null | undefined,
+  venueCountry: string | null | undefined
+): Promise<TrustSignal> {
+  if (!ip) {
+    return {
+      key: "ip",
+      label: "IP geolocation",
+      status: "neutral",
+      detail: "No IP captured with this claim.",
+    };
+  }
+
+  const geo = await geolocateIp(ip);
+
+  if (!geo.ok) {
+    return {
+      key: "ip",
+      label: "IP geolocation",
+      status: "neutral",
+      detail: `Submitted from ${ip}. Location could not be resolved (private, local, or unrecognised IP).`,
+    };
+  }
+
+  const locationStr = [geo.city, geo.region, geo.country].filter(Boolean).join(", ");
+
+  if (venueLat == null || venueLng == null) {
+    return {
+      key: "ip",
+      label: "IP geolocation",
+      status: "neutral",
+      detail: `${ip} → ${locationStr}. Venue coordinates not on file; distance check skipped.`,
+    };
+  }
+
+  const distKm = haversineKm(venueLat, venueLng, geo.lat, geo.lon);
+  const distStr = distKm < 1 ? "<1 km" : `~${Math.round(distKm).toLocaleString()} km`;
+
+  const differentCountry =
+    venueCountry &&
+    geo.country &&
+    normalizeCountry(geo.country) !== normalizeCountry(venueCountry);
+
+  let status: SignalStatus;
+  let tier: string;
+
+  if (differentCountry) {
+    status = "warning";
+    tier = "Different country";
+  } else if (distKm <= 25) {
+    status = "positive";
+    tier = "Nearby";
+  } else if (distKm <= 100) {
+    status = "neutral";
+    tier = "Plausible distance";
+  } else {
+    status = "warning";
+    tier = "Far";
+  }
+
+  const detail = differentCountry
+    ? `Strong caution — IP in ${displayCountry(geo.country)}, venue is in ${displayCountry(venueCountry!)}. ${locationStr}, ${distStr} from venue. (IP: ${ip})`
+    : `${tier} — ${locationStr}, ${distStr} from venue. (IP: ${ip})`;
+
+  return { key: "ip", label: "IP geolocation", status, detail };
 }
 
 function priorClaimsSignal(priorCount: number): TrustSignal {
@@ -217,20 +376,30 @@ export type ClaimForSignals = {
   venue: {
     website_url: string | null | undefined;
     phone: string | null | undefined;
+    lat: number | null | undefined;
+    lng: number | null | undefined;
+    country: string | null | undefined;
   } | null;
   prior_claim_count: number;
 };
 
-export function computeTrustSignals(claim: ClaimForSignals): TrustSignal[] {
+export async function computeTrustSignals(claim: ClaimForSignals): Promise<TrustSignal[]> {
   const emailDomain = extractEmailDomain(claim.email);
   const isPublic = isPublicEmailDomain(emailDomain);
+
+  const ipSignal = await ipGeoSignal(
+    claim.ip_address,
+    claim.venue?.lat,
+    claim.venue?.lng,
+    claim.venue?.country
+  );
 
   return [
     emailDomainSignal(claim.email, claim.venue?.website_url, emailDomain, isPublic),
     publicEmailSignal(emailDomain, isPublic),
     roleSignal(claim.position),
     phoneSignal(claim.phone, claim.venue?.phone),
-    ipSignal(claim.ip_address),
+    ipSignal,
     priorClaimsSignal(claim.prior_claim_count),
   ];
 }
