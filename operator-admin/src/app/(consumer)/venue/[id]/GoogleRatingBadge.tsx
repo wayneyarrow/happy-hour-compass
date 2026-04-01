@@ -59,7 +59,7 @@ export function GoogleRatingBadge({ googleRating, googleReviewCount }: Props) {
       : null;
 
   return (
-    <div className="flex items-center gap-1.5 mt-1.5" aria-label={`Google rating: ${ratingDisplay} out of 5`}>
+    <div className="flex items-center gap-1.5 mt-2.5" aria-label={`Google rating: ${ratingDisplay} out of 5`}>
       {/* Stars */}
       <span className="flex items-center gap-[2px]">
         {fractions.map((f, i) => (
@@ -72,14 +72,14 @@ export function GoogleRatingBadge({ googleRating, googleReviewCount }: Props) {
       </span>
       {/* Review count */}
       {countDisplay && (
-        <span className="text-[11px] text-gray-400 leading-none">
+        <span className="text-[11px] text-gray-500 leading-none">
           {countDisplay}
         </span>
       )}
       {/* Attribution separator */}
-      <span className="text-[11px] text-gray-300 leading-none" aria-hidden="true">·</span>
+      <span className="text-[11px] text-gray-400 leading-none" aria-hidden="true">·</span>
       {/* Google attribution */}
-      <span className="text-[11px] text-gray-400 leading-none">Google</span>
+      <span className="text-[11px] text-gray-500 leading-none">via Google</span>
     </div>
   );
 }
