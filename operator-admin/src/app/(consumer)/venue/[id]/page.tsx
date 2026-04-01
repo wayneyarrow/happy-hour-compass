@@ -8,6 +8,7 @@ import { VenueDetailMeta } from "./VenueDetailMeta";
 import { HappyHourTimesCard } from "./HappyHourTimesCard";
 import { BusinessHoursRow } from "../../event/[id]/BusinessHoursRow";
 import { BackButton } from "./BackButton";
+import { VenueImageGallery } from "./VenueImageGallery";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -68,8 +69,8 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  // Hero image: use first venue image if available, otherwise type-based fallback.
-  const heroImageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
+  // Fallback image when venue has no uploaded images.
+  const fallbackImageSrc = getVenueImageSrc(venue.establishmentType);
 
   // Days with at least one business hours entry, Sun→Sat order.
   const openDays = DAY_ORDER.filter(
@@ -99,7 +100,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         </h1>
         {/* Header actions — bookmark + share */}
         <div className="flex items-center gap-3 shrink-0 ml-2">
-          <BookmarkButton venueId={id} />
+          <BookmarkButton venueId={id} variant="header" />
           <ShareButton />
         </div>
       </div>
@@ -110,14 +111,17 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         </div>
       )}
 
-      {/* ── Hero image ─────────────────────────────────────────────────────────
-          Matches original .venue-hero-image: 240px height, object-cover */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={heroImageSrc}
-        alt={venue.name}
-        className="w-full object-cover object-center"
-        style={{ height: 240, backgroundColor: "#e5e7eb" }}
+      {/* ── Hero image + thumbnail strip ───────────────────────────────────────
+          Gallery handles hero (always) + thumbnail strip (only when images > 1).
+          Images list is derived here so future plan-based gating can be applied
+          by slicing/filtering before passing to the component. */}
+      <VenueImageGallery
+        images={
+          venue.images.length > 0
+            ? venue.images
+            : [{ url: fallbackImageSrc }]
+        }
+        venueName={venue.name}
       />
 
       {/* ── Name section ───────────────────────────────────────────────────────
@@ -145,43 +149,6 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         />
       </div>
 
-      {/* ── Action buttons ─────────────────────────────────────────────────────
-          Matches original .venue-action-buttons: padding 0 20px 20px, flex gap-2.
-          Each .venue-action-btn: flex-1, white bg, border gray-300, rounded-lg (8px),
-          padding 12px 8px, min-height 64px, 13px medium #374151, column layout gap-6px.
-          Only Call + Website per spec (Reserve excluded). */}
-      {(venue.phone || venue.websiteUrl) && (
-        <div className="flex gap-2 px-5 pb-5">
-          {venue.phone && (
-            <a
-              href={`tel:${venue.phone}`}
-              className="flex-1 flex flex-col items-center justify-center gap-1.5 bg-white border border-gray-300 rounded-lg text-[13px] font-medium text-[#374151] hover:bg-gray-50 hover:border-gray-400 transition-colors"
-              style={{ padding: "12px 8px", minHeight: 64 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-              </svg>
-              <span>Call</span>
-            </a>
-          )}
-          {venue.websiteUrl && (
-            <a
-              href={venue.websiteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex flex-col items-center justify-center gap-1.5 bg-white border border-gray-300 rounded-lg text-[13px] font-medium text-[#374151] hover:bg-gray-50 hover:border-gray-400 transition-colors"
-              style={{ padding: "12px 8px", minHeight: 64 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-              <span>Website</span>
-            </a>
-          )}
-        </div>
-      )}
 
       {/* ── Jump chips nav ─────────────────────────────────────────────────────
           Matches original .venue-section-nav.venue-tabs:
