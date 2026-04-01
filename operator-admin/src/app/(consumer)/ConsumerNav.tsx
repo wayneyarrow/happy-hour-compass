@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 /**
  * Fixed bottom navigation for the consumer app.
  * Matches the original index.html bottom-nav structure:
- *   Search (🔍) | Saved (bookmark) | Events (🎉)
+ *   Search (🔍) | Saved (bookmark) | Events (🎉) | Add a Happy Hour (+)
  */
 export function ConsumerNav() {
   const pathname = usePathname();
@@ -14,6 +14,7 @@ export function ConsumerNav() {
   const isSaved = pathname.startsWith("/saved");
   const isEvents =
     pathname.startsWith("/events") || pathname.startsWith("/event");
+  const isSuggest = pathname.startsWith("/suggest");
 
   return (
     <nav className="bg-white border-t border-gray-200 flex shrink-0">
@@ -72,6 +73,29 @@ export function ConsumerNav() {
       >
         <span className="text-xl leading-none mb-1">🎉</span>
         Events
+      </Link>
+
+      {/* Add tab */}
+      <Link
+        href="/suggest"
+        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
+          isSuggest ? "text-blue-500" : "text-gray-400"
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-5 h-5 mb-1"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="16" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+        </svg>
+        Add
       </Link>
     </nav>
   );

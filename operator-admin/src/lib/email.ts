@@ -375,6 +375,111 @@ Founder, Happy Hour Compass`;
   }
 }
 
+// ── Venue suggestion notification email ───────────────────────────────────────
+
+/**
+ * Notifies the founder when a consumer submits a new venue suggestion.
+ *
+ * Fire-and-forget pattern: email failure must not block the consumer success
+ * state. Caller is responsible for not awaiting this in a blocking way.
+ *
+ * Required env var: RESEND_API_KEY
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com)
+ */
+export async function sendSuggestionNotificationEmail({
+  suggestionId,
+  venueName,
+  city,
+  notes,
+  submittedAt,
+}: {
+  suggestionId: string;
+  venueName: string;
+  city: string;
+  notes?: string;
+  submittedAt: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to =
+    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const from = DEFAULT_FROM;
+
+  const notesRow = notes
+    ? `<tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Notes</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${notes}</td>
+            </tr>`
+    : "";
+
+  const notesText = notes ? `Notes:     ${notes}\n` : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New happy hour suggestion</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Venue</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${venueName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">City</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${city}</td>
+            </tr>
+            ${notesRow}
+            <tr${notes ? "" : ' style="background:#f8fafc;"'}>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 8px;font-size:12px;color:#94a3b8;">Suggestion ID: ${suggestionId}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Consumer suggestion notification</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `New happy hour suggestion — Happy Hour Compass
+
+Venue:     ${venueName}
+City:      ${city}
+${notesText}Submitted: ${submittedAt}
+ID:        ${suggestionId}
+
+—
+Happy Hour Compass`;
+
+  try {
+    const resend = getResend();
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject: `New happy hour suggestion: ${venueName} (${city})`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[sendSuggestionNotificationEmail] Resend error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[sendSuggestionNotificationEmail] Unexpected error:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({
