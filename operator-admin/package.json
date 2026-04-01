@@ -11,7 +11,8 @@
     "import:events": "tsx scripts/importEventsFromCsv.ts",
     "trim:specials": "tsx scripts/trimSeededSpecials.ts",
     "normalize:hh-times": "tsx scripts/normalizeHhTimes.ts",
-    "backfill:hh-review": "tsx scripts/backfillHhReviewFlag.ts"
+    "backfill:hh-review": "tsx scripts/backfillHhReviewFlag.ts",
+    "backfill:google-rating": "tsx scripts/backfillGoogleRating.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

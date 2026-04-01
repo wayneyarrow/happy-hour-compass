@@ -342,6 +342,24 @@ function parseCoord(raw: string): number | null {
   return isNaN(n) ? null : n;
 }
 
+// ── Google rating helpers ──────────────────────────────────────────────────────
+
+/** Validates a decimal rating (0.0–5.0, rounded to 1 decimal).  Returns null if invalid. */
+function parseRating(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = parseFloat(raw);
+  if (isNaN(n) || n < 0 || n > 5) return null;
+  return Math.round(n * 10) / 10;
+}
+
+/** Validates a non-negative integer review count.  Returns null if invalid. */
+function parseReviewCount(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = parseInt(raw, 10);
+  if (isNaN(n) || n < 0) return null;
+  return n;
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -456,6 +474,11 @@ async function main() {
       hh_food_details: normalizeSpecialsToJson(get(row, "happy_hour_food_details")),
       hh_drink_details: normalizeSpecialsToJson(get(row, "happy_hour_drink_details")),
       // hours: legacy TEXT column — intentionally omitted (see mapping doc)
+      // place_id is the canonical Google Places ID already on the venues table.
+      // Carry it through from the CSV when present; leave null if absent.
+      place_id: orNull(get(row, "place_id")),
+      google_rating: parseRating(get(row, "google_rating")),
+      google_review_count: parseReviewCount(get(row, "google_review_count")),
       is_published: true,
       // created_by_operator_id / updated_by_operator_id: NULL for CSV imports
     };
