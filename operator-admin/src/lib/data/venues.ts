@@ -68,6 +68,10 @@ export type ConsumerVenue = {
    * List fetches leave this as null to avoid widening the listing query.
    */
   claimedAt: string | null;
+  /** Google Maps aggregate rating (e.g. 4.5). Null when not available. */
+  googleRating: number | null;
+  /** Total number of Google reviews. Null when not available. */
+  googleReviewCount: number | null;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -487,6 +491,8 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     events: [],  // populated by callers after event fetch
     images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
     claimedAt: (row.claimed_at as string | null) ?? null,
+    googleRating: typeof row.google_rating === "number" ? row.google_rating : null,
+    googleReviewCount: typeof row.google_review_count === "number" ? row.google_review_count : null,
   };
 }
 
@@ -559,7 +565,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-  "establishment_type, claimed_at";
+  "establishment_type, claimed_at, google_rating, google_review_count";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.

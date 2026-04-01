@@ -9,6 +9,7 @@ import { HappyHourTimesCard } from "./HappyHourTimesCard";
 import { BusinessHoursRow } from "../../event/[id]/BusinessHoursRow";
 import { BackButton } from "./BackButton";
 import { VenueImageGallery } from "./VenueImageGallery";
+import { GoogleRatingBadge } from "./GoogleRatingBadge";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -146,6 +147,12 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           lat={venue.latitude}
           lng={venue.longitude}
           establishmentType={venue.establishmentType}
+        />
+
+        {/* Google rating — shown directly below meta row when data is present */}
+        <GoogleRatingBadge
+          googleRating={venue.googleRating}
+          googleReviewCount={venue.googleReviewCount}
         />
       </div>
 
