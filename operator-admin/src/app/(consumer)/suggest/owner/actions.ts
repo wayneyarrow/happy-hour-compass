@@ -2,12 +2,44 @@
 
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
+import {
+  extractEmailDomain,
+  extractWebsiteDomain,
+  isPublicEmailDomain,
+  geolocateIp,
+  normalizePhone,
+} from "@/lib/trustSignals";
 import type {
   GoogleMatch,
   LookupResult,
   SavePayload,
   SaveResult,
 } from "./types";
+
+// ── Phone formatting ──────────────────────────────────────────────────────────
+
+/**
+ * Formats a Google Places phone string for storage in venues.phone.
+ *
+ * Reuses normalizePhone() from trustSignals to strip non-digits, then:
+ *   - If 11 digits starting with 1 (e.g. "+1 604-423-4840" → "16044234840"),
+ *     drops the leading country code to get 10 digits.
+ *   - If exactly 10 digits, formats as (XXX) XXX-XXXX.
+ *   - If null/empty, returns null.
+ *   - If the result is not 10 digits, returns the original string unchanged
+ *     (safe fallback — no data loss).
+ *
+ * North America only (V1). Does not support non-+1 country codes.
+ */
+function formatPhoneForStorage(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  let digits = normalizePhone(raw);               // strips all non-digit chars
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);                      // drop leading country code
+  }
+  if (digits.length !== 10) return raw;            // unparseable — store as-is
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 
 // ── Google Places API (New) constants ─────────────────────────────────────────
 
@@ -382,11 +414,18 @@ export async function lookupBusinessAction(
 /**
  * Persists the operator submission to operator_submissions.
  *
- * Called after the submitter has responded to the Google match confirmation:
- *   - matchConfirmed: true  → match_status = 'confirmed'
- *   - matchConfirmed: false → match_status = 'rejected' (or 'no_match' if no match)
+ * Phase 3B routing logic:
+ *   1. Compute trust signals (informational only — do not affect routing).
+ *   2. Determine match_status from the submitter's response.
+ *   3. For confirmed matches: look up venue by place_id.
+ *      A. No venue found → create unpublished venue, link it.
+ *      B. Venue found, unclaimed → link existing venue.
+ *      C. Venue found, claimed → link existing venue, flag as double_claim.
+ *   4. Insert submission row with derived status and venue_id.
  *
- * Captures IP address from request headers for future trust signal use.
+ * Trust signals are stored as plain columns but MUST NOT influence routing.
+ * match_status is set here and never modified again.
+ * status reflects the routing/review outcome, not the submitter's response.
  */
 export async function saveOperatorSubmissionAction(
   payload: SavePayload
@@ -400,61 +439,180 @@ export async function saveOperatorSubmissionAction(
     additionalNotes,
   } = payload;
 
-  // ── IP capture (for trust signals in Phase 3B+) ───────────────────────────
+  // ── IP capture ────────────────────────────────────────────────────────────
   const heads = await headers();
   const forwarded = heads.get("x-forwarded-for");
-  const ip =
+  const ip: string | null =
     forwarded
       ? forwarded.split(",")[0].trim()
       : (heads.get("x-real-ip") ?? null);
 
   // ── Derive match_status ───────────────────────────────────────────────────
-  // no_match:  Google returned nothing (match is null)
+  // no_match:  Google returned nothing (match is null, matchConfirmed is false)
   // confirmed: submitter said "yes, this is my business"
   // rejected:  submitter said "this is not my business"
-  const matchStatus =
+  const matchStatus: string =
     match === null ? "no_match" : matchConfirmed ? "confirmed" : "rejected";
 
-  // Only store the Google place_id on the top-level column when confirmed.
-  // The full match object is always stored in google_match_json for review.
-  const placeId = matchConfirmed && match?.placeId ? match.placeId : null;
+  // Only store place_id on the top-level column when confirmed.
+  // google_match_json always stores the full match object for review.
+  const placeId: string | null =
+    matchConfirmed && match?.placeId ? match.placeId : null;
 
-  // ── Insert ────────────────────────────────────────────────────────────────
+  // ── Trust signals (informational only) ────────────────────────────────────
+  // Computed unconditionally — signals must not affect routing.
+  // All fields are nullable; failures silently produce null.
+  const emailDomain = extractEmailDomain(formValues.email);
+  const isPublicEmail = isPublicEmailDomain(emailDomain);
+
+  // Email domain vs website domain match — only meaningful for non-public emails
+  // when a Google match with a website is available.
+  let emailDomainMatchesWebsite: boolean | null = null;
+  if (!isPublicEmail && match?.website) {
+    const websiteDomain = extractWebsiteDomain(match.website);
+    if (websiteDomain) {
+      emailDomainMatchesWebsite =
+        emailDomain === websiteDomain ||
+        emailDomain.endsWith(`.${websiteDomain}`);
+    }
+  }
+
+  // Role strength: Owner/Manager = strong, Bartender/Server = moderate, else weak
+  const strongRoles = ["Owner", "Manager"];
+  const moderateRoles = ["Bartender", "Server"];
+  const roleTrustLevel = strongRoles.includes(formValues.position)
+    ? "strong"
+    : moderateRoles.includes(formValues.position)
+    ? "moderate"
+    : "weak";
+
+  // GeoIP — best-effort; private IPs return { ok: false }
+  const geo = ip ? await geolocateIp(ip) : null;
+  const geoIpCountry: string | null = geo?.ok ? geo.country : null;
+  const geoIpRegion: string | null = geo?.ok ? geo.region : null;
+
+  // Region match: compare GeoIP region against the Google-matched venue province.
+  // Case-insensitive string comparison (full province name vs full province name).
+  let geoIpMatchesBusinessRegion: boolean | null = null;
+  if (geoIpRegion && match?.province) {
+    geoIpMatchesBusinessRegion =
+      geoIpRegion.trim().toLowerCase() ===
+      match.province.trim().toLowerCase();
+  }
+
+  // ── Phase 3B routing ──────────────────────────────────────────────────────
+  // Routing only applies to confirmed matches with a valid place_id.
+  // All other paths (rejected, no_match, or confirmed without place_id) skip
+  // venue lookup/creation entirely.
+
   const supabase = createAdminClient();
 
-  const { error } = await supabase.from("operator_submissions").insert({
-    // Identity — operator_name kept as combined name for backwards-compat
+  let routedStatus: string;
+  let venueId: string | null = null;
+
+  if (matchStatus === "confirmed" && placeId && match) {
+    // ── Venue lookup by place_id ──────────────────────────────────────────
+    const { data: existingVenue, error: lookupError } = await supabase
+      .from("venues")
+      .select("id, claimed_by, created_by_operator_id")
+      .eq("place_id", placeId)
+      .not("place_id", "is", null)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("[saveOperatorSubmissionAction] Venue lookup error:", lookupError);
+      return { error: "Something went wrong. Please try again." };
+    }
+
+    if (!existingVenue) {
+      // ── Case A: No venue found → create unpublished venue ───────────────
+      const slug = `submission-${placeId.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+
+      const { data: newVenue, error: createError } = await supabase
+        .from("venues")
+        .insert({
+          name:          match.name ?? formValues.businessName,
+          slug,
+          address_line1: match.streetAddress ?? null,
+          city:          match.city ?? formValues.city,
+          region:        match.provinceShort ?? match.province ?? formValues.province,
+          postal_code:   match.postalCode ?? null,
+          country:       match.country ?? null,
+          lat:           match.lat ?? null,
+          lng:           match.lng ?? null,
+          phone:         formatPhoneForStorage(match.phone),
+          website_url:   match.website ?? null,
+          place_id:      placeId,
+          is_published:  false,
+          source:        "operator_submission",
+        })
+        .select("id")
+        .single();
+
+      if (createError || !newVenue) {
+        console.error("[saveOperatorSubmissionAction] Venue creation error:", createError);
+        return { error: "Something went wrong. Please try again." };
+      }
+
+      venueId = newVenue.id;
+      routedStatus = "confirmed_auto";
+    } else if (existingVenue.claimed_by == null && existingVenue.created_by_operator_id == null) {
+      // ── Case B: Venue exists and is unclaimed → link it ─────────────────
+      venueId = existingVenue.id;
+      routedStatus = "confirmed_auto";
+    } else {
+      // ── Case C: Venue exists and is claimed/owned → flag double_claim ───
+      venueId = existingVenue.id;
+      routedStatus = "double_claim";
+    }
+  } else if (matchStatus === "rejected") {
+    routedStatus = "rejected_by_user";
+  } else {
+    // no_match, or confirmed without a place_id (treated as no_match)
+    routedStatus = "no_match";
+  }
+
+  // ── Insert submission row ─────────────────────────────────────────────────
+  const { error: insertError } = await supabase.from("operator_submissions").insert({
+    // Identity
     operator_name:     `${formValues.firstName} ${formValues.lastName}`.trim(),
     first_name:        formValues.firstName,
     last_name:         formValues.lastName,
     email:             formValues.email,
     position:          formValues.position,
 
-    // Business info submitted by the operator
+    // Business info
     venue_name:        formValues.businessName,
     street_address:    formValues.streetAddress,
     city:              formValues.city,
     province:          formValues.province,
 
-    // Google match results
+    // Google match
     place_id:          placeId,
     google_match_json: match ?? null,
     match_status:      matchStatus,
 
-    // Rejection path fields (null when not on rejection path)
+    // Routing outcome (Phase 3B)
+    status:            routedStatus,
+    venue_id:          venueId,
+
+    // Rejection path
     rejection_notes:   rejectionNotes || null,
     website:           website || null,
     additional_notes:  additionalNotes || null,
 
-    // Trust signal seed
-    ip_address:        ip,
-
-    // Review routing — always starts as 'new'
-    status:            "new",
+    // Trust signals (informational only)
+    ip_address:                    ip,
+    email_domain_matches_website:  emailDomainMatchesWebsite,
+    is_public_email_domain:        isPublicEmail,
+    role_trust_level:              roleTrustLevel,
+    geo_ip_country:                geoIpCountry,
+    geo_ip_region:                 geoIpRegion,
+    geo_ip_matches_business_region: geoIpMatchesBusinessRegion,
   });
 
-  if (error) {
-    console.error("[saveOperatorSubmissionAction] Insert error:", error);
+  if (insertError) {
+    console.error("[saveOperatorSubmissionAction] Insert error:", insertError);
     return { error: "Something went wrong. Please try again." };
   }
 

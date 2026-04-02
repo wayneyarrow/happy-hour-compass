@@ -228,7 +228,7 @@ function displayCountry(value: string): string {
 
 // ── IP geolocation ────────────────────────────────────────────────────────────
 
-type GeoResult =
+export type GeoResult =
   | { ok: true; city: string; region: string; country: string; lat: number; lon: number }
   | { ok: false };
 
@@ -237,7 +237,7 @@ function isPrivateIp(ip: string): boolean {
   return /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|localhost$)/i.test(ip);
 }
 
-async function geolocateIp(ip: string): Promise<GeoResult> {
+export async function geolocateIp(ip: string): Promise<GeoResult> {
   if (!ip || isPrivateIp(ip)) return { ok: false };
   try {
     const res = await fetch(
