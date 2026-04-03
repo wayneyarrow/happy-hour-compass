@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/control-panel/dashboard" },
-  { label: "Claims",    href: "/control-panel/claims" },
-  { label: "Venues",    href: "/control-panel/venues" },
-  { label: "Operators", href: "/control-panel/operators" },
-  { label: "Settings",  href: "/control-panel/settings" },
+  { label: "Dashboard",    href: "/control-panel/dashboard" },
+  { label: "Claims",       href: "/control-panel/claims" },
+  { label: "Submissions",  href: "/control-panel/operator-submissions" },
+  { label: "Venues",       href: "/control-panel/venues" },
+  { label: "Operators",    href: "/control-panel/operators" },
+  { label: "Settings",     href: "/control-panel/settings" },
 ] as const;
 
 export default function ControlPanelSideNav() {

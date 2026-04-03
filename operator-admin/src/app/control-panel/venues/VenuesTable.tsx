@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ function ClaimedBadge({ claimedAt }: { claimedAt: string | null }) {
 // ── VenuesTable ────────────────────────────────────────────────────────────────
 
 export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
+  const router = useRouter();
   const [search,    setSearch]    = useState("");
   const [claimed,   setClaimed]   = useState<ClaimedFilter>("all");
   const [published, setPublished] = useState<PublishedFilter>("all");
@@ -149,18 +151,16 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((v) => (
-                  <tr key={v.id} className="hover:bg-amber-50 transition-colors">
+                  <tr
+                    key={v.id}
+                    onClick={() => router.push(`/control-panel/venues/${v.id}`)}
+                    className="hover:bg-amber-50 transition-colors cursor-pointer"
+                  >
                     {/* Venue name + slug */}
                     <td className="px-4 py-3">
-                      <a
-                        href={`/venue/${v.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-slate-900 hover:text-amber-700 transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <span className="font-medium text-slate-900">
                         {v.name}
-                      </a>
+                      </span>
                       <div className="text-xs text-gray-400 mt-0.5 font-mono">
                         {v.slug}
                       </div>

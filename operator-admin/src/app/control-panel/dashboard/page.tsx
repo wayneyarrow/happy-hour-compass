@@ -8,6 +8,12 @@ const SECTIONS = [
     status: "active" as const,
   },
   {
+    title: "Operator Submissions",
+    href: "/control-panel/operator-submissions",
+    description: "Triage pre-auth operator submissions. Review Google match outcomes, trust signals, and linked venues.",
+    status: "active" as const,
+  },
+  {
     title: "Venues",
     href: "/control-panel/venues",
     description: "Browse all venues on the platform — published status, claim state, and linked operator.",
