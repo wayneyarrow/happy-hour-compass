@@ -461,14 +461,35 @@ function HhDayRow({
 type Props = {
   venueId: string;
   initialHhTimes: string | null;
+  /**
+   * Optional server action to use instead of the default updateHhTimesAction.
+   * Used by the Control Panel Fix panel so it can run CP-specific auth +
+   * publish eligibility logic without duplicating the editor UI.
+   */
+  actionOverride?: (
+    prevState: HhTimesState,
+    formData: FormData
+  ) => Promise<HhTimesState>;
+  /**
+   * Called after a successful save when provided. Replaces the default
+   * router.refresh() + Saved badge behaviour (e.g., to close a panel).
+   */
+  onSuccess?: () => void;
 };
 
 const initialState: HhTimesState = {};
 
-export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
+export default function HhTimesForm({
+  venueId,
+  initialHhTimes,
+  actionOverride,
+  onSuccess,
+}: Props) {
   const router = useRouter();
-  const boundAction = updateHhTimesAction.bind(null, venueId);
-  const [state, formAction, isPending] = useActionState(boundAction, initialState);
+  const [state, formAction, isPending] = useActionState(
+    actionOverride ?? updateHhTimesAction.bind(null, venueId),
+    initialState
+  );
   const [saved, setSaved] = useState(false);
 
   // Default to all-"No happy hour". The effect below hydrates from the prop
@@ -488,16 +509,22 @@ export default function HhTimesForm({ venueId, initialHhTimes }: Props) {
     setDayStates(parseHhTimes(initialHhTimes));
   }, [initialHhTimes]);
 
-  // Show Saved badge for 4 s after a successful save; also trigger page refresh
-  // so initialHhTimes updates to the freshly written DB value.
+  // On successful save: if an onSuccess callback is provided (e.g., CP Fix panel),
+  // call it so the panel can close itself. Otherwise use the default behaviour:
+  // refresh the router so initialHhTimes reflects the new DB value and show a
+  // 4 s Saved badge.
   useEffect(() => {
     if (state.success) {
-      router.refresh();
-      setSaved(true);
-      const timer = setTimeout(() => setSaved(false), 4000);
-      return () => clearTimeout(timer);
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.refresh();
+        setSaved(true);
+        const timer = setTimeout(() => setSaved(false), 4000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [state, router]);
+  }, [state, router, onSuccess]);
 
   // Derive the serialized schedule string from current UI state.
   const generatedText = useMemo(

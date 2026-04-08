@@ -92,3 +92,95 @@ export async function qaPublishImportedVenuesAction(
 
   return { published: ids.length, city };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fix HH times for a flagged venue (CP Manual Review fix action)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CpFixHhTimesState = {
+  success?: boolean;
+  /** true when the venue was auto-published after the fix */
+  published?: boolean;
+  errors?: { form?: string };
+};
+
+/**
+ * Called by the CP HH Times Manual Review "Fix" panel.
+ *
+ * On success:
+ *   1. Updates venues.hh_times with the structured value from the editor
+ *   2. Clears hh_times_needs_review = false
+ *   3. Auto-publishes the venue if it is an imported venue (created_by_operator_id IS NULL)
+ *      and not yet published — same eligibility rule as qaPublishImportedVenuesAction.
+ *
+ * Auth: caller must be an authenticated Control Panel admin.
+ * Uses admin client (bypasses RLS) — same pattern as all other CP actions.
+ */
+export async function cpFixHhTimesAction(
+  venueId: string,
+  _prevState: CpFixHhTimesState,
+  formData: FormData
+): Promise<CpFixHhTimesState> {
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user || !isControlPanelAdmin(user.email)) {
+    return { errors: { form: "Unauthorized." } };
+  }
+
+  // ── Validate ────────────────────────────────────────────────────────────────
+  const hh_times = (formData.get("hh_times") as string | null)?.trim() ?? "";
+  if (!hh_times) {
+    return { errors: { form: "HH times cannot be empty." } };
+  }
+
+  const supabase = createAdminClient();
+
+  // ── Update hh_times + clear the review flag ─────────────────────────────────
+  const { error: updateError } = await supabase
+    .from("venues")
+    .update({ hh_times, hh_times_needs_review: false })
+    .eq("id", venueId);
+
+  if (updateError) {
+    console.error("[cpFixHhTimesAction] Update failed:", updateError.message);
+    return { errors: { form: `Failed to save: ${updateError.message}` } };
+  }
+
+  // ── Publish eligibility: auto-publish imported, unpublished venues ───────────
+  // Mirrors the safety filter in qaPublishImportedVenuesAction:
+  //   created_by_operator_id IS NULL → imported only; never operator-owned venues
+  //   is_published = false           → skip already-published
+  let published = false;
+
+  const { data: venueRow } = await supabase
+    .from("venues")
+    .select("is_published, created_by_operator_id")
+    .eq("id", venueId)
+    .single();
+
+  if (venueRow && !venueRow.is_published && venueRow.created_by_operator_id === null) {
+    const { error: publishError } = await supabase
+      .from("venues")
+      .update({ is_published: true })
+      .eq("id", venueId);
+
+    if (publishError) {
+      console.error("[cpFixHhTimesAction] Publish failed:", publishError.message);
+      // Non-fatal: times were already fixed; surface a warning via the success path
+    } else {
+      published = true;
+      console.log(
+        `[cpFixHhTimesAction] Published venue ${venueId} — triggered by ${user.email}`
+      );
+    }
+  }
+
+  revalidatePath("/control-panel/settings");
+  revalidatePath("/control-panel/venues");
+
+  return { success: true, published };
+}

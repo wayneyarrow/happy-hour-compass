@@ -1,12 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
-
-type ReviewVenue = {
-  id: string;
-  slug: string;
-  name: string;
-  city: string | null;
-  hh_times: string | null;
-};
+import { HhReviewTable } from "./HhReviewTable";
+import type { ReviewVenue } from "./HhReviewTable";
 
 /**
  * Control Panel panel listing every venue flagged hh_times_needs_review = true.
@@ -20,7 +14,7 @@ export async function QaHhReviewPanel() {
 
   const { data, error } = await supabase
     .from("venues")
-    .select("id, slug, name, city, hh_times")
+    .select("id, name, city, hh_times")
     .eq("hh_times_needs_review", true)
     .order("name", { ascending: true });
 
@@ -46,9 +40,9 @@ export async function QaHhReviewPanel() {
         not be auto-normalized — day/time context is missing or ambiguous.
       </p>
       <p className="text-xs text-gray-400 mb-4">
-        Fix the raw string via the Supabase SQL editor, then set{" "}
-        <code className="bg-gray-100 px-1 rounded">hh_times_needs_review = false</code>{" "}
-        to clear the flag. Click a venue name to open it in the Venues list.
+        Click <strong>Fix</strong> on any row to open the structured editor, enter correct
+        times, and save. The flag is cleared automatically and the venue is published if
+        eligible.
       </p>
 
       {/* Error */}
@@ -65,55 +59,8 @@ export async function QaHhReviewPanel() {
         </p>
       )}
 
-      {/* Venue list */}
-      {!error && venues.length > 0 && (
-        <div className="rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left">
-                <th className="px-4 py-2.5 font-medium text-gray-700">Venue</th>
-                <th className="px-4 py-2.5 font-medium text-gray-700 w-28">City</th>
-                <th className="px-4 py-2.5 font-medium text-gray-700">
-                  hh_times{" "}
-                  <span className="font-normal text-gray-400">(raw)</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {venues.map((v) => (
-                <tr key={v.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 align-top">
-                    <a
-                      href="/control-panel/venues"
-                      className="font-medium text-slate-800 hover:text-amber-600 transition-colors"
-                      title={`Open ${v.name} in Venues`}
-                    >
-                      {v.name}
-                    </a>
-                  </td>
-                  <td className="px-4 py-3 align-top text-gray-500">
-                    {v.city ?? <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    {v.hh_times ? (
-                      <span
-                        className="font-mono text-xs text-gray-500 break-all"
-                        title={v.hh_times}
-                      >
-                        {v.hh_times.length > 90
-                          ? v.hh_times.slice(0, 90) + "…"
-                          : v.hh_times}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300 text-xs">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Venue list — rendered as an interactive client component with Fix buttons */}
+      {!error && venues.length > 0 && <HhReviewTable venues={venues} />}
     </div>
   );
 }
