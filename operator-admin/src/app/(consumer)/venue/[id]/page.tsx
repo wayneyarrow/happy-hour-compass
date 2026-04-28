@@ -81,9 +81,12 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
   // Menu URL: prefer dedicated menu URL, fall back to website.
   const menuTarget = venue.menuUrl || venue.websiteUrl;
 
-  // Google Maps URL for address.
-  const mapsUrl = venue.address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
+  // Google Maps URL: use place_id to open the business listing directly when
+  // available, otherwise fall back to an address query.
+  const mapsUrl = venue.placeId
+    ? `https://www.google.com/maps/place/?q=place_id:${venue.placeId}`
+    : venue.address
+    ? `https://www.google.com/maps?q=${encodeURIComponent(venue.address)}`
     : null;
 
   return (
