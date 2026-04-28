@@ -13,7 +13,8 @@
     "normalize:hh-times": "tsx scripts/normalizeHhTimes.ts",
     "backfill:hh-review": "tsx scripts/backfillHhReviewFlag.ts",
     "backfill:google-rating": "tsx scripts/backfillGoogleRating.ts",
-    "hygiene:bc": "tsx scripts/bcHygienePass.ts"
+    "hygiene:bc": "tsx scripts/bcHygienePass.ts",
+    "enrich:kelowna-geo": "tsx scripts/enrichMissingGeoKelowna.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
