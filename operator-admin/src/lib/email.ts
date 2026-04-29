@@ -27,7 +27,11 @@ function getAppUrl(): string {
 
 function getResend(): Resend {
   const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error("RESEND_API_KEY env var is not set.");
+  if (!key) {
+    console.warn("[EMAIL] RESEND_API_KEY is not set — Resend client cannot be created.");
+    throw new Error("RESEND_API_KEY env var is not set.");
+  }
+  console.log("[EMAIL] RESEND_API_KEY present, key prefix:", key.slice(0, 8) + "…");
   return new Resend(key);
 }
 
@@ -104,9 +108,11 @@ This link expires within 24 hours.
 —
 Happy Hour Compass`;
 
+  console.log("[EMAIL] sendPasswordSetupEmail — attempting send", { to, from, flow: "password-setup" });
+
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject: "Your Happy Hour Compass claim was approved — set up your password",
@@ -115,14 +121,15 @@ Happy Hour Compass`;
     });
 
     if (error) {
-      console.error("[sendPasswordSetupEmail] Resend error:", error);
+      console.error("[EMAIL] sendPasswordSetupEmail — Resend returned error:", error);
       return { ok: false, error: error.message };
     }
 
+    console.log("[EMAIL] sendPasswordSetupEmail — sent successfully", { id: data?.id });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[sendPasswordSetupEmail] Unexpected error:", msg);
+    console.error("[EMAIL] sendPasswordSetupEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -225,9 +232,11 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
+  console.log("[EMAIL] sendClaimNotificationEmail — attempting send", { to, from, flow: "claim-notification", claimId, venueName });
+
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject: `New claim: ${venueName} — ${firstName} ${lastName}`,
@@ -236,14 +245,15 @@ Happy Hour Compass Control Panel`;
     });
 
     if (error) {
-      console.error("[sendClaimNotificationEmail] Resend error:", error);
+      console.error("[EMAIL] sendClaimNotificationEmail — Resend returned error:", error);
       return { ok: false, error: error.message };
     }
 
+    console.log("[EMAIL] sendClaimNotificationEmail — sent successfully", { id: data?.id });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[sendClaimNotificationEmail] Unexpected error:", msg);
+    console.error("[EMAIL] sendClaimNotificationEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -350,9 +360,11 @@ Thanks again,
 Wayne
 Founder, Happy Hour Compass`;
 
+  console.log("[EMAIL] sendRequestMoreInfoEmail — attempting send", { to, from, flow: "request-more-info", venueName });
+
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject: "More information needed to verify your venue claim",
@@ -361,14 +373,15 @@ Founder, Happy Hour Compass`;
     });
 
     if (error) {
-      console.error("[sendRequestMoreInfoEmail] Resend error:", error);
+      console.error("[EMAIL] sendRequestMoreInfoEmail — Resend returned error:", error);
       return { ok: false, error: error.message };
     }
 
+    console.log("[EMAIL] sendRequestMoreInfoEmail — sent successfully", { id: data?.id });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[sendRequestMoreInfoEmail] Unexpected error:", msg);
+    console.error("[EMAIL] sendRequestMoreInfoEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -455,9 +468,11 @@ ID:        ${suggestionId}
 —
 Happy Hour Compass`;
 
+  console.log("[EMAIL] sendSuggestionNotificationEmail — attempting send", { to, from, flow: "suggestion-notification", venueName, city });
+
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject: `New happy hour suggestion: ${venueName} (${city})`,
@@ -466,14 +481,15 @@ Happy Hour Compass`;
     });
 
     if (error) {
-      console.error("[sendSuggestionNotificationEmail] Resend error:", error);
+      console.error("[EMAIL] sendSuggestionNotificationEmail — Resend returned error:", error);
       return { ok: false, error: error.message };
     }
 
+    console.log("[EMAIL] sendSuggestionNotificationEmail — sent successfully", { id: data?.id });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[sendSuggestionNotificationEmail] Unexpected error:", msg);
+    console.error("[EMAIL] sendSuggestionNotificationEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -540,19 +556,22 @@ This link expires in 7 days.
 —
 Happy Hour Compass`;
 
+  console.log("[EMAIL] sendApprovalEmail — attempting send", { to, from, flow: "approval-legacy" });
+
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({ from, to, subject: "Your Happy Hour Compass claim was approved", html, text });
+    const { data, error } = await resend.emails.send({ from, to, subject: "Your Happy Hour Compass claim was approved", html, text });
 
     if (error) {
-      console.error("[sendApprovalEmail] Resend error:", error);
+      console.error("[EMAIL] sendApprovalEmail — Resend returned error:", error);
       return { ok: false, error: error.message };
     }
 
+    console.log("[EMAIL] sendApprovalEmail — sent successfully", { id: data?.id });
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[sendApprovalEmail] Unexpected error:", msg);
+    console.error("[EMAIL] sendApprovalEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }

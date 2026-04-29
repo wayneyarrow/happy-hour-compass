@@ -171,6 +171,7 @@ export async function reviewClaimAction(
     // Email failure must not block the review action — the status update has
     // already committed.  Errors are logged for monitoring.
     if (action === "needs_more_info") {
+      console.log("[EMAIL] reviewClaimAction — initiating fire-and-forget needs-more-info email", { claimId, flow: "request-more-info" });
       (async () => {
         const { data: claim } = await supabase
           .from("venue_claims")
@@ -179,7 +180,7 @@ export async function reviewClaimAction(
           .single();
 
         if (!claim) {
-          console.error("[reviewClaimAction] Could not fetch claim for more-info email.", { claimId });
+          console.error("[EMAIL] reviewClaimAction — could not fetch claim for more-info email, skipping send.", { claimId });
           return;
         }
 

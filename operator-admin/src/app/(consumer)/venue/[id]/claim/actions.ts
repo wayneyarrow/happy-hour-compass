@@ -123,6 +123,12 @@ export async function submitClaimAction(
     timeStyle: "short",
   });
 
+  console.log("[EMAIL] submitClaimAction — initiating fire-and-forget founder notification", {
+    claimId: insertedClaim.id,
+    venueName: venueRow.name,
+    flow: "claim-notification",
+  });
+
   sendClaimNotificationEmail({
     claimId:       insertedClaim.id as string,
     venueName:     venueRow.name as string,

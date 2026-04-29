@@ -71,6 +71,13 @@ export async function submitSuggestionAction(
     { timeZone: "America/Vancouver", dateStyle: "medium", timeStyle: "short" }
   );
 
+  console.log("[EMAIL] submitSuggestionAction — initiating fire-and-forget founder notification", {
+    suggestionId: inserted.id,
+    venueName: name,
+    city,
+    flow: "suggestion-notification",
+  });
+
   sendSuggestionNotificationEmail({
     suggestionId: inserted.id as string,
     venueName:    name,
