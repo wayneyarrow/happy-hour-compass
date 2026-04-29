@@ -10,9 +10,7 @@
  *   APP_URL          — e.g. "https://happyhourcompass.com"
  *                      Falls back to VERCEL_URL (auto-set by Vercel) or localhost.
  *
- * Sender: always uses onboarding@resend.dev (Resend's shared sender, no domain
- * verification required). Switch to a verified domain when ready by updating
- * DEFAULT_FROM below.
+ * Sender: hello@happyhourcompass.com (verified domain).
  *
  * Resend free tier: 3,000 emails/month, 100/day.
  */
@@ -33,7 +31,7 @@ function getResend(): Resend {
   return new Resend(key);
 }
 
-const DEFAULT_FROM = "Happy Hour Compass <onboarding@resend.dev>";
+const DEFAULT_FROM = "Happy Hour Compass <hello@happyhourcompass.com>";
 
 // ── Password setup email ───────────────────────────────────────────────────────
 
