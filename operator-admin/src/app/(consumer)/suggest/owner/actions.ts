@@ -9,6 +9,7 @@ import {
   geolocateIp,
   normalizePhone,
 } from "@/lib/trustSignals";
+import { sendOperatorSubmissionNotificationEmail } from "@/lib/email";
 import type {
   GoogleMatch,
   LookupResult,
@@ -573,7 +574,7 @@ export async function saveOperatorSubmissionAction(
   }
 
   // ── Insert submission row ─────────────────────────────────────────────────
-  const { error: insertError } = await supabase.from("operator_submissions").insert({
+  const { data: insertedSubmission, error: insertError } = await supabase.from("operator_submissions").insert({
     // Identity
     operator_name:     `${formValues.firstName} ${formValues.lastName}`.trim(),
     first_name:        formValues.firstName,
@@ -609,12 +610,44 @@ export async function saveOperatorSubmissionAction(
     geo_ip_country:                geoIpCountry,
     geo_ip_region:                 geoIpRegion,
     geo_ip_matches_business_region: geoIpMatchesBusinessRegion,
-  });
+  }).select("id").single();
 
   if (insertError) {
     console.error("[saveOperatorSubmissionAction] Insert error:", insertError);
     return { error: "Something went wrong. Please try again." };
   }
+
+  // ── Notify founder — fire-and-forget; email failure must not block submission ─
+  // Fires for ALL submission types regardless of matchStatus or Google availability.
+  const submittedAt = new Date().toLocaleString("en-CA", {
+    timeZone: "America/Vancouver",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  console.log("[EMAIL] saveOperatorSubmissionAction — initiating fire-and-forget founder notification", {
+    flow: "operator-submission-notification",
+    matchStatus,
+    routedStatus,
+    businessName: formValues.businessName,
+  });
+
+  sendOperatorSubmissionNotificationEmail({
+    submissionId:       (insertedSubmission?.id ?? "unknown") as string,
+    businessName:       formValues.businessName,
+    city:               formValues.city,
+    province:           formValues.province,
+    submitterFirstName: formValues.firstName,
+    submitterLastName:  formValues.lastName,
+    submitterEmail:     formValues.email,
+    matchStatus,
+    routedStatus,
+    submittedAt,
+  }).then(({ ok, error: emailErr }) => {
+    if (!ok) {
+      console.error("[EMAIL] saveOperatorSubmissionAction — founder notification failed:", emailErr);
+    }
+  });
 
   return { success: true };
 }

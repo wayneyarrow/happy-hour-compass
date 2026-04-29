@@ -494,6 +494,157 @@ Happy Hour Compass`;
   }
 }
 
+// ── Operator submission notification email ────────────────────────────────────
+
+/**
+ * Notifies the founder when an operator submits a new business submission via
+ * the /suggest/owner flow. Fires after every successful DB insert regardless of
+ * match_status (confirmed / rejected / no_match) or Google Places availability.
+ *
+ * Required env var: RESEND_API_KEY
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com)
+ */
+export async function sendOperatorSubmissionNotificationEmail({
+  submissionId,
+  businessName,
+  city,
+  province,
+  submitterFirstName,
+  submitterLastName,
+  submitterEmail,
+  matchStatus,
+  routedStatus,
+  submittedAt,
+}: {
+  submissionId: string;
+  businessName: string;
+  city: string;
+  province: string;
+  submitterFirstName: string;
+  submitterLastName: string;
+  submitterEmail: string;
+  matchStatus: string;
+  routedStatus: string;
+  submittedAt: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const from = DEFAULT_FROM;
+  const appUrl = getAppUrl();
+  const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
+
+  const matchBadgeColor =
+    matchStatus === "confirmed" ? "#16a34a"
+    : matchStatus === "rejected" ? "#dc2626"
+    : "#d97706"; // no_match = amber
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New operator submission</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Business</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${businessName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Location</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${city}, ${province}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitter</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submitterFirstName} ${submitterLastName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submitterEmail}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Match status</td>
+              <td style="padding:10px 14px;border-top:1px solid #e2e8f0;">
+                <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#ffffff;background:${matchBadgeColor};">${matchStatus}</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Routed as</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${routedStatus}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Review submission →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Operator submission notification</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `New operator submission — Happy Hour Compass
+
+Business:     ${businessName}
+Location:     ${city}, ${province}
+Submitter:    ${submitterFirstName} ${submitterLastName}
+Email:        ${submitterEmail}
+Match status: ${matchStatus}
+Routed as:    ${routedStatus}
+Submitted:    ${submittedAt}
+
+Review the submission:
+${reviewUrl}
+
+—
+Happy Hour Compass Control Panel`;
+
+  console.log("[EMAIL] sendOperatorSubmissionNotificationEmail — attempting send", {
+    to,
+    from,
+    flow: "operator-submission-notification",
+    businessName,
+    matchStatus,
+    routedStatus,
+  });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: `New operator submission: ${businessName} (${city}) — ${matchStatus}`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendOperatorSubmissionNotificationEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendOperatorSubmissionNotificationEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendOperatorSubmissionNotificationEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({
