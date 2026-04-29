@@ -69,6 +69,32 @@ export default function SuggestChooserPage() {
             <path d="m9 18 6-6-6-6" />
           </svg>
         </Link>
+        {/* Contact Us */}
+        <Link
+          href="/contact"
+          className="flex items-center gap-4 p-5 rounded-xl border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+        >
+          <span className="text-2xl shrink-0">✉️</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[16px] font-semibold text-gray-900">
+              Contact Us
+            </p>
+            <p className="text-[13px] text-gray-500 mt-0.5">
+              Get in touch with the Happy Hour Compass team
+            </p>
+          </div>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-4 h-4 text-gray-300 shrink-0"
+          >
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </Link>
       </div>
     </main>
   );
