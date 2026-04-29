@@ -3,48 +3,54 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Events" };
 
 import { createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
+import { resolveOperatorContext } from "@/lib/impersonation";
 import Link from "next/link";
 import EventsManager from "./EventsManager";
 import type { EventRow } from "./EventForm";
 
 export default async function AdminEventsPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const ctx = await resolveOperatorContext();
+  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
-  if (!user) {
-    redirect("/login");
+  // Load venue — by operator ownership (normal/Case A) or directly by id (Case B).
+  let venueData: { id: string; name: string } | null = null;
+  let venueError: { message: string } | null = null;
+
+  if (operator) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("id, name")
+      .eq("created_by_operator_id", operator.id)
+      .maybeSingle();
+    venueData = data as { id: string; name: string } | null;
+    venueError = error as { message: string } | null;
+  } else if (isImpersonating && impersonatingVenueId) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("id, name")
+      .eq("id", impersonatingVenueId)
+      .maybeSingle();
+    venueData = data as { id: string; name: string } | null;
+    venueError = error as { message: string } | null;
   }
 
-  const { operator, error: operatorError } = await ensureOperatorForSession(
-    supabase,
-    user
-  );
+  const venue = venueData;
 
-  // Load this operator's single venue.
-  const { data: venueData, error: venueError } = operator
-    ? await supabase
-        .from("venues")
-        .select("id, name")
-        .eq("created_by_operator_id", operator.id)
-        .maybeSingle()
-    : { data: null, error: null };
+  // Events require an assigned operator (EventsManager uses operatorId for writes).
+  // In Case B (orphan venue), show an informational message instead.
+  const canManageEvents = !!operator && !!venue;
 
-  const venue = venueData as { id: string; name: string } | null;
-
-  // Load events for this venue only, newest first_date first.
-  // Filter by venue_id (not created_by_operator_id) so only this venue's
-  // events appear, even if the operator has events linked to other venues.
   const { data: eventsData, error: eventsError } =
-    operator && venue
-      ? await supabase
+    canManageEvents
+      ? await ctx.supabase
           .from("events")
           .select("id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, image_url, created_by_operator_id, updated_by_operator_id")
-          .eq("venue_id", venue.id)
+          .eq("venue_id", venue!.id)
           .order("first_date", { ascending: false })
           .order("title", { ascending: true })
       : { data: null, error: null };
@@ -75,8 +81,8 @@ export default async function AdminEventsPage() {
         </div>
       )}
 
-      {/* No venue yet */}
-      {!operatorError && !venueError && operator && !venue && (
+      {/* No venue yet (normal mode only) */}
+      {!operatorError && !venueError && operator && !venue && !isImpersonating && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
           <p className="text-sm font-medium text-gray-700">
             No venue set up yet
@@ -93,20 +99,32 @@ export default async function AdminEventsPage() {
         </div>
       )}
 
+      {/* Case B: venue found but no operator — event management unavailable */}
+      {isImpersonating && !operator && venue && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-6 text-center">
+          <p className="text-sm font-medium text-gray-700">
+            Event management requires an operator to be assigned to this venue.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            This venue has no linked operator account. Assign an operator first.
+          </p>
+        </div>
+      )}
+
       {/* Non-fatal event load error */}
-      {operator && venue && eventsError && (
+      {canManageEvents && eventsError && (
         <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
           <strong>Note:</strong> Could not load existing events. You can still
           create a new one.
         </div>
       )}
 
-      {/* Events manager — list + form */}
-      {!operatorError && operator && venue && (
+      {/* Events manager — list + form (requires operator) */}
+      {!operatorError && canManageEvents && (
         <EventsManager
           initialEvents={initialEvents}
-          operatorId={operator.id}
-          venueId={venue.id}
+          operatorId={operator!.id}
+          venueId={venue!.id}
         />
       )}
     </div>

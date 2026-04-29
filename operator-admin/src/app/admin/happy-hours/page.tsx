@@ -4,8 +4,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Happy Hours" };
 
 import { createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
+import { resolveOperatorContext } from "@/lib/impersonation";
 import AccordionSection from "../venue/AccordionSection";
 import HhTimesSection from "./HhTimesSection";
 import TaglineForm from "./TaglineForm";
@@ -141,31 +141,34 @@ function parseSpecials(raw: string | null | undefined): HhItem[] {
 
 export default async function AdminHappyHoursPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const ctx = await resolveOperatorContext();
+  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
-  if (!user) {
-    redirect("/login");
+  let venueData: HappyHoursVenueRow | null = null;
+  let venueError: { message: string } | null = null;
+
+  if (operator) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details")
+      .eq("created_by_operator_id", operator.id)
+      .maybeSingle();
+    venueData = data as HappyHoursVenueRow | null;
+    venueError = error as { message: string } | null;
+  } else if (isImpersonating && impersonatingVenueId) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details")
+      .eq("id", impersonatingVenueId)
+      .maybeSingle();
+    venueData = data as HappyHoursVenueRow | null;
+    venueError = error as { message: string } | null;
   }
 
-  const { operator, error: operatorError } = await ensureOperatorForSession(
-    supabase,
-    user
-  );
-
-  // Load this operator's single venue — select only the columns we need here.
-  // Ownership enforced by created_by_operator_id filter (+ RLS).
-  const { data: venueData, error: venueError } = operator
-    ? await supabase
-        .from("venues")
-        .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details")
-        .eq("created_by_operator_id", operator.id)
-        .maybeSingle()
-    : { data: null, error: null };
-
-  const venue = venueData as HappyHoursVenueRow | null;
+  const venue = venueData;
 
   const foodItems = parseSpecials(venue?.hh_food_details);
   const drinkItems = parseSpecials(venue?.hh_drink_details);
@@ -196,7 +199,7 @@ export default async function AdminHappyHoursPage() {
       )}
 
       {/* No venue found */}
-      {!operatorError && !venueError && operator && !venue && (
+      {!operatorError && !venueError && (operator || isImpersonating) && !venue && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
           <p className="text-sm font-medium text-gray-600">
             We couldn&rsquo;t find a venue connected to your account.
@@ -206,7 +209,7 @@ export default async function AdminHappyHoursPage() {
       )}
 
       {/* ── Happy hour sections ──────────────────────────────────────────── */}
-      {!operatorError && operator && venue && (
+      {!operatorError && (operator || isImpersonating) && venue && (
         <div className="space-y-3">
 
           {/* Section 1: Tagline — expanded by default */}

@@ -1,7 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession } from "@/lib/ensureOperator";
+import { resolveOperatorContext } from "@/lib/impersonation";
 import { redirect } from "next/navigation";
 import {
   ESTABLISHMENT_TYPE_OPTIONS,
@@ -13,7 +12,7 @@ import {
 } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Slug utility (same logic as createVenueAction)
+// Slug utility
 // ─────────────────────────────────────────────────────────────────────────────
 
 function generateSlug(name: string): string {
@@ -28,30 +27,40 @@ function generateSlug(name: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth helper
+// Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function resolveOperator() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, operator: null, operatorError: "Session expired. Please sign in again." };
-  const { operator, error: operatorError } = await ensureOperatorForSession(supabase, user);
-  return { supabase, user, operator, operatorError };
+/**
+ * Build the venue UPDATE query with correct ownership scoping.
+ *
+ * Normal / Case A impersonation: filter by both venue id AND operator id.
+ * Case B impersonation (orphan):  filter by venue id only (no operator assigned).
+ *
+ * In impersonation mode ctx.supabase is the admin client (bypasses RLS).
+ * The explicit filter ensures we never touch any venue other than the target.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildVenueUpdate(
+  ctx: Awaited<ReturnType<typeof resolveOperatorContext>>,
+  venueId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updates: Record<string, any>
+) {
+  const q = ctx.supabase
+    .from("venues")
+    .update(updates, { count: "exact" })
+    .eq("id", venueId);
+  // Add operator ownership filter when operator is known.
+  // In Case B (orphan) there is no operator, so venue id alone is the scope.
+  return ctx.operator
+    ? q.eq("created_by_operator_id", ctx.operator.id)
+    : q;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Create venue (admin context — redirects to /admin/venue on success)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Creates a new venue with just a name.
- * Additional details are filled in via the edit sections after creation.
- *
- * Ownership is set server-side from the resolved operator row.
- * No client-supplied operator ID is accepted.
- */
 export async function createVenueAdminAction(
   _prevState: CreateVenueAdminState,
   formData: FormData
@@ -62,20 +71,28 @@ export async function createVenueAdminAction(
     return { errors: { name: "Venue name is required." }, values: { name } };
   }
 
-  const { supabase, operator, operatorError } = await resolveOperator();
+  const ctx = await resolveOperatorContext();
 
-  if (operatorError || !operator) {
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return {
-      errors: { form: operatorError ?? "Could not resolve your operator account." },
+      errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
       values: { name },
     };
   }
 
-  const { error: insertError } = await supabase.from("venues").insert({
+  // Creating a new venue requires an operator; not available in Case B orphan mode.
+  if (!ctx.operator) {
+    return {
+      errors: { form: "Creating a new venue is not available in support mode for unassigned venues." },
+      values: { name },
+    };
+  }
+
+  const { error: insertError } = await ctx.supabase.from("venues").insert({
     name,
     slug: generateSlug(name),
-    created_by_operator_id: operator.id,
-    updated_by_operator_id: operator.id,
+    created_by_operator_id: ctx.operator.id,
+    updated_by_operator_id: ctx.operator.id,
   });
 
   if (insertError) {
@@ -93,14 +110,6 @@ export async function createVenueAdminAction(
 // Update business details
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Updates the venue's core business fields.
- *
- * `venueId` is bound via `.bind(null, venueId)` — never read from FormData.
- * Ownership enforced at two layers:
- *   1. RLS policy "venues: update own" (database).
- *   2. Explicit `.eq("created_by_operator_id", operator.id)` (application).
- */
 export async function updateBusinessDetailsAction(
   venueId: string,
   _prevState: BusinessDetailsState,
@@ -126,11 +135,11 @@ export async function updateBusinessDetailsAction(
     return { errors: { name: "Venue name is required." }, values };
   }
 
-  const { supabase, operator, operatorError } = await resolveOperator();
+  const ctx = await resolveOperatorContext();
 
-  if (operatorError || !operator) {
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return {
-      errors: { form: operatorError ?? "Could not resolve your operator account." },
+      errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
       values,
     };
   }
@@ -138,33 +147,25 @@ export async function updateBusinessDetailsAction(
   const latNum = values.lat ? parseFloat(values.lat) : null;
   const lngNum = values.lng ? parseFloat(values.lng) : null;
 
-  const { error: updateError, count } = await supabase
-    .from("venues")
-    .update(
-      {
-        name:                   values.name,
-        address_line1:          values.address_line1 || null,
-        city:                   values.city          || null,
-        region:                 values.region        || null,
-        postal_code:            values.postal_code   || null,
-        phone:                  values.phone         || null,
-        country:                values.country       || null,
-        lat:                    latNum != null && !Number.isNaN(latNum) ? latNum : null,
-        lng:                    lngNum != null && !Number.isNaN(lngNum) ? lngNum : null,
-        establishment_type:     values.establishment_type,
-        updated_by_operator_id: operator.id,
-      },
-      { count: "exact" }
-    )
-    .eq("id", venueId)
-    .eq("created_by_operator_id", operator.id);
+  const updates = {
+    name:                   values.name,
+    address_line1:          values.address_line1 || null,
+    city:                   values.city          || null,
+    region:                 values.region        || null,
+    postal_code:            values.postal_code   || null,
+    phone:                  values.phone         || null,
+    country:                values.country       || null,
+    lat:                    latNum != null && !Number.isNaN(latNum) ? latNum : null,
+    lng:                    lngNum != null && !Number.isNaN(lngNum) ? lngNum : null,
+    establishment_type:     values.establishment_type,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+  };
+
+  const { error: updateError, count } = await buildVenueUpdate(ctx, venueId, updates);
 
   if (updateError) {
     console.error("[updateBusinessDetailsAction] Update failed:", updateError);
-    return {
-      errors: { form: `Failed to save: ${updateError.message}` },
-      values,
-    };
+    return { errors: { form: `Failed to save: ${updateError.message}` }, values };
   }
 
   if (count === 0) {
@@ -181,13 +182,6 @@ export async function updateBusinessDetailsAction(
 // Update payment types
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Saves the selected payment methods for the venue.
- * Stored as a string array in the `payment_types` JSONB column.
- *
- * `venueId` is bound — never read from FormData.
- * Dual ownership filter enforced.
- */
 export async function updatePaymentTypesAction(
   venueId: string,
   _prevState: PaymentTypesState,
@@ -197,22 +191,20 @@ export async function updatePaymentTypesAction(
     (t) => formData.get(`payment_${t}`) === "on"
   );
 
-  const { supabase, operator, operatorError } = await resolveOperator();
+  const ctx = await resolveOperatorContext();
 
-  if (operatorError || !operator) {
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return {
-      errors: { form: operatorError ?? "Could not resolve your operator account." },
+      errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
     };
   }
 
-  const { error: updateError, count } = await supabase
-    .from("venues")
-    .update(
-      { payment_types: selected, updated_by_operator_id: operator.id },
-      { count: "exact" }
-    )
-    .eq("id", venueId)
-    .eq("created_by_operator_id", operator.id);
+  const updates = {
+    payment_types: selected,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+  };
+
+  const { error: updateError, count } = await buildVenueUpdate(ctx, venueId, updates);
 
   if (updateError) {
     console.error("[updatePaymentTypesAction] Update failed:", updateError);
@@ -232,12 +224,6 @@ export async function updatePaymentTypesAction(
 // Update links
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Saves website and menu URLs for the venue.
- *
- * `venueId` is bound — never read from FormData.
- * Dual ownership filter enforced.
- */
 export async function updateLinksAction(
   venueId: string,
   _prevState: LinksState,
@@ -248,27 +234,22 @@ export async function updateLinksAction(
     menu_url:    (formData.get("menu_url")    as string | null)?.trim() ?? "",
   };
 
-  const { supabase, operator, operatorError } = await resolveOperator();
+  const ctx = await resolveOperatorContext();
 
-  if (operatorError || !operator) {
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return {
-      errors: { form: operatorError ?? "Could not resolve your operator account." },
+      errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
       values,
     };
   }
 
-  const { error: updateError, count } = await supabase
-    .from("venues")
-    .update(
-      {
-        website_url:            values.website_url || null,
-        menu_url:               values.menu_url    || null,
-        updated_by_operator_id: operator.id,
-      },
-      { count: "exact" }
-    )
-    .eq("id", venueId)
-    .eq("created_by_operator_id", operator.id);
+  const updates = {
+    website_url:            values.website_url || null,
+    menu_url:               values.menu_url    || null,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+  };
+
+  const { error: updateError, count } = await buildVenueUpdate(ctx, venueId, updates);
 
   if (updateError) {
     console.error("[updateLinksAction] Update failed:", updateError);

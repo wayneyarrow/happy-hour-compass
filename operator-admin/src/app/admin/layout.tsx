@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Image from "next/image";
 import AdminSideNav from "./AdminSideNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
+import ImpersonationBanner from "./ImpersonationBanner";
+import { IMP_COOKIE_NAME, getValidImpersonationSession } from "@/lib/impersonation";
 
 export const metadata: Metadata = {
   title: {
@@ -15,6 +18,8 @@ export const metadata: Metadata = {
 // Admin shell layout — wraps every page under /admin/*.
 // Performs a server-side auth check so unauthenticated requests are caught
 // here in addition to the middleware guard.
+// When an active impersonation session cookie is present, renders the
+// ImpersonationBanner above the header.
 export default async function AdminLayout({
   children,
 }: {
@@ -29,8 +34,24 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
+  // Check for an active impersonation session to show the banner.
+  const cookieStore = await cookies();
+  const impSessionId = cookieStore.get(IMP_COOKIE_NAME)?.value;
+  const impSession = impSessionId
+    ? await getValidImpersonationSession(impSessionId)
+    : null;
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
+      {/* ── Impersonation banner (shown above header when session is active) ── */}
+      {impSession && (
+        <ImpersonationBanner
+          venueName={impSession.venue_name ?? "Unknown Venue"}
+          operatorEmail={impSession.operator_email}
+          founderEmail={impSession.founder_email}
+        />
+      )}
+
       {/* ── Top header ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200 shadow-sm px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center">

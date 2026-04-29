@@ -7,6 +7,11 @@ import {
   ImageTooLargeError,
   InvalidImageTypeError,
 } from "@/lib/imageProcessing";
+import {
+  uploadVenueImageAction,
+  deleteVenueImageAction,
+  reorderVenueImagesAction,
+} from "./imageActions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,7 +23,6 @@ type MediaRow = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const BUCKET = "venue-images";
 const MAX_IMAGES = 5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,7 +56,7 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── Fetch (browser client — "media: authenticated read" permits all authed users) ──
 
   const refreshImages = async () => {
     if (!venueId) return;
@@ -89,11 +93,10 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
     if (slots <= 0) return;
 
     setUploading(true);
-    const supabase = createClient();
     const toUpload = Array.from(files).slice(0, slots);
 
     for (const file of toUpload) {
-      // ── Process (resize + compress) before upload ─────────────────────────
+      // Process (resize + compress) in the browser before sending to the server.
       let blob: Blob;
       try {
         blob = await processImageFile(file, {
@@ -114,39 +117,13 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
         return;
       }
 
-      // Always store as .jpg (output is always JPEG after processing).
-      const path = `venues/${venueId}/${crypto.randomUUID()}.jpg`;
+      const formData = new FormData();
+      formData.append("file", new File([blob], `${crypto.randomUUID()}.jpg`, { type: "image/jpeg" }));
 
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: "image/jpeg" });
+      const { error: actionError } = await uploadVenueImageAction(venueId, formData);
 
-      if (uploadError) {
-        setError(`Upload failed: ${uploadError.message}`);
-        setUploading(false);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
-
-      // Re-query the live count so back-to-back uploads get sequential sort_orders.
-      const { data: existing } = await supabase
-        .from("media")
-        .select("id")
-        .eq("venue_id", venueId)
-        .eq("type", "venue_image");
-      const sortOrder = existing?.length ?? 0;
-
-      const { error: insertError } = await supabase.from("media").insert({
-        venue_id: venueId,
-        url: publicUrl,
-        sort_order: sortOrder,
-        type: "venue_image",
-      });
-
-      if (insertError) {
-        setError(`Failed to save image record: ${insertError.message}`);
+      if (actionError) {
+        setError(actionError);
         setUploading(false);
         return;
       }
@@ -159,17 +136,16 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
 
   // ── Re-order ───────────────────────────────────────────────────────────────
 
-  /**
-   * Persists a new image order by writing each item's new index as sort_order.
-   * Called by all three ordering controls (set primary, move left, move right).
-   */
   const reorderImages = async (newOrder: MediaRow[]) => {
-    const supabase = createClient();
-    await Promise.all(
-      newOrder.map((img, i) =>
-        supabase.from("media").update({ sort_order: i }).eq("id", img.id)
-      )
+    if (!venueId) return;
+    const { error: actionError } = await reorderVenueImagesAction(
+      venueId,
+      newOrder.map((img) => img.id)
     );
+    if (actionError) {
+      setError(actionError);
+      return;
+    }
     await refreshImages();
   };
 
@@ -197,29 +173,14 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = async (img: MediaRow) => {
+    if (!venueId) return;
     setError(null);
-    const supabase = createClient();
 
-    const { error: deleteError } = await supabase
-      .from("media")
-      .delete()
-      .eq("id", img.id);
+    const { error: actionError } = await deleteVenueImageAction(venueId, img.id, img.url);
 
-    if (deleteError) {
-      setError(`Failed to delete image: ${deleteError.message}`);
+    if (actionError) {
+      setError(actionError);
       return;
-    }
-
-    // Best-effort: also delete the file from storage.
-    // Public URL path: /storage/v1/object/public/<bucket>/<storagePath>
-    try {
-      const urlObj = new URL(img.url);
-      const match = urlObj.pathname.match(/\/public\/[^/]+\/(.+)$/);
-      if (match?.[1]) {
-        await supabase.storage.from(BUCKET).remove([match[1]]);
-      }
-    } catch {
-      // Non-fatal — the media row is already gone.
     }
 
     // Re-normalise sort_order on the remaining images to keep them 0..n-1.

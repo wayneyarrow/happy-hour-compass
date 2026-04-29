@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
+import ImpersonateButton from "./ImpersonateButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -142,31 +143,36 @@ export default async function ControlPanelVenueDetailPage({
       </Link>
 
       {/* Page header */}
-      <div className="mb-6 flex items-start gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{venue.name}</h1>
-          <p className="text-xs text-gray-400 font-mono mt-0.5">{venue.id}</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">{venue.name}</h1>
+            <p className="text-xs text-gray-400 font-mono mt-0.5">{venue.id}</p>
+          </div>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {venue.is_published ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                Published
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                Unpublished
+              </span>
+            )}
+            {isClaimed ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                Claimed / owned
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                Unclaimed
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {venue.is_published ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-              Published
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-              Unpublished
-            </span>
-          )}
-          {isClaimed ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-              Claimed / owned
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-              Unclaimed
-            </span>
-          )}
-        </div>
+
+        {/* Open this venue's Operator Admin in a new tab as founder/support */}
+        <ImpersonateButton venueId={venue.id} />
       </div>
 
       <div className="space-y-5">

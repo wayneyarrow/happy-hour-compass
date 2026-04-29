@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { updatePublishStatusAction } from "./publishActions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Props = {
   venueId: string;
-  operatorId: string;
   initialIsPublished: boolean;
 };
 
@@ -16,7 +16,6 @@ type Props = {
 
 export default function VenuePublishSection({
   venueId,
-  operatorId,
   initialIsPublished,
 }: Props) {
   const router = useRouter();
@@ -72,16 +71,10 @@ export default function VenuePublishSection({
     setIsSaving(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("venues")
-      .update({ is_published: isPublished })
-      .eq("id", venueId)
-      .eq("created_by_operator_id", operatorId);
+    const { error: actionError } = await updatePublishStatusAction(venueId, isPublished);
 
-    if (error) {
-      console.error("[VenuePublishSection] Update failed:", error);
-      setPublishError(`Failed to save: ${error.message}`);
+    if (actionError) {
+      setPublishError(actionError);
       setIsSaving(false);
       return;
     }

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
+import { resolveOperatorContext } from "@/lib/impersonation";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
 import BusinessDetailsForm from "./BusinessDetailsForm";
@@ -57,32 +57,42 @@ function parsePaymentTypes(raw: string | null | undefined): string[] {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AdminVenuePage() {
+  // Auth guard: redirect unauthenticated users. During impersonation the CP
+  // admin IS authenticated (their own Supabase session), so this passes.
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Resolve operator context — returns impersonated context when the
+  // imp_session_id cookie is present and valid, otherwise normal context.
+  const ctx = await resolveOperatorContext();
+  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
-  if (!user) {
-    redirect("/login");
+  // Load venue:
+  //   Normal / Case A impersonation: filter by created_by_operator_id
+  //   Case B impersonation (orphan):  filter directly by venue id
+  let venueData: AdminVenueRow | null = null;
+  let venueError: { message: string } | null = null;
+
+  if (operator) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("*")
+      .eq("created_by_operator_id", operator.id)
+      .maybeSingle();
+    venueData = data as AdminVenueRow | null;
+    venueError = error as { message: string } | null;
+  } else if (isImpersonating && impersonatingVenueId) {
+    const { data, error } = await ctx.supabase
+      .from("venues")
+      .select("*")
+      .eq("id", impersonatingVenueId)
+      .maybeSingle();
+    venueData = data as AdminVenueRow | null;
+    venueError = error as { message: string } | null;
   }
 
-  const { operator, error: operatorError } = await ensureOperatorForSession(
-    supabase,
-    user
-  );
-
-  // Load this operator's single venue.
-  // Ownership enforced by created_by_operator_id filter (+ RLS).
-  const { data: venueData, error: venueError } = operator
-    ? await supabase
-        .from("venues")
-        .select("*")
-        .eq("created_by_operator_id", operator.id)
-        .maybeSingle()
-    : { data: null, error: null };
-
-  const venue = venueData as AdminVenueRow | null;
+  const venue = venueData;
 
   // Parse payment_types from TEXT column (JSON array string → string[]).
   const paymentTypes = parsePaymentTypes(venue?.payment_types);
@@ -140,8 +150,8 @@ export default async function AdminVenuePage() {
         </div>
       )}
 
-      {/* ── No venue yet: setup prompt ────────────────────────────────────── */}
-      {!operatorError && !venueError && operator && !venue && (
+      {/* ── No venue yet: setup prompt (normal mode only, not during impersonation) */}
+      {!operatorError && !venueError && operator && !venue && !isImpersonating && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h3 className="text-base font-semibold text-gray-800 mb-1">
             Set up your venue
@@ -154,8 +164,8 @@ export default async function AdminVenuePage() {
         </div>
       )}
 
-      {/* ── Venue sections ────────────────────────────────────────────────── */}
-      {!operatorError && operator && venue && (
+      {/* ── Venue sections (normal mode, or Case A/B impersonation with venue) */}
+      {!operatorError && (operator || isImpersonating) && venue && (
         <div className="space-y-3">
 
           {/* Section 1: Business details — expanded by default */}
@@ -226,14 +236,13 @@ export default async function AdminVenuePage() {
             />
           </AccordionSection>
 
-          {/* Section 6: Publish — requires at least one venue image */}
+          {/* Section 6: Publish — works in normal mode, Case A, and Case B (server action) */}
           <AccordionSection
             title="Publish"
             description="Make your venue visible to the public. At least one venue image is required."
           >
             <VenuePublishSection
               venueId={venue.id}
-              operatorId={operator.id}
               initialIsPublished={venue.is_published ?? false}
             />
           </AccordionSection>

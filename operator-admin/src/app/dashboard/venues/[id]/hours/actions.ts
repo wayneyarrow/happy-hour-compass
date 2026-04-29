@@ -1,7 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession } from "@/lib/ensureOperator";
+import { resolveOperatorContext } from "@/lib/impersonation";
 import { DAYS_OF_WEEK, to24h } from "../../_shared/hoursUtils";
 import type {
   BusinessHours,
@@ -17,19 +16,9 @@ export type UpdateBusinessHoursState = BusinessHoursFormState;
  * `venueId` is bound via `.bind(null, venueId)` in the client component —
  * it is never read from FormData.
  *
- * Per-day fields follow the naming convention:
- *   ${day}_closed        — checkbox; "on" = closed, absent = open
- *   ${day}_open_hour     — "1"–"12"
- *   ${day}_open_minute   — "00" | "15" | "30" | "45"
- *   ${day}_open_period   — "AM" | "PM"
- *   ${day}_close_hour    — "1"–"12"
- *   ${day}_close_minute  — "00" | "15" | "30" | "45"
- *   ${day}_close_period  — "AM" | "PM"
- *
- * Validation rules:
- *   • open === close → invalid (a venue can't open and close at the same moment)
- *   • open > close  → valid overnight window (e.g. 22:00–02:00)
- *   • open < close  → normal same-day window
+ * Impersonation-aware: delegates operator resolution to resolveOperatorContext(),
+ * which returns the admin client + impersonated operator when a valid
+ * imp_session_id cookie is present.
  */
 export async function updateBusinessHoursAction(
   venueId: string,
@@ -48,7 +37,6 @@ export async function updateBusinessHoursAction(
       continue;
     }
 
-    // Time fields are only submitted when the day is not closed.
     const openHour   = (formData.get(`${day}_open_hour`)    as string | null) ?? "9";
     const openMinute = (formData.get(`${day}_open_minute`)  as string | null) ?? "00";
     const openPeriod = (formData.get(`${day}_open_period`)  as string | null) ?? "AM";
@@ -61,7 +49,6 @@ export async function updateBusinessHoursAction(
 
     if (open === close) {
       errors[day] = "Opening and closing times cannot be the same.";
-      // Still record the attempted times so the form can restore them.
       hours[day] = { open, close };
       continue;
     }
@@ -73,44 +60,34 @@ export async function updateBusinessHoursAction(
     return { errors, hours };
   }
 
-  // ── Auth + operator resolution ─────────────────────────────────────────────
-  const supabase = await createClient();
+  // ── Resolve operator context (impersonation-aware) ─────────────────────────
+  const ctx = await resolveOperatorContext();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return {
-      errors: { form: "Your session has expired. Please sign in again." },
-      hours,
-    };
-  }
-
-  const { operator, error: operatorError } = await ensureOperatorForSession(
-    supabase,
-    user
-  );
-
-  if (operatorError || !operator) {
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return {
       errors: {
-        form:
-          operatorError ??
-          "Could not resolve your operator account. Try refreshing the page.",
+        form: ctx.operatorError ?? "Could not resolve your operator account. Try refreshing the page.",
       },
       hours,
     };
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  // Dual ownership filter: id + created_by_operator_id.
-  // If neither matches, count === 0 is returned — treated as a not-found error.
-  const { error: updateError, count } = await supabase
+  const updates = {
+    business_hours: hours,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+  };
+
+  let q = ctx.supabase
     .from("venues")
-    .update({ business_hours: hours }, { count: "exact" })
-    .eq("id", venueId)
-    .eq("created_by_operator_id", operator.id);
+    .update(updates, { count: "exact" })
+    .eq("id", venueId);
+
+  if (ctx.operator) {
+    q = q.eq("created_by_operator_id", ctx.operator.id);
+  }
+
+  const { error: updateError, count } = await q;
 
   if (updateError) {
     console.error("[updateBusinessHoursAction] Update failed:", updateError);
@@ -122,13 +99,10 @@ export async function updateBusinessHoursAction(
 
   if (count === 0) {
     return {
-      errors: {
-        form: "Venue not found or you don't have permission to edit it.",
-      },
+      errors: { form: "Venue not found or you don't have permission to edit it." },
       hours,
     };
   }
 
-  // Success — return result so the client can show feedback without navigating.
   return { success: true, hours };
 }
