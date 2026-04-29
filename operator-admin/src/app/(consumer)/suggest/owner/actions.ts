@@ -617,37 +617,49 @@ export async function saveOperatorSubmissionAction(
     return { error: "Something went wrong. Please try again." };
   }
 
-  // ── Notify founder — fire-and-forget; email failure must not block submission ─
-  // Fires for ALL submission types regardless of matchStatus or Google availability.
+  console.log("[EMAIL DEBUG] insert succeeded with id:", insertedSubmission?.id, {
+    matchStatus,
+    routedStatus,
+    businessName: formValues.businessName,
+  });
+
+  // ── Notify founder ────────────────────────────────────────────────────────
+  // Awaited directly so the email executes before this Server Action returns.
+  // Fire-and-forget (.then()) is NOT safe in Vercel serverless — the runtime
+  // exits after the return value is serialised, cutting off any pending Promise.
+  // Email failure is caught and logged but does NOT fail the submission.
   const submittedAt = new Date().toLocaleString("en-CA", {
     timeZone: "America/Vancouver",
     dateStyle: "medium",
     timeStyle: "short",
   });
 
-  console.log("[EMAIL] saveOperatorSubmissionAction — initiating fire-and-forget founder notification", {
+  console.log("[EMAIL] saveOperatorSubmissionAction — calling sendOperatorSubmissionNotificationEmail", {
     flow: "operator-submission-notification",
     matchStatus,
     routedStatus,
     businessName: formValues.businessName,
   });
 
-  sendOperatorSubmissionNotificationEmail({
-    submissionId:       (insertedSubmission?.id ?? "unknown") as string,
-    businessName:       formValues.businessName,
-    city:               formValues.city,
-    province:           formValues.province,
-    submitterFirstName: formValues.firstName,
-    submitterLastName:  formValues.lastName,
-    submitterEmail:     formValues.email,
-    matchStatus,
-    routedStatus,
-    submittedAt,
-  }).then(({ ok, error: emailErr }) => {
-    if (!ok) {
-      console.error("[EMAIL] saveOperatorSubmissionAction — founder notification failed:", emailErr);
+  try {
+    const emailResult = await sendOperatorSubmissionNotificationEmail({
+      submissionId:       (insertedSubmission?.id ?? "unknown") as string,
+      businessName:       formValues.businessName,
+      city:               formValues.city,
+      province:           formValues.province,
+      submitterFirstName: formValues.firstName,
+      submitterLastName:  formValues.lastName,
+      submitterEmail:     formValues.email,
+      matchStatus,
+      routedStatus,
+      submittedAt,
+    });
+    if (!emailResult.ok) {
+      console.error("[EMAIL] saveOperatorSubmissionAction — email returned not-ok:", emailResult.error);
     }
-  });
+  } catch (emailErr) {
+    console.error("[EMAIL] saveOperatorSubmissionAction — email threw unexpected exception:", emailErr);
+  }
 
   return { success: true };
 }
