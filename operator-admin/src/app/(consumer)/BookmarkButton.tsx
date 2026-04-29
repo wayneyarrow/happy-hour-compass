@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/analytics";
 
 const STORAGE_KEY = "savedVenues";
 
@@ -53,13 +54,15 @@ export function BookmarkButton({ venueId, className = "", variant = "list" }: Pr
     e.preventDefault();
     e.stopPropagation();
     const ids = getSavedVenues();
-    if (ids.has(venueId)) {
-      ids.delete(venueId);
-    } else {
+    const willSave = !ids.has(venueId);
+    if (willSave) {
       ids.add(venueId);
+    } else {
+      ids.delete(venueId);
     }
     persistSavedVenues(ids);
-    setSaved(ids.has(venueId));
+    setSaved(willSave);
+    trackEvent("saved_venue_toggled", { venue_id: venueId, saved: willSave });
   }
 
   const isHeader = variant === "header";

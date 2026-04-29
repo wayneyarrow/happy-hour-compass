@@ -20,6 +20,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.0",
+    "@vercel/analytics": "^2.0.1",
     "@vis.gl/react-google-maps": "^1.7.1",
     "next": "15.5.12",
     "react": "^19.0.0",

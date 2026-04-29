@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import {
   APIProvider,
@@ -9,6 +9,7 @@ import {
 } from "@vis.gl/react-google-maps";
 import { lookupBusinessAction, saveOperatorSubmissionAction } from "./actions";
 import type { OwnerFormValues, GoogleMatch } from "./types";
+import { trackEvent } from "@/lib/analytics";
 
 // ── Step state machine ────────────────────────────────────────────────────────
 // form        — initial 8-field submission form
@@ -129,6 +130,10 @@ export function OwnerSubmissionFlow() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    trackEvent("operator_submission_started");
+  }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 

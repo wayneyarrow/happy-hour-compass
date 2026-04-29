@@ -10,6 +10,8 @@ import { BusinessHoursRow } from "../../event/[id]/BusinessHoursRow";
 import { BackButton } from "./BackButton";
 import { VenueImageGallery } from "./VenueImageGallery";
 import { GoogleRatingBadge } from "./GoogleRatingBadge";
+import { VenueViewTracker } from "./VenueViewTracker";
+import { VenueInfoRows } from "./VenueInfoRows";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -31,13 +33,6 @@ const DAY_ORDER = [
   "Sunday", "Monday", "Tuesday", "Wednesday",
   "Thursday", "Friday", "Saturday",
 ] as const;
-
-/** Formats a 10-digit phone string as "(XXX) XXX-XXXX"; returns raw if not 10 digits. */
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length !== 10) return phone;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
 
 /**
  * Maps establishment type to a type-based placeholder image path.
@@ -91,6 +86,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
 
   return (
     <main className="bg-white">
+      <VenueViewTracker venueId={id} city={venue.city} />
 
       {/* ── Header ─────────────────────────────────────────────────────────────
           Matches original .detail-page-header:
@@ -226,126 +222,24 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           />
           <h3 className="text-[18px] font-bold text-gray-900 mb-4">Info</h3>
 
-          {/* Info rows — matches original .venue-info-details:
-              flat list with dividers, .info-list-row / .info-list-row-action.
-              Reuses the exact same row pattern from event/[id]/page.tsx. */}
+          {/* Info rows — BusinessHoursRow stays server-side; tappable link rows
+              are extracted to VenueInfoRows (client) to enable click tracking. */}
           <div className="flex flex-col">
 
-            {/* Business Hours row — reused from event detail page */}
             {openDays.length > 0 && (
               <BusinessHoursRow hoursWeekly={venue.hoursWeekly} />
             )}
 
-            {/* Address row — tappable, opens Google Maps */}
-            {venue.address && (
-              <a
-                href={mapsUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start justify-between py-[18px] min-h-[60px] border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-5 px-5"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Address
-                  </p>
-                  <p className="text-[15px] text-gray-900 leading-[1.5] line-clamp-2 break-words">
-                    {venue.address}
-                  </p>
-                </div>
-                <div className="flex items-center ml-3 mt-0.5 shrink-0 text-gray-400">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
-                </div>
-              </a>
-            )}
-
-            {/* Menu row — tappable, opens menu/website URL */}
-            {menuTarget && (
-              <a
-                href={menuTarget}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start justify-between py-[18px] min-h-[60px] border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-5 px-5"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Menu
-                  </p>
-                  <p className="text-[15px] text-gray-900 leading-[1.5]">View menu</p>
-                </div>
-                <div className="flex items-center ml-3 mt-0.5 shrink-0 text-gray-400">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </div>
-              </a>
-            )}
-
-            {/* Phone row — tappable, click-to-call */}
-            {venue.phone && (
-              <a
-                href={`tel:${venue.phone}`}
-                className="flex items-start justify-between py-[18px] min-h-[60px] border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-5 px-5"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Phone
-                  </p>
-                  <p className="text-[15px] text-gray-900 leading-[1.5]">
-                    {formatPhone(venue.phone)}
-                  </p>
-                </div>
-                <div className="flex items-center ml-3 mt-0.5 shrink-0 text-gray-400">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
-                </div>
-              </a>
-            )}
-
-            {/* Payment row — static display, no icon */}
-            {venue.paymentMethods && (
-              <div className="flex items-start justify-between py-4 border-b border-gray-100">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Payment
-                  </p>
-                  <p className="text-[15px] text-gray-900 leading-[1.5] break-words">
-                    {venue.paymentMethods}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Website row — tappable, opens externally */}
-            {venue.websiteUrl && (
-              <a
-                href={venue.websiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start justify-between py-[18px] min-h-[60px] border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-5 px-5"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.8px] leading-[1.3] mb-1.5">
-                    Website
-                  </p>
-                  <p className="text-[15px] text-gray-900 leading-[1.5] truncate">
-                    {venue.websiteUrl.replace(/^https?:\/\//, "")}
-                  </p>
-                </div>
-                <div className="flex items-center ml-3 mt-0.5 shrink-0 text-gray-400">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </div>
-              </a>
-            )}
+            <VenueInfoRows
+              venueId={id}
+              city={venue.city}
+              address={venue.address}
+              mapsUrl={mapsUrl}
+              menuTarget={menuTarget}
+              phone={venue.phone}
+              websiteUrl={venue.websiteUrl}
+              paymentMethods={venue.paymentMethods}
+            />
 
           </div>
         </div>

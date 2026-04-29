@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
 import { VenueMapView } from "./VenueMapView";
+import { trackEvent } from "@/lib/analytics";
 
 type View = "list" | "map";
 
@@ -70,6 +71,7 @@ export function VenueDiscovery({ venues }: Props) {
   const [fineDiningActive, setFineDiningActive] = useState(false);
   const [underTenActive, setUnderTenActive] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const searchTracked = useRef(false);
   const isMap = view === "map";
 
   // Restore the list scroll position when returning from a venue detail page.
@@ -203,7 +205,15 @@ export function VenueDiscovery({ venues }: Props) {
               type="search"
               placeholder="Search venues..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchTerm(val);
+                if (val.length > 0 && !searchTracked.current) {
+                  searchTracked.current = true;
+                  trackEvent("search_used", { query_length: val.length });
+                }
+                if (val.length === 0) searchTracked.current = false;
+              }}
               className="w-full focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
               style={{
                 background: "white",
@@ -222,7 +232,11 @@ export function VenueDiscovery({ venues }: Props) {
           {/* View toggle — mirrors .view-toggle-btn */}
           <button
             type="button"
-            onClick={() => setView(isMap ? "list" : "map")}
+            onClick={() => {
+              const next = isMap ? "list" : "map";
+              setView(next);
+              trackEvent(next === "map" ? "map_view_opened" : "list_view_opened");
+            }}
             className="flex items-center gap-1.5 text-[#3b82f6] font-medium text-[14px] whitespace-nowrap flex-shrink-0 hover:bg-[#f9fafb] transition-colors"
             style={{
               background: "white",
@@ -275,17 +289,17 @@ export function VenueDiscovery({ venues }: Props) {
                     type="button"
                     onClick={
                       isHappeningNowChip
-                        ? () => setHappeningNowActive((v) => !v)
+                        ? () => { if (!happeningNowActive) trackEvent("filter_used", { filter_type: chip }); setHappeningNowActive((v) => !v); }
                         : isNearMeChip
-                        ? handleNearMeClick
+                        ? () => { if (!nearMeActive) trackEvent("filter_used", { filter_type: chip }); handleNearMeClick(); }
                         : isOpenNowChip
-                        ? () => setOpenNowActive((v) => !v)
+                        ? () => { if (!openNowActive) trackEvent("filter_used", { filter_type: chip }); setOpenNowActive((v) => !v); }
                         : isSportsBarsChip
-                        ? () => setSportsBarsActive((v) => !v)
+                        ? () => { if (!sportsBarsActive) trackEvent("filter_used", { filter_type: chip }); setSportsBarsActive((v) => !v); }
                         : isFineDiningChip
-                        ? () => setFineDiningActive((v) => !v)
+                        ? () => { if (!fineDiningActive) trackEvent("filter_used", { filter_type: chip }); setFineDiningActive((v) => !v); }
                         : isUnderTenChip
-                        ? () => setUnderTenActive((v) => !v)
+                        ? () => { if (!underTenActive) trackEvent("filter_used", { filter_type: chip }); setUnderTenActive((v) => !v); }
                         : undefined
                     }
                     className="whitespace-nowrap shrink-0 transition-all"

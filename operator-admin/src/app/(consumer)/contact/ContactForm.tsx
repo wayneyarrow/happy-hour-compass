@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { submitContactAction, type ContactFormState } from "./actions";
+import { trackEvent } from "@/lib/analytics";
 
 const INPUT_CLASS =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 " +
@@ -15,6 +16,14 @@ export function ContactForm() {
     submitContactAction,
     {}
   );
+
+  useEffect(() => {
+    trackEvent("contact_us_started");
+  }, []);
+
+  useEffect(() => {
+    if (state.success) trackEvent("contact_us_submitted");
+  }, [state.success]);
 
   if (state.success) {
     return (

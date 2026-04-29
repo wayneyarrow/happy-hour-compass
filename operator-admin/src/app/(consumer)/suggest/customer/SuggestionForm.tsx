@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { submitSuggestionAction, type SuggestionFormState } from "./actions";
+import { trackEvent } from "@/lib/analytics";
 
 const INPUT_CLASS =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 " +
@@ -17,6 +18,10 @@ export function SuggestionForm() {
     submitSuggestionAction,
     {}
   );
+
+  useEffect(() => {
+    trackEvent("suggest_venue_started");
+  }, []);
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {

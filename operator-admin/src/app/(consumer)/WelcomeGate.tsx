@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { trackEvent } from "@/lib/analytics";
 
 /**
  * WelcomeGate — opening screen logic ported from original index.html.
@@ -48,6 +49,9 @@ export function WelcomeGate({ children }: Props) {
       setPhase("done");
       return;
     }
+
+    // Fresh session — fire once before any gate phase runs.
+    trackEvent("app_opened");
 
     const hasLaunched = localStorage.getItem(STORAGE_KEY);
 
