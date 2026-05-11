@@ -65,13 +65,19 @@ export type OperatorSubmissionDetail = {
   geo_ip_country: string | null;
   geo_ip_region: string | null;
   geo_ip_matches_business_region: boolean | null;
+  // Founder review fields (added in migration 020)
+  review_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  more_info_requested_at: string | null;
+  rejected_at: string | null;
   // Linked venue (fetched separately via venue_id)
   venue: LinkedVenue | null;
 };
 
 // ── Tab → status filter ───────────────────────────────────────────────────────
 
-const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match"];
+const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match", "needs_more_info"];
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
@@ -158,7 +164,8 @@ export async function getOperatorSubmissionById(id: string): Promise<{
        status, match_status, place_id, google_match_json, venue_id,
        ip_address,
        email_domain_matches_website, is_public_email_domain, role_trust_level,
-       geo_ip_country, geo_ip_region, geo_ip_matches_business_region`
+       geo_ip_country, geo_ip_region, geo_ip_matches_business_region,
+       review_notes, reviewed_by, reviewed_at, more_info_requested_at, rejected_at`
     )
     .eq("id", id)
     .maybeSingle();
@@ -227,6 +234,11 @@ export async function getOperatorSubmissionById(id: string): Promise<{
     geo_ip_country:               row.geo_ip_country as string | null,
     geo_ip_region:                row.geo_ip_region as string | null,
     geo_ip_matches_business_region: row.geo_ip_matches_business_region as boolean | null,
+    review_notes:                 row.review_notes as string | null,
+    reviewed_by:                  row.reviewed_by as string | null,
+    reviewed_at:                  row.reviewed_at as string | null,
+    more_info_requested_at:       row.more_info_requested_at as string | null,
+    rejected_at:                  row.rejected_at as string | null,
     venue,
   };
 

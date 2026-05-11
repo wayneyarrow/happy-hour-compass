@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getOperatorSubmissionById } from "@/lib/data/operatorSubmissions";
+import SubmissionReviewPanel from "./SubmissionReviewPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -30,11 +31,16 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   double_claim:          { label: "Double claim",     classes: "bg-red-100 text-red-700" },
   rejected_by_user:      { label: "Rejected by user", classes: "bg-orange-100 text-orange-700" },
   no_match:              { label: "No match",         classes: "bg-gray-100 text-gray-600" },
+  needs_more_info:       { label: "Needs more info",  classes: "bg-blue-100 text-blue-700" },
+  closed:                { label: "Closed",           classes: "bg-slate-100 text-slate-600" },
   new:                   { label: "New",              classes: "bg-amber-100 text-amber-700" },
   approved:              { label: "Approved",         classes: "bg-green-100 text-green-700" },
   rejected:              { label: "Rejected",         classes: "bg-red-100 text-red-700" },
   converted_to_operator: { label: "Converted",        classes: "bg-blue-100 text-blue-700" },
 };
+
+// Statuses that warrant founder review actions
+const ACTIONABLE_STATUSES = new Set(["no_match", "rejected_by_user", "needs_more_info", "closed"]);
 
 const MATCH_STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed: { label: "Confirmed", classes: "bg-green-100 text-green-700" },
@@ -321,6 +327,29 @@ export default async function OperatorSubmissionDetailPage({
 
         {/* ── Right column ──────────────────────────────────────────────────── */}
         <div className="space-y-5">
+
+          {/* Review Actions — shown for actionable statuses */}
+          {ACTIONABLE_STATUSES.has(submission.status) && (
+            <SubmissionReviewPanel
+              submissionId={submission.id}
+              initialNotes={submission.review_notes}
+              currentStatus={submission.status}
+            />
+          )}
+
+          {/* Review Notes display — shown once notes exist (any status) */}
+          {submission.review_notes && !ACTIONABLE_STATUSES.has(submission.status) && (
+            <Section title="Review Notes">
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {submission.review_notes}
+              </p>
+              {submission.reviewed_at && (
+                <p className="mt-3 text-xs text-gray-400">
+                  Reviewed {fmt(submission.reviewed_at, true)}
+                </p>
+              )}
+            </Section>
+          )}
 
           {/* Linked Venue */}
           {venue ? (
