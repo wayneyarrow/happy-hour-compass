@@ -65,19 +65,27 @@ export type OperatorSubmissionDetail = {
   geo_ip_country: string | null;
   geo_ip_region: string | null;
   geo_ip_matches_business_region: boolean | null;
-  // Founder review fields (added in migration 020)
+  // Founder review fields (migration 020)
   review_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   more_info_requested_at: string | null;
   rejected_at: string | null;
+  // More-info form fields (migration 021) — founder-review-only
+  more_info_completed_at: string | null;
+  info_phone: string | null;
+  info_website: string | null;
+  info_socials: Record<string, string> | null;
+  info_relationship: string | null;
+  info_additional_notes: string | null;
+  info_preferred_contact: string | null;
   // Linked venue (fetched separately via venue_id)
   venue: LinkedVenue | null;
 };
 
 // ── Tab → status filter ───────────────────────────────────────────────────────
 
-const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match", "needs_more_info"];
+const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match", "needs_more_info", "info_submitted"];
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
@@ -165,7 +173,10 @@ export async function getOperatorSubmissionById(id: string): Promise<{
        ip_address,
        email_domain_matches_website, is_public_email_domain, role_trust_level,
        geo_ip_country, geo_ip_region, geo_ip_matches_business_region,
-       review_notes, reviewed_by, reviewed_at, more_info_requested_at, rejected_at`
+       review_notes, reviewed_by, reviewed_at, more_info_requested_at, rejected_at,
+       more_info_completed_at,
+       info_phone, info_website, info_socials, info_relationship,
+       info_additional_notes, info_preferred_contact`
     )
     .eq("id", id)
     .maybeSingle();
@@ -239,6 +250,13 @@ export async function getOperatorSubmissionById(id: string): Promise<{
     reviewed_at:                  row.reviewed_at as string | null,
     more_info_requested_at:       row.more_info_requested_at as string | null,
     rejected_at:                  row.rejected_at as string | null,
+    more_info_completed_at:       row.more_info_completed_at as string | null,
+    info_phone:                   row.info_phone as string | null,
+    info_website:                 row.info_website as string | null,
+    info_socials:                 row.info_socials as Record<string, string> | null,
+    info_relationship:            row.info_relationship as string | null,
+    info_additional_notes:        row.info_additional_notes as string | null,
+    info_preferred_contact:       row.info_preferred_contact as string | null,
     venue,
   };
 

@@ -32,6 +32,7 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   rejected_by_user:      { label: "Rejected by user", classes: "bg-orange-100 text-orange-700" },
   no_match:              { label: "No match",         classes: "bg-gray-100 text-gray-600" },
   needs_more_info:       { label: "Needs more info",  classes: "bg-blue-100 text-blue-700" },
+  info_submitted:        { label: "Info submitted",   classes: "bg-purple-100 text-purple-700" },
   closed:                { label: "Closed",           classes: "bg-slate-100 text-slate-600" },
   new:                   { label: "New",              classes: "bg-amber-100 text-amber-700" },
   approved:              { label: "Approved",         classes: "bg-green-100 text-green-700" },
@@ -40,7 +41,7 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
 };
 
 // Statuses that warrant founder review actions
-const ACTIONABLE_STATUSES = new Set(["no_match", "rejected_by_user", "needs_more_info", "closed"]);
+const ACTIONABLE_STATUSES = new Set(["no_match", "rejected_by_user", "needs_more_info", "info_submitted", "closed"]);
 
 const MATCH_STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed: { label: "Confirmed", classes: "bg-green-100 text-green-700" },
@@ -389,7 +390,73 @@ export default async function OperatorSubmissionDetailPage({
             </Section>
           )}
 
-          {/* D. Trust Signals */}
+          {/* D. Verification Details — shown when submitter completed the more-info form */}
+          {(submission.info_phone || submission.info_website || submission.info_relationship) && (
+            <Section title="Verification Details">
+              <dl className="space-y-2.5">
+                {submission.info_phone && (
+                  <MetaRow label="Business phone">
+                    <a href={`tel:${submission.info_phone}`} className="text-amber-700 hover:underline">
+                      {submission.info_phone}
+                    </a>
+                  </MetaRow>
+                )}
+                {submission.info_website && (
+                  <MetaRow label="Website / profile">
+                    <a
+                      href={submission.info_website.startsWith("http") ? submission.info_website : `https://${submission.info_website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber-700 hover:underline break-all"
+                    >
+                      {submission.info_website}
+                    </a>
+                  </MetaRow>
+                )}
+                {submission.info_socials && Object.keys(submission.info_socials).length > 0 && (
+                  <>
+                    {submission.info_socials.instagram && (
+                      <MetaRow label="Instagram">
+                        <span className="break-all">{submission.info_socials.instagram}</span>
+                      </MetaRow>
+                    )}
+                    {submission.info_socials.facebook && (
+                      <MetaRow label="Facebook">
+                        <span className="break-all">{submission.info_socials.facebook}</span>
+                      </MetaRow>
+                    )}
+                    {submission.info_socials.tiktok && (
+                      <MetaRow label="TikTok">
+                        <span className="break-all">{submission.info_socials.tiktok}</span>
+                      </MetaRow>
+                    )}
+                  </>
+                )}
+                {submission.info_relationship && (
+                  <MetaRow label="Relationship">
+                    <span className="whitespace-pre-wrap">{submission.info_relationship}</span>
+                  </MetaRow>
+                )}
+                {submission.info_additional_notes && (
+                  <MetaRow label="Additional notes">
+                    <span className="whitespace-pre-wrap">{submission.info_additional_notes}</span>
+                  </MetaRow>
+                )}
+                {submission.info_preferred_contact && (
+                  <MetaRow label="Preferred contact">
+                    {submission.info_preferred_contact}
+                  </MetaRow>
+                )}
+                {submission.more_info_completed_at && (
+                  <MetaRow label="Submitted at">
+                    <span className="text-gray-500">{fmt(submission.more_info_completed_at, true)}</span>
+                  </MetaRow>
+                )}
+              </dl>
+            </Section>
+          )}
+
+          {/* E. Trust Signals */}
           <Section title="Trust Signals">
             <div className="-mt-1">
               <StoredSignalRow signal={{

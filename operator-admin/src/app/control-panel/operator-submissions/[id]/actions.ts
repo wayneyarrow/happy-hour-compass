@@ -1,11 +1,18 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   sendOperatorSubmissionMoreInfoEmail,
   sendOperatorSubmissionClosedEmail,
 } from "@/lib/email";
+
+function getAppUrl(): string {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +111,11 @@ export async function reviewSubmissionAction(
 
   // ── needs_more_info ────────────────────────────────────────────────────────
   if (action === "needs_more_info") {
+    // Generate a secure 64-char hex token (32 random bytes). This IS the
+    // credential for the public more-info form — never log the token value.
+    const token     = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
     const { error: updateError } = await supabase
       .from("operator_submissions")
       .update({
@@ -112,6 +124,10 @@ export async function reviewSubmissionAction(
         reviewed_by:            user.id,
         reviewed_at:            now,
         more_info_requested_at: now,
+        // Token for the structured more-info form (overwrites any prior token)
+        more_info_token:        token,
+        more_info_expires_at:   expiresAt,
+        more_info_completed_at: null, // clear any prior completion
       })
       .eq("id", submissionId);
 
@@ -120,15 +136,18 @@ export async function reviewSubmissionAction(
       return { error: "Failed to save review. Please try again." };
     }
 
-    // Email is required for this action: the founder's review note is the
-    // communication to the submitter. If it fails the status is updated but
-    // the submitter wasn't notified — return a clear error so the founder
-    // can follow up directly.
+    const appUrl     = getAppUrl();
+    const moreInfoUrl = `${appUrl}/suggest/owner/more-info/${token}`;
+
+    // Email is required for this action. If it fails, the token is stored but
+    // the submitter has no link — return a clear error so the founder knows to
+    // retry. On retry, a new token overwrites the current one.
     const emailResult = await sendOperatorSubmissionMoreInfoEmail({
-      to:         submitterEmail,
+      to:          submitterEmail,
       firstName,
       venueName,
-      reviewNote: reviewNotes,
+      reviewNote:  reviewNotes,
+      moreInfoUrl,
     });
 
     if (!emailResult.ok) {

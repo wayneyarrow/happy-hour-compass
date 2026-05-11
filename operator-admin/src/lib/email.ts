@@ -853,11 +853,14 @@ export async function sendOperatorSubmissionMoreInfoEmail({
   firstName,
   venueName,
   reviewNote,
+  moreInfoUrl,
 }: {
   to: string;
   firstName: string;
   venueName: string;
   reviewNote: string;
+  /** Secure link to the structured more-info form. Expires in 72 hours. */
+  moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const from = DEFAULT_FROM;
 
@@ -870,7 +873,7 @@ export async function sendOperatorSubmissionMoreInfoEmail({
       <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
         <tr><td>
           <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
-          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A quick question about your submission</h1>
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
 
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
 
@@ -879,20 +882,28 @@ export async function sendOperatorSubmissionMoreInfoEmail({
           </p>
 
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
-            We weren&rsquo;t able to automatically verify all of the information we need, so we&rsquo;d love to hear a bit more from you. Here&rsquo;s what would help us move forward:
+            We weren&rsquo;t able to automatically verify your venue, so we need a few extra details before we can create your operator account. Here&rsquo;s a note from our team:
           </p>
 
           <div style="margin:0 0 24px;padding:16px;background:#fef9ec;border:1px solid #fde68a;border-radius:8px;font-size:14px;color:#0f172a;line-height:1.6;white-space:pre-wrap;">${reviewNote}</div>
 
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-            Please reply to this email with the information above and we&rsquo;ll pick it up from there.
+          <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.6;">
+            Click the button below to complete a short verification form. It only takes a couple of minutes.
           </p>
 
-          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Thanks,</p>
-          <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
-          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${moreInfoUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Complete verification →
+              </a>
+            </td></tr>
+          </table>
 
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
+          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
+
+          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 20px;">
           <p style="margin:0;font-size:12px;color:#94a3b8;">
             You received this email because you submitted a venue on Happy Hour Compass.
           </p>
@@ -907,15 +918,17 @@ export async function sendOperatorSubmissionMoreInfoEmail({
 
 Thanks for submitting ${venueName} to Happy Hour Compass.
 
-We weren't able to automatically verify all of the information we need, so we'd love to hear a bit more from you. Here's what would help us move forward:
+We weren't able to automatically verify your venue, so we need a few extra details before we can create your operator account. Here's a note from our team:
 
 ${reviewNote}
 
-Please reply to this email with the information above and we'll pick it up from there.
+Complete a short verification form here (takes a couple of minutes):
+${moreInfoUrl}
 
-Thanks,
-Wayne
-Founder, Happy Hour Compass`;
+This link expires in 72 hours. If it expires, reply to this email and we'll send a new one.
+
+—
+Happy Hour Compass`;
 
   console.log("[EMAIL] sendOperatorSubmissionMoreInfoEmail — attempting send", { to, from, flow: "submission-more-info", venueName });
 
@@ -1037,6 +1050,140 @@ Founder, Happy Hour Compass`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[EMAIL] sendOperatorSubmissionClosedEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+// ── Operator submission "info submitted" founder notification ─────────────────
+
+/**
+ * Notifies the founder when a submitter completes the structured More Info form
+ * and the submission transitions to info_submitted.
+ *
+ * Non-blocking on failure: the submitter's form completion must not be held
+ * hostage to email delivery. Failure is logged and the caller returns success
+ * to the submitter regardless.
+ *
+ * Required env var: RESEND_API_KEY
+ * Optional env vars: FOUNDER_NOTIFICATION_EMAIL, APP_URL
+ */
+export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
+  submissionId,
+  businessName,
+  submitterFirstName,
+  submitterLastName,
+  submitterEmail,
+  submittedAt,
+}: {
+  submissionId: string;
+  businessName: string;
+  submitterFirstName: string;
+  submitterLastName: string;
+  submitterEmail: string;
+  submittedAt: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const from    = DEFAULT_FROM;
+  const appUrl  = getAppUrl();
+  const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
+  const fullName  = [submitterFirstName, submitterLastName].filter(Boolean).join(" ") || submitterEmail;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Additional information submitted</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Business</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${businessName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitter</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${fullName}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submitterEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Status</td>
+              <td style="padding:10px 14px;border-top:1px solid #e2e8f0;">
+                <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#ffffff;background:#7c3aed;">Info submitted</span>
+              </td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
+            The submitter has completed the additional verification form. Open the submission to review their details.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Review submission →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Operator submission notification</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Additional information submitted — Happy Hour Compass
+
+Business:  ${businessName}
+Submitter: ${fullName}
+Email:     ${submitterEmail}
+Status:    Info submitted
+Submitted: ${submittedAt}
+
+The submitter has completed the additional verification form. Review their details:
+${reviewUrl}
+
+—
+Happy Hour Compass Control Panel`;
+
+  console.log("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — attempting send", {
+    to,
+    from,
+    flow: "info-submitted-notification",
+    submissionId,
+    businessName,
+  });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: `Info submitted: ${businessName} — ready for review`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — unexpected exception:", msg);
     return { ok: false, error: msg };
   }
 }
