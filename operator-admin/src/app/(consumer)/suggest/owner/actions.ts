@@ -9,7 +9,11 @@ import {
   geolocateIp,
   normalizePhone,
 } from "@/lib/trustSignals";
-import { sendOperatorSubmissionNotificationEmail } from "@/lib/email";
+import {
+  sendOperatorSubmissionNotificationEmail,
+  sendOperatorActivationEmail,
+} from "@/lib/email";
+import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import type {
   GoogleMatch,
   LookupResult,
@@ -613,6 +617,42 @@ export async function saveOperatorSubmissionAction(
     routedStatus = "no_match";
   }
 
+  // ── Operator provisioning (confirmed_auto only) ───────────────────────────
+  // Provision the operator account and link the venue BEFORE inserting the
+  // submission row. A failure here returns an error to the submitter so they
+  // can retry — no orphan submission row is created.
+  let operatorId: string | null = null;
+
+  if (routedStatus === "confirmed_auto" && venueId) {
+    const provisionResult = await provisionOperatorForVenue({
+      email:     formValues.email,
+      firstName: formValues.firstName,
+      lastName:  formValues.lastName,
+      venueId,
+      logTag:    "[saveOperatorSubmissionAction]",
+      sendEmail: (setupLink) =>
+        sendOperatorActivationEmail({
+          to:        formValues.email,
+          firstName: formValues.firstName,
+          setupLink,
+        }),
+    });
+
+    if (!provisionResult.ok) {
+      console.error(
+        "[saveOperatorSubmissionAction] Operator provisioning failed — not inserting submission row.",
+        { error: provisionResult.error }
+      );
+      return { error: provisionResult.error };
+    }
+
+    operatorId = provisionResult.authUserId;
+    console.log("[saveOperatorSubmissionAction] Operator provisioned.", {
+      authUserId: operatorId,
+      venueId,
+    });
+  }
+
   // ── Insert submission row ─────────────────────────────────────────────────
   const { data: insertedSubmission, error: insertError } = await supabase.from("operator_submissions").insert({
     // Identity
@@ -636,6 +676,7 @@ export async function saveOperatorSubmissionAction(
     // Routing outcome (Phase 3B)
     status:            routedStatus,
     venue_id:          venueId,
+    operator_id:       operatorId,
 
     // Rejection path
     rejection_notes:   rejectionNotes || null,

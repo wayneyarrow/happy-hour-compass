@@ -838,6 +838,103 @@ Founder, Happy Hour Compass`;
   }
 }
 
+// ── Operator activation email (operator submission flow) ─────────────────────
+
+/**
+ * Sends an account setup email to an operator whose venue was auto-confirmed
+ * via the /suggest/owner submission flow.
+ *
+ * Copy is intentionally distinct from sendPasswordSetupEmail (claim approval):
+ * the submitter is learning their venue was *added* to the platform, not that
+ * a *claim* was approved.
+ *
+ * `setupLink` is the Supabase-generated recovery action link.
+ * When clicked, Supabase creates a session and redirects to
+ * /operator/create-password where the operator sets their password.
+ */
+export async function sendOperatorActivationEmail({
+  to,
+  firstName,
+  setupLink,
+}: {
+  to: string;
+  firstName: string;
+  setupLink: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const from = DEFAULT_FROM;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue is on Happy Hour Compass</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            Your venue has been added to Happy Hour Compass. Click the button below to set up your Operator Admin account and start managing your listing.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${setupLink}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Set up my account →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires within 24 hours. If it expires, contact us and we&rsquo;ll send a new one.</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because you submitted a venue on Happy Hour Compass.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi ${firstName},
+
+Your venue has been added to Happy Hour Compass.
+
+Set up your Operator Admin account to manage your listing:
+${setupLink}
+
+This link expires within 24 hours.
+
+—
+Happy Hour Compass`;
+
+  console.log("[EMAIL] sendOperatorActivationEmail — attempting send", { to, from, flow: "operator-activation" });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: "Your venue is on Happy Hour Compass — set up your account",
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendOperatorActivationEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendOperatorActivationEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendOperatorActivationEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({
