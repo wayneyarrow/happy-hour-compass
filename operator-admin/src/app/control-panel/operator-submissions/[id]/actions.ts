@@ -20,12 +20,12 @@ export type SubmissionReviewState = {
   success?: true;
   successAction?: string;
   error?: string;
-  fieldErrors?: { review_notes?: string };
 };
 
-export type SaveNotesState = {
+export type AddNoteState = {
   success?: true;
   error?: string;
+  fieldError?: string;
 };
 
 type ReviewAction = "needs_more_info" | "close";
@@ -70,8 +70,6 @@ export async function reviewSubmissionAction(
   }
   const action = rawAction as ReviewAction;
 
-  // Notes are optional for both actions — saved internally, never sent to the submitter.
-  const reviewNotes = (formData.get("review_notes") as string | null)?.trim() || null;
 
   // ── Resolve admin identity ─────────────────────────────────────────────────
   const authClient = await createClient();
@@ -113,7 +111,6 @@ export async function reviewSubmissionAction(
       .from("operator_submissions")
       .update({
         status:                 "needs_more_info",
-        review_notes:           reviewNotes,
         reviewed_by:            user.id,
         reviewed_at:            now,
         more_info_requested_at: now,
@@ -168,9 +165,8 @@ export async function reviewSubmissionAction(
   const { error: updateError } = await supabase
     .from("operator_submissions")
     .update({
-      status:       "closed",
-      review_notes: reviewNotes,
-      reviewed_by:  user.id,
+      status:      "closed",
+      reviewed_by: user.id,
       reviewed_at:  now,
       rejected_at:  now,
     })
@@ -208,20 +204,25 @@ export async function reviewSubmissionAction(
   return { success: true, successAction: ACTION_LABELS.close };
 }
 
-// ── Save internal notes (independent of review actions) ───────────────────────
+// ── Append internal note ──────────────────────────────────────────────────────
 
 /**
- * Saves founder-only internal notes on an operator submission without changing
- * the submission status. Notes are never exposed to the submitter.
+ * Appends a new internal note to operator_submission_notes.
+ * Does NOT overwrite previous notes — each call inserts a new row.
+ * Notes are internal only; never sent to submitters.
  *
  * submissionId is bound via .bind(null, submissionId).
  */
-export async function saveSubmissionNotesAction(
+export async function addSubmissionNoteAction(
   submissionId: string,
-  _prevState: SaveNotesState,
+  _prevState: AddNoteState,
   formData: FormData
-): Promise<SaveNotesState> {
-  const notes = (formData.get("review_notes") as string | null)?.trim() || null;
+): Promise<AddNoteState> {
+  const note = (formData.get("note") as string | null)?.trim() ?? "";
+
+  if (!note) {
+    return { fieldError: "Note cannot be empty." };
+  }
 
   const authClient = await createClient();
   const {
@@ -235,13 +236,17 @@ export async function saveSubmissionNotesAction(
   const supabase = createAdminClient();
 
   const { error } = await supabase
-    .from("operator_submissions")
-    .update({ review_notes: notes })
-    .eq("id", submissionId);
+    .from("operator_submission_notes")
+    .insert({
+      submission_id:    submissionId,
+      note,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
 
   if (error) {
-    console.error("[saveSubmissionNotesAction] Update failed:", error.message);
-    return { error: "Failed to save notes. Please try again." };
+    console.error("[addSubmissionNoteAction] Insert failed:", error.message);
+    return { error: "Failed to save note. Please try again." };
   }
 
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);

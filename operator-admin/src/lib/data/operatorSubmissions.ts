@@ -2,6 +2,16 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** One entry in the internal notes log for a submission. */
+export type SubmissionNote = {
+  id: string;
+  submission_id: string;
+  note: string;
+  created_by: string | null;
+  created_by_email: string | null;
+  created_at: string;
+};
+
 /** Minimal shape for the list view — only columns needed for fast triage. */
 export type OperatorSubmissionRow = {
   id: string;
@@ -261,4 +271,38 @@ export async function getOperatorSubmissionById(id: string): Promise<{
   };
 
   return { submission, error: null };
+}
+
+/**
+ * Fetches the internal notes log for a submission, newest first.
+ * Returns an empty array (not an error) when there are no notes.
+ */
+export async function getSubmissionNotes(submissionId: string): Promise<{
+  notes: SubmissionNote[];
+  error: string | null;
+}> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("operator_submission_notes")
+    .select("id, submission_id, note, created_by, created_by_email, created_at")
+    .eq("submission_id", submissionId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getSubmissionNotes]", error.message);
+    return { notes: [], error: "Failed to load notes." };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const notes: SubmissionNote[] = (data ?? []).map((row: Record<string, any>) => ({
+    id:               row.id as string,
+    submission_id:    row.submission_id as string,
+    note:             row.note as string,
+    created_by:       row.created_by as string | null,
+    created_by_email: row.created_by_email as string | null,
+    created_at:       row.created_at as string,
+  }));
+
+  return { notes, error: null };
 }

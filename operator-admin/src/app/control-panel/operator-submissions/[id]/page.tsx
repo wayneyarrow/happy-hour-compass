@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { getOperatorSubmissionById } from "@/lib/data/operatorSubmissions";
+import { getOperatorSubmissionById, getSubmissionNotes } from "@/lib/data/operatorSubmissions";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
-import SaveNotesPanel from "./SaveNotesPanel";
+import InternalNotesSection from "./InternalNotesSection";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -138,7 +138,10 @@ export default async function OperatorSubmissionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { submission, error } = await getOperatorSubmissionById(id);
+  const [{ submission, error }, { notes }] = await Promise.all([
+    getOperatorSubmissionById(id),
+    getSubmissionNotes(id),
+  ]);
 
   // ── Not found ─────────────────────────────────────────────────────────────
   if (!error && !submission) {
@@ -281,7 +284,14 @@ export default async function OperatorSubmissionDetailPage({
             </dl>
           </Section>
 
-          {/* C. Google Match Summary */}
+          {/* C. Internal Notes */}
+          <InternalNotesSection
+            submissionId={submission.id}
+            initialNotes={notes}
+            legacyNote={submission.review_notes}
+          />
+
+          {/* D. Google Match Summary */}
           {gm && (
             <Section title="Google Match">
               <dl className="space-y-2.5">
@@ -336,28 +346,6 @@ export default async function OperatorSubmissionDetailPage({
               submissionId={submission.id}
               currentStatus={submission.status}
             />
-          )}
-
-          {/* Founder notes — always editable for actionable statuses */}
-          {ACTIONABLE_STATUSES.has(submission.status) && (
-            <SaveNotesPanel
-              submissionId={submission.id}
-              initialNotes={submission.review_notes}
-            />
-          )}
-
-          {/* Review Notes display — read-only when status is not actionable */}
-          {submission.review_notes && !ACTIONABLE_STATUSES.has(submission.status) && (
-            <Section title="Founder Notes">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {submission.review_notes}
-              </p>
-              {submission.reviewed_at && (
-                <p className="mt-3 text-xs text-gray-400">
-                  Reviewed {fmt(submission.reviewed_at, true)}
-                </p>
-              )}
-            </Section>
           )}
 
           {/* Linked Venue */}
