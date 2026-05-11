@@ -94,6 +94,9 @@ function extractShort(
  * GoogleMatch object from the top result.
  *
  * Uses GOOGLE_PLACES_API_KEY (server-side only — never exposed to the client).
+ * This key must be set in Vercel → Settings → Environment Variables for all
+ * environments (Production, Preview, Development). See .env.local.example.
+ *
  * Returns null on API failure, missing key, or no results.
  */
 async function searchGooglePlace(
@@ -102,10 +105,18 @@ async function searchGooglePlace(
   province: string
 ): Promise<GoogleMatch | null> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+  // Log key presence — never log the value itself.
+  console.log(
+    "[searchGooglePlace] GOOGLE_PLACES_API_KEY present:",
+    !!apiKey
+  );
+
   if (!apiKey) {
     console.error(
       "[searchGooglePlace] GOOGLE_PLACES_API_KEY is not configured. " +
-        "Add it to .env.local to enable Google matching."
+        "Add it to .env.local for local dev and to Vercel Environment Variables " +
+        "(Production + Preview + Development) to enable Google matching."
     );
     return null;
   }
@@ -114,6 +125,7 @@ async function searchGooglePlace(
   // Street address is intentionally excluded from the query — it tends to
   // confuse the Places text search when combined with name.
   const textQuery = `${businessName}, ${city}, ${province}`;
+  console.log("[searchGooglePlace] query:", textQuery);
 
   let data: Record<string, unknown>;
   try {
@@ -128,11 +140,22 @@ async function searchGooglePlace(
       cache: "no-store",
     });
 
+    console.log("[searchGooglePlace] Places API HTTP status:", res.status);
+
     if (!res.ok) {
+      // Parse the Google error body for actionable detail.
+      let errorBody: unknown = null;
+      try {
+        errorBody = await res.json();
+      } catch {
+        // Ignore — body may not be JSON.
+      }
       console.error(
-        "[searchGooglePlace] Places API HTTP error:",
+        "[searchGooglePlace] Places API error — status:",
         res.status,
-        res.statusText
+        res.statusText,
+        "— body:",
+        JSON.stringify(errorBody)
       );
       return null;
     }
@@ -144,6 +167,8 @@ async function searchGooglePlace(
   }
 
   const places = data.places as Record<string, unknown>[] | undefined;
+  console.log("[searchGooglePlace] candidates returned:", places?.length ?? 0);
+
   if (!places?.length) return null;
 
   const p = places[0] as Record<string, unknown>;
@@ -157,9 +182,14 @@ async function searchGooglePlace(
   const displayName = p.displayName as { text?: string } | undefined;
   const photos = p.photos as { name?: string }[] | undefined;
 
+  const placeId = typeof p.id === "string" ? p.id : null;
+  const name = displayName?.text ?? null;
+
+  console.log("[searchGooglePlace] selected candidate:", { name, placeId });
+
   return {
-    placeId: typeof p.id === "string" ? p.id : null,
-    name: displayName?.text ?? null,
+    placeId,
+    name,
     formattedAddress:
       typeof p.formattedAddress === "string" ? p.formattedAddress : null,
     streetAddress,
@@ -390,6 +420,10 @@ export async function lookupBusinessAction(
   const candidate = await searchGooglePlace(businessName, city, province);
 
   if (!candidate) {
+    console.log(
+      "[lookupBusinessAction] No candidate from Places API — routing to no-match.",
+      { businessName, city, province }
+    );
     return { match: null };
   }
 
@@ -409,6 +443,12 @@ export async function lookupBusinessAction(
     return { match: null };
   }
 
+  console.log(
+    "[lookupBusinessAction] Match confirmed — placeId:",
+    candidate.placeId,
+    "name:",
+    candidate.name
+  );
   return { match: candidate };
 }
 
