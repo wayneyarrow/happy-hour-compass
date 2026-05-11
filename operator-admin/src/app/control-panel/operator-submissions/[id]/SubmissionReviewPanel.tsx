@@ -8,16 +8,13 @@ const INITIAL_STATE: SubmissionReviewState = {};
 
 export default function SubmissionReviewPanel({
   submissionId,
-  initialNotes,
   currentStatus,
 }: {
   submissionId: string;
-  initialNotes: string | null;
   currentStatus: string;
 }) {
   const router = useRouter();
 
-  // Bind submissionId so the action signature matches (prevState, formData)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const boundAction = (reviewSubmissionAction as any).bind(null, submissionId);
   const [state, formAction, pending] = useActionState<SubmissionReviewState, FormData>(
@@ -25,8 +22,6 @@ export default function SubmissionReviewPanel({
     INITIAL_STATE
   );
 
-  // Refresh the server component once after a successful action so status
-  // badges and review metadata in the page header reflect the change.
   const didRefresh = useRef(false);
   useEffect(() => {
     if (state.success && !didRefresh.current) {
@@ -42,13 +37,9 @@ export default function SubmissionReviewPanel({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-1">
+      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
         Review actions
       </h3>
-      <p className="text-xs text-gray-400 mb-3">
-        Notes are required for both actions.
-        For &ldquo;Request more info&rdquo;, they are sent verbatim to the submitter.
-      </p>
 
       {/* Success banner */}
       {state.success && (
@@ -67,55 +58,29 @@ export default function SubmissionReviewPanel({
         </div>
       )}
 
-      <form action={formAction} className="space-y-4">
-        {/* Review notes */}
-        <div>
-          <label
-            htmlFor="review_notes"
-            className="block text-xs font-medium text-gray-600 mb-1.5"
-          >
-            Review notes <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            id="review_notes"
-            name="review_notes"
-            rows={3}
-            defaultValue={initialNotes ?? ""}
-            placeholder="For 'Request more info': describe what you need — this text goes in the email. For 'Reject / Close': internal reason only."
-            className={`w-full px-3 py-2 border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder:text-gray-300 ${
-              state.fieldErrors?.review_notes ? "border-red-400" : "border-gray-300"
-            }`}
-          />
-          {state.fieldErrors?.review_notes && (
-            <p className="mt-1 text-xs text-red-600">{state.fieldErrors.review_notes}</p>
-          )}
-        </div>
+      <form action={formAction} className="space-y-3">
+        <button
+          type="submit"
+          name="action"
+          value="needs_more_info"
+          disabled={pending || isClosed}
+          className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {pending ? "Saving…" : "Request more info"}
+        </button>
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="submit"
-            name="action"
-            value="needs_more_info"
-            disabled={pending || isClosed}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {pending ? "Saving…" : "Request more info"}
-          </button>
-
-          <button
-            type="submit"
-            name="action"
-            value="close"
-            disabled={pending || isClosed}
-            className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {pending ? "Saving…" : "Reject / Close"}
-          </button>
-        </div>
+        <button
+          type="submit"
+          name="action"
+          value="close"
+          disabled={pending || isClosed}
+          className="w-full px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {pending ? "Saving…" : "Reject / Close"}
+        </button>
 
         {isClosed && !state.success && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 pt-1">
             This submission has been closed. No further actions are available.
           </p>
         )}

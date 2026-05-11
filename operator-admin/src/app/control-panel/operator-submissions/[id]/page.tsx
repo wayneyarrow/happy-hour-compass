@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getOperatorSubmissionById } from "@/lib/data/operatorSubmissions";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
+import SaveNotesPanel from "./SaveNotesPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -333,14 +334,21 @@ export default async function OperatorSubmissionDetailPage({
           {ACTIONABLE_STATUSES.has(submission.status) && (
             <SubmissionReviewPanel
               submissionId={submission.id}
-              initialNotes={submission.review_notes}
               currentStatus={submission.status}
             />
           )}
 
-          {/* Review Notes display — shown once notes exist (any status) */}
+          {/* Founder notes — always editable for actionable statuses */}
+          {ACTIONABLE_STATUSES.has(submission.status) && (
+            <SaveNotesPanel
+              submissionId={submission.id}
+              initialNotes={submission.review_notes}
+            />
+          )}
+
+          {/* Review Notes display — read-only when status is not actionable */}
           {submission.review_notes && !ACTIONABLE_STATUSES.has(submission.status) && (
-            <Section title="Review Notes">
+            <Section title="Founder Notes">
               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {submission.review_notes}
               </p>

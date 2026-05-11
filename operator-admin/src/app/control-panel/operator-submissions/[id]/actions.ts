@@ -23,6 +23,11 @@ export type SubmissionReviewState = {
   fieldErrors?: { review_notes?: string };
 };
 
+export type SaveNotesState = {
+  success?: true;
+  error?: string;
+};
+
 type ReviewAction = "needs_more_info" | "close";
 
 const ACTION_LABELS: Record<ReviewAction, string> = {
@@ -36,20 +41,17 @@ const ACTION_LABELS: Record<ReviewAction, string> = {
  * Handles founder review actions on Needs Review operator submissions.
  *
  * needs_more_info:
- *   - Requires review_notes (sent verbatim to submitter).
- *   - Updates: status → needs_more_info, review_notes, reviewed_by,
- *     reviewed_at, more_info_requested_at.
+ *   - Updates: status → needs_more_info, reviewed_by, reviewed_at,
+ *     more_info_requested_at. Saves review_notes if provided.
  *   - Sends sendOperatorSubmissionMoreInfoEmail (awaited, required).
  *   - If email fails: returns error. Status update is already committed;
  *     the founder knows to contact the submitter directly.
  *
  * close:
- *   - Requires review_notes (internal record of why it was closed).
- *   - Updates: status → closed, review_notes, reviewed_by, reviewed_at,
- *     rejected_at.
+ *   - Updates: status → closed, reviewed_by, reviewed_at, rejected_at.
+ *     Saves review_notes if provided.
  *   - Sends sendOperatorSubmissionClosedEmail (awaited, failure non-blocking).
  *   - Closure always succeeds if the DB update succeeds, even if email fails.
- *     Email is a courtesy; the DB state is the authoritative outcome.
  *
  * submissionId is bound via .bind(null, submissionId) — never read from FormData.
  * All DB writes use createAdminClient() (service role) — RLS blocks writes.
@@ -68,17 +70,8 @@ export async function reviewSubmissionAction(
   }
   const action = rawAction as ReviewAction;
 
-  const reviewNotes = (formData.get("review_notes") as string | null)?.trim() ?? "";
-  if (!reviewNotes) {
-    return {
-      fieldErrors: {
-        review_notes:
-          action === "needs_more_info"
-            ? "Review notes are required — they will be sent to the submitter."
-            : "Review notes are required to document why this submission is being closed.",
-      },
-    };
-  }
+  // Notes are optional for both actions — saved internally, never sent to the submitter.
+  const reviewNotes = (formData.get("review_notes") as string | null)?.trim() || null;
 
   // ── Resolve admin identity ─────────────────────────────────────────────────
   const authClient = await createClient();
@@ -146,7 +139,6 @@ export async function reviewSubmissionAction(
       to:          submitterEmail,
       firstName,
       venueName,
-      reviewNote:  reviewNotes,
       moreInfoUrl,
     });
 
@@ -157,9 +149,8 @@ export async function reviewSubmissionAction(
       );
       return {
         error:
-          `Review notes were saved and status updated to "Needs more info", but the email ` +
-          `to ${submitterEmail} could not be sent (${emailResult.error ?? "unknown error"}). ` +
-          `Please contact the submitter directly.`,
+          `Status updated to "Needs more info", but the email to ${submitterEmail} could not ` +
+          `be sent (${emailResult.error ?? "unknown error"}). Please contact the submitter directly.`,
       };
     }
 
@@ -215,4 +206,44 @@ export async function reviewSubmissionAction(
   revalidatePath("/control-panel/operator-submissions");
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
   return { success: true, successAction: ACTION_LABELS.close };
+}
+
+// ── Save internal notes (independent of review actions) ───────────────────────
+
+/**
+ * Saves founder-only internal notes on an operator submission without changing
+ * the submission status. Notes are never exposed to the submitter.
+ *
+ * submissionId is bound via .bind(null, submissionId).
+ */
+export async function saveSubmissionNotesAction(
+  submissionId: string,
+  _prevState: SaveNotesState,
+  formData: FormData
+): Promise<SaveNotesState> {
+  const notes = (formData.get("review_notes") as string | null)?.trim() || null;
+
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user) {
+    return { error: "Session expired. Please sign in again." };
+  }
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("operator_submissions")
+    .update({ review_notes: notes })
+    .eq("id", submissionId);
+
+  if (error) {
+    console.error("[saveSubmissionNotesAction] Update failed:", error.message);
+    return { error: "Failed to save notes. Please try again." };
+  }
+
+  revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  return { success: true };
 }

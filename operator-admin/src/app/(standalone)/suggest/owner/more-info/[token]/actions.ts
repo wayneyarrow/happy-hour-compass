@@ -51,7 +51,9 @@ export async function submitMoreInfoAction(
   const infoTiktok    = (formData.get("info_tiktok")          as string | null)?.trim() ?? "";
   const infoRelation  = (formData.get("info_relationship")    as string | null)?.trim() ?? "";
   const infoNotes     = (formData.get("info_additional_notes")as string | null)?.trim() ?? "";
-  const infoContact   = (formData.get("info_preferred_contact")as string | null)?.trim() ?? "";
+  const rawContact    = (formData.get("info_preferred_contact") as string | null)?.trim() ?? "";
+  const otherText     = (formData.get("info_preferred_contact_other") as string | null)?.trim() ?? "";
+  const infoContact   = rawContact === "Other" && otherText ? `Other: ${otherText}` : rawContact;
 
   // ── Validate ───────────────────────────────────────────────────────────────
   const fieldErrors: MoreInfoState["fieldErrors"] = {};

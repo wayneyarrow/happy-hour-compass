@@ -842,8 +842,8 @@ Founder, Happy Hour Compass`;
 
 /**
  * Asks a venue submitter for additional information needed to verify their
- * submission. The founder's review note is included verbatim in the email body
- * so the submitter knows exactly what is being asked.
+ * submission. Sends a clean CTA with a secure link to the structured more-info
+ * form — no internal review notes are exposed to the submitter.
  *
  * Called when the founder clicks "Request more info" on a Needs Review
  * submission in the Control Panel. Must be awaited — not fire-and-forget.
@@ -852,13 +852,11 @@ export async function sendOperatorSubmissionMoreInfoEmail({
   to,
   firstName,
   venueName,
-  reviewNote,
   moreInfoUrl,
 }: {
   to: string;
   firstName: string;
   venueName: string;
-  reviewNote: string;
   /** Secure link to the structured more-info form. Expires in 72 hours. */
   moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
@@ -881,14 +879,8 @@ export async function sendOperatorSubmissionMoreInfoEmail({
             Thanks for submitting <strong style="color:#0f172a;">${venueName}</strong> to Happy Hour Compass.
           </p>
 
-          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
-            We weren&rsquo;t able to automatically verify your venue, so we need a few extra details before we can create your operator account. Here&rsquo;s a note from our team:
-          </p>
-
-          <div style="margin:0 0 24px;padding:16px;background:#fef9ec;border:1px solid #fde68a;border-radius:8px;font-size:14px;color:#0f172a;line-height:1.6;white-space:pre-wrap;">${reviewNote}</div>
-
           <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.6;">
-            Click the button below to complete a short verification form. It only takes a couple of minutes.
+            We weren&rsquo;t able to automatically verify your venue, so we need a few additional details before we can create your operator account. Please click the button below to complete a short verification form — it only takes a couple of minutes.
           </p>
 
           <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
@@ -918,11 +910,7 @@ export async function sendOperatorSubmissionMoreInfoEmail({
 
 Thanks for submitting ${venueName} to Happy Hour Compass.
 
-We weren't able to automatically verify your venue, so we need a few extra details before we can create your operator account. Here's a note from our team:
-
-${reviewNote}
-
-Complete a short verification form here (takes a couple of minutes):
+We weren't able to automatically verify your venue, so we need a few additional details before we can create your operator account. Please complete a short verification form here:
 ${moreInfoUrl}
 
 This link expires in 72 hours. If it expires, reply to this email and we'll send a new one.

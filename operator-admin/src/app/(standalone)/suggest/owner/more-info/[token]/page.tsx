@@ -35,7 +35,7 @@ function InvalidView({ reason }: { reason: TokenState }) {
   const { heading, body } = copy[reason];
 
   return (
-    <main className="bg-white min-h-full px-5 pt-16 pb-16 flex flex-col items-center text-center">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-8 py-12 flex flex-col items-center text-center">
       <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-6">
         <svg
           className="w-7 h-7 text-gray-400"
@@ -53,7 +53,7 @@ function InvalidView({ reason }: { reason: TokenState }) {
       </div>
       <h1 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">{heading}</h1>
       <p className="text-[14px] text-gray-500 leading-relaxed max-w-[280px]">{body}</p>
-    </main>
+    </div>
   );
 }
 
@@ -62,17 +62,12 @@ function InvalidView({ reason }: { reason: TokenState }) {
 export default async function MoreInfoPage({ params }: Props) {
   const { token } = await params;
 
-  // Structural guard: tokens are 64 hex chars (32 random bytes).
-  // Reject obviously malformed values before hitting the DB.
   if (!token || token.length !== 64 || !/^[0-9a-f]+$/.test(token)) {
     return <InvalidView reason="invalid" />;
   }
 
   const supabase = createAdminClient();
 
-  // Fetch the submission matching this token. We do NOT filter by expiry or
-  // completion here — we fetch first, then distinguish the reason for rejection
-  // so we can show the correct message to the user.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rawSubmission, error } = await supabase
     .from("operator_submissions")
@@ -84,7 +79,6 @@ export default async function MoreInfoPage({ params }: Props) {
     .eq("more_info_token", token)
     .maybeSingle();
 
-  // Cast away the opaque Supabase generic — no generated types in this project.
   const submission = rawSubmission as {
     id: string;
     venue_name: string | null;
@@ -121,20 +115,18 @@ export default async function MoreInfoPage({ params }: Props) {
   }
 
   return (
-    <main className="bg-white min-h-full">
-      <MoreInfoForm
-        token={token}
-        initial={{
-          venue_name:     (submission.venue_name     as string | null) ?? "",
-          street_address: (submission.street_address as string | null) ?? "",
-          city:           (submission.city           as string | null) ?? "",
-          province:       (submission.province       as string | null) ?? "",
-          first_name:     (submission.first_name     as string | null) ?? "",
-          last_name:      (submission.last_name      as string | null) ?? "",
-          email:          (submission.email          as string | null) ?? "",
-          position:       (submission.position       as string | null) ?? "",
-        }}
-      />
-    </main>
+    <MoreInfoForm
+      token={token}
+      initial={{
+        venue_name:     (submission.venue_name     as string | null) ?? "",
+        street_address: (submission.street_address as string | null) ?? "",
+        city:           (submission.city           as string | null) ?? "",
+        province:       (submission.province       as string | null) ?? "",
+        first_name:     (submission.first_name     as string | null) ?? "",
+        last_name:      (submission.last_name      as string | null) ?? "",
+        email:          (submission.email          as string | null) ?? "",
+        position:       (submission.position       as string | null) ?? "",
+      }}
+    />
   );
 }
