@@ -2,7 +2,10 @@
 
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendClaimNotificationEmail } from "@/lib/email";
+import {
+  sendClaimNotificationEmail,
+  sendClaimSubmissionConfirmationEmail,
+} from "@/lib/email";
 
 export type ClaimFormState = {
   success?: boolean;
@@ -116,32 +119,60 @@ export async function submitClaimAction(
     return { error: "Something went wrong. Please try again." };
   }
 
-  // ── Notify founder — fire-and-forget; email failure must not block the claim ─
+  // ── Send emails — awaited; failure is non-blocking but must be logged ────────
+  // Fire-and-forget (.then()) is NOT safe in Vercel serverless — the runtime
+  // exits after the return value is serialised, cutting off any pending Promise.
   const submittedAt = new Date().toLocaleString("en-CA", {
     timeZone: "America/Vancouver",
     dateStyle: "medium",
     timeStyle: "short",
   });
 
-  console.log("[EMAIL] submitClaimAction — initiating fire-and-forget founder notification", {
+  // Founder notification
+  console.log("[EMAIL] submitClaimAction — sending founder notification", {
     claimId: insertedClaim.id,
     venueName: venueRow.name,
     flow: "claim-notification",
   });
-
-  sendClaimNotificationEmail({
-    claimId:       insertedClaim.id as string,
-    venueName:     venueRow.name as string,
-    firstName,
-    lastName,
-    claimantEmail: email,
-    phone,
-    submittedAt,
-  }).then(({ ok, error: emailErr }) => {
-    if (!ok) {
-      console.error("[submitClaimAction] Founder notification failed:", emailErr);
+  try {
+    const founderResult = await sendClaimNotificationEmail({
+      claimId:       insertedClaim.id as string,
+      venueName:     venueRow.name as string,
+      firstName,
+      lastName,
+      claimantEmail: email,
+      phone,
+      submittedAt,
+    });
+    if (!founderResult.ok) {
+      console.error("[EMAIL] submitClaimAction — founder notification not-ok:", founderResult.error);
+    } else {
+      console.log("[EMAIL] submitClaimAction — founder notification sent successfully");
     }
+  } catch (err) {
+    console.error("[EMAIL] submitClaimAction — founder notification threw:", err);
+  }
+
+  // Claimant confirmation
+  console.log("[EMAIL] submitClaimAction — sending claimant confirmation", {
+    claimantEmail: email,
+    venueName: venueRow.name,
+    flow: "claim-submission-confirmation",
   });
+  try {
+    const confirmResult = await sendClaimSubmissionConfirmationEmail({
+      to:        email,
+      firstName,
+      venueName: venueRow.name as string,
+    });
+    if (!confirmResult.ok) {
+      console.error("[EMAIL] submitClaimAction — claimant confirmation not-ok:", confirmResult.error);
+    } else {
+      console.log("[EMAIL] submitClaimAction — claimant confirmation sent successfully");
+    }
+  } catch (err) {
+    console.error("[EMAIL] submitClaimAction — claimant confirmation threw:", err);
+  }
 
   return { success: true };
 }

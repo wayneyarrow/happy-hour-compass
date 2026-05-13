@@ -258,6 +258,102 @@ Happy Hour Compass Control Panel`;
   }
 }
 
+// ── Claim submission confirmation email (to claimant) ────────────────────────
+
+/**
+ * Sends a "we received your claim" acknowledgement to the claimant immediately
+ * after they submit the venue claim form.
+ *
+ * Failure is non-blocking: the claim record already exists. Log and continue.
+ */
+export async function sendClaimSubmissionConfirmationEmail({
+  to,
+  firstName,
+  venueName,
+}: {
+  to: string;
+  firstName: string;
+  venueName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const from = DEFAULT_FROM;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">We received your claim</h1>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for submitting your ownership claim for <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
+          </p>
+
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            We&rsquo;ll review your claim shortly. If we need any additional information, we&rsquo;ll reach out to you at this email address.
+          </p>
+
+          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Cheers,</p>
+          <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because you submitted a venue claim on Happy Hour Compass.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi ${firstName},
+
+Thanks for submitting your ownership claim for ${venueName} on Happy Hour Compass.
+
+We'll review your claim shortly. If we need any additional information, we'll reach out to you at this email address.
+
+Cheers,
+Wayne
+Founder, Happy Hour Compass`;
+
+  console.log("[EMAIL] sendClaimSubmissionConfirmationEmail — attempting send", {
+    to,
+    from,
+    flow: "claim-submission-confirmation",
+    venueName,
+  });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: `We received your claim — ${venueName}`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendClaimSubmissionConfirmationEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendClaimSubmissionConfirmationEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendClaimSubmissionConfirmationEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Request more info email ────────────────────────────────────────────────────
 
 /**
