@@ -925,7 +925,7 @@ Happy Hour Compass`;
     const { data, error } = await resend.emails.send({
       from,
       to,
-      subject: `A quick question about your Happy Hour Compass submission — ${venueName}`,
+      subject: `More information needed for your venue submission — ${venueName}`,
       html,
       text,
     });
@@ -1359,7 +1359,7 @@ Happy Hour Compass`;
     const { data, error } = await resend.emails.send({
       from,
       to,
-      subject: `A quick question about your venue claim — ${venueName}`,
+      subject: `More information needed for your venue claim — ${venueName}`,
       html,
       text,
     });

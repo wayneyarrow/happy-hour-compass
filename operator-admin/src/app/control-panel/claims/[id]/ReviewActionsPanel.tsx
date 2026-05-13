@@ -38,8 +38,8 @@ export default function ReviewActionsPanel({
     }
   }, [state.success, router]);
 
-  const isResolved =
-    currentStatus === "approved" || currentStatus === "rejected";
+  const isResolved = currentStatus === "approved" || currentStatus === "rejected";
+  const isInfoSubmitted = currentStatus === "info_submitted";
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
@@ -64,29 +64,41 @@ export default function ReviewActionsPanel({
         </div>
       )}
 
-      <form action={formAction} className="mt-3 space-y-4">
-        {/* Review notes */}
-        <div>
-          <label htmlFor="review_notes" className="block text-xs font-medium text-gray-600 mb-1.5">
-            Review notes
-            <span className="text-gray-400 font-normal ml-1">(required for &quot;Request more info&quot;)</span>
-          </label>
-          <textarea
-            id="review_notes"
-            name="review_notes"
-            rows={3}
-            defaultValue={initialNotes ?? ""}
-            placeholder="Internal notes visible only to the review team…"
-            className={`w-full px-3 py-2 border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder:text-gray-300 ${
-              state.fieldErrors?.review_notes
-                ? "border-red-400"
-                : "border-gray-300"
-            }`}
-          />
-          {state.fieldErrors?.review_notes && (
-            <p className="mt-1 text-xs text-red-600">{state.fieldErrors.review_notes}</p>
-          )}
+      {/* Info callout when claimant has submitted verification details */}
+      {isInfoSubmitted && !state.success && (
+        <div className="mt-3 mb-4 flex items-start gap-2 rounded-lg bg-purple-50 border border-purple-200 px-4 py-3 text-sm text-purple-700">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+          </svg>
+          <span>Claimant has submitted verification details — review above before approving or rejecting.</span>
         </div>
+      )}
+
+      <form action={formAction} className="mt-3 space-y-4">
+        {/* Review notes — hidden once structured info has been submitted */}
+        {!isInfoSubmitted && (
+          <div>
+            <label htmlFor="review_notes" className="block text-xs font-medium text-gray-600 mb-1.5">
+              Review notes
+              <span className="text-gray-400 font-normal ml-1">(required for &quot;Request more info&quot;)</span>
+            </label>
+            <textarea
+              id="review_notes"
+              name="review_notes"
+              rows={3}
+              defaultValue={initialNotes ?? ""}
+              placeholder="Internal notes visible only to the review team…"
+              className={`w-full px-3 py-2 border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent placeholder:text-gray-300 ${
+                state.fieldErrors?.review_notes
+                  ? "border-red-400"
+                  : "border-gray-300"
+              }`}
+            />
+            {state.fieldErrors?.review_notes && (
+              <p className="mt-1 text-xs text-red-600">{state.fieldErrors.review_notes}</p>
+            )}
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
@@ -100,15 +112,18 @@ export default function ReviewActionsPanel({
             {pending ? "Saving…" : "Approve"}
           </button>
 
-          <button
-            type="submit"
-            name="action"
-            value="needs_more_info"
-            disabled={pending}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {pending ? "Saving…" : "Request more info"}
-          </button>
+          {/* Request more info — hidden once claimant has already responded */}
+          {!isInfoSubmitted && (
+            <button
+              type="submit"
+              name="action"
+              value="needs_more_info"
+              disabled={pending}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {pending ? "Saving…" : "Request more info"}
+            </button>
+          )}
 
           <button
             type="submit"
@@ -123,7 +138,7 @@ export default function ReviewActionsPanel({
 
         {isResolved && !state.success && (
           <p className="text-xs text-gray-400">
-            This claim is already resolved. Use &quot;Request more info&quot; to re-open the conversation.
+            This claim is already resolved.
           </p>
         )}
       </form>

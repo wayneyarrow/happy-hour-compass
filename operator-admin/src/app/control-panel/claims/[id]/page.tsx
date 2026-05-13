@@ -286,13 +286,6 @@ export default async function ClaimDetailPage({
             </dl>
           </Section>
 
-          {/* Internal notes */}
-          <ClaimNotesSection
-            claimId={claim.id}
-            initialNotes={notes}
-            legacyNote={claim.review_notes}
-          />
-
           {/* Verification Details — shown after claimant completes the more-info form */}
           {(claim.info_phone || claim.info_website || claim.info_relationship) && (
             <Section title="Verification Details">
@@ -358,6 +351,13 @@ export default async function ClaimDetailPage({
               </dl>
             </Section>
           )}
+
+          {/* Internal notes */}
+          <ClaimNotesSection
+            claimId={claim.id}
+            initialNotes={notes}
+            legacyNote={claim.review_notes}
+          />
 
           <ReviewActionsPanel
             claimId={claim.id}
