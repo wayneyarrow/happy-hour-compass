@@ -9,6 +9,7 @@ const STATUS: Record<string, { label: string; classes: string }> = {
   pending:         { label: "Pending",         classes: "bg-amber-100 text-amber-700" },
   approved:        { label: "Approved",        classes: "bg-green-100 text-green-700" },
   needs_more_info: { label: "Needs more info", classes: "bg-blue-100 text-blue-600" },
+  info_submitted:  { label: "Info submitted",  classes: "bg-purple-100 text-purple-700" },
   rejected:        { label: "Rejected",        classes: "bg-red-100 text-red-700" },
 };
 

@@ -1273,6 +1273,236 @@ Happy Hour Compass`;
   }
 }
 
+// ── Claim more-info request email ────────────────────────────────────────────
+
+/**
+ * Sends a secure tokenised link to a claimant so they can complete the
+ * structured verification form at /claim/more-info/[token].
+ *
+ * Mirrors sendOperatorSubmissionMoreInfoEmail but with claim-specific copy.
+ * Token expires in 72 hours. Email failure blocks the "Request more info"
+ * action — the founder is told to retry.
+ */
+export async function sendClaimMoreInfoEmail({
+  to,
+  firstName,
+  venueName,
+  moreInfoUrl,
+}: {
+  to: string;
+  firstName: string;
+  venueName: string;
+  moreInfoUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const from = DEFAULT_FROM;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for submitting your ownership claim for <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
+          </p>
+
+          <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.6;">
+            We need a few additional details to verify your ownership before we can grant you access to manage this listing. Please click the button below — it only takes a couple of minutes.
+          </p>
+
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${moreInfoUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Complete verification →
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
+
+          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 20px;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because you submitted a venue claim on Happy Hour Compass.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi ${firstName},
+
+Thanks for submitting your ownership claim for ${venueName} on Happy Hour Compass.
+
+We need a few additional details to verify your ownership before we can grant you access. Please complete a short verification form here:
+${moreInfoUrl}
+
+This link expires in 72 hours. If it expires, reply to this email and we'll send a new one.
+
+—
+Happy Hour Compass`;
+
+  console.log("[EMAIL] sendClaimMoreInfoEmail — attempting send", { to, from, flow: "claim-more-info", venueName });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: `A quick question about your venue claim — ${venueName}`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendClaimMoreInfoEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendClaimMoreInfoEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendClaimMoreInfoEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+// ── Claim info-submitted founder notification ─────────────────────────────────
+
+/**
+ * Notifies the founder that a claimant has completed the structured
+ * verification form. Deep-links to the claim detail page.
+ *
+ * Mirrors sendOperatorSubmissionInfoSubmittedNotificationEmail but for claims.
+ */
+export async function sendClaimInfoSubmittedNotificationEmail({
+  claimId,
+  venueName,
+  claimantFirstName,
+  claimantLastName,
+  claimantEmail,
+  submittedAt,
+}: {
+  claimId: string;
+  venueName: string;
+  claimantFirstName: string;
+  claimantLastName: string;
+  claimantEmail: string;
+  submittedAt: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to       = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const from     = DEFAULT_FROM;
+  const appUrl   = getAppUrl();
+  const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
+  const fullName  = [claimantFirstName, claimantLastName].filter(Boolean).join(" ") || claimantEmail;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Claim verification submitted</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Venue</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${venueName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Claimant</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${fullName}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${claimantEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Status</td>
+              <td style="padding:10px 14px;border-top:1px solid #e2e8f0;">
+                <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#ffffff;background:#7c3aed;">Info submitted</span>
+              </td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
+            The claimant has completed the verification form. Open the claim to review their details.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Review claim →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Venue claim notification</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Claim verification submitted — Happy Hour Compass
+
+Venue:    ${venueName}
+Claimant: ${fullName}
+Email:    ${claimantEmail}
+Status:   Info submitted
+At:       ${submittedAt}
+
+The claimant has completed the verification form. Review their details:
+${reviewUrl}
+
+—
+Happy Hour Compass Control Panel`;
+
+  console.log("[EMAIL] sendClaimInfoSubmittedNotificationEmail — attempting send", {
+    to, from, flow: "claim-info-submitted", claimId, venueName,
+  });
+
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject: `Info submitted: ${venueName} claim — ready for review`,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error("[EMAIL] sendClaimInfoSubmittedNotificationEmail — Resend returned error:", error);
+      return { ok: false, error: error.message };
+    }
+
+    console.log("[EMAIL] sendClaimInfoSubmittedNotificationEmail — sent successfully", { id: data?.id });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] sendClaimInfoSubmittedNotificationEmail — unexpected exception:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({

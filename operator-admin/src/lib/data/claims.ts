@@ -40,6 +40,14 @@ export type ClaimDetail = {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  // Structured more-info (set when claimant completes the verification form)
+  more_info_completed_at: string | null;
+  info_phone: string | null;
+  info_website: string | null;
+  info_socials: { instagram?: string; facebook?: string; tiktok?: string } | null;
+  info_relationship: string | null;
+  info_additional_notes: string | null;
+  info_preferred_contact: string | null;
   venue: {
     name: string;
     website_url: string | null;
@@ -124,6 +132,9 @@ export async function getClaimById(id: string): Promise<{
       `id, venue_id, first_name, last_name, position, phone, email,
        ip_address, status, review_notes, reviewed_by, reviewed_at,
        created_at, updated_at,
+       more_info_completed_at,
+       info_phone, info_website, info_socials,
+       info_relationship, info_additional_notes, info_preferred_contact,
        venues (
          name, website_url, phone, address_line1,
          city, region, postal_code, country, lat, lng, claimed_at, claimed_by
@@ -181,6 +192,13 @@ export async function getClaimById(id: string): Promise<{
     reviewed_at: data.reviewed_at as string | null,
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
+    more_info_completed_at: data.more_info_completed_at as string | null,
+    info_phone:             data.info_phone as string | null,
+    info_website:           data.info_website as string | null,
+    info_socials:           data.info_socials as ClaimDetail["info_socials"],
+    info_relationship:      data.info_relationship as string | null,
+    info_additional_notes:  data.info_additional_notes as string | null,
+    info_preferred_contact: data.info_preferred_contact as string | null,
     venue: venue
       ? {
           name: venue.name,

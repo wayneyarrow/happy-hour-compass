@@ -1,8 +1,9 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { sendPasswordSetupEmail, sendRequestMoreInfoEmail } from "@/lib/email";
+import { sendPasswordSetupEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,12 +154,12 @@ export async function reviewClaimAction(
 
   const supabase = createAdminClient();
 
-  // ── needs_more_info / reject ───────────────────────────────────────────────
-  if (action !== "approve") {
+  // ── reject ────────────────────────────────────────────────────────────────
+  if (action === "reject") {
     const { error: updateError } = await supabase
       .from("venue_claims")
       .update({
-        status:       STATUS_MAP[action],
+        status:       "rejected",
         review_notes: reviewNotes || null,
         reviewed_by:  user.id,
         reviewed_at:  new Date().toISOString(),
@@ -166,49 +167,102 @@ export async function reviewClaimAction(
       .eq("id", claimId);
 
     if (updateError) {
-      console.error("[reviewClaimAction] Update failed:", updateError.message);
+      console.error("[reviewClaimAction] Reject update failed:", updateError.message);
       return { error: "Failed to save review decision. Please try again." };
     }
 
     revalidatePath("/control-panel/claims");
     revalidatePath(`/control-panel/claims/${claimId}`);
+    return { success: true, successAction: ACTION_LABELS.reject };
+  }
 
-    // ── Send "request more info" email to claimant (fire-and-forget) ──────────
-    // Email failure must not block the review action — the status update has
-    // already committed.  Errors are logged for monitoring.
-    if (action === "needs_more_info") {
-      console.log("[EMAIL] reviewClaimAction — initiating fire-and-forget needs-more-info email", { claimId, flow: "request-more-info" });
-      (async () => {
-        const { data: claim } = await supabase
-          .from("venue_claims")
-          .select("email, first_name, venue_id")
-          .eq("id", claimId)
-          .single();
+  // ── needs_more_info: tokenised structured form ────────────────────────────
+  if (action === "needs_more_info") {
+    // Fetch claim to get claimant contact + venue name for the email.
+    const { data: claimRow, error: fetchError } = await supabase
+      .from("venue_claims")
+      .select("email, first_name, venue_id")
+      .eq("id", claimId)
+      .single();
 
-        if (!claim) {
-          console.error("[EMAIL] reviewClaimAction — could not fetch claim for more-info email, skipping send.", { claimId });
-          return;
-        }
-
-        const { data: venue } = await supabase
-          .from("venues")
-          .select("name")
-          .eq("id", claim.venue_id as string)
-          .single();
-
-        const result = await sendRequestMoreInfoEmail({
-          to:        claim.email as string,
-          firstName: (claim.first_name as string | null) || "there",
-          venueName: (venue?.name as string | null) || "your venue",
-        });
-
-        if (!result.ok) {
-          console.error("[reviewClaimAction] Request more info email failed:", result.error);
-        }
-      })();
+    if (fetchError || !claimRow) {
+      console.error("[reviewClaimAction] Claim fetch failed for more-info:", fetchError?.message);
+      return { error: "Claim not found. Please refresh and try again." };
     }
 
-    return { success: true, successAction: ACTION_LABELS[action] };
+    const { data: venueRow } = await supabase
+      .from("venues")
+      .select("name")
+      .eq("id", claimRow.venue_id as string)
+      .single();
+
+    const claimantEmail = claimRow.email as string;
+    const firstName     = ((claimRow.first_name as string | null) ?? "").trim() || "there";
+    const venueName     = (venueRow?.name as string | null) ?? "your venue";
+
+    // Generate a secure 64-char hex token (32 random bytes).
+    // This IS the credential for the public more-info form — never log it.
+    const token     = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+    const now       = new Date().toISOString();
+
+    const { error: updateError } = await supabase
+      .from("venue_claims")
+      .update({
+        status:                 "needs_more_info",
+        review_notes:           reviewNotes || null,
+        reviewed_by:            user.id,
+        reviewed_at:            now,
+        more_info_token:        token,
+        more_info_expires_at:   expiresAt,
+        more_info_completed_at: null, // clear any prior completion
+      })
+      .eq("id", claimId);
+
+    if (updateError) {
+      console.error("[reviewClaimAction] needs_more_info update failed:", updateError.message);
+      return { error: "Failed to save review decision. Please try again." };
+    }
+
+    const appUrl     = getAppUrl();
+    const moreInfoUrl = `${appUrl}/claim/more-info/${token}`;
+
+    // Email is required — the claimant needs the link.
+    // If it fails the token is stored but undelivered; return an error so the
+    // founder knows to retry. On retry a new token overwrites the current one.
+    const emailResult = await sendClaimMoreInfoEmail({
+      to: claimantEmail,
+      firstName,
+      venueName,
+      moreInfoUrl,
+    });
+
+    if (!emailResult.ok) {
+      console.error(
+        "[reviewClaimAction] More-info email failed — status updated but claimant not emailed.",
+        { claimId, claimantEmail, error: emailResult.error }
+      );
+      return {
+        error:
+          `Status updated to "Needs more info", but the email to ${claimantEmail} ` +
+          `could not be sent (${emailResult.error ?? "unknown error"}). ` +
+          `Please contact the claimant directly.`,
+      };
+    }
+
+    // Append internal note.
+    await supabase.from("venue_claim_notes").insert({
+      claim_id:         claimId,
+      note:             `More info requested — structured verification form emailed to ${claimantEmail}. Token expires in 72 h.`,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
+
+    console.log("[reviewClaimAction] needs_more_info — complete.", { claimId, claimantEmail });
+
+    revalidatePath("/control-panel/claims");
+    revalidatePath(`/control-panel/claims/${claimId}`);
+    return { success: true, successAction: ACTION_LABELS.needs_more_info };
   }
 
   // ── Approve: operator onboarding flow ─────────────────────────────────────

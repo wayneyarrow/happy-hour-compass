@@ -39,6 +39,7 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   pending:         { label: "Pending",         classes: "bg-amber-100 text-amber-700" },
   approved:        { label: "Approved",        classes: "bg-green-100 text-green-700" },
   needs_more_info: { label: "Needs more info", classes: "bg-blue-100 text-blue-600" },
+  info_submitted:  { label: "Info submitted",  classes: "bg-purple-100 text-purple-700" },
   rejected:        { label: "Rejected",        classes: "bg-red-100 text-red-700" },
 };
 
@@ -291,6 +292,72 @@ export default async function ClaimDetailPage({
             initialNotes={notes}
             legacyNote={claim.review_notes}
           />
+
+          {/* Verification Details — shown after claimant completes the more-info form */}
+          {(claim.info_phone || claim.info_website || claim.info_relationship) && (
+            <Section title="Verification Details">
+              <dl className="space-y-2.5">
+                {claim.info_phone && (
+                  <MetaRow label="Business phone">
+                    <a href={`tel:${claim.info_phone}`} className="text-amber-700 hover:underline">
+                      {claim.info_phone}
+                    </a>
+                  </MetaRow>
+                )}
+                {claim.info_website && (
+                  <MetaRow label="Website / profile">
+                    <a
+                      href={claim.info_website.startsWith("http") ? claim.info_website : `https://${claim.info_website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber-700 hover:underline break-all"
+                    >
+                      {claim.info_website}
+                    </a>
+                  </MetaRow>
+                )}
+                {claim.info_socials && Object.keys(claim.info_socials).length > 0 && (
+                  <>
+                    {claim.info_socials.instagram && (
+                      <MetaRow label="Instagram">
+                        <span className="break-all">{claim.info_socials.instagram}</span>
+                      </MetaRow>
+                    )}
+                    {claim.info_socials.facebook && (
+                      <MetaRow label="Facebook">
+                        <span className="break-all">{claim.info_socials.facebook}</span>
+                      </MetaRow>
+                    )}
+                    {claim.info_socials.tiktok && (
+                      <MetaRow label="TikTok">
+                        <span className="break-all">{claim.info_socials.tiktok}</span>
+                      </MetaRow>
+                    )}
+                  </>
+                )}
+                {claim.info_relationship && (
+                  <MetaRow label="Relationship">
+                    <span className="whitespace-pre-wrap">{claim.info_relationship}</span>
+                  </MetaRow>
+                )}
+                {claim.info_additional_notes && (
+                  <MetaRow label="Additional notes">
+                    <span className="whitespace-pre-wrap">{claim.info_additional_notes}</span>
+                  </MetaRow>
+                )}
+                {claim.info_preferred_contact && (
+                  <MetaRow label="Preferred contact">
+                    {claim.info_preferred_contact}
+                  </MetaRow>
+                )}
+                {claim.more_info_completed_at && (
+                  <MetaRow label="Submitted at">
+                    <span className="text-gray-500">{fmt(claim.more_info_completed_at, true)}</span>
+                  </MetaRow>
+                )}
+              </dl>
+            </Section>
+          )}
 
           <ReviewActionsPanel
             claimId={claim.id}

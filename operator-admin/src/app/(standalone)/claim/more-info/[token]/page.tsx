@@ -1,0 +1,124 @@
+import { createAdminClient } from "@/lib/supabase/server";
+import MoreInfoForm from "./MoreInfoForm";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Verify Your Claim — Happy Hour Compass" };
+
+type Props = {
+  params: Promise<{ token: string }>;
+};
+
+// ── Token states ──────────────────────────────────────────────────────────────
+
+type TokenState = "invalid" | "expired" | "completed" | "error";
+
+function InvalidView({ reason }: { reason: TokenState }) {
+  const copy: Record<TokenState, { heading: string; body: string }> = {
+    invalid: {
+      heading: "Link not found",
+      body: "This link doesn't look right. Please check the email and try again, or reply to that email if you need help.",
+    },
+    expired: {
+      heading: "Link expired",
+      body: "This link has expired. Please reply to the original email and we'll send you a new one.",
+    },
+    completed: {
+      heading: "Already submitted",
+      body: "Your additional details have already been submitted. We'll review your claim and be in touch soon.",
+    },
+    error: {
+      heading: "Something went wrong",
+      body: "We hit an unexpected error. Please try again in a few minutes, or reply to the original email for help.",
+    },
+  };
+
+  const { heading, body } = copy[reason];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-8 py-12 flex flex-col items-center text-center">
+      <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-6">
+        <svg
+          className="w-7 h-7 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+          />
+        </svg>
+      </div>
+      <h1 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">{heading}</h1>
+      <p className="text-[14px] text-gray-500 leading-relaxed max-w-[280px]">{body}</p>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function ClaimMoreInfoPage({ params }: Props) {
+  const { token } = await params;
+
+  if (!token || token.length !== 64 || !/^[0-9a-f]+$/.test(token)) {
+    return <InvalidView reason="invalid" />;
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: rawClaim, error } = await supabase
+    .from("venue_claims")
+    .select(
+      "id, first_name, last_name, email, position, " +
+      "more_info_expires_at, more_info_completed_at, " +
+      "venues ( name )"
+    )
+    .eq("more_info_token", token)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[ClaimMoreInfoPage] Token lookup error:", error.message);
+    return <InvalidView reason="error" />;
+  }
+
+  if (!rawClaim) {
+    return <InvalidView reason="invalid" />;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const claim = rawClaim as any as Record<string, unknown>;
+
+  if (claim.more_info_completed_at) {
+    return <InvalidView reason="completed" />;
+  }
+
+  const expiresAt = claim.more_info_expires_at
+    ? new Date(claim.more_info_expires_at as string)
+    : null;
+
+  if (!expiresAt || expiresAt <= new Date()) {
+    return <InvalidView reason="expired" />;
+  }
+
+  const venueRaw = claim.venues;
+  const venueName = (
+    Array.isArray(venueRaw)
+      ? (venueRaw[0] as Record<string, unknown>)?.name
+      : (venueRaw as Record<string, unknown>)?.name
+  ) as string | null ?? "";
+
+  return (
+    <MoreInfoForm
+      token={token}
+      initial={{
+        venue_name: venueName,
+        first_name: (claim.first_name as string | null) ?? "",
+        last_name:  (claim.last_name  as string | null) ?? "",
+        email:      (claim.email      as string | null) ?? "",
+        position:   (claim.position   as string | null) ?? "",
+      }}
+    />
+  );
+}
