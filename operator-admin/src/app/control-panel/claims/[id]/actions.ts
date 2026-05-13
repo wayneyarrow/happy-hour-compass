@@ -19,7 +19,6 @@ export type ReviewState = {
   /** Human-readable label of the action that succeeded (for the success banner). */
   successAction?: string;
   error?: string;
-  fieldErrors?: { review_notes?: string };
 };
 
 type ReviewAction = "approve" | "needs_more_info" | "reject";
@@ -86,16 +85,6 @@ export async function reviewClaimAction(
     return { error: "Invalid action. Please try again." };
   }
 
-  const reviewNotes = (formData.get("review_notes") as string | null)?.trim() ?? "";
-
-  if (action === "needs_more_info" && !reviewNotes) {
-    return {
-      fieldErrors: {
-        review_notes: "A message is required when requesting more information.",
-      },
-    };
-  }
-
   // ── Resolve the reviewing admin's identity ─────────────────────────────────
   const authClient = await createClient();
   const {
@@ -113,9 +102,8 @@ export async function reviewClaimAction(
     const { error: updateError } = await supabase
       .from("venue_claims")
       .update({
-        status:       "rejected",
-        review_notes: reviewNotes || null,
-        reviewed_by:  user.id,
+        status:      "rejected",
+        reviewed_by: user.id,
         reviewed_at:  new Date().toISOString(),
       })
       .eq("id", claimId);
@@ -163,9 +151,8 @@ export async function reviewClaimAction(
     const { error: updateError } = await supabase
       .from("venue_claims")
       .update({
-        status:                 "needs_more_info",
-        review_notes:           reviewNotes || null,
-        reviewed_by:            user.id,
+        status:      "needs_more_info",
+        reviewed_by: user.id,
         reviewed_at:            now,
         more_info_token:        token,
         more_info_expires_at:   expiresAt,

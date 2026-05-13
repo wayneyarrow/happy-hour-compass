@@ -364,11 +364,12 @@ export default async function ClaimDetailPage({
         {/* ── Right column: review actions + trust signals ──────────────────── */}
         <div className="space-y-5">
 
-          <ReviewActionsPanel
-            claimId={claim.id}
-            initialNotes={claim.review_notes}
-            currentStatus={claim.status}
-          />
+          {claim.status !== "approved" && claim.status !== "rejected" && (
+            <ReviewActionsPanel
+              claimId={claim.id}
+              currentStatus={claim.status}
+            />
+          )}
 
           <Section title="Trust signals">
             <div className="divide-y divide-gray-100 -mt-1">
