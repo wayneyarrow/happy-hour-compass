@@ -71,7 +71,7 @@ export default async function ClaimMoreInfoPage({ params }: Props) {
   const { data: rawClaim, error } = await supabase
     .from("venue_claims")
     .select(
-      "id, first_name, last_name, email, position, " +
+      "id, first_name, last_name, email, position, phone, info_phone, " +
       "more_info_expires_at, more_info_completed_at, " +
       "venues ( name )"
     )
@@ -109,15 +109,21 @@ export default async function ClaimMoreInfoPage({ params }: Props) {
       : (venueRaw as Record<string, unknown>)?.name
   ) as string | null ?? "";
 
+  // Phone prefill: prefer info_phone (prior partial submission), fall back to
+  // the original claim phone field.
+  const initialPhone =
+    ((claim.info_phone as string | null) || (claim.phone as string | null) || "").trim();
+
   return (
     <MoreInfoForm
       token={token}
       initial={{
-        venue_name: venueName,
-        first_name: (claim.first_name as string | null) ?? "",
-        last_name:  (claim.last_name  as string | null) ?? "",
-        email:      (claim.email      as string | null) ?? "",
-        position:   (claim.position   as string | null) ?? "",
+        venue_name:    venueName,
+        first_name:    (claim.first_name as string | null) ?? "",
+        last_name:     (claim.last_name  as string | null) ?? "",
+        email:         (claim.email      as string | null) ?? "",
+        position:      (claim.position   as string | null) ?? "",
+        initial_phone: initialPhone,
       }}
     />
   );

@@ -28,6 +28,7 @@ type InitialValues = {
   last_name: string;
   email: string;
   position: string;
+  initial_phone: string;
 };
 
 const CONTACT_OPTIONS = [
@@ -53,7 +54,7 @@ export default function MoreInfoForm({
     {}
   );
 
-  const [phoneDisplay, setPhoneDisplay] = useState("");
+  const [phoneDisplay, setPhoneDisplay] = useState(() => formatPhone(initial.initial_phone));
   const [contactMethod, setContactMethod] = useState<string>("");
 
   // ── Success ───────────────────────────────────────────────────────────────

@@ -359,16 +359,17 @@ export default async function ClaimDetailPage({
             legacyNote={claim.review_notes}
           />
 
+        </div>
+
+        {/* ── Right column: review actions + trust signals ──────────────────── */}
+        <div className="space-y-5">
+
           <ReviewActionsPanel
             claimId={claim.id}
             initialNotes={claim.review_notes}
             currentStatus={claim.status}
           />
 
-        </div>
-
-        {/* ── Right column: trust signals ──────────────────────────────────── */}
-        <div>
           <Section title="Trust signals">
             <div className="divide-y divide-gray-100 -mt-1">
               {signals.map((signal) => (
@@ -376,6 +377,7 @@ export default async function ClaimDetailPage({
               ))}
             </div>
           </Section>
+
         </div>
 
       </div>
