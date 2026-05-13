@@ -6,6 +6,12 @@ import { sendPasswordSetupEmail, sendRequestMoreInfoEmail } from "@/lib/email";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type AddClaimNoteState = {
+  success?: true;
+  error?: string;
+  fieldError?: string;
+};
+
 export type ReviewState = {
   success?: true;
   /** Human-readable label of the action that succeeded (for the success banner). */
@@ -415,4 +421,53 @@ export async function reviewClaimAction(
   revalidatePath(`/control-panel/claims/${claimId}`);
 
   return { success: true, successAction: ACTION_LABELS.approve };
+}
+
+// ── Append internal claim note ────────────────────────────────────────────────
+
+/**
+ * Appends a new internal note to venue_claim_notes.
+ * Does NOT overwrite previous notes — each call inserts a new row.
+ * Notes are internal only; never shared with claimants.
+ *
+ * claimId is bound via .bind(null, claimId).
+ */
+export async function addClaimNoteAction(
+  claimId: string,
+  _prevState: AddClaimNoteState,
+  formData: FormData
+): Promise<AddClaimNoteState> {
+  const note = (formData.get("note") as string | null)?.trim() ?? "";
+
+  if (!note) {
+    return { fieldError: "Note cannot be empty." };
+  }
+
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user) {
+    return { error: "Session expired. Please sign in again." };
+  }
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("venue_claim_notes")
+    .insert({
+      claim_id:         claimId,
+      note,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
+
+  if (error) {
+    console.error("[addClaimNoteAction] Insert failed:", error.message);
+    return { error: "Failed to save note. Please try again." };
+  }
+
+  revalidatePath(`/control-panel/claims/${claimId}`);
+  return { success: true };
 }

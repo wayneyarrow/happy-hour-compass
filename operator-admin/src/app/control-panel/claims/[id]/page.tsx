@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getClaimById } from "@/lib/data/claims";
+import { getClaimById, getClaimNotes } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
 import ReviewActionsPanel from "./ReviewActionsPanel";
+import ClaimNotesSection from "./ClaimNotesSection";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
@@ -140,7 +141,10 @@ export default async function ClaimDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { claim, error } = await getClaimById(id);
+  const [{ claim, error }, { notes }] = await Promise.all([
+    getClaimById(id),
+    getClaimNotes(id),
+  ]);
 
   // ── Not found ──────────────────────────────────────────────────────────────
   if (!error && !claim) {
@@ -281,16 +285,12 @@ export default async function ClaimDetailPage({
             </dl>
           </Section>
 
-          {/* Review notes */}
-          <Section title="Review notes">
-            {claim.review_notes ? (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {claim.review_notes}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-400 italic">No review notes yet.</p>
-            )}
-          </Section>
+          {/* Internal notes */}
+          <ClaimNotesSection
+            claimId={claim.id}
+            initialNotes={notes}
+            legacyNote={claim.review_notes}
+          />
 
           <ReviewActionsPanel
             claimId={claim.id}

@@ -2,6 +2,16 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** One entry in the internal notes log for a claim. */
+export type ClaimNote = {
+  id: string;
+  claim_id: string;
+  note: string;
+  created_by: string | null;
+  created_by_email: string | null;
+  created_at: string;
+};
+
 export type ClaimWithVenue = {
   id: string;
   venue_id: string;
@@ -191,4 +201,34 @@ export async function getClaimById(id: string): Promise<{
   };
 
   return { claim, error: null };
+}
+
+/**
+ * Fetches internal notes for a single claim, newest first.
+ * Uses the admin client — RLS blocks non-service-role reads on venue_claim_notes.
+ */
+export async function getClaimNotes(claimId: string): Promise<{ notes: ClaimNote[] }> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("venue_claim_notes")
+    .select("id, claim_id, note, created_by, created_by_email, created_at")
+    .eq("claim_id", claimId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getClaimNotes]", error.message);
+    return { notes: [] };
+  }
+
+  const notes: ClaimNote[] = (data ?? []).map((row) => ({
+    id:               row.id as string,
+    claim_id:         row.claim_id as string,
+    note:             row.note as string,
+    created_by:       row.created_by as string | null,
+    created_by_email: row.created_by_email as string | null,
+    created_at:       row.created_at as string,
+  }));
+
+  return { notes };
 }
