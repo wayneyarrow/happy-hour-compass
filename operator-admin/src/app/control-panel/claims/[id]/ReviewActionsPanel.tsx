@@ -109,7 +109,7 @@ export default function ReviewActionsPanel({
             disabled={pending || isResolved}
             className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {pending ? "Saving…" : "Approve"}
+            {pending ? "Saving…" : "Approve Claim"}
           </button>
 
           {/* Request more info — hidden once claimant has already responded */}
