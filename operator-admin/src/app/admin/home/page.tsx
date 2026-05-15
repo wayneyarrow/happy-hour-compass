@@ -17,14 +17,19 @@ import {
 // matching #id hash so the browser scrolls the section into view.
 
 const ITEM_HREF: Record<string, string> = {
-  reviewImportedDetails:"/admin/venue?section=business-details#business-details",
+  // Claimed-venue review tasks
+  claimedReview_businessDetails: "/admin/venue?section=business-details#business-details",
+  claimedReview_venueType:       "/admin/venue?section=business-details#business-details",
+  claimedReview_businessHours:   "/admin/venue?section=business-hours#business-hours",
+  claimedReview_hhSpecials:      "/admin/happy-hours?section=food#food",
+  claimedReview_image:           "/admin/venue?section=images#images",
+  // Standard items
   hasVenueName:         "/admin/venue?section=business-details#business-details",
   hasAddressLine1:      "/admin/venue?section=business-details#business-details",
   hasCity:              "/admin/venue?section=business-details#business-details",
   hasProvinceOrState:   "/admin/venue?section=business-details#business-details",
   hasHappyHourTimes:    "/admin/happy-hours?section=times#times",
   hasVenueImage:        "/admin/venue?section=images#images",
-  hasOperatorVenueImage:"/admin/venue?section=images#images",
   hasConfirmedVenueType:"/admin/venue?section=business-details#business-details",
   hasFoodSpecials:      "/admin/happy-hours?section=food#food",
   hasDrinkSpecials:     "/admin/happy-hours?section=drink#drink",
@@ -39,14 +44,19 @@ const ITEM_HREF: Record<string, string> = {
 
 // Short action labels per item key
 const ITEM_ACTION: Record<string, string> = {
-  reviewImportedDetails:"Review details",
+  // Claimed-venue review tasks
+  claimedReview_businessDetails: "Review",
+  claimedReview_venueType:       "Confirm",
+  claimedReview_businessHours:   "Review",
+  claimedReview_hhSpecials:      "Review",
+  claimedReview_image:           "Upload photo",
+  // Standard items
   hasVenueName:         "Edit details",
   hasAddressLine1:      "Add address",
   hasCity:              "Add city",
   hasProvinceOrState:   "Add province",
   hasHappyHourTimes:    "Set times",
   hasVenueImage:        "Upload photo",
-  hasOperatorVenueImage:"Upload photo",
   hasConfirmedVenueType:"Set type",
   hasFoodSpecials:      "Add specials",
   hasDrinkSpecials:     "Add specials",
@@ -90,40 +100,51 @@ const VENUE_SELECT =
 
 // ── Presentational helpers ─────────────────────────────────────────────────────
 
-function CheckCircle() {
+// Keys belonging to the claimed-venue imported-data verification section.
+// Used in the page to split strongRecommendations into review vs improvement groups.
+const CLAIMED_REVIEW_KEYS = new Set([
+  "claimedReview_businessDetails",
+  "claimedReview_venueType",
+  "claimedReview_businessHours",
+  "claimedReview_hhSpecials",
+  "claimedReview_image",
+]);
+
+// Shown at the bottom of a section when some items are already complete.
+// Replaces the long list of green-check completed rows with a single compact line.
+function CompletedItemsSummary({ count }: { count: number }) {
+  if (count === 0) return null;
   return (
-    <svg
-      className="w-5 h-5 text-green-500 shrink-0 mt-0.5"
-      fill="currentColor"
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-        clipRule="evenodd"
-      />
-    </svg>
+    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-100 bg-white">
+      <svg
+        className="w-4 h-4 text-green-500 shrink-0"
+        fill="currentColor"
+        viewBox="0 0 20 20"
+        aria-hidden="true"
+      >
+        <path
+          fillRule="evenodd"
+          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+          clipRule="evenodd"
+        />
+      </svg>
+      <span className="text-xs text-gray-400">
+        {count === 1 ? "1 item already complete" : `${count} items already complete`}
+      </span>
+    </div>
   );
 }
 
 type Tier = "required" | "strong" | "recommendation";
 
+// Renders a single incomplete readiness item. Completed items are never passed
+// here — each section pre-filters to incomplete items and uses CompletedItemsSummary
+// to surface the count instead of individual green-check rows.
 function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
   const href   = ITEM_HREF[item.key]   ?? "/admin/venue";
   const action = ITEM_ACTION[item.key] ?? "Go to";
 
-  // Completed — muted row with green check
-  if (item.completed) {
-    return (
-      <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-100">
-        <CheckCircle />
-        <span className="text-sm text-gray-400 leading-5">{item.label}</span>
-      </div>
-    );
-  }
-
-  // Missing — required tier
+  // Required / high-urgency tier — amber border, prominent CTA button
   if (tier === "required") {
     return (
       <div className="flex items-start gap-3 px-4 py-4 bg-white rounded-xl border border-amber-200">
@@ -142,7 +163,7 @@ function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
     );
   }
 
-  // Missing — strong recommendation tier
+  // Strong / review tier — neutral border, amber text link
   if (tier === "strong") {
     return (
       <div className="flex items-start gap-3 px-4 py-4 bg-white rounded-xl border border-gray-200">
@@ -161,7 +182,7 @@ function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
     );
   }
 
-  // Missing — recommendation tier
+  // Recommendation tier — light border, muted text
   return (
     <div className="flex items-start gap-3 px-4 py-3.5 bg-white rounded-xl border border-gray-100">
       <div className="w-5 h-5 rounded-full border-2 border-gray-200 shrink-0 mt-0.5" />
@@ -267,6 +288,30 @@ export default async function AdminHomePage() {
     readiness.missingRequired.length === 0 &&
     readiness.missingStrongRecommendations.length === 0 &&
     readiness.missingRecommendations.length === 0;
+
+  // ── Section data pre-computations ─────────────────────────────────────────
+  // Each section shows only incomplete items. Completed items are replaced by
+  // a compact summary line so the page stays focused on what needs attention.
+
+  const incompleteRequired     = readiness ? readiness.required.filter(i => !i.completed) : [];
+  const completedRequiredCount = readiness ? readiness.required.length - incompleteRequired.length : 0;
+
+  // Split strongRecommendations into claimed-review tasks and general improvements.
+  const reviewItems      = readiness
+    ? readiness.strongRecommendations.filter(i => CLAIMED_REVIEW_KEYS.has(i.key))
+    : [];
+  const improvementItems = readiness
+    ? readiness.strongRecommendations.filter(i => !CLAIMED_REVIEW_KEYS.has(i.key))
+    : [];
+
+  const incompleteReviewItems      = reviewItems.filter(i => !i.completed);
+  const completedReviewCount       = reviewItems.length - incompleteReviewItems.length;
+
+  const incompleteImprovements     = improvementItems.filter(i => !i.completed);
+  const completedImprovementsCount = improvementItems.length - incompleteImprovements.length;
+
+  const incompleteRecs     = readiness ? readiness.recommendations.filter(i => !i.completed) : [];
+  const completedRecsCount = readiness ? readiness.recommendations.length - incompleteRecs.length : 0;
 
   return (
     <div className="max-w-2xl">
@@ -380,35 +425,57 @@ export default async function AdminHomePage() {
                   {isPublished ? "Important profile items" : "Required to publish"}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {readiness.missingRequired.length === 0
+                  {incompleteRequired.length === 0
                     ? isPublished
                       ? "All core profile items are filled in."
                       : "All required items are complete."
                     : isPublished
-                      ? `${readiness.missingRequired.length} item${readiness.missingRequired.length === 1 ? "" : "s"} still incomplete — your listing is live but not fully filled out.`
-                      : `${readiness.missingRequired.length} of ${readiness.required.length} items still needed.`}
+                      ? `${incompleteRequired.length} item${incompleteRequired.length === 1 ? "" : "s"} still incomplete.`
+                      : `${incompleteRequired.length} of ${readiness.required.length} items still needed.`}
                 </p>
               </div>
-              {readiness.missingRequired.length === 0 && (
+              {incompleteRequired.length === 0 && (
                 <span className="shrink-0 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
                   ✓ Complete
                 </span>
               )}
             </div>
-            <div className="space-y-2">
-              {/* Missing required items first, then completed */}
-              {readiness.required
-                .slice()
-                .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1))
-                .map((item) => (
+            {incompleteRequired.length > 0 && (
+              <div className="space-y-2">
+                {incompleteRequired.map((item) => (
                   <ReadinessRow key={item.key} item={item} tier="required" />
                 ))}
+                {completedRequiredCount > 0 && (
+                  <CompletedItemsSummary count={completedRequiredCount} />
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Claimed-venue review tasks ───────────────────────────────────── */}
+        {/* Only shown for claimed/imported venues with outstanding review items. */}
+        {venue && readiness && isClaimed && incompleteReviewItems.length > 0 && (
+          <section aria-label="Review imported profile">
+            <div className="mb-2 px-0.5">
+              <h3 className="text-sm font-semibold text-gray-900">Review your imported profile</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Your venue data was imported — check these items to make sure everything is accurate.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {incompleteReviewItems.map((item) => (
+                <ReadinessRow key={item.key} item={item} tier="strong" />
+              ))}
+              {completedReviewCount > 0 && (
+                <CompletedItemsSummary count={completedReviewCount} />
+              )}
             </div>
           </section>
         )}
 
-        {/* ── Strong recommendations ──────────────────────────────────────── */}
-        {venue && readiness && readiness.strongRecommendations.length > 0 && (
+        {/* ── Improvement suggestions ──────────────────────────────────────── */}
+        {venue && readiness && incompleteImprovements.length > 0 && (
           <section aria-label="Recommended improvements">
             <div className="mb-2 px-0.5">
               <h3 className="text-sm font-semibold text-gray-900">Improve your listing</h3>
@@ -417,18 +484,18 @@ export default async function AdminHomePage() {
               </p>
             </div>
             <div className="space-y-2">
-              {readiness.strongRecommendations
-                .slice()
-                .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1))
-                .map((item) => (
-                  <ReadinessRow key={item.key} item={item} tier="strong" />
-                ))}
+              {incompleteImprovements.map((item) => (
+                <ReadinessRow key={item.key} item={item} tier="strong" />
+              ))}
+              {completedImprovementsCount > 0 && (
+                <CompletedItemsSummary count={completedImprovementsCount} />
+              )}
             </div>
           </section>
         )}
 
-        {/* ── Recommendations ─────────────────────────────────────────────── */}
-        {venue && readiness && readiness.recommendations.length > 0 && (
+        {/* ── Profile suggestions ──────────────────────────────────────────── */}
+        {venue && readiness && incompleteRecs.length > 0 && (
           <section aria-label="Optional optimizations">
             <div className="mb-2 px-0.5">
               <h3 className="text-sm font-semibold text-gray-700">Keep optimizing</h3>
@@ -437,12 +504,12 @@ export default async function AdminHomePage() {
               </p>
             </div>
             <div className="space-y-2">
-              {readiness.recommendations
-                .slice()
-                .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1))
-                .map((item) => (
-                  <ReadinessRow key={item.key} item={item} tier="recommendation" />
-                ))}
+              {incompleteRecs.map((item) => (
+                <ReadinessRow key={item.key} item={item} tier="recommendation" />
+              ))}
+              {completedRecsCount > 0 && (
+                <CompletedItemsSummary count={completedRecsCount} />
+              )}
             </div>
           </section>
         )}

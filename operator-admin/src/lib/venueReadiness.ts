@@ -290,62 +290,81 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   ];
 
   // ── Tier 2: Strong Recommendations — high-priority, do not block publish ───
+  //
+  // Claimed venues see granular "verify imported data" tasks instead of generic
+  // "add this field" prompts. Keys are prefixed with "claimedReview_" so the
+  // page layer can render them in a dedicated verification section.
+  // Submitted venues see the standard profile-completion items.
 
   const strongRecommendations: ReadinessItem[] = [
-    // Claimed-only (highest priority): prompt the operator to review the
-    // imported profile rather than treating it as a blank setup form.
-    // Considered complete once they've uploaded their own image — a reliable
-    // signal that they've actively engaged with and taken ownership of the profile.
     ...(isClaimed
       ? [
+          // ── Claimed venues: imported-data verification tasks ──────────────
           {
-            key: "reviewImportedDetails",
-            label: "Review your imported venue details",
+            key: "claimedReview_businessDetails",
+            label: "Verify your business details",
             description:
-              "Your profile was imported from our database. Check your address, business hours, venue type, and contact info to make sure everything looks right.",
+              "Check that your imported address, phone number, and contact details are correct for your venue.",
+            completed: hasAddressLine1 && hasCity && hasProvinceOrState,
+          },
+          {
+            key: "claimedReview_venueType",
+            label: "Confirm your venue type",
+            description:
+              "The imported venue type may not match your establishment. Set it correctly so guests can find you in the right searches.",
+            completed: hasConfirmedVenueType,
+          },
+          {
+            key: "claimedReview_businessHours",
+            label: "Review your business hours",
+            description:
+              "Guests check hours before visiting. Make sure the imported schedule is accurate and up to date.",
+            completed: hasBusinessHours,
+          },
+          {
+            key: "claimedReview_hhSpecials",
+            label: "Review or add your happy hour specials",
+            description:
+              "Food and drink deals are the #1 reason guests choose a venue. Review any imported items or add your own.",
+            completed: hasFoodSpecials && hasDrinkSpecials,
+          },
+          {
+            key: "claimedReview_image",
+            label: "Upload your own venue photo",
+            description:
+              "Your listing shows a placeholder photo. Upload a real image of your venue to build guest trust and make a stronger impression.",
             completed: hasOperatorVenueImage,
           },
         ]
-      : []),
-    // Claimed-only: shown when a placeholder image is present (claimed venue
-    // has any image but the operator has not uploaded their own). Not shown
-    // when imageCount === 0 — the required "Add a venue image" item handles that case.
-    ...(isClaimed && hasAnyVenueImage
-      ? [
+      : [
+          // ── Submitted venues: standard profile-completion items ────────────
           {
-            key: "hasOperatorVenueImage",
-            label: "Replace the placeholder image with your own photo",
+            key: "hasConfirmedVenueType",
+            label: "Confirm venue type",
             description:
-              "Your listing currently shows a generic placeholder photo. Upload your own to build trust and help your venue stand out.",
-            completed: hasOperatorVenueImage,
+              "Helps guests find venues that match their preferences. Set your establishment type in Business Details.",
+            completed: hasConfirmedVenueType,
           },
-        ]
-      : []),
-    {
-      key: "hasConfirmedVenueType",
-      label: "Confirm venue type",
-      description:
-        "Helps guests find venues that match their preferences. Set your establishment type in Business Details.",
-      completed: hasConfirmedVenueType,
-    },
-    {
-      key: "hasFoodSpecials",
-      label: "Add food specials",
-      description: "Food specials are among the most searched happy hour features.",
-      completed: hasFoodSpecials,
-    },
-    {
-      key: "hasDrinkSpecials",
-      label: "Add drink specials",
-      description: "Drink deals are the #1 reason guests choose a happy hour venue.",
-      completed: hasDrinkSpecials,
-    },
-    {
-      key: "hasBusinessHours",
-      label: "Add business hours",
-      description: "Guests check hours before visiting. Complete hours reduce no-shows.",
-      completed: hasBusinessHours,
-    },
+          {
+            key: "hasFoodSpecials",
+            label: "Add food specials",
+            description: "Food specials are among the most searched happy hour features.",
+            completed: hasFoodSpecials,
+          },
+          {
+            key: "hasDrinkSpecials",
+            label: "Add drink specials",
+            description: "Drink deals are the #1 reason guests choose a happy hour venue.",
+            completed: hasDrinkSpecials,
+          },
+          {
+            key: "hasBusinessHours",
+            label: "Add business hours",
+            description: "Guests check hours before visiting. Complete hours reduce no-shows.",
+            completed: hasBusinessHours,
+          },
+        ]),
+    // Menu link: valuable for all venues
     {
       key: "hasMenuLink",
       label: "Add menu link",
@@ -355,30 +374,31 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   ];
 
   // ── Tier 3: Recommendations — nice-to-have, do not block publish ───────────
+  // Copy is written as helpful suggestions, not admin checklist entries.
 
   const recommendations: ReadinessItem[] = [
     {
       key: "hasPhone",
-      label: "Add phone number",
-      description: "Lets guests call ahead for reservations or questions.",
+      label: "Add a phone number",
+      description: "Lets guests call ahead to check on specials, make a reservation, or ask questions.",
       completed: hasPhone,
     },
     {
       key: "hasWebsite",
-      label: "Add website URL",
-      description: "Links your listing to your main online presence.",
+      label: "Link your website",
+      description: "Connects your listing to your main online presence so guests can learn more.",
       completed: hasWebsite,
     },
     {
       key: "hasTagline",
-      label: "Add a tagline",
-      description: "A short, memorable tagline can set your venue apart in search results.",
+      label: "Add a short tagline",
+      description: "A quick line about what makes your happy hour worth visiting.",
       completed: hasTagline,
     },
     {
       key: "hasPaymentTypes",
-      label: "Add payment types",
-      description: "Guests appreciate knowing accepted payment methods before they visit.",
+      label: "Show accepted payment methods",
+      description: "Guests appreciate knowing what payment you accept before they arrive.",
       completed: hasPaymentTypes,
     },
     {
