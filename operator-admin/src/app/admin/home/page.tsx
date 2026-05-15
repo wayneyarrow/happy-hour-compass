@@ -13,25 +13,27 @@ import {
 } from "@/lib/venueReadiness";
 
 // ── Deep-link destinations for each readiness signal key ─────────────────────
+// Each href includes ?section= to auto-open the correct accordion, plus a
+// matching #id hash so the browser scrolls the section into view.
 
 const ITEM_HREF: Record<string, string> = {
-  hasVenueName:         "/admin/venue",
-  hasAddressLine1:      "/admin/venue",
-  hasCity:              "/admin/venue",
-  hasProvinceOrState:   "/admin/venue",
-  hasHappyHourTimes:    "/admin/happy-hours",
-  hasVenueImage:        "/admin/venue",
-  hasOperatorVenueImage:"/admin/venue",
-  hasConfirmedVenueType:"/admin/venue",
-  hasFoodSpecials:      "/admin/happy-hours",
-  hasDrinkSpecials:     "/admin/happy-hours",
-  hasBusinessHours:     "/admin/venue",
-  hasMenuLink:          "/admin/venue",
-  hasPhone:             "/admin/venue",
-  hasWebsite:           "/admin/venue",
-  hasTagline:           "/admin/happy-hours",
-  hasPaymentTypes:      "/admin/venue",
-  hasPostalCode:        "/admin/venue",
+  hasVenueName:         "/admin/venue?section=business-details#business-details",
+  hasAddressLine1:      "/admin/venue?section=business-details#business-details",
+  hasCity:              "/admin/venue?section=business-details#business-details",
+  hasProvinceOrState:   "/admin/venue?section=business-details#business-details",
+  hasHappyHourTimes:    "/admin/happy-hours?section=times#times",
+  hasVenueImage:        "/admin/venue?section=images#images",
+  hasOperatorVenueImage:"/admin/venue?section=images#images",
+  hasConfirmedVenueType:"/admin/venue?section=business-details#business-details",
+  hasFoodSpecials:      "/admin/happy-hours?section=food#food",
+  hasDrinkSpecials:     "/admin/happy-hours?section=drink#drink",
+  hasBusinessHours:     "/admin/venue?section=business-hours#business-hours",
+  hasMenuLink:          "/admin/venue?section=links#links",
+  hasPhone:             "/admin/venue?section=business-details#business-details",
+  hasWebsite:           "/admin/venue?section=links#links",
+  hasTagline:           "/admin/happy-hours?section=tagline#tagline",
+  hasPaymentTypes:      "/admin/venue?section=payment-types#payment-types",
+  hasPostalCode:        "/admin/venue?section=business-details#business-details",
 };
 
 // Short action labels per item key
@@ -366,11 +368,17 @@ export default async function AdminHomePage() {
           <section aria-label="Required items">
             <div className="flex items-start justify-between gap-3 mb-2 px-0.5">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Required to publish</h3>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {isPublished ? "Important profile items" : "Required to publish"}
+                </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {readiness.missingRequired.length === 0
-                    ? "All required items are complete."
-                    : `${readiness.missingRequired.length} of ${readiness.required.length} items still needed.`}
+                    ? isPublished
+                      ? "All core profile items are filled in."
+                      : "All required items are complete."
+                    : isPublished
+                      ? `${readiness.missingRequired.length} item${readiness.missingRequired.length === 1 ? "" : "s"} still incomplete — your listing is live but not fully filled out.`
+                      : `${readiness.missingRequired.length} of ${readiness.required.length} items still needed.`}
                 </p>
               </div>
               {readiness.missingRequired.length === 0 && (
@@ -397,7 +405,7 @@ export default async function AdminHomePage() {
             <div className="mb-2 px-0.5">
               <h3 className="text-sm font-semibold text-gray-900">Improve your listing</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                These additions make your venue more discoverable and persuasive to guests.
+                These additions make your venue more discoverable and help it stand out to guests.
               </p>
             </div>
             <div className="space-y-2">

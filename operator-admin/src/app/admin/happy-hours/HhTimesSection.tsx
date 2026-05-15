@@ -6,6 +6,7 @@ type Props = {
   title: string;
   description?: string;
   defaultOpen?: boolean;
+  id?: string;
   children: React.ReactNode;
 };
 
@@ -18,12 +19,13 @@ export default function HhTimesSection({
   title,
   description,
   defaultOpen = false,
+  id,
   children,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div id={id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

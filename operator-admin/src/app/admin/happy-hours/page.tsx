@@ -137,9 +137,22 @@ function parseSpecials(raw: string | null | undefined): HhItem[] {
   return [];
 }
 
+// ── Section id/name mapping ───────────────────────────────────────────────────
+
+type HhSection = "tagline" | "times" | "food" | "drink";
+
+function isOpen(section: string | undefined, name: HhSection): boolean {
+  return section === name;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function AdminHappyHoursPage() {
+export default async function AdminHappyHoursPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ section?: string }>;
+}) {
+  const { section } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -212,8 +225,12 @@ export default async function AdminHappyHoursPage() {
       {!operatorError && (operator || isImpersonating) && venue && (
         <div className="space-y-3">
 
-          {/* Section 1: Tagline — expanded by default */}
-          <AccordionSection title="Tagline" defaultOpen>
+          {/* Section 1: Tagline — expanded by default or when deep-linked */}
+          <AccordionSection
+            id="tagline"
+            title="Tagline"
+            defaultOpen={!section || isOpen(section, "tagline")}
+          >
             <TaglineForm
               venueId={venue.id}
               initialTagline={venue.hh_tagline ?? ""}
@@ -222,8 +239,10 @@ export default async function AdminHappyHoursPage() {
 
           {/* Section 2: Happy Hour Times — uses HhTimesSection (always mounted) */}
           <HhTimesSection
+            id="times"
             title="Happy Hour Times"
             description="Set the days and times when your happy hour is active."
+            defaultOpen={isOpen(section, "times")}
           >
             <HhTimesForm
               venueId={venue.id}
@@ -232,7 +251,11 @@ export default async function AdminHappyHoursPage() {
           </HhTimesSection>
 
           {/* Section 3: Food specials */}
-          <AccordionSection title="Food specials">
+          <AccordionSection
+            id="food"
+            title="Food specials"
+            defaultOpen={isOpen(section, "food")}
+          >
             <SpecialsForm
               venueId={venue.id}
               type="food"
@@ -241,7 +264,11 @@ export default async function AdminHappyHoursPage() {
           </AccordionSection>
 
           {/* Section 4: Drink specials */}
-          <AccordionSection title="Drink specials">
+          <AccordionSection
+            id="drink"
+            title="Drink specials"
+            defaultOpen={isOpen(section, "drink")}
+          >
             <SpecialsForm
               venueId={venue.id}
               type="drink"

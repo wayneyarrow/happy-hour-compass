@@ -54,9 +54,28 @@ function parsePaymentTypes(raw: string | null | undefined): string[] {
   return [];
 }
 
+// ── Section id/name mapping ───────────────────────────────────────────────────
+
+type VenueSection =
+  | "business-details"
+  | "business-hours"
+  | "payment-types"
+  | "links"
+  | "images"
+  | "publish";
+
+function isOpen(section: string | undefined, name: VenueSection): boolean {
+  return section === name;
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function AdminVenuePage() {
+export default async function AdminVenuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ section?: string }>;
+}) {
+  const { section } = await searchParams;
   // Auth guard: redirect unauthenticated users. During impersonation the CP
   // admin IS authenticated (their own Supabase session), so this passes.
   const supabase = await createClient();
@@ -168,8 +187,12 @@ export default async function AdminVenuePage() {
       {!operatorError && (operator || isImpersonating) && venue && (
         <div className="space-y-3">
 
-          {/* Section 1: Business details — expanded by default */}
-          <AccordionSection title="Business details" defaultOpen>
+          {/* Section 1: Business details — expanded by default or when deep-linked */}
+          <AccordionSection
+            id="business-details"
+            title="Business details"
+            defaultOpen={!section || isOpen(section, "business-details")}
+          >
             <BusinessDetailsForm
               venueId={venue.id}
               initialValues={{
@@ -187,15 +210,15 @@ export default async function AdminVenuePage() {
             />
           </AccordionSection>
 
-          {/* Section 2: Business hours
-              BusinessHoursForm is unchanged from its original location.
-              On success it redirects to /dashboard → /admin/venue. */}
+          {/* Section 2: Business hours */}
           <AccordionSection
+            id="business-hours"
             title="Business hours"
             description={
               'Check "Closed" for days the venue is not open. ' +
               "Overnight hours (e.g. 10 PM – 2 AM) are supported."
             }
+            defaultOpen={isOpen(section, "business-hours")}
           >
             <BusinessHoursForm
               venueId={venue.id}
@@ -203,10 +226,12 @@ export default async function AdminVenuePage() {
             />
           </AccordionSection>
 
-          {/* Section 3: Payment types
-              key forces remount when stored payment_types changes after
-              router.refresh(), ensuring controlled checkboxes re-initialise. */}
-          <AccordionSection title="Payment types">
+          {/* Section 3: Payment types */}
+          <AccordionSection
+            id="payment-types"
+            title="Payment types"
+            defaultOpen={isOpen(section, "payment-types")}
+          >
             <PaymentTypesForm
               key={paymentTypesKey}
               venueId={venue.id}
@@ -215,7 +240,11 @@ export default async function AdminVenuePage() {
           </AccordionSection>
 
           {/* Section 4: Links */}
-          <AccordionSection title="Links">
+          <AccordionSection
+            id="links"
+            title="Links"
+            defaultOpen={isOpen(section, "links")}
+          >
             <LinksForm
               venueId={venue.id}
               initialValues={{
@@ -227,8 +256,10 @@ export default async function AdminVenuePage() {
 
           {/* Section 5: Images */}
           <AccordionSection
+            id="images"
             title="Venue images"
             description="Upload up to 5 images. The first image is used as the primary image."
+            defaultOpen={isOpen(section, "images")}
           >
             <VenueImagesSection
               venueId={venue.id}
@@ -236,10 +267,12 @@ export default async function AdminVenuePage() {
             />
           </AccordionSection>
 
-          {/* Section 6: Publish — works in normal mode, Case A, and Case B (server action) */}
+          {/* Section 6: Publish */}
           <AccordionSection
+            id="publish"
             title="Publish"
             description="Make your venue visible to the public. At least one venue image is required."
+            defaultOpen={isOpen(section, "publish")}
           >
             <VenuePublishSection
               venueId={venue.id}
