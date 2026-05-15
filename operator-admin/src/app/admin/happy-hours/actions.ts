@@ -2,24 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { buildVenueUpdate } from "@/lib/venueActions";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared venue-update builder
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildVenueUpdate(
-  ctx: Awaited<ReturnType<typeof resolveOperatorContext>>,
-  venueId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updates: Record<string, any>
-) {
-  const q = ctx.supabase
-    .from("venues")
-    .update(updates, { count: "exact" })
-    .eq("id", venueId);
-  return ctx.operator ? q.eq("created_by_operator_id", ctx.operator.id) : q;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Update tagline (hh_tagline)

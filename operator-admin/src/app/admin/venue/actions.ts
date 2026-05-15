@@ -1,6 +1,7 @@
 "use server";
 
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { buildVenueUpdate } from "@/lib/venueActions";
 import { redirect } from "next/navigation";
 import {
   ESTABLISHMENT_TYPE_OPTIONS,
@@ -24,37 +25,6 @@ function generateSlug(name: string): string {
     .slice(0, 50);
   const suffix = Math.random().toString(36).slice(2, 7);
   return base ? `${base}-${suffix}` : `venue-${suffix}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Build the venue UPDATE query with correct ownership scoping.
- *
- * Normal / Case A impersonation: filter by both venue id AND operator id.
- * Case B impersonation (orphan):  filter by venue id only (no operator assigned).
- *
- * In impersonation mode ctx.supabase is the admin client (bypasses RLS).
- * The explicit filter ensures we never touch any venue other than the target.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildVenueUpdate(
-  ctx: Awaited<ReturnType<typeof resolveOperatorContext>>,
-  venueId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updates: Record<string, any>
-) {
-  const q = ctx.supabase
-    .from("venues")
-    .update(updates, { count: "exact" })
-    .eq("id", venueId);
-  // Add operator ownership filter when operator is known.
-  // In Case B (orphan) there is no operator, so venue id alone is the scope.
-  return ctx.operator
-    ? q.eq("created_by_operator_id", ctx.operator.id)
-    : q;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
