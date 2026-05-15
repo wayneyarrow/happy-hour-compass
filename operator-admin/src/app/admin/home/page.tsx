@@ -13,8 +13,6 @@ import {
 } from "@/lib/venueReadiness";
 
 // ── Deep-link destinations for each readiness signal key ─────────────────────
-// Each href includes ?section= to auto-open the correct accordion, plus a
-// matching #id hash so the browser scrolls the section into view.
 
 const ITEM_HREF: Record<string, string> = {
   // Claimed-venue review tasks
@@ -42,13 +40,13 @@ const ITEM_HREF: Record<string, string> = {
   hasPostalCode:        "/admin/venue?section=business-details#business-details",
 };
 
-// Short action labels per item key
+// Action labels for incomplete items
 const ITEM_ACTION: Record<string, string> = {
   // Claimed-venue review tasks
-  claimedReview_businessDetails: "Review",
-  claimedReview_venueType:       "Confirm",
-  claimedReview_businessHours:   "Review",
-  claimedReview_hhSpecials:      "Review",
+  claimedReview_businessDetails: "Review details",
+  claimedReview_venueType:       "Confirm type",
+  claimedReview_businessHours:   "Review hours",
+  claimedReview_hhSpecials:      "Review specials",
   claimedReview_image:           "Upload photo",
   // Standard items
   hasVenueName:         "Edit details",
@@ -68,6 +66,13 @@ const ITEM_ACTION: Record<string, string> = {
   hasPaymentTypes:      "Add payments",
   hasPostalCode:        "Add postal",
 };
+
+// For claimed venues: completed items with potentially imported values use "Review →"
+// instead of "Add ..." so operators know they're verifying existing data, not adding new.
+const CLAIMED_REVIEW_ACTION_KEYS = new Set([
+  "hasMenuLink", "hasPhone", "hasWebsite", "hasPaymentTypes",
+  "hasPostalCode", "hasTagline", "hasConfirmedVenueType",
+]);
 
 // ── Venue row type ─────────────────────────────────────────────────────────────
 
@@ -101,7 +106,6 @@ const VENUE_SELECT =
 // ── Presentational helpers ─────────────────────────────────────────────────────
 
 // Keys belonging to the claimed-venue imported-data verification section.
-// Used in the page to split strongRecommendations into review vs improvement groups.
 const CLAIMED_REVIEW_KEYS = new Set([
   "claimedReview_businessDetails",
   "claimedReview_venueType",
@@ -110,41 +114,89 @@ const CLAIMED_REVIEW_KEYS = new Set([
   "claimedReview_image",
 ]);
 
-// Shown at the bottom of a section when some items are already complete.
-// Replaces the long list of green-check completed rows with a single compact line.
-function CompletedItemsSummary({ count }: { count: number }) {
+// Expandable completed-items summary. Replaces the old static count row.
+// Shows a compact "✓ N items complete" line that expands to reveal individual rows,
+// keeping completed work visible without cluttering the actionable items above.
+function ExpandableCompletedSummary({
+  completedItems,
+  isClaimed = false,
+}: {
+  completedItems: ReadinessItem[];
+  isClaimed?: boolean;
+}) {
+  const count = completedItems.length;
   if (count === 0) return null;
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-100 bg-white">
-      <svg
-        className="w-4 h-4 text-green-500 shrink-0"
-        fill="currentColor"
-        viewBox="0 0 20 20"
-        aria-hidden="true"
-      >
-        <path
-          fillRule="evenodd"
-          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-          clipRule="evenodd"
-        />
-      </svg>
-      <span className="text-xs text-gray-400">
-        {count === 1 ? "1 item already complete" : `${count} items already complete`}
-      </span>
-    </div>
+    <details className="group">
+      <summary className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-100 bg-white cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <svg
+          className="w-4 h-4 text-green-500 shrink-0"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+            clipRule="evenodd"
+          />
+        </svg>
+        <span className="text-xs text-gray-400 flex-1">
+          {count === 1 ? "1 item already complete" : `${count} items already complete`}
+        </span>
+        <span className="text-xs text-gray-400 group-open:hidden">Show completed</span>
+        <span className="text-xs text-gray-400 hidden group-open:inline">Hide</span>
+      </summary>
+      <div className="mt-1.5 space-y-1">
+        {completedItems.map((item) => {
+          const href = ITEM_HREF[item.key] ?? "/admin/venue";
+          // Claimed venues: completed items with imported data use "Review" to
+          // remind operators these values came from import and may need verification.
+          const action =
+            isClaimed && CLAIMED_REVIEW_ACTION_KEYS.has(item.key)
+              ? "Review"
+              : (ITEM_ACTION[item.key] ?? "View");
+          return (
+            <div
+              key={item.key}
+              className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-xl border border-gray-100"
+            >
+              <svg
+                className="w-4 h-4 text-green-500 shrink-0"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="flex-1 text-sm text-gray-500">{item.label}</span>
+              <Link
+                href={href}
+                className="shrink-0 text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap"
+              >
+                {action} →
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 
-type Tier = "required" | "strong" | "recommendation";
+type Tier = "required" | "review" | "strong" | "recommendation";
 
-// Renders a single incomplete readiness item. Completed items are never passed
-// here — each section pre-filters to incomplete items and uses CompletedItemsSummary
-// to surface the count instead of individual green-check rows.
+// Renders a single incomplete readiness item.
+// Completed items are never passed here — use ExpandableCompletedSummary instead.
 function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
   const href   = ITEM_HREF[item.key]   ?? "/admin/venue";
   const action = ITEM_ACTION[item.key] ?? "Go to";
 
-  // Required / high-urgency tier — amber border, prominent CTA button
+  // Required — amber border, prominent CTA button (publish-blocking)
   if (tier === "required") {
     return (
       <div className="flex items-start gap-3 px-4 py-4 bg-white rounded-xl border border-amber-200">
@@ -163,7 +215,27 @@ function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
     );
   }
 
-  // Strong / review tier — neutral border, amber text link
+  // Review — amber border (customer-facing trust item), amber text link (not publish-blocking)
+  // Used exclusively for claimed-venue imported-data verification tasks.
+  if (tier === "review") {
+    return (
+      <div className="flex items-start gap-3 px-4 py-4 bg-amber-50/40 rounded-xl border border-amber-200">
+        <div className="w-5 h-5 rounded-full border-2 border-amber-400 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 leading-5">{item.label}</p>
+          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{item.description}</p>
+        </div>
+        <Link
+          href={href}
+          className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-800 mt-0.5 whitespace-nowrap"
+        >
+          {action} →
+        </Link>
+      </div>
+    );
+  }
+
+  // Strong — neutral border, amber text link
   if (tier === "strong") {
     return (
       <div className="flex items-start gap-3 px-4 py-4 bg-white rounded-xl border border-gray-200">
@@ -182,7 +254,7 @@ function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
     );
   }
 
-  // Recommendation tier — light border, muted text
+  // Recommendation — light border, muted text
   return (
     <div className="flex items-start gap-3 px-4 py-3.5 bg-white rounded-xl border border-gray-100">
       <div className="w-5 h-5 rounded-full border-2 border-gray-200 shrink-0 mt-0.5" />
@@ -203,7 +275,6 @@ function ReadinessRow({ item, tier }: { item: ReadinessItem; tier: Tier }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AdminHomePage() {
-  // Auth check — belt-and-suspenders alongside the layout guard
   const supabase = await createClient();
   const {
     data: { user },
@@ -213,7 +284,6 @@ export default async function AdminHomePage() {
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
-  // Fetch the operator's venue
   let venue: HomeVenueRow | null = null;
   let venueError: { message: string } | null = null;
 
@@ -235,7 +305,6 @@ export default async function AdminHomePage() {
     venueError = error as { message: string } | null;
   }
 
-  // Fetch image counts for readiness computation
   let imageCount = 0;
   let operatorImageCount = 0;
 
@@ -254,7 +323,6 @@ export default async function AdminHomePage() {
     );
   }
 
-  // Compute readiness
   const readiness = venue
     ? computeVenueReadiness({ ...venue, imageCount, operatorImageCount })
     : null;
@@ -263,22 +331,22 @@ export default async function AdminHomePage() {
   const isClaimed    = !!venue?.claimed_at;
   const venueName    = venue?.name ?? "Your venue";
 
-  // Contextual subtitle shown in the status card.
-  // Claimed venues should reinforce "review and personalise" framing;
-  // submitted venues should reinforce "complete and publish" framing.
+  // Status card context message.
+  // Claimed venues: reinforce "we imported your data — please review" framing.
+  // Submitted venues: reinforce "complete and publish" framing.
   let contextMessage: string;
   if (!venue) {
     contextMessage = "Create your venue profile to get started on Happy Hour Compass.";
   } else if (isPublished) {
     contextMessage = isClaimed
-      ? "Your venue is live. Review your imported profile and add your own details to keep it accurate."
+      ? "Your venue is live. It was created from imported data — review the important items below to make sure guests see accurate information."
       : "Your venue is live on Happy Hour Compass.";
   } else if (readiness?.publishReady) {
     contextMessage = isClaimed
-      ? "Your imported profile is ready to go live — review your details, then publish from Venue settings."
+      ? "Your imported profile is ready to publish — finish reviewing your details, then publish from Venue settings."
       : "Your profile is ready to go live. Publish from Venue settings.";
   } else if (isClaimed) {
-    contextMessage = "Your venue profile was imported — review and complete it before going live.";
+    contextMessage = "We created your listing using imported venue data. Review the details below to make sure everything shown to guests is accurate before you go live.";
   } else {
     contextMessage = "Complete the required items below before publishing.";
   }
@@ -290,13 +358,11 @@ export default async function AdminHomePage() {
     readiness.missingRecommendations.length === 0;
 
   // ── Section data pre-computations ─────────────────────────────────────────
-  // Each section shows only incomplete items. Completed items are replaced by
-  // a compact summary line so the page stays focused on what needs attention.
 
   const incompleteRequired     = readiness ? readiness.required.filter(i => !i.completed) : [];
-  const completedRequiredCount = readiness ? readiness.required.length - incompleteRequired.length : 0;
+  const completedRequired      = readiness ? readiness.required.filter(i => i.completed) : [];
 
-  // Split strongRecommendations into claimed-review tasks and general improvements.
+  // Claimed-venue review tasks (claimedReview_* keys) — always separated from improvements.
   const reviewItems      = readiness
     ? readiness.strongRecommendations.filter(i => CLAIMED_REVIEW_KEYS.has(i.key))
     : [];
@@ -304,14 +370,14 @@ export default async function AdminHomePage() {
     ? readiness.strongRecommendations.filter(i => !CLAIMED_REVIEW_KEYS.has(i.key))
     : [];
 
-  const incompleteReviewItems      = reviewItems.filter(i => !i.completed);
-  const completedReviewCount       = reviewItems.length - incompleteReviewItems.length;
+  const incompleteReviewItems  = reviewItems.filter(i => !i.completed);
+  const completedReviewItems   = reviewItems.filter(i => i.completed);
 
-  const incompleteImprovements     = improvementItems.filter(i => !i.completed);
-  const completedImprovementsCount = improvementItems.length - incompleteImprovements.length;
+  const incompleteImprovements  = improvementItems.filter(i => !i.completed);
+  const completedImprovements   = improvementItems.filter(i => i.completed);
 
   const incompleteRecs     = readiness ? readiness.recommendations.filter(i => !i.completed) : [];
-  const completedRecsCount = readiness ? readiness.recommendations.length - incompleteRecs.length : 0;
+  const completedRecs      = readiness ? readiness.recommendations.filter(i => i.completed) : [];
 
   return (
     <div className="max-w-2xl">
@@ -422,7 +488,14 @@ export default async function AdminHomePage() {
             <div className="flex items-start justify-between gap-3 mb-2 px-0.5">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">
-                  {isPublished ? "Important profile items" : "Required to publish"}
+                  {/* Claimed venues always show "Required to publish" —
+                      "Important profile items" is reserved for the review tasks section below.
+                      Submitted venues use "Important profile items" once live. */}
+                  {isClaimed
+                    ? "Required to publish"
+                    : isPublished
+                      ? "Important profile items"
+                      : "Required to publish"}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {incompleteRequired.length === 0
@@ -445,51 +518,62 @@ export default async function AdminHomePage() {
                 {incompleteRequired.map((item) => (
                   <ReadinessRow key={item.key} item={item} tier="required" />
                 ))}
-                {completedRequiredCount > 0 && (
-                  <CompletedItemsSummary count={completedRequiredCount} />
-                )}
+                <ExpandableCompletedSummary
+                  completedItems={completedRequired}
+                  isClaimed={isClaimed}
+                />
               </div>
             )}
           </section>
         )}
 
-        {/* ── Claimed-venue review tasks ───────────────────────────────────── */}
-        {/* Only shown for claimed/imported venues with outstanding review items. */}
-        {venue && readiness && isClaimed && incompleteReviewItems.length > 0 && (
-          <section aria-label="Review imported profile">
+        {/* ── Claimed-venue: Important profile items (review tasks) ────────── */}
+        {/* Shown for all claimed venues — even when all items are reviewed,
+            the expandable summary confirms the operator has seen everything. */}
+        {venue && readiness && isClaimed && reviewItems.length > 0 && (
+          <section aria-label="Important profile items">
             <div className="mb-2 px-0.5">
-              <h3 className="text-sm font-semibold text-gray-900">Review your imported profile</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Important profile items</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Your venue data was imported — check these items to make sure everything is accurate.
+                Your listing was created from imported data. Verify these customer-facing details
+                to make sure guests see accurate information.
               </p>
             </div>
             <div className="space-y-2">
               {incompleteReviewItems.map((item) => (
-                <ReadinessRow key={item.key} item={item} tier="strong" />
+                <ReadinessRow key={item.key} item={item} tier="review" />
               ))}
-              {completedReviewCount > 0 && (
-                <CompletedItemsSummary count={completedReviewCount} />
-              )}
+              <ExpandableCompletedSummary
+                completedItems={completedReviewItems}
+                isClaimed={true}
+              />
             </div>
           </section>
         )}
 
         {/* ── Improvement suggestions ──────────────────────────────────────── */}
         {venue && readiness && incompleteImprovements.length > 0 && (
-          <section aria-label="Recommended improvements">
+          <section aria-label={isClaimed ? "Improve your listing" : "Finish your listing"}>
             <div className="mb-2 px-0.5">
-              <h3 className="text-sm font-semibold text-gray-900">Improve your listing</h3>
+              <h3 className="text-sm font-semibold text-gray-900">
+                {/* Submitted venues pre-publish: "Finish your listing" frames these as
+                    setup tasks, not optional improvements. Published or claimed: "Improve". */}
+                {!isClaimed && !isPublished ? "Finish your listing" : "Improve your listing"}
+              </h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                These additions make your venue more discoverable and help it stand out to guests.
+                {!isClaimed && !isPublished
+                  ? "Complete these items to prepare your listing for publish."
+                  : "These additions make your venue more discoverable and help it stand out to guests."}
               </p>
             </div>
             <div className="space-y-2">
               {incompleteImprovements.map((item) => (
                 <ReadinessRow key={item.key} item={item} tier="strong" />
               ))}
-              {completedImprovementsCount > 0 && (
-                <CompletedItemsSummary count={completedImprovementsCount} />
-              )}
+              <ExpandableCompletedSummary
+                completedItems={completedImprovements}
+                isClaimed={isClaimed}
+              />
             </div>
           </section>
         )}
@@ -507,9 +591,10 @@ export default async function AdminHomePage() {
               {incompleteRecs.map((item) => (
                 <ReadinessRow key={item.key} item={item} tier="recommendation" />
               ))}
-              {completedRecsCount > 0 && (
-                <CompletedItemsSummary count={completedRecsCount} />
-              )}
+              <ExpandableCompletedSummary
+                completedItems={completedRecs}
+                isClaimed={isClaimed}
+              />
             </div>
           </section>
         )}
