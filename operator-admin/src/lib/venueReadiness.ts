@@ -9,6 +9,13 @@
  *   Tier 1 – Required:              block publish if missing
  *   Tier 2 – Strong Recommendations: high-priority but do not block publish
  *   Tier 3 – Recommendations:        nice-to-have, do not block publish
+ *
+ * Claimed vs submitted venue model:
+ *   Claimed venues have imported data that is NOT the same as verified data.
+ *   Review tasks (claimedReview_* keys) appear as incomplete until the operator
+ *   explicitly confirms each item via the "Mark reviewed" button. This keeps
+ *   imported items visible and actionable until human verification occurs.
+ *   Missing imported data falls back to standard "Add" tasks.
  */
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -18,7 +25,7 @@ export type ReadinessItem = {
   key: string;
   /** Short human-readable label (for checklist display). */
   label: string;
-  /** One-sentence explanation of why this matters (for future UI). */
+  /** One-sentence explanation of why this matters. */
   description: string;
   /** Whether the operator has completed this item. */
   completed: boolean;
@@ -46,11 +53,8 @@ export type VenueReadinessInput = {
   /** TEXT column — stored as a JSON array string, e.g. '["Visa","Cash"]' */
   payment_types?: string | null;
   /**
-   * Set when a venue claim was approved. Null for operator-created (non-claimed)
-   * venues. Used to determine which image rule applies:
-   *   - Non-claimed: must have at least one operator-uploaded image.
-   *   - Claimed: any image (including seeded) satisfies publish; operator image
-   *              is a strong recommendation to replace the seeded one.
+   * Set when a venue claim was approved. Null for operator-created venues.
+   * Determines which readiness model applies.
    */
   claimed_at?: string | null;
   /** Total count of venue_image rows in the media table for this venue. */
@@ -58,12 +62,16 @@ export type VenueReadinessInput = {
   /**
    * Count of images uploaded via the operator image upload flow.
    * Detected by URL prefix matching the Supabase venue-images storage bucket.
-   * See computeOperatorImageCount() below for derivation.
-   *
-   * For non-claimed (operator-created) venues, seeded images are never injected,
-   * so operatorImageCount === imageCount in practice.
    */
   operatorImageCount: number;
+  /**
+   * Map of review task keys that the operator has explicitly confirmed.
+   * Populated only for claimed venues via the "Mark reviewed" button.
+   * Missing keys or an empty object means unreviewed.
+   * Optional — callers that don't need review state (e.g. publish actions)
+   * can omit this; review items will simply show as not yet confirmed.
+   */
+  reviewConfirmations?: Record<string, boolean> | null;
 };
 
 /** Boolean signals derived from the venue row. */
@@ -75,20 +83,10 @@ export type VenueReadinessSignals = {
   hasHappyHourTimes: boolean;
   hasAnyVenueImage: boolean;
   hasOperatorVenueImage: boolean;
-  /**
-   * True when media rows exist but none match the operator storage URL pattern.
-   * Indicates the listing is showing a seeded/imported image rather than an
-   * operator-branded photo.
-   */
   isUsingGenericSeededImage: boolean;
-  /**
-   * True when establishment_type has been explicitly saved (non-null, non-empty).
-   * A freshly created venue has null here until the operator saves Business Details.
-   */
   hasConfirmedVenueType: boolean;
   hasFoodSpecials: boolean;
   hasDrinkSpecials: boolean;
-  /** True when business_hours JSONB object has at least one day key configured. */
   hasBusinessHours: boolean;
   hasMenuLink: boolean;
   hasPhone: boolean;
@@ -100,15 +98,10 @@ export type VenueReadinessSignals = {
 
 /** Full readiness result returned by computeVenueReadiness(). */
 export type VenueReadiness = {
-  /** True when all Tier 1 (required) items are complete. */
   publishReady: boolean;
-  /** All items in the Required tier (completed and incomplete). */
   required: ReadinessItem[];
-  /** All items in the Strong Recommendation tier (completed and incomplete). */
   strongRecommendations: ReadinessItem[];
-  /** All items in the Recommendation tier (completed and incomplete). */
   recommendations: ReadinessItem[];
-  /** All completed items across all tiers — useful for progress display. */
   completed: ReadinessItem[];
   signals: VenueReadinessSignals;
   missingRequired: ReadinessItem[];
@@ -145,7 +138,6 @@ function parsePaymentTypeCount(raw: string | null | undefined): number {
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.length;
   } catch {
-    // Fallback: legacy comma-separated format
     return raw.split(",").map((s) => s.trim()).filter(Boolean).length;
   }
   return 0;
@@ -155,19 +147,8 @@ function parsePaymentTypeCount(raw: string | null | undefined): number {
 
 /**
  * Counts how many media rows were uploaded via the operator image upload flow.
- *
- * Operator images are stored in the `venue-images` Supabase Storage bucket at
- * path `venues/{venueId}/{uuid}.jpg`. Their public URLs therefore begin with:
- *   {NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/venue-images/venues/
- *
- * Seeded or bulk-imported images typically have external URLs or a different
- * bucket/path. If the Supabase URL is unavailable, all images are conservatively
- * treated as operator images to avoid false publish blocks.
- *
- * Limitation: if the bulk-import pipeline stores images in the same bucket and
- * path prefix, this heuristic will misclassify those as operator images. A
- * `source` column on the media table (e.g. "operator" | "seeded") would make
- * this detection reliable and is the recommended future improvement.
+ * Operator images live in the `venue-images` Supabase Storage bucket at
+ * path `venues/{venueId}/{uuid}.jpg`. Seeded images typically have external URLs.
  */
 export function computeOperatorImageCount(
   images: Array<{ url: string }>,
@@ -182,6 +163,8 @@ export function computeOperatorImageCount(
 
 export function computeVenueReadiness(input: VenueReadinessInput): VenueReadiness {
   const isClaimed = !!input.claimed_at;
+  // Shorthand: rc["key"] === true means explicitly confirmed by the operator.
+  const rc = input.reviewConfirmations ?? {};
 
   // ── Derive signals ──────────────────────────────────────────────────────────
 
@@ -208,35 +191,18 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   const hasPostalCode       = hasContent(input.postal_code);
 
   const signals: VenueReadinessSignals = {
-    hasVenueName,
-    hasAddressLine1,
-    hasCity,
-    hasProvinceOrState,
-    hasHappyHourTimes,
-    hasAnyVenueImage,
-    hasOperatorVenueImage,
-    isUsingGenericSeededImage,
-    hasConfirmedVenueType,
-    hasFoodSpecials,
-    hasDrinkSpecials,
-    hasBusinessHours,
-    hasMenuLink,
-    hasPhone,
-    hasWebsite,
-    hasTagline,
-    hasPaymentTypes,
-    hasPostalCode,
+    hasVenueName, hasAddressLine1, hasCity, hasProvinceOrState, hasHappyHourTimes,
+    hasAnyVenueImage, hasOperatorVenueImage, isUsingGenericSeededImage,
+    hasConfirmedVenueType, hasFoodSpecials, hasDrinkSpecials, hasBusinessHours,
+    hasMenuLink, hasPhone, hasWebsite, hasTagline, hasPaymentTypes, hasPostalCode,
   };
 
   // ── Tier 1: Required — blocks publish if missing ───────────────────────────
   //
-  // Image rule differs by venue origin:
-  //   Submitted (operator-created): requires at least one operator-uploaded image.
-  //   Claimed: any image (including a placeholder) satisfies the publish requirement.
-  //            When the publish requirement is already met, the required item is
-  //            omitted so operators don't see a confusing completed "Add image" row
-  //            alongside the "Replace placeholder" strong recommendation.
-  //            When a claimed venue has no image at all, the required item is shown.
+  // Image rule: claimed venues with any image (including seeded) satisfy publish.
+  // When a placeholder is present, the required item is omitted — the review
+  // task handles the "upload your own" nudge. When a claimed venue has NO image,
+  // the standard required item is shown.
 
   const imageCompleted = isClaimed ? hasAnyVenueImage : hasOperatorVenueImage;
 
@@ -271,10 +237,9 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
       description: "Guests come specifically to find happy hour deals — times are essential.",
       completed: hasHappyHourTimes,
     },
-    // For claimed venues: only include the image item when there is no image at all.
-    // When a placeholder image is present, the publish requirement is already met —
-    // the "Replace placeholder" strong recommendation handles the image nudge.
-    // For submitted venues: always include (completed only when they upload their own).
+    // For claimed venues with any image: omit (placeholder satisfies publish).
+    // For claimed venues with no image: include (nothing imported, must upload).
+    // For submitted venues: always include (requires operator-uploaded image).
     ...(!isClaimed || !hasAnyVenueImage
       ? [
           {
@@ -289,55 +254,189 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
       : []),
   ];
 
-  // ── Tier 2: Strong Recommendations — high-priority, do not block publish ───
+  // ── Tier 2: Strong Recommendations ─────────────────────────────────────────
   //
-  // Claimed venues see granular "verify imported data" tasks instead of generic
-  // "add this field" prompts. Keys are prefixed with "claimedReview_" so the
-  // page layer can render them in a dedicated verification section.
-  // Submitted venues see the standard profile-completion items.
+  // Claimed venues: imported data ≠ verified data.
+  //   Items with imported values appear as review tasks (completed = explicitly
+  //   reviewed via the "Mark reviewed" button). Items with missing values fall
+  //   back to standard "Add" tasks so operators know to fill them in.
+  //
+  // Submitted venues: standard profile-completion items. No review tasks.
 
   const strongRecommendations: ReadinessItem[] = [
     ...(isClaimed
       ? [
-          // ── Claimed venues: imported-data verification tasks ──────────────
-          {
-            key: "claimedReview_businessDetails",
-            label: "Verify your business details",
-            description:
-              "Check that your imported address, phone number, and contact details are correct for your venue.",
-            completed: hasAddressLine1 && hasCity && hasProvinceOrState,
-          },
-          {
-            key: "claimedReview_venueType",
-            label: "Confirm your venue type",
-            description:
-              "The imported venue type may not match your establishment. Set it correctly so guests can find you in the right searches.",
-            completed: hasConfirmedVenueType,
-          },
-          {
-            key: "claimedReview_businessHours",
-            label: "Review your business hours",
-            description:
-              "Guests check hours before visiting. Make sure the imported schedule is accurate and up to date.",
-            completed: hasBusinessHours,
-          },
-          {
-            key: "claimedReview_hhSpecials",
-            label: "Review or add your happy hour specials",
-            description:
-              "Food and drink deals are the #1 reason guests choose a venue. Review any imported items or add your own.",
-            completed: hasFoodSpecials && hasDrinkSpecials,
-          },
-          {
-            key: "claimedReview_image",
-            label: "Upload your own venue photo",
-            description:
-              "Your listing shows a placeholder photo. Upload a real image of your venue to build guest trust and make a stronger impression.",
-            completed: hasOperatorVenueImage,
-          },
+          // ── Claimed: review items (only when imported data exists) ────────
+
+          // Business details: review when address was imported.
+          // If any address field is missing it shows as required above.
+          ...(hasAddressLine1 && hasCity && hasProvinceOrState
+            ? [
+                {
+                  key: "claimedReview_businessDetails",
+                  label: "Review your business details",
+                  description:
+                    "Check that the imported address and contact details are correct for your venue.",
+                  completed: rc["claimedReview_businessDetails"] === true,
+                },
+              ]
+            : []),
+
+          // Venue type: review if imported, add task if missing.
+          ...(hasConfirmedVenueType
+            ? [
+                {
+                  key: "claimedReview_venueType",
+                  label: "Confirm your venue type",
+                  description:
+                    "The imported venue type may not match your establishment. Set it correctly so guests can find you in the right searches.",
+                  completed: rc["claimedReview_venueType"] === true,
+                },
+              ]
+            : [
+                {
+                  key: "hasConfirmedVenueType",
+                  label: "Confirm venue type",
+                  description:
+                    "Helps guests find venues that match their preferences. Set your establishment type in Business Details.",
+                  completed: false,
+                },
+              ]),
+
+          // Business hours: review if imported, add task if missing.
+          ...(hasBusinessHours
+            ? [
+                {
+                  key: "claimedReview_businessHours",
+                  label: "Review your business hours",
+                  description:
+                    "Guests check hours before visiting. Make sure the imported schedule is accurate and up to date.",
+                  completed: rc["claimedReview_businessHours"] === true,
+                },
+              ]
+            : [
+                {
+                  key: "hasBusinessHours",
+                  label: "Add business hours",
+                  description:
+                    "Guests check hours before visiting. Complete hours reduce no-shows.",
+                  completed: false,
+                },
+              ]),
+
+          // HH times: review when imported. If missing, the required item above
+          // handles it as a blocking task — no duplicate entry needed here.
+          ...(hasHappyHourTimes
+            ? [
+                {
+                  key: "claimedReview_hhTimes",
+                  label: "Review your happy hour times",
+                  description:
+                    "The happy hour schedule shown to guests came from imported data. Verify the days and times are accurate.",
+                  completed: rc["claimedReview_hhTimes"] === true,
+                },
+              ]
+            : []),
+
+          // HH specials: review if any exist, otherwise standard add tasks.
+          ...(hasFoodSpecials || hasDrinkSpecials
+            ? [
+                {
+                  key: "claimedReview_hhSpecials",
+                  label: "Review your happy hour specials",
+                  description:
+                    "Food and drink deals are the #1 reason guests choose a venue. Review any imported items or add your own.",
+                  completed: rc["claimedReview_hhSpecials"] === true,
+                },
+              ]
+            : [
+                ...(!hasFoodSpecials
+                  ? [
+                      {
+                        key: "hasFoodSpecials",
+                        label: "Add food specials",
+                        description:
+                          "Food specials are among the most searched happy hour features.",
+                        completed: false,
+                      },
+                    ]
+                  : []),
+                ...(!hasDrinkSpecials
+                  ? [
+                      {
+                        key: "hasDrinkSpecials",
+                        label: "Add drink specials",
+                        description:
+                          "Drink deals are the #1 reason guests choose a happy hour venue.",
+                        completed: false,
+                      },
+                    ]
+                  : []),
+              ]),
+
+          // Placeholder image: show when the listing has only seeded images.
+          // Completed by uploading (not a review button — the upload IS the action).
+          ...(isUsingGenericSeededImage
+            ? [
+                {
+                  key: "claimedReview_image",
+                  label: "Upload your own venue photo",
+                  description:
+                    "Your listing shows a placeholder photo. Upload a real image of your venue to build guest trust and make a stronger impression.",
+                  completed: hasOperatorVenueImage,
+                },
+              ]
+            : []),
+
+          // Menu link: review if imported, add task if missing.
+          ...(hasMenuLink
+            ? [
+                {
+                  key: "claimedReview_menuLink",
+                  label: "Review your menu link",
+                  description:
+                    "Check that the imported menu link is current and working. Guests use it to browse your offerings before visiting.",
+                  completed: rc["claimedReview_menuLink"] === true,
+                },
+              ]
+            : [
+                {
+                  key: "hasMenuLink",
+                  label: "Add menu link",
+                  description: "A menu link drives more confident, informed guest visits.",
+                  completed: false,
+                },
+              ]),
+
+          // Website: review if imported. If missing, stays in recommendations below.
+          ...(hasWebsite
+            ? [
+                {
+                  key: "claimedReview_website",
+                  label: "Review your website",
+                  description:
+                    "Confirm that the imported website URL is accurate and up to date.",
+                  completed: rc["claimedReview_website"] === true,
+                },
+              ]
+            : []),
+
+          // Phone: review if imported. If missing, stays in recommendations below.
+          ...(hasPhone
+            ? [
+                {
+                  key: "claimedReview_phone",
+                  label: "Review your phone number",
+                  description:
+                    "Guests may call ahead to check on specials or ask questions. Verify the imported number is correct.",
+                  completed: rc["claimedReview_phone"] === true,
+                },
+              ]
+            : []),
         ]
       : [
           // ── Submitted venues: standard profile-completion items ────────────
+
           {
             key: "hasConfirmedVenueType",
             label: "Confirm venue type",
@@ -364,31 +463,51 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
             completed: hasBusinessHours,
           },
         ]),
-    // Menu link: valuable for all venues
-    {
-      key: "hasMenuLink",
-      label: "Add menu link",
-      description: "A menu link drives more confident, informed guest visits.",
-      completed: hasMenuLink,
-    },
+
+    // Menu link for submitted venues. Claimed venues handle it in the block above.
+    ...(!isClaimed
+      ? [
+          {
+            key: "hasMenuLink",
+            label: "Add menu link",
+            description: "A menu link drives more confident, informed guest visits.",
+            completed: hasMenuLink,
+          },
+        ]
+      : []),
   ];
 
   // ── Tier 3: Recommendations — nice-to-have, do not block publish ───────────
-  // Copy is written as helpful suggestions, not admin checklist entries.
+  //
+  // For claimed venues: phone and website are excluded when they have imported
+  // values (those appear as claimedReview_* tasks in Tier 2 above). They remain
+  // here only when the value is missing — as standard "Add" tasks.
 
   const recommendations: ReadinessItem[] = [
-    {
-      key: "hasPhone",
-      label: "Add a phone number",
-      description: "Lets guests call ahead to check on specials, make a reservation, or ask questions.",
-      completed: hasPhone,
-    },
-    {
-      key: "hasWebsite",
-      label: "Link your website",
-      description: "Connects your listing to your main online presence so guests can learn more.",
-      completed: hasWebsite,
-    },
+    // Phone: always for submitted; for claimed only when not imported.
+    ...(!isClaimed || !hasPhone
+      ? [
+          {
+            key: "hasPhone",
+            label: "Add a phone number",
+            description:
+              "Lets guests call ahead to check on specials, make a reservation, or ask questions.",
+            completed: hasPhone,
+          },
+        ]
+      : []),
+    // Website: always for submitted; for claimed only when not imported.
+    ...(!isClaimed || !hasWebsite
+      ? [
+          {
+            key: "hasWebsite",
+            label: "Link your website",
+            description:
+              "Connects your listing to your main online presence so guests can learn more.",
+            completed: hasWebsite,
+          },
+        ]
+      : []),
     {
       key: "hasTagline",
       label: "Add a short tagline",
