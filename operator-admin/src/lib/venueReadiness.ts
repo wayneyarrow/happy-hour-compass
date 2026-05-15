@@ -231,12 +231,12 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   // ── Tier 1: Required — blocks publish if missing ───────────────────────────
   //
   // Image rule differs by venue origin:
-  //   Non-claimed (operator-created): requires at least one operator-uploaded image.
-  //   Claimed seeded: any image satisfies the requirement (seeded counts); replacing
-  //                   it with a branded image is surfaced as a strong recommendation.
-  //
-  // In practice, operator-created venues never receive seeded images, so
-  // hasOperatorVenueImage === hasAnyVenueImage for them.
+  //   Submitted (operator-created): requires at least one operator-uploaded image.
+  //   Claimed: any image (including a placeholder) satisfies the publish requirement.
+  //            When the publish requirement is already met, the required item is
+  //            omitted so operators don't see a confusing completed "Add image" row
+  //            alongside the "Replace placeholder" strong recommendation.
+  //            When a claimed venue has no image at all, the required item is shown.
 
   const imageCompleted = isClaimed ? hasAnyVenueImage : hasOperatorVenueImage;
 
@@ -271,27 +271,52 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
       description: "Guests come specifically to find happy hour deals — times are essential.",
       completed: hasHappyHourTimes,
     },
-    {
-      key: "hasVenueImage",
-      label: isClaimed ? "Add a venue image" : "Upload a venue image",
-      description: isClaimed
-        ? "A venue photo helps guests recognise and trust your listing."
-        : "Upload at least one photo of your venue. Guests are more likely to visit venues with real photos.",
-      completed: imageCompleted,
-    },
+    // For claimed venues: only include the image item when there is no image at all.
+    // When a placeholder image is present, the publish requirement is already met —
+    // the "Replace placeholder" strong recommendation handles the image nudge.
+    // For submitted venues: always include (completed only when they upload their own).
+    ...(!isClaimed || !hasAnyVenueImage
+      ? [
+          {
+            key: "hasVenueImage",
+            label: isClaimed ? "Add a venue image" : "Upload a venue image",
+            description: isClaimed
+              ? "A venue photo helps guests recognise and trust your listing."
+              : "Upload at least one photo of your venue. Guests are more likely to visit venues with real photos.",
+            completed: imageCompleted,
+          },
+        ]
+      : []),
   ];
 
   // ── Tier 2: Strong Recommendations — high-priority, do not block publish ───
 
   const strongRecommendations: ReadinessItem[] = [
-    // Only shown for claimed venues: encourage replacing the seeded image
+    // Claimed-only (highest priority): prompt the operator to review the
+    // imported profile rather than treating it as a blank setup form.
+    // Considered complete once they've uploaded their own image — a reliable
+    // signal that they've actively engaged with and taken ownership of the profile.
     ...(isClaimed
       ? [
           {
-            key: "hasOperatorVenueImage",
-            label: "Replace generic image with your own photo",
+            key: "reviewImportedDetails",
+            label: "Review your imported venue details",
             description:
-              "Your listing currently shows a seeded image. Upload a real venue photo to build trust and stand out to guests.",
+              "Your profile was imported from our database. Check your address, business hours, venue type, and contact info to make sure everything looks right.",
+            completed: hasOperatorVenueImage,
+          },
+        ]
+      : []),
+    // Claimed-only: shown when a placeholder image is present (claimed venue
+    // has any image but the operator has not uploaded their own). Not shown
+    // when imageCount === 0 — the required "Add a venue image" item handles that case.
+    ...(isClaimed && hasAnyVenueImage
+      ? [
+          {
+            key: "hasOperatorVenueImage",
+            label: "Replace the placeholder image with your own photo",
+            description:
+              "Your listing currently shows a generic placeholder photo. Upload your own to build trust and help your venue stand out.",
             completed: hasOperatorVenueImage,
           },
         ]

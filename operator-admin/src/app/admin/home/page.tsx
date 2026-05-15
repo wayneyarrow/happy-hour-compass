@@ -17,6 +17,7 @@ import {
 // matching #id hash so the browser scrolls the section into view.
 
 const ITEM_HREF: Record<string, string> = {
+  reviewImportedDetails:"/admin/venue?section=business-details#business-details",
   hasVenueName:         "/admin/venue?section=business-details#business-details",
   hasAddressLine1:      "/admin/venue?section=business-details#business-details",
   hasCity:              "/admin/venue?section=business-details#business-details",
@@ -38,6 +39,7 @@ const ITEM_HREF: Record<string, string> = {
 
 // Short action labels per item key
 const ITEM_ACTION: Record<string, string> = {
+  reviewImportedDetails:"Review details",
   hasVenueName:         "Edit details",
   hasAddressLine1:      "Add address",
   hasCity:              "Add city",
@@ -240,16 +242,22 @@ export default async function AdminHomePage() {
   const isClaimed    = !!venue?.claimed_at;
   const venueName    = venue?.name ?? "Your venue";
 
-  // Contextual subtitle shown in the status card
+  // Contextual subtitle shown in the status card.
+  // Claimed venues should reinforce "review and personalise" framing;
+  // submitted venues should reinforce "complete and publish" framing.
   let contextMessage: string;
   if (!venue) {
     contextMessage = "Create your venue profile to get started on Happy Hour Compass.";
   } else if (isPublished) {
-    contextMessage = "Your venue is live on Happy Hour Compass.";
+    contextMessage = isClaimed
+      ? "Your venue is live. Review your imported profile and add your own details to keep it accurate."
+      : "Your venue is live on Happy Hour Compass.";
   } else if (readiness?.publishReady) {
-    contextMessage = "Your profile is ready to go live. Publish from Venue settings.";
+    contextMessage = isClaimed
+      ? "Your imported profile is ready to go live — review your details, then publish from Venue settings."
+      : "Your profile is ready to go live. Publish from Venue settings.";
   } else if (isClaimed) {
-    contextMessage = "Your claimed venue needs a few more details before it can go live.";
+    contextMessage = "Your venue profile was imported — review and complete it before going live.";
   } else {
     contextMessage = "Complete the required items below before publishing.";
   }
