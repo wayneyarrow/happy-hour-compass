@@ -78,7 +78,7 @@ export default function ActivateAccountForm({
         return;
       }
 
-      router.push("/admin/venue");
+      router.push("/admin/home");
       router.refresh();
     });
   }

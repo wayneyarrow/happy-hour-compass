@@ -21,7 +21,7 @@ import { createClient } from "@/lib/supabase/browser";
  *      createBrowserClient auto-detects hash tokens in this context.
  *   5. Once a session is confirmed, the password form is shown.
  *   6. On submit: supabase.auth.updateUser({ password }).
- *   7. Redirect to /admin/venue — operator account is ready.
+ *   7. Redirect to /admin/home — operator account is ready.
  *
  * Fallback: if no hash tokens are found (e.g. page refresh after exchange),
  * getSession() is used — handles a pre-existing cookie session.
@@ -102,7 +102,7 @@ export default function CreatePasswordPage() {
     }
 
     setDone(true);
-    router.push("/admin/venue");
+    router.push("/admin/home");
     router.refresh();
   }
 
@@ -224,7 +224,7 @@ export default function CreatePasswordPage() {
 
             {done && (
               <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                Password set — redirecting to your venue…
+                Password set — redirecting to your dashboard…
               </div>
             )}
 

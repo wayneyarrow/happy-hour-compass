@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 
-// The admin shell at /admin/venue is now the primary interface.
-// This file is kept intact so the /dashboard route continues to resolve,
-// but it immediately redirects to the new admin section.
+// Deprecated route — kept so /dashboard links don't 404.
+// Redirects to the operator home (readiness center).
 export default function DashboardPage() {
-  redirect("/admin/venue");
+  redirect("/admin/home");
 }

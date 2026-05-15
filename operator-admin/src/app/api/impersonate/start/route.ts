@@ -12,7 +12,7 @@
  *   • The session ID is set as an httpOnly cookie (not in the URL)
  *   • Cookie is Secure in production, SameSite=Lax
  *
- * On success: sets imp_session_id cookie and redirects to /admin/venue
+ * On success: sets imp_session_id cookie and redirects to /admin/home
  * On failure: redirects to /control-panel/venues with an error param
  */
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 6. Set httpOnly cookie and redirect to Operator Admin ──────────────────
-  const response = NextResponse.redirect(`${origin}/admin/venue`, {
+  const response = NextResponse.redirect(`${origin}/admin/home`, {
     status: 303,
   });
 

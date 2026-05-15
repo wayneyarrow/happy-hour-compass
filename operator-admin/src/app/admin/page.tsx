@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// /admin → /admin/venue (the primary working section)
+// /admin → /admin/home (growth & readiness center is the primary entry point)
 export default function AdminIndexPage() {
-  redirect("/admin/venue");
+  redirect("/admin/home");
 }

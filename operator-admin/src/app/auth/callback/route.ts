@@ -12,7 +12,7 @@ import type { NextRequest } from "next/server";
  *   /auth/callback?code=<pkce_code>&next=<destination_path>
  *
  * On success: exchanges the code for a session (sets auth cookies) and
- *   redirects to `next` (defaults to /admin/venue).
+ *   redirects to `next` (defaults to /admin/home).
  * On failure: redirects to / with ?error=auth_callback_failed so the
  *   consumer home is shown rather than a blank page.
  *
@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
 
   // Only allow relative paths for `next` to prevent open redirects.
-  const rawNext = searchParams.get("next") ?? "/admin/venue";
-  const next = rawNext.startsWith("/") ? rawNext : "/admin/venue";
+  const rawNext = searchParams.get("next") ?? "/admin/home";
+  const next = rawNext.startsWith("/") ? rawNext : "/admin/home";
 
   if (code) {
     const supabase = await createClient();
