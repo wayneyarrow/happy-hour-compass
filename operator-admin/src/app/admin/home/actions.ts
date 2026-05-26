@@ -58,3 +58,17 @@ export async function markReviewedAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/home");
 }
+
+// Records that the operator has seen and dismissed the V2 intro banner.
+// No-op when called during Case B impersonation (no operator row to update).
+export async function dismissV2IntroAction(): Promise<void> {
+  const ctx = await resolveOperatorContext();
+  if (!ctx.operator) return;
+
+  await ctx.supabase
+    .from("operators")
+    .update({ homepage_v2_intro_seen_at: new Date().toISOString() })
+    .eq("id", ctx.operator.id);
+
+  revalidatePath("/admin/home");
+}

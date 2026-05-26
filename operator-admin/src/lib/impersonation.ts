@@ -18,7 +18,7 @@
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { ensureOperatorForSession, type OperatorRow } from "@/lib/ensureOperator";
+import { ensureOperatorForSession, OPERATOR_SELECT, type OperatorRow } from "@/lib/ensureOperator";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -191,12 +191,10 @@ export async function resolveOperatorContext(): Promise<OperatorContext> {
       // Case A: fetch the impersonated operator by ID using admin client.
       const { data } = await adminClient
         .from("operators")
-        .select(
-          "id, email, first_name, last_name, name, is_approved, role, created_at, updated_at"
-        )
+        .select(OPERATOR_SELECT)
         .eq("id", session.operator_id)
         .maybeSingle();
-      operator = data as OperatorRow | null;
+      operator = data as unknown as OperatorRow | null;
     }
     // Case B: operator_id is null — operator stays null, impersonatingVenueId is set.
 

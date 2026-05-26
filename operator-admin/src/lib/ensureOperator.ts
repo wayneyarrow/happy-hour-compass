@@ -11,9 +11,13 @@ export type OperatorRow = {
   role: string;
   created_at: string;
   updated_at: string;
+  /** Null until the operator dismisses the V2 intro banner for the first time. */
+  homepage_v2_intro_seen_at: string | null;
 };
 
-const OPERATOR_SELECT = "id, email, first_name, last_name, name, is_approved, role, created_at, updated_at";
+export const OPERATOR_SELECT =
+  "id, email, first_name, last_name, name, is_approved, role, created_at, updated_at, " +
+  "homepage_v2_intro_seen_at";
 
 /**
  * Ensures an `operators` row exists for the current authenticated user.
@@ -68,7 +72,7 @@ export async function ensureOperatorForSession(
 
   if (existing) {
     // Row already exists — return it without any write.
-    return { operator: existing as OperatorRow, error: null };
+    return { operator: existing as unknown as OperatorRow, error: null };
   }
 
   // ── Step 2: Insert a new row ──────────────────────────────────────────────
@@ -87,7 +91,7 @@ export async function ensureOperatorForSession(
     .single();
 
   if (!insertError) {
-    return { operator: inserted as OperatorRow, error: null };
+    return { operator: inserted as unknown as OperatorRow, error: null };
   }
 
   // ── Step 3: Handle unique-violation race ─────────────────────────────────
@@ -115,7 +119,7 @@ export async function ensureOperatorForSession(
     }
 
     if (recovered) {
-      return { operator: recovered as OperatorRow, error: null };
+      return { operator: recovered as unknown as OperatorRow, error: null };
     }
 
     // Row exists (unique constraint fired) but SELECT returned nothing —

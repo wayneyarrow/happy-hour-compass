@@ -11,7 +11,9 @@ import {
   computeOperatorImageCount,
   type ReadinessItem,
 } from "@/lib/venueReadiness";
+import { isOnboardingComplete } from "@/lib/homepagePhase";
 import { markReviewedAction } from "./actions";
+import HomepageV2 from "./HomepageV2";
 
 // ── Deep-link destinations for each readiness signal key ─────────────────────
 
@@ -369,6 +371,25 @@ export default async function AdminHomePage() {
 
   const incompleteRecs = readiness ? readiness.recommendations.filter((i) => !i.completed) : [];
   const completedRecs  = readiness ? readiness.recommendations.filter((i) => i.completed) : [];
+
+  // ── Homepage V2 transition ─────────────────────────────────────────────────
+  // Once all onboarding criteria are satisfied, graduate to Venue HQ.
+  // V1 does not return automatically — the conditions that trigger V2
+  // (published + complete profile) are stable in normal operation.
+  //
+  // introSeen: true when the operator has already dismissed the banner (DB flag),
+  // or when there is no operator row (Case B impersonation — skip banner).
+  if (readiness && isOnboardingComplete(readiness.signals, isPublished)) {
+    const introSeen = !operator || !!operator.homepage_v2_intro_seen_at;
+    return (
+      <HomepageV2
+        venueName={venueName}
+        venueSlug={venue?.slug ?? null}
+        venueId={venue!.id}
+        introSeen={introSeen}
+      />
+    );
+  }
 
   return (
     <div className="max-w-2xl">
