@@ -115,7 +115,7 @@ function hasContent(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function parseSpecialItemCount(raw: string | null | undefined): number {
+export function parseSpecialItemCount(raw: string | null | undefined): number {
   if (!raw?.trim()) return 0;
   try {
     const parsed: unknown = JSON.parse(raw);

@@ -9,9 +9,11 @@ import { resolveOperatorContext } from "@/lib/impersonation";
 import {
   computeVenueReadiness,
   computeOperatorImageCount,
+  parseSpecialItemCount,
   type ReadinessItem,
 } from "@/lib/venueReadiness";
 import { isOnboardingComplete } from "@/lib/homepagePhase";
+import { computeSuggestedSteps } from "@/lib/suggestedSteps";
 import { markReviewedAction } from "./actions";
 import HomepageV2 from "./HomepageV2";
 
@@ -380,6 +382,20 @@ export default async function AdminHomePage() {
   // introSeen: true when the operator has already dismissed the banner (DB flag),
   // or when there is no operator row (Case B impersonation — skip banner).
   if (readiness && isOnboardingComplete(readiness.signals, isPublished)) {
+    // Fetch event count — only needed on V2. head:true returns count with no rows.
+    const { count: rawEventsCount } = await ctx.supabase
+      .from("events")
+      .select("id", { count: "exact", head: true })
+      .eq("venue_id", venue!.id);
+
+    const suggestions = computeSuggestedSteps({
+      signals: readiness.signals,
+      operatorImageCount,
+      eventsCount: rawEventsCount ?? 0,
+      foodSpecialsCount: parseSpecialItemCount(venue!.hh_food_details),
+      drinkSpecialsCount: parseSpecialItemCount(venue!.hh_drink_details),
+    });
+
     const introSeen = !operator || !!operator.homepage_v2_intro_seen_at;
     return (
       <HomepageV2
@@ -387,6 +403,7 @@ export default async function AdminHomePage() {
         venueSlug={venue?.slug ?? null}
         venueId={venue!.id}
         introSeen={introSeen}
+        suggestions={suggestions}
       />
     );
   }
