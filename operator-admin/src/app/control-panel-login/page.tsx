@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import { checkIsControlPanelAdmin } from "./actions";
+import PasswordInput from "@/components/PasswordInput";
 
 /**
  * /control-panel-login
@@ -111,9 +112,8 @@ export default function ControlPanelLoginPage() {
               >
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={6}
                 autoComplete="current-password"

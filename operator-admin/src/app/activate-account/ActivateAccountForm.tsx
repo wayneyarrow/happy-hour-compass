@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { activateAccountAction } from "./actions";
+import PasswordInput from "@/components/PasswordInput";
 
 type Props = {
   token: string;
@@ -154,9 +155,8 @@ export default function ActivateAccountForm({
         >
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           required
           minLength={6}
           autoComplete="new-password"
@@ -175,9 +175,8 @@ export default function ActivateAccountForm({
         >
           Confirm password
         </label>
-        <input
+        <PasswordInput
           id="confirm-password"
-          type="password"
           required
           minLength={6}
           autoComplete="new-password"

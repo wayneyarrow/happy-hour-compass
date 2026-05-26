@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 type Mode = "signin" | "signup";
 
@@ -190,9 +191,8 @@ export default function LoginPage() {
             >
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               required
               minLength={6}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}

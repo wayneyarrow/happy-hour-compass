@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import PasswordInput from "@/components/PasswordInput";
 
 /**
  * /operator/create-password
@@ -183,9 +184,8 @@ export default function CreatePasswordPage() {
               >
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={6}
                 autoComplete="new-password"
@@ -203,9 +203,8 @@ export default function CreatePasswordPage() {
               >
                 Confirm password
               </label>
-              <input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
                 required
                 minLength={6}
                 autoComplete="new-password"
