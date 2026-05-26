@@ -533,7 +533,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 
     const rows = data ?? [];
 
-    // Map venue rows to ConsumerVenue (events: [] initially)
+    // Map venue rows to ConsumerVenue (events: [] and images: [] initially)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const venues = rows.map((row: Record<string, any>) =>
       rowToConsumerVenue(row)
@@ -543,9 +543,6 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const venueUuids = rows.map((r: Record<string, any>) => r.id as string);
 
-    // Fetch all published events for these venues in a single query
-    const allEvents = await getEventsForConsumerVenues(venueUuids);
-
     // Build a UUID → venue-array-index map for O(1) attachment
     const uuidToIdx: Record<string, number> = {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -553,10 +550,42 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       uuidToIdx[r.id as string] = i;
     });
 
+    // Fetch events and primary images in parallel — single query each, no N+1.
+    // Media ordered by sort_order ASC so the first row per venue_id is the primary image.
+    const [allEvents, mediaResult] = await Promise.all([
+      getEventsForConsumerVenues(venueUuids),
+      venueUuids.length > 0
+        ? supabase
+            .from("media")
+            .select("venue_id, url")
+            .in("venue_id", venueUuids)
+            .eq("type", "venue_image")
+            .order("sort_order", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    // Attach events
     for (const event of allEvents) {
       const idx = uuidToIdx[event.venueId];
       if (idx !== undefined) venues[idx].events.push(event);
     }
+
+    // Attach primary image (lowest sort_order) per venue to the images array.
+    // Because the media query is ordered ASC, the first occurrence of each venue_id
+    // is the primary image — subsequent images for the same venue are skipped.
+    const primaryByVenueId: Record<string, string> = {};
+    for (const m of (mediaResult.data ?? [])) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const vid = (m as Record<string, any>).venue_id as string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const url = (m as Record<string, any>).url as string;
+      if (!primaryByVenueId[vid]) primaryByVenueId[vid] = url;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows.forEach((r: Record<string, any>, i: number) => {
+      const url = primaryByVenueId[r.id as string];
+      if (url) venues[i].images = [{ url }];
+    });
 
     return venues;
   } catch (err) {
