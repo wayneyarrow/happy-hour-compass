@@ -381,19 +381,34 @@ function HhDayRow({
   dayState,
   isPending,
   onChange,
+  onCopyPrev,
+  prevDayName,
 }: {
   day: Day;
   dayState: DayState;
   isPending: boolean;
   onChange: (s: DayState) => void;
+  onCopyPrev?: () => void;
+  prevDayName?: Day;
 }) {
   return (
     <div className="py-3 border-b border-gray-100 last:border-0">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        {/* Day label */}
-        <span className="w-24 shrink-0 text-sm font-medium text-gray-700 pt-1.5">
-          {day}
-        </span>
+        {/* Day label + copy-prev */}
+        <div className="w-24 shrink-0 flex flex-col pt-1.5 gap-0.5">
+          <span className="text-sm font-medium text-gray-700">{day}</span>
+          {onCopyPrev && (
+            <button
+              type="button"
+              onClick={onCopyPrev}
+              disabled={isPending}
+              className="text-left text-xs text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50"
+              aria-label={`Copy ${prevDayName} schedule to ${day}`}
+            >
+              ↑ Copy {prevDayName?.slice(0, 3)}
+            </button>
+          )}
+        </div>
 
         {/* "No happy hour" checkbox */}
         <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none shrink-0 pt-1.5">
@@ -452,6 +467,144 @@ function HhDayRow({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── BulkApplyPanel ────────────────────────────────────────────────────────────
+
+const DAY_ABBREVS: Record<Day, string> = {
+  Sunday: "Sun",
+  Monday: "Mon",
+  Tuesday: "Tue",
+  Wednesday: "Wed",
+  Thursday: "Thu",
+  Friday: "Fri",
+  Saturday: "Sat",
+};
+
+const WEEKDAYS: Day[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const WEEKEND_DAYS: Day[] = ["Saturday", "Sunday"];
+
+function BulkApplyPanel({
+  onApply,
+  isPending,
+}: {
+  onApply: (days: Day[], state: DayState) => void;
+  isPending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<Set<Day>>(new Set());
+  const [noHappyHour, setNoHappyHour] = useState(false);
+  const [block, setBlock] = useState<TimeBlock>({ ...DEFAULT_BLOCK });
+
+  function toggleDay(day: Day) {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day);
+      else next.add(day);
+      return next;
+    });
+  }
+
+  function selectPreset(preset: "all" | "weekdays" | "weekends") {
+    if (preset === "all") setSelectedDays(new Set(DAYS));
+    else if (preset === "weekdays") setSelectedDays(new Set(WEEKDAYS));
+    else setSelectedDays(new Set(WEEKEND_DAYS));
+  }
+
+  function handleApply() {
+    if (selectedDays.size === 0) return;
+    onApply([...selectedDays], { noHappyHour, block1: { ...block }, block2: null });
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+      >
+        <span>Apply schedule to multiple days</span>
+        <svg
+          className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-amber-200">
+          {/* Day picker */}
+          <div className="pt-3">
+            <div className="flex gap-1.5 flex-wrap">
+              {DAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  disabled={isPending}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    selectedDays.has(day)
+                      ? "bg-amber-500 text-white"
+                      : "bg-white border border-gray-300 text-gray-600 hover:border-amber-400"
+                  }`}
+                >
+                  {DAY_ABBREVS[day]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-2">
+              {(["all", "weekdays", "weekends"] as const).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => selectPreset(preset)}
+                  disabled={isPending}
+                  className="text-xs text-amber-700 hover:text-amber-900 hover:underline"
+                >
+                  {preset === "all"
+                    ? "All days"
+                    : preset.charAt(0).toUpperCase() + preset.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* No HH toggle */}
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={noHappyHour}
+              onChange={(e) => setNoHappyHour(e.target.checked)}
+              disabled={isPending}
+              className="h-4 w-4 rounded border-gray-300 accent-amber-500"
+            />
+            No happy hour
+          </label>
+
+          {/* Time inputs */}
+          {!noHappyHour && (
+            <TimeBlockInputs block={block} disabled={isPending} onChange={setBlock} />
+          )}
+
+          {/* Apply button */}
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={isPending || selectedDays.size === 0}
+            className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {selectedDays.size > 0
+              ? `Apply to ${selectedDays.size} day${selectedDays.size !== 1 ? "s" : ""}`
+              : "Select days to apply"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -536,6 +689,14 @@ export default function HhTimesForm({
     setDayStates((prev) => ({ ...prev, [day]: ds }));
   }
 
+  function applyToDays(days: Day[], ds: DayState) {
+    setDayStates((prev) => {
+      const next = { ...prev };
+      for (const day of days) next[day] = { ...ds };
+      return next;
+    });
+  }
+
   return (
     <form action={formAction}>
         {/* Hidden input carries the serialized weekly schedule */}
@@ -552,14 +713,18 @@ export default function HhTimesForm({
           ranges per day.
         </p>
 
+        <BulkApplyPanel onApply={applyToDays} isPending={isPending} />
+
         <div className="mt-2">
-          {DAYS.map((day) => (
+          {DAYS.map((day, i) => (
             <HhDayRow
               key={day}
               day={day}
               dayState={dayStates[day]}
               isPending={isPending}
               onChange={(ds) => updateDay(day, ds)}
+              onCopyPrev={i > 0 ? () => updateDay(day, { ...dayStates[DAYS[i - 1]] }) : undefined}
+              prevDayName={i > 0 ? DAYS[i - 1] : undefined}
             />
           ))}
         </div>
