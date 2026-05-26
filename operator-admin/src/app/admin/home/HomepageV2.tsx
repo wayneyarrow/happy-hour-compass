@@ -84,7 +84,7 @@ export default function HomepageV2({
           completion={completion}
           updatedAt={updatedAt}
         />
-        <QuickActionsModule />
+        <QuickActionsModule venueSlug={venueSlug} venueId={venueId} />
         <VenueSnapshotModule />
         <IndustryReadsModule />
         <HelpModule />
