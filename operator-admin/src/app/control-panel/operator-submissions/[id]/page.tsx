@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getOperatorSubmissionById, getSubmissionNotes } from "@/lib/data/operatorSubmissions";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import InternalNotesSection from "./InternalNotesSection";
+import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -346,6 +347,11 @@ export default async function OperatorSubmissionDetailPage({
               submissionId={submission.id}
               currentStatus={submission.status}
             />
+          )}
+
+          {/* Account recovery — shown when operator was provisioned */}
+          {submission.status === "approved" && (
+            <ResendSetupEmailPanel submissionId={submission.id} />
           )}
 
           {/* Linked Venue */}

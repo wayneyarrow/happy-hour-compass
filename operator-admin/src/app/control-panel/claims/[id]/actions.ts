@@ -298,6 +298,123 @@ export async function reviewClaimAction(
   return { success: true, successAction: ACTION_LABELS.approve };
 }
 
+// ── Resend operator setup email ───────────────────────────────────────────────
+
+export type ResendSetupEmailState = {
+  success?: true;
+  successAction?: string;
+  error?: string;
+};
+
+/**
+ * Resends the "set up your password" email to a claim-approved operator.
+ *
+ * Safe to call multiple times — generates a fresh Supabase recovery link each
+ * time. Does NOT create a new auth user, a new operator row, or alter venue
+ * ownership. Appends an internal note on success.
+ *
+ * Eligibility: claim.status === "approved", email present, venue_id present,
+ * and an operator row exists for the email address.
+ *
+ * claimId is bound via .bind(null, claimId).
+ */
+export async function resendClaimSetupEmailAction(
+  claimId: string,
+  _prevState: ResendSetupEmailState,
+  _formData: FormData
+): Promise<ResendSetupEmailState> {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: "Session expired. Please sign in again." };
+
+  const supabase = createAdminClient();
+
+  // ── Fetch claim ───────────────────────────────────────────────────────────
+  const { data: claimRow, error: fetchError } = await supabase
+    .from("venue_claims")
+    .select("email, first_name, venue_id, status")
+    .eq("id", claimId)
+    .single();
+
+  if (fetchError || !claimRow) {
+    console.error("[resendClaimSetupEmailAction] Claim fetch failed:", fetchError?.message);
+    return { error: "Claim not found. Please refresh and try again." };
+  }
+
+  // ── Eligibility ───────────────────────────────────────────────────────────
+  if ((claimRow.status as string) !== "approved") {
+    return { error: "Resend is only available for approved claims." };
+  }
+
+  const email     = claimRow.email as string;
+  const firstName = ((claimRow.first_name as string | null) ?? "").trim() || "there";
+  const venueId   = claimRow.venue_id as string | null;
+
+  if (!email)   return { error: "Claim has no email address." };
+  if (!venueId) return { error: "Claim is not linked to a venue." };
+
+  // ── Confirm operator account exists ───────────────────────────────────────
+  const { data: operatorRow } = await supabase
+    .from("operators")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (!operatorRow?.id) {
+    return {
+      error:
+        "No operator account found for this email. The claim may not have been " +
+        "fully provisioned. Try re-approving the claim or contact support.",
+    };
+  }
+
+  // ── Generate fresh recovery link ──────────────────────────────────────────
+  const appUrl     = getAppUrl();
+  const redirectTo = `${appUrl}/operator/create-password`;
+
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type:    "recovery",
+    email,
+    options: { redirectTo },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    console.error("[resendClaimSetupEmailAction] generateLink failed:", linkError?.message);
+    return { error: "Failed to generate a new setup link. Please try again." };
+  }
+
+  // ── Send email (awaited — fail fast on error) ─────────────────────────────
+  const emailResult = await sendPasswordSetupEmail({
+    to:        email,
+    firstName,
+    setupLink: linkData.properties.action_link,
+  });
+
+  if (!emailResult.ok) {
+    console.error(
+      "[resendClaimSetupEmailAction] Email send failed:",
+      { claimId, email, error: emailResult.error }
+    );
+    return {
+      error: `Email could not be sent to ${email} (${emailResult.error ?? "unknown error"}). Please try again.`,
+    };
+  }
+
+  // ── Append internal note ──────────────────────────────────────────────────
+  await supabase.from("venue_claim_notes").insert({
+    claim_id:         claimId,
+    note:             `Setup email resent to ${email} by founder.`,
+    created_by:       user.id,
+    created_by_email: user.email ?? null,
+  });
+
+  console.log("[resendClaimSetupEmailAction] Complete.", { claimId, email });
+
+  revalidatePath(`/control-panel/claims/${claimId}`);
+  return { success: true, successAction: `Setup email resent to ${email}` };
+}
+
 // ── Append internal claim note ────────────────────────────────────────────────
 
 /**

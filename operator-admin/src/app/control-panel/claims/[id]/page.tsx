@@ -3,6 +3,7 @@ import { getClaimById, getClaimNotes } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
+import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
@@ -369,6 +370,10 @@ export default async function ClaimDetailPage({
               claimId={claim.id}
               currentStatus={claim.status}
             />
+          )}
+
+          {claim.status === "approved" && (
+            <ResendSetupEmailPanel claimId={claim.id} />
           )}
 
           <Section title="Trust signals">

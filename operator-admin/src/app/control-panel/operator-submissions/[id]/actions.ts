@@ -437,6 +437,117 @@ export async function approveAndCreateVenueAction(
   };
 }
 
+// ── Resend operator setup email ───────────────────────────────────────────────
+
+export type ResendSetupEmailState = {
+  success?: true;
+  successAction?: string;
+  error?: string;
+};
+
+/**
+ * Resends the "set up your account" email to an operator whose submission was
+ * approved and whose account was provisioned.
+ *
+ * Safe to call multiple times — generates a fresh Supabase recovery link each
+ * time. Does NOT create a new auth user, a new operator row, or alter venue
+ * ownership. Appends an internal note on success.
+ *
+ * Eligibility: submission.status === "approved" and operator_id is set.
+ *
+ * submissionId is bound via .bind(null, submissionId).
+ */
+export async function resendSubmissionSetupEmailAction(
+  submissionId: string,
+  _prevState: ResendSetupEmailState,
+  _formData: FormData
+): Promise<ResendSetupEmailState> {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: "Session expired. Please sign in again." };
+
+  const supabase = createAdminClient();
+
+  // ── Fetch submission ──────────────────────────────────────────────────────
+  const { data: subRaw, error: fetchError } = await supabase
+    .from("operator_submissions")
+    .select("email, first_name, operator_id, status")
+    .eq("id", submissionId)
+    .single();
+
+  if (fetchError || !subRaw) {
+    console.error("[resendSubmissionSetupEmailAction] Fetch failed:", fetchError?.message);
+    return { error: "Submission not found. Please refresh and try again." };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sub = subRaw as any as Record<string, unknown>;
+
+  // ── Eligibility ───────────────────────────────────────────────────────────
+  if ((sub.status as string) !== "approved") {
+    return { error: "Resend is only available for approved submissions." };
+  }
+
+  const email      = sub.email as string;
+  const firstName  = ((sub.first_name as string | null) ?? "").trim() || "there";
+  const operatorId = sub.operator_id as string | null;
+
+  if (!email) return { error: "Submission has no email address." };
+  if (!operatorId) {
+    return {
+      error:
+        "No operator account is linked to this submission. " +
+        "The submission may not have been fully provisioned.",
+    };
+  }
+
+  // ── Generate fresh recovery link ──────────────────────────────────────────
+  const appUrl     = getAppUrl();
+  const redirectTo = `${appUrl}/operator/create-password`;
+
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type:    "recovery",
+    email,
+    options: { redirectTo },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    console.error("[resendSubmissionSetupEmailAction] generateLink failed:", linkError?.message);
+    return { error: "Failed to generate a new setup link. Please try again." };
+  }
+
+  // ── Send email (awaited — fail fast on error) ─────────────────────────────
+  const emailResult = await sendOperatorActivationEmail({
+    to:        email,
+    firstName,
+    setupLink: linkData.properties.action_link,
+  });
+
+  if (!emailResult.ok) {
+    console.error(
+      "[resendSubmissionSetupEmailAction] Email send failed:",
+      { submissionId, email, error: emailResult.error }
+    );
+    return {
+      error: `Email could not be sent to ${email} (${emailResult.error ?? "unknown error"}). Please try again.`,
+    };
+  }
+
+  // ── Append internal note ──────────────────────────────────────────────────
+  await supabase.from("operator_submission_notes").insert({
+    submission_id:    submissionId,
+    note:             `Setup email resent to ${email} by founder.`,
+    created_by:       user.id,
+    created_by_email: user.email ?? null,
+  });
+
+  console.log("[resendSubmissionSetupEmailAction] Complete.", { submissionId, email });
+
+  revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  return { success: true, successAction: `Setup email resent to ${email}` };
+}
+
 // ── Append internal note ──────────────────────────────────────────────────────
 
 /**
