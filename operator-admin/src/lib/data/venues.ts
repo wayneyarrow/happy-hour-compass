@@ -550,6 +550,20 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       uuidToIdx[r.id as string] = i;
     });
 
+    // TODO(HHC Scaling):
+    // Current implementation performs one bulk media query using
+    // WHERE venue_id IN (...) and selects the first image
+    // (sort_order=0 equivalent) per venue.
+    //
+    // Fine for beta and early launch volumes.
+    //
+    // If venue counts grow substantially (ex: 1,000+ published venues),
+    // consider denormalizing primary_image_url onto venues and updating it
+    // whenever images are uploaded, reordered, deleted, or primary changes.
+    //
+    // Reason:
+    // Avoid growing IN clauses and reduce query complexity on consumer listing pages.
+
     // Fetch events and primary images in parallel — single query each, no N+1.
     // Media ordered by sort_order ASC so the first row per venue_id is the primary image.
     const [allEvents, mediaResult] = await Promise.all([
