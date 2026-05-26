@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SuggestionCard } from "@/lib/suggestedSteps";
+import type { VenueCompletion } from "@/lib/venueCompletion";
 import V2IntroBanner from "./V2IntroBanner";
 import VenueHealthModule from "./modules/VenueHealthModule";
 import SuggestedNextStepsModule from "./modules/SuggestedNextStepsModule";
@@ -15,9 +16,23 @@ type Props = {
   /** True when the operator has already dismissed the intro banner (DB-persisted). */
   introSeen: boolean;
   suggestions: SuggestionCard[];
+  isPublished: boolean;
+  isClaimed: boolean;
+  completion: VenueCompletion;
+  updatedAt: string | null;
 };
 
-export default function HomepageV2({ venueName, venueSlug, venueId, introSeen, suggestions }: Props) {
+export default function HomepageV2({
+  venueName,
+  venueSlug,
+  venueId,
+  introSeen,
+  suggestions,
+  isPublished,
+  isClaimed,
+  completion,
+  updatedAt,
+}: Props) {
   const publicHref = `/venue/${venueSlug ?? venueId}?preview=true`;
 
   return (
@@ -63,7 +78,12 @@ export default function HomepageV2({ venueName, venueSlug, venueId, introSeen, s
           The rest fill the 2-column grid naturally on desktop. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SuggestedNextStepsModule suggestions={suggestions} />
-        <VenueHealthModule />
+        <VenueHealthModule
+          isPublished={isPublished}
+          isClaimed={isClaimed}
+          completion={completion}
+          updatedAt={updatedAt}
+        />
         <QuickActionsModule />
         <VenueSnapshotModule />
         <IndustryReadsModule />

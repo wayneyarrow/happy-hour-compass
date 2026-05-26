@@ -14,6 +14,7 @@ import {
 } from "@/lib/venueReadiness";
 import { isOnboardingComplete } from "@/lib/homepagePhase";
 import { computeSuggestedSteps } from "@/lib/suggestedSteps";
+import { computeVenueCompletion } from "@/lib/venueCompletion";
 import { markReviewedAction } from "./actions";
 import HomepageV2 from "./HomepageV2";
 
@@ -88,6 +89,7 @@ type HomeVenueRow = {
   name: string | null;
   is_published: boolean | null;
   claimed_at: string | null;
+  updated_at: string | null;
   address_line1: string | null;
   city: string | null;
   region: string | null;
@@ -106,7 +108,7 @@ type HomeVenueRow = {
 };
 
 const VENUE_SELECT =
-  "id, slug, name, is_published, claimed_at, address_line1, city, region, postal_code, " +
+  "id, slug, name, is_published, claimed_at, updated_at, address_line1, city, region, postal_code, " +
   "phone, website_url, menu_url, establishment_type, hh_times, hh_tagline, " +
   "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations";
 
@@ -388,12 +390,24 @@ export default async function AdminHomePage() {
       .select("id", { count: "exact", head: true })
       .eq("venue_id", venue!.id);
 
+    const eventsCount = rawEventsCount ?? 0;
+    const foodSpecialsCount = parseSpecialItemCount(venue!.hh_food_details);
+    const drinkSpecialsCount = parseSpecialItemCount(venue!.hh_drink_details);
+
     const suggestions = computeSuggestedSteps({
       signals: readiness.signals,
       operatorImageCount,
-      eventsCount: rawEventsCount ?? 0,
-      foodSpecialsCount: parseSpecialItemCount(venue!.hh_food_details),
-      drinkSpecialsCount: parseSpecialItemCount(venue!.hh_drink_details),
+      eventsCount,
+      foodSpecialsCount,
+      drinkSpecialsCount,
+    });
+
+    const completion = computeVenueCompletion({
+      signals: readiness.signals,
+      operatorImageCount,
+      eventsCount,
+      foodSpecialsCount,
+      drinkSpecialsCount,
     });
 
     const introSeen = !operator || !!operator.homepage_v2_intro_seen_at;
@@ -404,6 +418,10 @@ export default async function AdminHomePage() {
         venueId={venue!.id}
         introSeen={introSeen}
         suggestions={suggestions}
+        isPublished={isPublished}
+        isClaimed={isClaimed}
+        completion={completion}
+        updatedAt={venue!.updated_at ?? null}
       />
     );
   }
