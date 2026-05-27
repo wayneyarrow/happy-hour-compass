@@ -26,24 +26,30 @@ function EmptyState() {
 function Card({ card, isPrimary = false }: { card: SuggestionCard; isPrimary?: boolean }) {
   return (
     <div
-      className={`flex flex-col gap-2 p-4 rounded-xl border transition-colors ${
+      className={`flex flex-col gap-3 p-4 rounded-xl border transition-all ${
         isPrimary
-          ? "border-amber-200 bg-white shadow-sm hover:shadow hover:border-amber-300"
-          : "border-gray-100 bg-gray-50 hover:border-amber-100 hover:bg-white"
+          ? "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 shadow-sm hover:shadow hover:border-amber-300"
+          : "border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      {isPrimary && (
+        <span className="self-start text-[10px] font-bold uppercase tracking-wide text-white bg-amber-500 rounded-full px-2.5 py-1 shrink-0">
+          Top pick
+        </span>
+      )}
+      <div
+        className={`flex items-center justify-center shrink-0 ${
+          isPrimary
+            ? "w-10 h-10 rounded-xl bg-white/80 border border-amber-100"
+            : "w-8 h-8 rounded-lg bg-white border border-gray-200"
+        }`}
+      >
         <span
           className={`leading-none ${isPrimary ? "text-2xl" : "text-xl"}`}
           aria-hidden="true"
         >
           {card.icon}
         </span>
-        {isPrimary && (
-          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5 shrink-0">
-            Top pick
-          </span>
-        )}
       </div>
       <div className="flex-1">
         <p
@@ -55,12 +61,21 @@ function Card({ card, isPrimary = false }: { card: SuggestionCard; isPrimary?: b
         </p>
         <p className="text-xs text-gray-400 mt-1 leading-relaxed">{card.description}</p>
       </div>
-      <Link
-        href={card.href}
-        className="mt-1 self-start text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
-      >
-        {card.ctaLabel} →
-      </Link>
+      {isPrimary ? (
+        <Link
+          href={card.href}
+          className="mt-1 self-start text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          {card.ctaLabel} →
+        </Link>
+      ) : (
+        <Link
+          href={card.href}
+          className="mt-1 self-start text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+        >
+          {card.ctaLabel} →
+        </Link>
+      )}
     </div>
   );
 }

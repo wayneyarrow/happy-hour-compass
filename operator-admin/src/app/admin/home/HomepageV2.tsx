@@ -76,7 +76,7 @@ export default function HomepageV2({
       {/* ── Module grid ─────────────────────────────────────────────────────────
           SuggestedNextSteps spans full width (md:col-span-2).
           Remaining modules fill the 2-column grid naturally on desktop. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <SuggestedNextStepsModule suggestions={suggestions} />
         <VenueHealthModule
           isPublished={isPublished}
