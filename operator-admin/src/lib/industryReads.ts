@@ -88,8 +88,8 @@ const COMPARISON_PATTERNS: ReadonlyArray<string> = [
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
 const MIN_SCORE    = 0;
-const MAX_ARTICLES = 5;
-const MIN_ARTICLES = 3; // Fall back to curated if fewer pass filtering.
+const MAX_ARTICLES = 10; // Cache stores up to 10; homepage slices to 3, CP review shows all.
+const MIN_ARTICLES = 3;  // Fall back to curated if fewer pass filtering.
 
 // ── Fallback curated content ──────────────────────────────────────────────────
 // Shown when live feed filtering produces < MIN_ARTICLES results.
