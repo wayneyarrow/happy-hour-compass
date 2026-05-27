@@ -1,6 +1,6 @@
 export default function HelpModule() {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-3 mb-3">
         <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
           <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">

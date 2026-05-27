@@ -39,42 +39,43 @@ export default function HomepageV2({
       {/* One-time intro banner — server decides whether to mount based on DB state */}
       {!introSeen && <V2IntroBanner />}
 
-      {/* Page heading */}
-      <div className="mb-5">
-        <h2 className="text-2xl font-bold text-gray-900">Venue HQ</h2>
-        <p className="text-sm text-gray-500 mt-1">Attract more guests and fill your venue.</p>
+      {/* ── Identity block ──────────────────────────────────────────────────────
+          Warm amber wash anchors the page. The venue name is the primary heading —
+          "Venue HQ" is the eyebrow label. On V2 the venue is always live, so the
+          Live badge is removed; the focus shifts to venue identity and momentum. */}
+      <div className="mb-6 rounded-2xl bg-gradient-to-b from-amber-50 to-orange-50/30 border border-amber-100 px-5 py-5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-2">
+          Venue HQ
+        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold text-gray-900 leading-tight truncate">{venueName}</h2>
+            <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+              Your venue is live — keep your listing sharp and your tables full.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5 shrink-0 mt-0.5">
+            <a
+              href={publicHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              View listing ↗
+            </a>
+            <Link
+              href="/admin/venue"
+              className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Edit venue →
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* Venue status strip */}
-      <div className="mb-5 bg-white rounded-xl border border-gray-200 px-5 py-3.5 flex items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" aria-hidden="true" />
-          <span className="text-sm font-semibold text-gray-900 truncate">{venueName}</span>
-          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-            Live
-          </span>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <a
-            href={publicHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-amber-700 hover:text-amber-800 transition-colors"
-          >
-            Preview →
-          </a>
-          <Link
-            href="/admin/venue"
-            className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            Edit venue →
-          </Link>
-        </div>
-      </div>
-
-      {/* Module grid
-          SuggestedNextSteps and VenueSnapshot span full width (md:col-span-2).
-          The rest fill the 2-column grid naturally on desktop. */}
+      {/* ── Module grid ─────────────────────────────────────────────────────────
+          SuggestedNextSteps spans full width (md:col-span-2).
+          Remaining modules fill the 2-column grid naturally on desktop. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SuggestedNextStepsModule suggestions={suggestions} />
         <VenueHealthModule

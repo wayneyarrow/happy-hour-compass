@@ -26,6 +26,12 @@ const SECTIONS = [
     status: "active" as const,
   },
   {
+    title: "Industry Reads",
+    href: "/control-panel/industry-reads",
+    description: "Review and rate article relevance to tune keyword weighting and source quality over time.",
+    status: "active" as const,
+  },
+  {
     title: "Settings",
     href: "/control-panel/settings",
     description: "Platform configuration and feature flags.",

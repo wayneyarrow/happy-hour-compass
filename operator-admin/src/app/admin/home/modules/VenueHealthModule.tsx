@@ -47,6 +47,28 @@ function healthContext(percentage: number): string {
   return "There's room to grow — guests see what you show them.";
 }
 
+// ── Strength meter ────────────────────────────────────────────────────────────
+// 8-segment visual bar provides instant momentum reading of the percentage score.
+// Colour matches the existing green / amber / red thresholds.
+
+function StrengthMeter({ percentage }: { percentage: number }) {
+  const segments = 8;
+  const filled = Math.round((percentage / 100) * segments);
+  const filledColor =
+    percentage >= 80 ? "bg-green-400" : percentage >= 60 ? "bg-amber-400" : "bg-red-400";
+
+  return (
+    <div className="flex gap-1.5" role="presentation" aria-hidden="true">
+      {Array.from({ length: segments }, (_, i) => (
+        <div
+          key={i}
+          className={`h-1.5 flex-1 rounded-full ${i < filled ? filledColor : "bg-gray-100"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Health chip ───────────────────────────────────────────────────────────────
 
 const STATUS_CLASSES: Record<HealthIndicator["status"], string> = {
@@ -79,41 +101,47 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
     percentage >= 80 ? "text-green-700" : percentage >= 60 ? "text-amber-600" : "text-red-600";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      {/* Header — title + prominent percentage */}
-      <div className="flex items-center gap-3 mb-1.5">
-        <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-          <svg
-            className="w-4 h-4 text-green-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      {/* ── Strength section ── title + meter + context, separated from details below */}
+      <div className="mb-4 pb-4 border-b border-gray-100">
+        {/* Title row with prominent percentage */}
+        <div className="flex items-center gap-3 mb-2.5">
+          <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+            <svg
+              className="w-4 h-4 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-gray-900 flex-1">Listing Strength</h3>
+          <span
+            className={`text-lg font-bold tabular-nums ${percentageColor}`}
+            aria-label={`${percentage}% complete`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
+            {percentage}%
+          </span>
         </div>
-        <h3 className="text-sm font-semibold text-gray-900 flex-1">Listing Strength</h3>
-        <span
-          className={`text-lg font-bold tabular-nums ${percentageColor}`}
-          aria-label={`${percentage}% complete`}
-        >
-          {percentage}%
-        </span>
+
+        {/* Segmented strength meter — instant visual read of the score */}
+        <StrengthMeter percentage={percentage} />
+
+        {/* Contextual one-liner */}
+        <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+          {healthContext(percentage)}
+        </p>
       </div>
 
-      {/* Contextual one-liner — aligned under the icon */}
-      <p className="text-xs text-gray-500 mb-4 ml-11 leading-relaxed">
-        {healthContext(percentage)}
-      </p>
-
-      {/* Status row — Live / Verified / Updated at */}
-      <div className="flex items-center gap-2.5 flex-wrap mb-4 pb-4 border-b border-gray-100 text-xs">
+      {/* ── Status row ── Live / Verified / Updated at */}
+      <div className="flex items-center gap-2.5 flex-wrap mb-4 text-xs">
         {isPublished ? (
           <span className="inline-flex items-center gap-1.5 font-semibold text-green-700">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" aria-hidden="true" />
@@ -142,7 +170,7 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
         )}
       </div>
 
-      {/* Health chips */}
+      {/* ── Health chips ── each incomplete chip links directly to the relevant section */}
       <div className="flex flex-wrap gap-2">
         {indicators.map((indicator) => (
           <HealthChip key={indicator.key} indicator={indicator} />

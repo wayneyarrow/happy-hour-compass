@@ -8,8 +8,9 @@ const NAV_ITEMS = [
   { label: "Claims",       href: "/control-panel/claims" },
   { label: "Submissions",  href: "/control-panel/operator-submissions" },
   { label: "Venues",       href: "/control-panel/venues" },
-  { label: "Operators",    href: "/control-panel/operators" },
-  { label: "Settings",     href: "/control-panel/settings" },
+  { label: "Operators",       href: "/control-panel/operators" },
+  { label: "Industry Reads", href: "/control-panel/industry-reads" },
+  { label: "Settings",       href: "/control-panel/settings" },
 ] as const;
 
 export default function ControlPanelSideNav() {

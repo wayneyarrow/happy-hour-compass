@@ -95,7 +95,7 @@ async function ArticleList() {
 
 export default function IndustryReadsModule() {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       {/* Header — renders immediately, never waits for articles */}
       <div className="flex items-center gap-3 mb-3">
         <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">

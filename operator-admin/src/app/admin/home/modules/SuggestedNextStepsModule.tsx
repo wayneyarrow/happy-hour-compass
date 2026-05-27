@@ -20,13 +20,39 @@ function EmptyState() {
 }
 
 // ── Suggestion card ───────────────────────────────────────────────────────────
+// The first suggestion (isPrimary) is visually elevated to signal it's the
+// highest-impact action. Subsequent cards use a quieter treatment.
 
-function Card({ card }: { card: SuggestionCard }) {
+function Card({ card, isPrimary = false }: { card: SuggestionCard; isPrimary?: boolean }) {
   return (
-    <div className="flex flex-col gap-2 p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-amber-100 hover:bg-white transition-colors">
-      <span className="text-xl leading-none" aria-hidden="true">{card.icon}</span>
+    <div
+      className={`flex flex-col gap-2 p-4 rounded-xl border transition-colors ${
+        isPrimary
+          ? "border-amber-200 bg-white shadow-sm hover:shadow hover:border-amber-300"
+          : "border-gray-100 bg-gray-50 hover:border-amber-100 hover:bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className={`leading-none ${isPrimary ? "text-2xl" : "text-xl"}`}
+          aria-hidden="true"
+        >
+          {card.icon}
+        </span>
+        {isPrimary && (
+          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5 shrink-0">
+            Top pick
+          </span>
+        )}
+      </div>
       <div className="flex-1">
-        <p className="text-xs font-semibold text-gray-800 leading-snug">{card.title}</p>
+        <p
+          className={`font-semibold leading-snug ${
+            isPrimary ? "text-sm text-gray-900" : "text-xs text-gray-800"
+          }`}
+        >
+          {card.title}
+        </p>
         <p className="text-xs text-gray-400 mt-1 leading-relaxed">{card.description}</p>
       </div>
       <Link
@@ -85,8 +111,8 @@ export default function SuggestedNextStepsModule({ suggestions }: Props) {
         <EmptyState />
       ) : (
         <div className={`grid gap-3 ${colClass}`}>
-          {suggestions.map((card) => (
-            <Card key={card.id} card={card} />
+          {suggestions.map((card, i) => (
+            <Card key={card.id} card={card} isPrimary={i === 0} />
           ))}
         </div>
       )}
