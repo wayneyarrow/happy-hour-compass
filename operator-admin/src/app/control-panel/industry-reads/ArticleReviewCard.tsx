@@ -8,6 +8,7 @@ type Props = {
   articleTitle: string;
   sourceName: string;
   publishedAt: string;
+  excerpt?: string;
   thumbsUp: number;
   thumbsDown: number;
   lastAt: string | null;
@@ -31,6 +32,7 @@ export default function ArticleReviewCard({
   articleTitle,
   sourceName,
   publishedAt,
+  excerpt,
   thumbsUp,
   thumbsDown,
   lastAt,
@@ -68,6 +70,11 @@ export default function ArticleReviewCard({
               {articleTitle}
             </p>
           </a>
+          {excerpt && (
+            <p className="text-xs text-gray-400 mt-1 mb-1.5 leading-relaxed line-clamp-2">
+              {excerpt}
+            </p>
+          )}
           <p className="text-xs text-gray-500">
             <span className="text-amber-600 font-medium">{sourceName}</span>
             <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>

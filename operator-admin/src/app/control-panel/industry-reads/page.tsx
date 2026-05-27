@@ -73,12 +73,8 @@ export default async function IndustryReadsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Industry Reads</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Rate article relevance to tune keyword weighting and source quality over time.
-          Feedback is stored in{" "}
-          <code className="text-xs font-mono bg-gray-100 px-1 rounded">
-            industry_reads_feedback
-          </code>{" "}
-          and used to inform future scoring adjustments.
+          Review article relevance to help improve what operators see in Venue HQ.
+          Rate quickly — thumbs up for useful operator insight, thumbs down for noise or fluff.
         </p>
       </div>
 
@@ -123,6 +119,7 @@ export default async function IndustryReadsPage() {
                 articleTitle={article.title}
                 sourceName={article.sourceName}
                 publishedAt={article.publishedAt}
+                excerpt={article.excerpt}
                 thumbsUp={fb?.thumbsUp ?? 0}
                 thumbsDown={fb?.thumbsDown ?? 0}
                 lastAt={fb?.lastAt ?? null}
@@ -134,10 +131,9 @@ export default async function IndustryReadsPage() {
 
       {/* ── Context note ── */}
       <p className="mt-6 text-xs text-gray-400 leading-relaxed">
-        Articles are fetched and scored in real time from industry RSS feeds. Scores reflect
-        keyword matching against operator-relevant topics. Use these ratings to identify which
-        sources and topics are genuinely useful before adjusting keyword weights in{" "}
-        <code className="font-mono bg-gray-100 px-1 rounded">src/lib/industryReads.ts</code>.
+        Articles are pulled from industry RSS feeds every 6 hours and ranked by operator
+        relevance. Thumbs up signals a useful source; thumbs down flags noise. Ratings
+        accumulate over time and will inform future content tuning.
       </p>
     </div>
   );
