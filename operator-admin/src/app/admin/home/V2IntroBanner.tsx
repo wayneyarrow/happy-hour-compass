@@ -28,63 +28,25 @@ export default function V2IntroBanner() {
         <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">🎉</span>
 
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 mb-0.5 leading-snug">
-            Your venue is now customer-ready
+          <h3 className="text-base font-semibold text-gray-900 mb-1 leading-snug">
+            You&apos;re live — guests can find you now.
           </h3>
-          <p className="text-sm text-gray-600 mb-3">
-            Your listing is live and onboarding is complete.
+          <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+            Venue HQ is your home base for keeping your listing sharp, attracting
+            more guests, and growing your venue over time.
           </p>
-          <p className="text-sm text-gray-700 mb-2">
-            Welcome to <span className="font-semibold">Venue HQ</span> — a place to help
-            improve your listing, discover opportunities, and grow your business.
-          </p>
-          <p className="text-xs text-gray-500 mb-2">You&apos;ll now see:</p>
-          <ul className="space-y-1.5 mb-4">
-            {[
-              "Suggested next steps",
-              "Venue health",
-              "Venue snapshots",
-              "Industry resources",
-            ].map((item) => (
-              <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
-                <svg
-                  className="w-4 h-4 text-green-500 shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                {item}
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Tour is a future feature; both buttons dismiss for now */}
-            <button
-              onClick={dismiss}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-colors"
-            >
-              Take a quick tour
-            </button>
-            <button
-              onClick={dismiss}
-              className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-medium rounded-lg text-sm transition-colors"
-            >
-              Got it
-            </button>
-          </div>
+          <button
+            onClick={dismiss}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-colors"
+          >
+            Let&apos;s go
+          </button>
         </div>
 
         <button
           onClick={dismiss}
           className="shrink-0 text-gray-400 hover:text-gray-600 mt-0.5 transition-colors"
-          aria-label="Dismiss welcome message"
+          aria-label="Dismiss"
         >
           <svg
             className="w-5 h-5"

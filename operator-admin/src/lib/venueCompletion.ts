@@ -84,7 +84,7 @@ type IndicatorDef = {
 const INDICATOR_DEFS: IndicatorDef[] = [
   {
     key: "hh_times",
-    label: "HH Times",
+    label: "Happy Hours",
     weight: 2,
     href: "/admin/happy-hours?section=times#times",
     compute: ({ signals }) => ({

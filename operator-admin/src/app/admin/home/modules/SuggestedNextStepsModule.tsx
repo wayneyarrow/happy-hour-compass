@@ -11,9 +11,9 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center py-8 text-center">
       <span className="text-3xl mb-3" aria-hidden="true">✨</span>
-      <p className="text-sm font-medium text-gray-700">Your listing is looking strong.</p>
+      <p className="text-sm font-medium text-gray-700">Your listing is in great shape.</p>
       <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-        Check back anytime for new ways to improve your venue.
+        We&apos;ll surface new opportunities as your venue grows.
       </p>
     </div>
   );

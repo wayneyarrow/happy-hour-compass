@@ -122,7 +122,7 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
         <span className="text-gray-200" aria-hidden="true">·</span>
 
         {/* Completion percentage */}
-        <span className={`font-semibold ${percentageColor}`}>{percentage}% Complete</span>
+        <span className={`font-semibold ${percentageColor}`}>{percentage}% ready</span>
 
         {/* Updated at */}
         {relativeTime && (

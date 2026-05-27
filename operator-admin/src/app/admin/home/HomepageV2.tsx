@@ -49,7 +49,7 @@ export default function HomepageV2({
       {/* Page heading */}
       <div className="mb-5">
         <h2 className="text-2xl font-bold text-gray-900">Venue HQ</h2>
-        <p className="text-sm text-gray-500 mt-1">Grow and improve your venue.</p>
+        <p className="text-sm text-gray-500 mt-1">Attract more guests and fill your venue.</p>
       </div>
 
       {/* Venue status strip */}

@@ -30,10 +30,10 @@ export default function QuickActionsModule({ venueSlug, venueId }: Props) {
 
   const QUICK_ACTIONS: Action[] = [
     { label: "Edit happy hours",      icon: "🍹", href: "/admin/happy-hours?section=times#times" },
-    { label: "Update venue photos",   icon: "📸", href: "/admin/images" },
+    { label: "Update your photos",    icon: "📸", href: "/admin/images" },
     { label: "Manage specials",       icon: "🍽️", href: "/admin/happy-hours?section=food#food" },
     { label: "Manage events",         icon: "🎉", href: "/admin/events" },
-    { label: "Edit business details", icon: "✏️", href: "/admin/venue" },
+    { label: "Update your details",   icon: "✏️", href: "/admin/venue" },
     { label: "View public listing",   icon: "👁️", href: publicHref, external: true },
   ];
 
