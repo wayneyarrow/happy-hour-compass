@@ -26,21 +26,28 @@ function ArticleCard({ article }: { article: IndustryArticle }) {
       href={article.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block -mx-1 px-1 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+      className="group flex items-start gap-3 py-3 hover:opacity-90 transition-opacity"
     >
-      <p className="text-sm font-medium text-gray-800 group-hover:text-gray-900 leading-snug line-clamp-2 transition-colors">
-        {article.title}
-      </p>
-      <p className="text-[11px] text-gray-400 mt-1">
-        {article.sourceName}
-        <span className="mx-1" aria-hidden="true">·</span>
-        {relTime}
-      </p>
-      {article.excerpt && (
-        <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
-          {article.excerpt}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 group-hover:text-gray-900 leading-snug line-clamp-2 mb-1 transition-colors">
+          {article.title}
         </p>
-      )}
+        <p className="text-[11px] text-gray-400">
+          <span className="text-amber-600 font-semibold">{article.sourceName}</span>
+          <span className="mx-1.5" aria-hidden="true">·</span>
+          {relTime}
+        </p>
+      </div>
+      <svg
+        className="w-3.5 h-3.5 text-gray-300 group-hover:text-amber-400 shrink-0 mt-0.5 transition-colors"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+      </svg>
     </a>
   );
 }
@@ -49,11 +56,11 @@ function ArticleCard({ article }: { article: IndustryArticle }) {
 
 function ArticleListSkeleton() {
   return (
-    <div className="divide-y divide-gray-50 -my-1">
+    <div className="divide-y divide-gray-100">
       {[0, 1, 2].map((i) => (
         <div key={i} className="py-3 animate-pulse">
           <div className="h-3.5 bg-gray-100 rounded w-4/5 mb-1.5" />
-          <div className="h-3.5 bg-gray-100 rounded w-3/5 mb-1.5" />
+          <div className="h-3.5 bg-gray-100 rounded w-3/5 mb-2" />
           <div className="h-3 bg-gray-100 rounded w-2/5" />
         </div>
       ))}
@@ -65,8 +72,9 @@ function ArticleListSkeleton() {
 
 async function ArticleList() {
   const articles = await getIndustryReads();
+  const displayed = articles.slice(0, 3);
 
-  if (articles.length === 0) {
+  if (displayed.length === 0) {
     return (
       <p className="text-xs text-gray-400 py-2 leading-relaxed">
         Industry content is currently unavailable. Check back soon.
@@ -75,8 +83,8 @@ async function ArticleList() {
   }
 
   return (
-    <div className="divide-y divide-gray-50 -my-1">
-      {articles.map((article) => (
+    <div className="divide-y divide-gray-100">
+      {displayed.map((article) => (
         <ArticleCard key={article.url} article={article} />
       ))}
     </div>
@@ -89,7 +97,7 @@ export default function IndustryReadsModule() {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       {/* Header — renders immediately, never waits for articles */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-3">
         <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
           <svg
             className="w-4 h-4 text-orange-500"

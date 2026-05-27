@@ -25,15 +25,18 @@ export default function V2IntroBanner() {
       className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm"
     >
       <div className="flex items-start gap-3">
-        <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">🎉</span>
+        <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">🏠</span>
 
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 mb-1 leading-snug">
-            You&apos;re live — guests can find you now.
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 mb-1.5">
+            Your homepage just got smarter
+          </p>
+          <h3 className="text-base font-semibold text-gray-900 mb-1.5 leading-snug">
+            Welcome to your Venue HQ
           </h3>
           <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-            Venue HQ is your home base for keeping your listing sharp, attracting
-            more guests, and growing your venue over time.
+            Your home base for keeping your listing sharp, turning browsers into
+            guests, and surfacing opportunities to help your venue grow over time.
           </p>
           <button
             onClick={dismiss}

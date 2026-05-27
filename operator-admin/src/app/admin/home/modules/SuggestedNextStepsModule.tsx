@@ -23,11 +23,11 @@ function EmptyState() {
 
 function Card({ card }: { card: SuggestionCard }) {
   return (
-    <div className="flex flex-col gap-2 p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white transition-colors">
+    <div className="flex flex-col gap-2 p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-amber-100 hover:bg-white transition-colors">
       <span className="text-xl leading-none" aria-hidden="true">{card.icon}</span>
       <div className="flex-1">
         <p className="text-xs font-semibold text-gray-800 leading-snug">{card.title}</p>
-        <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">{card.description}</p>
+        <p className="text-xs text-gray-400 mt-1 leading-relaxed">{card.description}</p>
       </div>
       <Link
         href={card.href}
@@ -50,9 +50,9 @@ export default function SuggestedNextStepsModule({ suggestions }: Props) {
         : "grid-cols-1";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 md:col-span-2">
+    <div className="bg-gradient-to-b from-white to-amber-50/30 rounded-xl border border-amber-100 p-5 md:col-span-2">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-1">
         <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
           <svg
             className="w-4 h-4 text-amber-600"
@@ -72,6 +72,13 @@ export default function SuggestedNextStepsModule({ suggestions }: Props) {
           </span>
         )}
       </div>
+
+      {/* CSM intro — only shown when there are suggestions */}
+      {suggestions.length > 0 && (
+        <p className="text-xs text-gray-500 mb-4 ml-11 leading-relaxed">
+          Based on your listing, here&apos;s what would have the most impact right now.
+        </p>
+      )}
 
       {/* Cards or empty state */}
       {suggestions.length === 0 ? (

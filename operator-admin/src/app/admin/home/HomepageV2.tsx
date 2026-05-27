@@ -5,7 +5,6 @@ import V2IntroBanner from "./V2IntroBanner";
 import VenueHealthModule from "./modules/VenueHealthModule";
 import SuggestedNextStepsModule from "./modules/SuggestedNextStepsModule";
 import QuickActionsModule from "./modules/QuickActionsModule";
-import VenueSnapshotModule from "./modules/VenueSnapshotModule";
 import IndustryReadsModule from "./modules/IndustryReadsModule";
 import HelpModule from "./modules/HelpModule";
 
@@ -20,9 +19,6 @@ type Props = {
   isClaimed: boolean;
   completion: VenueCompletion;
   updatedAt: string | null;
-  photosCount: number;
-  specialsCount: number;
-  eventsCount: number;
 };
 
 export default function HomepageV2({
@@ -35,9 +31,6 @@ export default function HomepageV2({
   isClaimed,
   completion,
   updatedAt,
-  photosCount,
-  specialsCount,
-  eventsCount,
 }: Props) {
   const publicHref = `/venue/${venueSlug ?? venueId}?preview=true`;
 
@@ -91,11 +84,6 @@ export default function HomepageV2({
           updatedAt={updatedAt}
         />
         <QuickActionsModule venueSlug={venueSlug} venueId={venueId} />
-        <VenueSnapshotModule
-          photosCount={photosCount}
-          specialsCount={specialsCount}
-          eventsCount={eventsCount}
-        />
         <IndustryReadsModule />
         <HelpModule />
       </div>

@@ -41,6 +41,12 @@ function chipLabel(indicator: HealthIndicator): string {
   return status === "complete" ? `${label} ✓` : `${label} ✕`;
 }
 
+function healthContext(percentage: number): string {
+  if (percentage >= 80) return "Your listing is in strong shape.";
+  if (percentage >= 60) return "A few updates could make your listing stand out more.";
+  return "There's room to grow — guests see what you show them.";
+}
+
 // ── Health chip ───────────────────────────────────────────────────────────────
 
 const STATUS_CLASSES: Record<HealthIndicator["status"], string> = {
@@ -70,12 +76,12 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
   const relativeTime = formatRelativeTime(updatedAt);
 
   const percentageColor =
-    percentage >= 80 ? "text-green-700" : percentage >= 50 ? "text-amber-700" : "text-red-600";
+    percentage >= 80 ? "text-green-700" : percentage >= 60 ? "text-amber-600" : "text-red-600";
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* Header — title + prominent percentage */}
+      <div className="flex items-center gap-3 mb-1.5">
         <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
           <svg
             className="w-4 h-4 text-green-600"
@@ -92,12 +98,22 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
             />
           </svg>
         </div>
-        <h3 className="text-sm font-semibold text-gray-900">Venue Health</h3>
+        <h3 className="text-sm font-semibold text-gray-900 flex-1">Listing Strength</h3>
+        <span
+          className={`text-lg font-bold tabular-nums ${percentageColor}`}
+          aria-label={`${percentage}% complete`}
+        >
+          {percentage}%
+        </span>
       </div>
 
-      {/* Summary row */}
+      {/* Contextual one-liner — aligned under the icon */}
+      <p className="text-xs text-gray-500 mb-4 ml-11 leading-relaxed">
+        {healthContext(percentage)}
+      </p>
+
+      {/* Status row — Live / Verified / Updated at */}
       <div className="flex items-center gap-2.5 flex-wrap mb-4 pb-4 border-b border-gray-100 text-xs">
-        {/* Publish status */}
         {isPublished ? (
           <span className="inline-flex items-center gap-1.5 font-semibold text-green-700">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" aria-hidden="true" />
@@ -112,19 +128,12 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
 
         <span className="text-gray-200" aria-hidden="true">·</span>
 
-        {/* Verification status */}
         {isClaimed ? (
           <span className="font-medium text-green-600">✓ Verified</span>
         ) : (
-          <span className="font-medium text-gray-400">Pending</span>
+          <span className="font-medium text-gray-400">Unverified</span>
         )}
 
-        <span className="text-gray-200" aria-hidden="true">·</span>
-
-        {/* Completion percentage */}
-        <span className={`font-semibold ${percentageColor}`}>{percentage}% ready</span>
-
-        {/* Updated at */}
         {relativeTime && (
           <>
             <span className="text-gray-200" aria-hidden="true">·</span>

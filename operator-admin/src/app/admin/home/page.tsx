@@ -393,7 +393,6 @@ export default async function AdminHomePage() {
     const eventsCount = rawEventsCount ?? 0;
     const foodSpecialsCount = parseSpecialItemCount(venue!.hh_food_details);
     const drinkSpecialsCount = parseSpecialItemCount(venue!.hh_drink_details);
-    const specialsCount = foodSpecialsCount + drinkSpecialsCount;
 
     const suggestions = computeSuggestedSteps({
       signals: readiness.signals,
@@ -423,9 +422,6 @@ export default async function AdminHomePage() {
         isClaimed={isClaimed}
         completion={completion}
         updatedAt={venue!.updated_at ?? null}
-        photosCount={imageCount}
-        specialsCount={specialsCount}
-        eventsCount={eventsCount}
       />
     );
   }
