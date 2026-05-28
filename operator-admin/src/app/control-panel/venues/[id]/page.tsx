@@ -27,6 +27,7 @@ type VenueDetail = {
   created_by_operator_id: string | null;
   claimed_by: string | null;
   claimed_at: string | null;
+  is_verified: boolean;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ export default async function ControlPanelVenueDetailPage({
     .select(
       `id, slug, name, is_published, created_at,
        address_line1, city, region, postal_code, country, phone, website_url,
-       place_id, created_by_operator_id, claimed_by, claimed_at`
+       place_id, created_by_operator_id, claimed_by, claimed_at, is_verified`
     )
     .eq("id", id)
     .maybeSingle();
@@ -128,6 +129,7 @@ export default async function ControlPanelVenueDetailPage({
     created_by_operator_id: v.created_by_operator_id as string | null,
     claimed_by:             v.claimed_by as string | null,
     claimed_at:             v.claimed_at as string | null,
+    is_verified:            v.is_verified === true,
   };
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
@@ -168,6 +170,11 @@ export default async function ControlPanelVenueDetailPage({
                 Unclaimed
               </span>
             )}
+            {venue.is_verified && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                Verified ✓
+              </span>
+            )}
           </div>
         </div>
 
@@ -196,6 +203,13 @@ export default async function ControlPanelVenueDetailPage({
             <MetaRow label="Claimed / owned">
               {isClaimed ? (
                 <span className="text-amber-700 font-medium">Yes</span>
+              ) : (
+                <span className="text-gray-500">No</span>
+              )}
+            </MetaRow>
+            <MetaRow label="Verified">
+              {venue.is_verified ? (
+                <span className="text-blue-700 font-medium">Yes</span>
               ) : (
                 <span className="text-gray-500">No</span>
               )}

@@ -212,6 +212,7 @@ export async function provisionOperatorForVenue({
       claimed_by:             authUserId,
       claimed_at:             now,
       created_by_operator_id: authUserId,
+      is_verified:            true,
     })
     .eq("id", venueId);
 

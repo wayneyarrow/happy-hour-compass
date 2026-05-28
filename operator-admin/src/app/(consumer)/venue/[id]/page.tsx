@@ -140,6 +140,13 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           {venue.name}
         </h2>
 
+        {/* Verified badge — shown only for operator-claimed venues */}
+        {venue.isVerified && (
+          <span className="inline-block mt-2 mb-1 px-2 py-[3px] rounded-full bg-[#dbeafe] text-[#1e40af] text-[12px] font-medium">
+            Verified Venue ✓
+          </span>
+        )}
+
         {/* Meta row — .venue-meta-row: status badge + distance + category tag */}
         <VenueDetailMeta
           hoursWeekly={venue.hoursWeekly}

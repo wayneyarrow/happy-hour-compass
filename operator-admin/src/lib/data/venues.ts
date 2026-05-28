@@ -74,6 +74,11 @@ export type ConsumerVenue = {
   googleReviewCount: number | null;
   /** Google Places place_id for direct business listing links. Null when not available. */
   placeId: string | null;
+  /**
+   * True when the venue has been verified through an approved claim or operator
+   * submission.  Drives the "Verified Venue ✓" consumer badge.
+   */
+  isVerified: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -496,6 +501,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     googleRating: typeof row.google_rating === "number" ? row.google_rating : null,
     googleReviewCount: typeof row.google_review_count === "number" ? row.google_review_count : null,
     placeId: typeof row.place_id === "string" ? row.place_id : null,
+    isVerified: row.is_verified === true,
   };
 }
 
@@ -521,7 +527,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type"
+          "establishment_type, is_verified"
       )
       .eq("is_published", true)
       .order("name", { ascending: true });
@@ -611,7 +617,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-  "establishment_type, claimed_at, google_rating, google_review_count, place_id";
+  "establishment_type, claimed_at, google_rating, google_review_count, place_id, is_verified";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.

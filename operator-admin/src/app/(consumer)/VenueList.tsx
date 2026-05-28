@@ -261,6 +261,11 @@ export function VenueList({ venues }: Props) {
 
                   {/* Meta row — mirrors .listing-meta: status badge · distance · category */}
                   <div className="flex items-center gap-[3px] text-[12px] text-[#9ca3af] flex-nowrap min-w-0">
+                    {venue.isVerified && (
+                      <span className="inline-block px-[6px] py-[2px] rounded bg-[#dbeafe] text-[#1e40af] text-[11px] font-medium flex-shrink-0">
+                        Verified ✓
+                      </span>
+                    )}
                     {openStatus === "Open Now" && (
                       <span className="inline-block px-[6px] py-[2px] rounded bg-[#dcfce7] text-[#166534] text-[11px] font-medium flex-shrink-0">
                         Open Now
