@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordSetupEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
+import { sendSlackAlert } from "@/lib/slack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,13 @@ export async function reviewClaimAction(
         "[reviewClaimAction] More-info email failed — status updated but claimant not emailed.",
         { claimId, claimantEmail, error: emailResult.error }
       );
+      await sendSlackAlert({
+        channel:  "ops-alerts",
+        severity: "warning",
+        title:    "Claim More-Info Email Failed",
+        message:  "Claim status updated to 'needs_more_info' but claimant could not be emailed. Manual contact required.",
+        metadata: { "Claim ID": claimId, Email: claimantEmail, Error: emailResult.error ?? "unknown" },
+      });
       return {
         error:
           `Status updated to "Needs more info", but the email to ${claimantEmail} ` +
@@ -277,6 +285,19 @@ export async function reviewClaimAction(
       "[reviewClaimAction] CRITICAL: Claim update failed after provisioning complete.",
       { claimId, authUserId: provisionResult.authUserId, venueId, error: claimUpdateError.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "CRITICAL: Claim Not Marked Approved — Operator Is Live",
+      message:  "Provisioning succeeded and setup email sent, but venue_claims row could not be updated to 'approved'. Manual DB fix required.",
+      metadata: {
+        "Claim ID":  claimId,
+        Email:       claimEmail,
+        "Venue ID":  venueId,
+        "Auth User": provisionResult.authUserId,
+        "DB Error":  claimUpdateError.message,
+      },
+    });
     return {
       error:
         "Operator account created and setup email sent, but the claim record could not be " +

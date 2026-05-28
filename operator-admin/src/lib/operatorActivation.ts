@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { sendSlackAlert } from "@/lib/slack";
 
 function getAppUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
@@ -53,6 +54,13 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — auth user rollback failed.`,
         { userId, rollbackError: error.message }
       );
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Rollback Failed — Auth User Not Deleted",
+        message:  `${context} — auth user rollback failed. Manual cleanup required.`,
+        metadata: { Email: email, "User ID": userId, "Rollback Error": error.message },
+      });
     }
   }
 
@@ -63,6 +71,13 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — operator rollback failed.`,
         { userId, rollbackError: error.message }
       );
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Rollback Failed — Operator Row Not Deleted",
+        message:  `${context} — operator row rollback failed. Manual cleanup required.`,
+        metadata: { Email: email, "User ID": userId, "Rollback Error": error.message },
+      });
     }
   }
 
@@ -76,6 +91,13 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — venue link rollback failed.`,
         { venueId: vId, rollbackError: error.message }
       );
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Rollback Failed — Venue Link Not Cleared",
+        message:  `${context} — venue link rollback failed. Manual cleanup required.`,
+        metadata: { Email: email, "Venue ID": vId, "Rollback Error": error.message },
+      });
     }
   }
 
@@ -99,6 +121,13 @@ export async function provisionOperatorForVenue({
     const isDuplicate = createUserError.message?.toLowerCase().includes("already");
     if (!isDuplicate) {
       console.error(`${logTag} Auth user creation failed:`, createUserError.message);
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Provisioning Failed — Auth User Creation",
+        message:  "Failed to create Supabase Auth user.",
+        metadata: { Email: email, "Venue ID": venueId, Error: createUserError.message, Flow: logTag },
+      });
       return {
         ok: false,
         error: `Failed to create operator account: ${createUserError.message}`,
@@ -116,6 +145,13 @@ export async function provisionOperatorForVenue({
         `${logTag} Auth user exists but no operator row found.`,
         { email }
       );
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Provisioning Failed — Inconsistent Auth State",
+        message:  "Auth user exists but no operator row found. Manual investigation required.",
+        metadata: { Email: email, "Venue ID": venueId, Flow: logTag },
+      });
       return {
         ok: false,
         error:
@@ -145,6 +181,13 @@ export async function provisionOperatorForVenue({
   } else if (operatorError.code !== "23505") {
     // 23505 = unique_violation → operator row already exists from a prior run; skip.
     console.error(`${logTag} Operator insert failed:`, operatorError.message);
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Provisioning Failed — Operator Insert",
+      message:  "Failed to insert operator row.",
+      metadata: { Email: email, "Venue ID": venueId, Error: operatorError.message, Flow: logTag },
+    });
     if (createdNewAuthUser) await rbAuthUser(authUserId, "operator insert failed");
     return { ok: false, error: "Failed to create operator record. Please try again." };
   }
@@ -177,6 +220,13 @@ export async function provisionOperatorForVenue({
       `${logTag} Venue link failed — rolling back:`,
       { venueId, authUserId, error: venueError.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Provisioning Failed — Venue Link",
+      message:  "Failed to link venue to operator. Rolling back.",
+      metadata: { Email: email, "Venue ID": venueId, Error: venueError.message, Flow: logTag },
+    });
     if (createdNewOperator) await rbOperator(authUserId, "venue link failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "venue link failed");
     return { ok: false, error: "Failed to link venue to operator account. Please try again." };
@@ -200,6 +250,13 @@ export async function provisionOperatorForVenue({
       `${logTag} generateLink failed — rolling back:`,
       { email, error: linkError?.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Provisioning Failed — Setup Link Generation",
+      message:  "Failed to generate Supabase recovery link. Rolling back.",
+      metadata: { Email: email, "Venue ID": venueId, Error: linkError?.message ?? "unknown", Flow: logTag },
+    });
     await rbVenueLink(venueId, "generateLink failed");
     if (createdNewOperator) await rbOperator(authUserId, "generateLink failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "generateLink failed");
@@ -215,6 +272,13 @@ export async function provisionOperatorForVenue({
       `${logTag} Activation email failed — rolling back.`,
       { error: emailResult.error }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Provisioning Failed — Activation Email",
+      message:  "Activation email failed to send. Rolling back all provisioning steps.",
+      metadata: { Email: email, "Venue ID": venueId, Error: emailResult.error ?? "unknown", Flow: logTag },
+    });
     await rbVenueLink(venueId, "email send failed");
     if (createdNewOperator) await rbOperator(authUserId, "email send failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "email send failed");
@@ -226,5 +290,12 @@ export async function provisionOperatorForVenue({
   }
 
   console.log(`${logTag} Operator provisioning complete.`, { authUserId, venueId });
+  await sendSlackAlert({
+    channel:  "ops-alerts",
+    severity: "success",
+    title:    "Operator Provisioned",
+    message:  "Operator account created, venue linked, and activation email sent.",
+    metadata: { Email: email, "Venue ID": venueId, "Auth User": authUserId, Flow: logTag },
+  });
   return { ok: true, authUserId };
 }

@@ -9,6 +9,7 @@ import {
   sendOperatorActivationEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
+import { sendSlackAlert } from "@/lib/slack";
 
 function getAppUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
@@ -160,6 +161,13 @@ export async function reviewSubmissionAction(
         "[reviewSubmissionAction] More-info email failed — status updated but submitter not emailed.",
         { submissionId, submitterEmail, error: emailResult.error }
       );
+      await sendSlackAlert({
+        channel:  "ops-alerts",
+        severity: "warning",
+        title:    "Submission More-Info Email Failed",
+        message:  "Submission status updated to 'needs_more_info' but submitter could not be emailed. Manual contact required.",
+        metadata: { "Submission ID": submissionId, Email: submitterEmail, Error: emailResult.error ?? "unknown" },
+      });
       return {
         error:
           `Status updated to "Needs more info", but the email to ${submitterEmail} could not ` +
@@ -207,6 +215,13 @@ export async function reviewSubmissionAction(
       "[reviewSubmissionAction] Closure email failed — submission closed but submitter not emailed.",
       { submissionId, submitterEmail, error: emailResult.error }
     );
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "warning",
+      title:    "Submission Closure Email Failed",
+      message:  "Submission closed but submitter could not be emailed. No action required — closure succeeded.",
+      metadata: { "Submission ID": submissionId, Email: submitterEmail, Error: emailResult.error ?? "unknown" },
+    });
     // Do not return error — closure succeeded. Founder can contact manually.
   }
 
@@ -411,6 +426,19 @@ export async function approveAndCreateVenueAction(
       `operator_id='${provisionResult.authUserId}' for id='${submissionId}'.`,
       { dbError: updateError.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "CRITICAL: Submission Not Marked Approved — Operator Is Live",
+      message:  "Provisioning succeeded and activation email sent, but operator_submissions row could not be updated to 'approved'. Manual DB fix required.",
+      metadata: {
+        "Submission ID": submissionId,
+        Email:           email,
+        "Venue ID":      venueId,
+        "Auth User":     provisionResult.authUserId,
+        "DB Error":      updateError.message,
+      },
+    });
   }
 
   // ── Append internal note ───────────────────────────────────────────────────
