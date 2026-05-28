@@ -16,6 +16,7 @@
  */
 
 import { Resend } from "resend";
+import { sendSlackAlert } from "@/lib/slack";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,85 @@ function getResend(): Resend {
 }
 
 const DEFAULT_FROM = "Happy Hour Compass <hello@happyhourcompass.com>";
+
+// ── Centralized transactional email sender ────────────────────────────────────
+
+export type EmailCriticality = "critical" | "important" | "standard";
+
+/**
+ * Standardized send path for all transactional emails.
+ *
+ * Logs a structured outcome on every attempt:
+ *   [EMAIL] SUCCESS type=... to=... id=...
+ *   [EMAIL] FAILED  type=... to=... error=...
+ *
+ * Escalates to Slack on failure based on criticality:
+ *   critical  → #ops-critical  (activation, password reset, claim approval)
+ *   important → #ops-alerts    (founder notifications, more-info requests)
+ *   standard  → console only   (informational / non-blocking)
+ *
+ * Slack failures are silently swallowed — sendSlackAlert never throws.
+ */
+export async function sendTransactionalEmail({
+  type,
+  to,
+  subject,
+  html,
+  text,
+  criticality,
+}: {
+  type: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  criticality: EmailCriticality;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  try {
+    const resend = getResend();
+    const { data, error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, html, text });
+
+    if (error) {
+      console.error(`[EMAIL] FAILED type=${type} to=${to} error=${error.message}`);
+      await escalateEmailFailure({ type, to, error: error.message, criticality });
+      return { ok: false, error: error.message };
+    }
+
+    console.log(`[EMAIL] SUCCESS type=${type} to=${to} id=${data?.id}`);
+    return { ok: true, id: data?.id ?? undefined };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[EMAIL] FAILED type=${type} to=${to} error=${msg}`);
+    await escalateEmailFailure({ type, to, error: msg, criticality });
+    return { ok: false, error: msg };
+  }
+}
+
+async function escalateEmailFailure({
+  type,
+  to,
+  error,
+  criticality,
+}: {
+  type: string;
+  to: string;
+  error: string;
+  criticality: EmailCriticality;
+}): Promise<void> {
+  if (criticality === "standard") return;
+  await sendSlackAlert({
+    channel:  criticality === "critical" ? "ops-critical" : "ops-alerts",
+    severity: criticality === "critical" ? "critical"     : "warning",
+    title:    `Email Delivery Failed — ${type}`,
+    message:  `A ${criticality} transactional email failed to send.`,
+    metadata: {
+      Type:        type,
+      To:          to,
+      Error:       error,
+      Environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+    },
+  });
+}
 
 // ── Password setup email ───────────────────────────────────────────────────────
 
@@ -59,8 +139,6 @@ export async function sendPasswordSetupEmail({
   firstName: string;
   setupLink: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -108,30 +186,14 @@ This link expires within 24 hours.
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendPasswordSetupEmail — attempting send", { to, from, flow: "password-setup" });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "Your Happy Hour Compass claim was approved — set up your password",
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendPasswordSetupEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendPasswordSetupEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendPasswordSetupEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "claim_approval",
+    to,
+    subject:     "Your Happy Hour Compass claim was approved — set up your password",
+    html,
+    text,
+    criticality: "critical",
+  });
 }
 
 // ── Founder claim notification email ──────────────────────────────────────────
@@ -167,8 +229,6 @@ export async function sendClaimNotificationEmail({
     process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -232,30 +292,14 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  console.log("[EMAIL] sendClaimNotificationEmail — attempting send", { to, from, flow: "claim-notification", claimId, venueName });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `New claim: ${venueName} — ${firstName} ${lastName}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendClaimNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendClaimNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendClaimNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "claim_notification",
+    to,
+    subject:     `New claim: ${venueName} — ${firstName} ${lastName}`,
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Claim submission confirmation email (to claimant) ────────────────────────
@@ -275,8 +319,6 @@ export async function sendClaimSubmissionConfirmationEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -323,35 +365,14 @@ Cheers,
 Wayne
 Founder, Happy Hour Compass`;
 
-  console.log("[EMAIL] sendClaimSubmissionConfirmationEmail — attempting send", {
+  return sendTransactionalEmail({
+    type:        "claim_submission_confirmation",
     to,
-    from,
-    flow: "claim-submission-confirmation",
-    venueName,
+    subject:     `We received your claim — ${venueName}`,
+    html,
+    text,
+    criticality: "standard",
   });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `We received your claim — ${venueName}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendClaimSubmissionConfirmationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendClaimSubmissionConfirmationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendClaimSubmissionConfirmationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
 }
 
 // ── Request more info email ────────────────────────────────────────────────────
@@ -369,8 +390,6 @@ export async function sendRequestMoreInfoEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -456,30 +475,14 @@ Thanks again,
 Wayne
 Founder, Happy Hour Compass`;
 
-  console.log("[EMAIL] sendRequestMoreInfoEmail — attempting send", { to, from, flow: "request-more-info", venueName });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "More information needed to verify your venue claim",
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendRequestMoreInfoEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendRequestMoreInfoEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendRequestMoreInfoEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "claim_more_info_legacy",
+    to,
+    subject:     "More information needed to verify your venue claim",
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Venue suggestion notification email ───────────────────────────────────────
@@ -508,8 +511,6 @@ export async function sendSuggestionNotificationEmail({
 }): Promise<{ ok: boolean; error?: string }> {
   const to =
     process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
-  const from = DEFAULT_FROM;
-
   const notesRow = notes
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Notes</td>
@@ -564,30 +565,14 @@ ID:        ${suggestionId}
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendSuggestionNotificationEmail — attempting send", { to, from, flow: "suggestion-notification", venueName, city });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `New happy hour suggestion: ${venueName} (${city})`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendSuggestionNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendSuggestionNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendSuggestionNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "suggestion_notification",
+    to,
+    subject:     `New happy hour suggestion: ${venueName} (${city})`,
+    html,
+    text,
+    criticality: "standard",
+  });
 }
 
 // ── Operator submission notification email ────────────────────────────────────
@@ -623,9 +608,7 @@ export async function sendOperatorSubmissionNotificationEmail({
   routedStatus: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
-  const from = DEFAULT_FROM;
-  const appUrl = getAppUrl();
+  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";  const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
 
   const matchBadgeColor =
@@ -708,37 +691,14 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  console.log("[EMAIL] sendOperatorSubmissionNotificationEmail — attempting send", {
+  return sendTransactionalEmail({
+    type:        "operator_submission_notification",
     to,
-    from,
-    flow: "operator-submission-notification",
-    businessName,
-    matchStatus,
-    routedStatus,
+    subject:     `New operator submission: ${businessName} (${city}) — ${matchStatus}`,
+    html,
+    text,
+    criticality: "important",
   });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `New operator submission: ${businessName} (${city}) — ${matchStatus}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendOperatorSubmissionNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendOperatorSubmissionNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendOperatorSubmissionNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
 }
 
 // ── Contact Us — founder notification ────────────────────────────────────────
@@ -766,8 +726,6 @@ export async function sendContactFounderNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
-  const from = DEFAULT_FROM;
-
   const nameRow = name
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Name</td>
@@ -821,30 +779,14 @@ ${message}
 Message ID: ${messageId}
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendContactFounderNotificationEmail — attempting send", { to, from, flow: "contact-founder", messageId });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `New contact message from ${name ?? email}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendContactFounderNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendContactFounderNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendContactFounderNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "contact_founder_notification",
+    to,
+    subject:     `New contact message from ${name ?? email}`,
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Contact Us — submitter confirmation ───────────────────────────────────────
@@ -863,9 +805,7 @@ export async function sendContactSubmitterConfirmationEmail({
 }: {
   to: string;
   name: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-  const greeting = name ? `Hi ${name},` : "Hi there,";
+}): Promise<{ ok: boolean; error?: string }> {  const greeting = name ? `Hi ${name},` : "Hi there,";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -908,30 +848,14 @@ Cheers,
 Wayne
 Founder, Happy Hour Compass`;
 
-  console.log("[EMAIL] sendContactSubmitterConfirmationEmail — attempting send", { to, from, flow: "contact-submitter-confirmation" });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "We got your message",
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendContactSubmitterConfirmationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendContactSubmitterConfirmationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendContactSubmitterConfirmationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "contact_submitter_confirmation",
+    to,
+    subject:     "We got your message",
+    html,
+    text,
+    criticality: "standard",
+  });
 }
 
 // ── Operator submission "request more info" email ─────────────────────────────
@@ -956,8 +880,6 @@ export async function sendOperatorSubmissionMoreInfoEmail({
   /** Secure link to the structured more-info form. Expires in 72 hours. */
   moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1014,30 +936,14 @@ This link expires in 72 hours. If it expires, reply to this email and we'll send
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendOperatorSubmissionMoreInfoEmail — attempting send", { to, from, flow: "submission-more-info", venueName });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `More information needed for your venue submission — ${venueName}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendOperatorSubmissionMoreInfoEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendOperatorSubmissionMoreInfoEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendOperatorSubmissionMoreInfoEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "operator_submission_more_info",
+    to,
+    subject:     `More information needed for your venue submission — ${venueName}`,
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Operator submission closure email ─────────────────────────────────────────
@@ -1058,8 +964,6 @@ export async function sendOperatorSubmissionClosedEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1112,30 +1016,14 @@ Thanks again,
 Wayne
 Founder, Happy Hour Compass`;
 
-  console.log("[EMAIL] sendOperatorSubmissionClosedEmail — attempting send", { to, from, flow: "submission-closed", venueName });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `Your Happy Hour Compass submission — ${venueName}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendOperatorSubmissionClosedEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendOperatorSubmissionClosedEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendOperatorSubmissionClosedEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "operator_submission_closed",
+    to,
+    subject:     `Your Happy Hour Compass submission — ${venueName}`,
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Operator submission "info submitted" founder notification ─────────────────
@@ -1240,36 +1128,14 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  console.log("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — attempting send", {
+  return sendTransactionalEmail({
+    type:        "operator_submission_info_submitted",
     to,
-    from,
-    flow: "info-submitted-notification",
-    submissionId,
-    businessName,
+    subject:     `Info submitted: ${businessName} — ready for review`,
+    html,
+    text,
+    criticality: "important",
   });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `Info submitted: ${businessName} — ready for review`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendOperatorSubmissionInfoSubmittedNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
 }
 
 // ── Operator activation email (operator submission flow) ─────────────────────
@@ -1295,8 +1161,6 @@ export async function sendOperatorActivationEmail({
   firstName: string;
   setupLink: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1343,30 +1207,14 @@ This link expires within 24 hours.
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendOperatorActivationEmail — attempting send", { to, from, flow: "operator-activation" });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "Your venue is on Happy Hour Compass — set up your account",
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendOperatorActivationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendOperatorActivationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendOperatorActivationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "operator_activation",
+    to,
+    subject:     "Your venue is on Happy Hour Compass — set up your account",
+    html,
+    text,
+    criticality: "critical",
+  });
 }
 
 // ── Claim more-info request email ────────────────────────────────────────────
@@ -1390,8 +1238,6 @@ export async function sendClaimMoreInfoEmail({
   venueName: string;
   moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1448,30 +1294,14 @@ This link expires in 72 hours. If it expires, reply to this email and we'll send
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendClaimMoreInfoEmail — attempting send", { to, from, flow: "claim-more-info", venueName });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `More information needed for your venue claim — ${venueName}`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendClaimMoreInfoEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendClaimMoreInfoEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendClaimMoreInfoEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "claim_more_info",
+    to,
+    subject:     `More information needed for your venue claim — ${venueName}`,
+    html,
+    text,
+    criticality: "important",
+  });
 }
 
 // ── Claim info-submitted founder notification ─────────────────────────────────
@@ -1571,32 +1401,14 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  console.log("[EMAIL] sendClaimInfoSubmittedNotificationEmail — attempting send", {
-    to, from, flow: "claim-info-submitted", claimId, venueName,
+  return sendTransactionalEmail({
+    type:        "claim_info_submitted",
+    to,
+    subject:     `Info submitted: ${venueName} claim — ready for review`,
+    html,
+    text,
+    criticality: "important",
   });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: `Info submitted: ${venueName} claim — ready for review`,
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendClaimInfoSubmittedNotificationEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendClaimInfoSubmittedNotificationEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendClaimInfoSubmittedNotificationEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
 }
 
 // ── Password reset email ──────────────────────────────────────────────────────
@@ -1622,9 +1434,7 @@ export async function sendPasswordResetEmail({
   to: string;
   firstName?: string;
   resetLink: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const from = DEFAULT_FROM;
-  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
+}): Promise<{ ok: boolean; error?: string }> {  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1676,30 +1486,14 @@ If you didn't request a password reset, you can safely ignore this email.
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendPasswordResetEmail — attempting send", { to, from, flow: "password-reset" });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "Reset your Happy Hour Compass password",
-      html,
-      text,
-    });
-
-    if (error) {
-      console.error("[EMAIL] sendPasswordResetEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendPasswordResetEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendPasswordResetEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "password_reset",
+    to,
+    subject:     "Reset your Happy Hour Compass password",
+    html,
+    text,
+    criticality: "critical",
+  });
 }
 
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
@@ -1715,8 +1509,6 @@ export async function sendApprovalEmail({
 }): Promise<{ ok: boolean; error?: string }> {
   const appUrl = getAppUrl();
   const activateUrl = `${appUrl}/activate-account?token=${token}`;
-  const from = DEFAULT_FROM;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1764,22 +1556,12 @@ This link expires in 7 days.
 —
 Happy Hour Compass`;
 
-  console.log("[EMAIL] sendApprovalEmail — attempting send", { to, from, flow: "approval-legacy" });
-
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send({ from, to, subject: "Your Happy Hour Compass claim was approved", html, text });
-
-    if (error) {
-      console.error("[EMAIL] sendApprovalEmail — Resend returned error:", error);
-      return { ok: false, error: error.message };
-    }
-
-    console.log("[EMAIL] sendApprovalEmail — sent successfully", { id: data?.id });
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EMAIL] sendApprovalEmail — unexpected exception:", msg);
-    return { ok: false, error: msg };
-  }
+  return sendTransactionalEmail({
+    type:        "claim_approval_legacy",
+    to,
+    subject:     "Your Happy Hour Compass claim was approved",
+    html,
+    text,
+    criticality: "standard",
+  });
 }

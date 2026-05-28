@@ -180,17 +180,12 @@ export async function reviewClaimAction(
     });
 
     if (!emailResult.ok) {
+      // Slack escalation already fired by sendTransactionalEmail
+      // (claim_more_info → important → #ops-alerts).
       console.error(
         "[reviewClaimAction] More-info email failed — status updated but claimant not emailed.",
         { claimId, claimantEmail, error: emailResult.error }
       );
-      await sendSlackAlert({
-        channel:  "ops-alerts",
-        severity: "warning",
-        title:    "Claim More-Info Email Failed",
-        message:  "Claim status updated to 'needs_more_info' but claimant could not be emailed. Manual contact required.",
-        metadata: { "Claim ID": claimId, Email: claimantEmail, Error: emailResult.error ?? "unknown" },
-      });
       return {
         error:
           `Status updated to "Needs more info", but the email to ${claimantEmail} ` +

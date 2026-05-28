@@ -268,17 +268,12 @@ export async function provisionOperatorForVenue({
   const emailResult = await sendEmail(linkData.properties.action_link);
 
   if (!emailResult.ok) {
+    // Slack escalation already fired by sendTransactionalEmail
+    // (operator_activation / claim_approval → critical → #ops-critical).
     console.error(
       `${logTag} Activation email failed — rolling back.`,
       { error: emailResult.error }
     );
-    await sendSlackAlert({
-      channel:  "ops-critical",
-      severity: "critical",
-      title:    "Operator Provisioning Failed — Activation Email",
-      message:  "Activation email failed to send. Rolling back all provisioning steps.",
-      metadata: { Email: email, "Venue ID": venueId, Error: emailResult.error ?? "unknown", Flow: logTag },
-    });
     await rbVenueLink(venueId, "email send failed");
     if (createdNewOperator) await rbOperator(authUserId, "email send failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "email send failed");

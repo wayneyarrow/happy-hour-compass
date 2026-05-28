@@ -91,28 +91,14 @@ export async function forgotPasswordAction(
   }
 
   // ── Send branded reset email via Resend ────────────────────────────────────
-  const emailResult = await sendPasswordResetEmail({
+  await sendPasswordResetEmail({
     to:        email,
     firstName,
     resetLink: linkData.properties.action_link,
   });
 
-  if (!emailResult.ok) {
-    console.error("[forgotPasswordAction] Reset email failed:", { email, error: emailResult.error });
-    await sendSlackAlert({
-      channel:  "ops-alerts",
-      severity: "warning",
-      title:    "Forgot Password — Reset Email Failed to Send",
-      message:  "A password reset link was generated but could not be delivered. Operator may retry.",
-      metadata: {
-        Flow:        "forgotPasswordAction",
-        Email:       email,
-        Error:       emailResult.error ?? "unknown",
-        Environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
-      },
-    });
-  }
-
-  // Always return success — never reveal delivery outcome.
+  // Slack escalation on failure is handled by sendTransactionalEmail
+  // (password_reset → critical → #ops-critical). Always return success to
+  // prevent account enumeration — never reveal delivery outcome to the caller.
   return { success: true };
 }

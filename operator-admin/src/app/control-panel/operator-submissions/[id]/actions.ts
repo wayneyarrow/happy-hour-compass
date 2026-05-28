@@ -157,17 +157,12 @@ export async function reviewSubmissionAction(
     });
 
     if (!emailResult.ok) {
+      // Slack escalation already fired by sendTransactionalEmail
+      // (operator_submission_more_info → important → #ops-alerts).
       console.error(
         "[reviewSubmissionAction] More-info email failed — status updated but submitter not emailed.",
         { submissionId, submitterEmail, error: emailResult.error }
       );
-      await sendSlackAlert({
-        channel:  "ops-alerts",
-        severity: "warning",
-        title:    "Submission More-Info Email Failed",
-        message:  "Submission status updated to 'needs_more_info' but submitter could not be emailed. Manual contact required.",
-        metadata: { "Submission ID": submissionId, Email: submitterEmail, Error: emailResult.error ?? "unknown" },
-      });
       return {
         error:
           `Status updated to "Needs more info", but the email to ${submitterEmail} could not ` +
@@ -211,18 +206,13 @@ export async function reviewSubmissionAction(
   });
 
   if (!emailResult.ok) {
+    // Slack escalation already fired by sendTransactionalEmail
+    // (operator_submission_closed → important → #ops-alerts).
+    // Do not return error — closure succeeded. Founder can contact manually.
     console.error(
       "[reviewSubmissionAction] Closure email failed — submission closed but submitter not emailed.",
       { submissionId, submitterEmail, error: emailResult.error }
     );
-    await sendSlackAlert({
-      channel:  "ops-alerts",
-      severity: "warning",
-      title:    "Submission Closure Email Failed",
-      message:  "Submission closed but submitter could not be emailed. No action required — closure succeeded.",
-      metadata: { "Submission ID": submissionId, Email: submitterEmail, Error: emailResult.error ?? "unknown" },
-    });
-    // Do not return error — closure succeeded. Founder can contact manually.
   }
 
   console.log("[reviewSubmissionAction] close — complete.", {
