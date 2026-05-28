@@ -36,12 +36,18 @@ function getWebhookUrl(channel: SlackChannel): string | null {
   return process.env[WEBHOOK_ENV[channel]] ?? null;
 }
 
+export type SlackResult = "delivered" | "no-webhook" | "failed";
+
 /**
  * Sends an operational alert to a Slack channel.
  *
- * If the webhook env var is not set, silently no-ops (safe for local dev).
- * On any delivery failure, logs to console.error only — never throws.
- * Timeout: 4 seconds — Slack must not block user-facing flows.
+ * Returns:
+ *   "no-webhook" — env var not set (silently skipped; safe for local dev)
+ *   "delivered"  — fetch completed without throwing
+ *   "failed"     — timeout or network error (logged to console.error)
+ *
+ * Never throws — Slack must not interrupt user-facing flows.
+ * Timeout: 4 seconds.
  */
 export async function sendSlackAlert({
   channel,
@@ -49,9 +55,9 @@ export async function sendSlackAlert({
   title,
   message,
   metadata,
-}: SlackAlertParams): Promise<void> {
+}: SlackAlertParams): Promise<SlackResult> {
   const webhookUrl = getWebhookUrl(channel);
-  if (!webhookUrl) return; // Env var not set — skip silently.
+  if (!webhookUrl) return "no-webhook";
 
   const emoji = SEVERITY_EMOJI[severity];
 
@@ -84,9 +90,11 @@ export async function sendSlackAlert({
       body:    JSON.stringify(payload),
       signal:  controller.signal,
     });
+    return "delivered";
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[SLACK] Alert delivery failed:", { channel, severity, title, error: msg });
+    return "failed";
   } finally {
     clearTimeout(timer);
   }

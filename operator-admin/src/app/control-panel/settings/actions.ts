@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
+import { sendSlackAlert, type SlackChannel, type SlackResult } from "@/lib/slack";
 
 export type QaPublishState = {
   /** Number of venues published (present on success, including 0-match). */
@@ -183,4 +184,57 @@ export async function cpFixHhTimesAction(
   revalidatePath("/control-panel/venues");
 
   return { success: true, published };
+}
+
+// ── Slack notification test ────────────────────────────────────────────────────
+
+export type SlackTestState = {
+  channel?: SlackChannel;
+  result?: SlackResult;
+  error?: string;
+};
+
+/**
+ * Sends a test notification to a Slack channel from the Control Panel.
+ * Used to confirm webhook configuration and channel delivery without
+ * triggering a real operational event.
+ *
+ * Auth: caller must be a Control Panel admin.
+ * Webhook URLs are never exposed to the client.
+ */
+export async function slackTestAction(
+  _prevState: SlackTestState,
+  formData: FormData
+): Promise<SlackTestState> {
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user || !isControlPanelAdmin(user.email)) {
+    return { error: "Unauthorized." };
+  }
+
+  const channel = formData.get("channel") as string | null;
+  if (channel !== "ops-alerts" && channel !== "ops-critical") {
+    return { error: "Invalid channel." };
+  }
+
+  const env = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown";
+
+  const result = await sendSlackAlert({
+    channel,
+    severity: channel === "ops-critical" ? "critical" : "info",
+    title:    "Slack Test — Control Panel",
+    message:  "Test notification from the Happy Hour Compass Control Panel.",
+    metadata: {
+      Source:      "Control Panel Slack Test",
+      Channel:     channel,
+      Environment: env,
+      Timestamp:   new Date().toISOString(),
+      "Sent by":   user.email ?? "unknown",
+    },
+  });
+
+  return { channel, result };
 }

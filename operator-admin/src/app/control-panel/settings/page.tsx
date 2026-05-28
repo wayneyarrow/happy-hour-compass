@@ -3,6 +3,7 @@ export const metadata = { title: "Settings" };
 
 import { QaPublishPanel } from "./QaPublishPanel";
 import { QaHhReviewPanel } from "./QaHhReviewPanel";
+import { SlackTestPanel } from "./SlackTestPanel";
 
 export default function ControlPanelSettingsPage() {
   return (
@@ -16,6 +17,7 @@ export default function ControlPanelSettingsPage() {
       <div className="space-y-6">
         <QaPublishPanel />
         <QaHhReviewPanel />
+        <SlackTestPanel />
       </div>
     </div>
   );
