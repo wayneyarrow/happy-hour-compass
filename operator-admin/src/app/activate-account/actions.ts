@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { sendSlackAlert } from "@/lib/slack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,8 @@ export type ActivateState = {
 async function rollbackAuthUser(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
-  context: string
+  context: string,
+  email?: string
 ) {
   const { error } = await supabase.auth.admin.deleteUser(userId);
   if (error) {
@@ -27,6 +29,13 @@ async function rollbackAuthUser(
       `[activateAccountAction] CRITICAL: ${context} — auth user rollback failed.`,
       { userId, rollbackError: error.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Activation Rollback Failed — Auth User Not Deleted",
+      message:  `${context} — dangling auth user must be deleted manually before operator can re-activate.`,
+      metadata: { Email: email ?? "(unknown)", "User ID": userId, "Rollback Error": error.message },
+    });
   }
 }
 
@@ -37,7 +46,8 @@ async function rollbackAuthUser(
 async function rollbackOperator(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
-  context: string
+  context: string,
+  email?: string
 ) {
   const { error } = await supabase.from("operators").delete().eq("id", userId);
   if (error) {
@@ -45,6 +55,13 @@ async function rollbackOperator(
       `[activateAccountAction] CRITICAL: ${context} — operator rollback failed.`,
       { userId, rollbackError: error.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Activation Rollback Failed — Operator Row Not Deleted",
+      message:  `${context} — orphaned operator row must be removed manually.`,
+      metadata: { Email: email ?? "(unknown)", "User ID": userId, "Rollback Error": error.message },
+    });
   }
 }
 
@@ -55,7 +72,8 @@ async function rollbackOperator(
 async function rollbackVenueLink(
   supabase: ReturnType<typeof createAdminClient>,
   venueId: string,
-  context: string
+  context: string,
+  email?: string
 ) {
   const { error } = await supabase
     .from("venues")
@@ -66,6 +84,13 @@ async function rollbackVenueLink(
       `[activateAccountAction] CRITICAL: ${context} — venue link rollback failed.`,
       { venueId, rollbackError: error.message }
     );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Activation Rollback Failed — Venue Link Not Cleared",
+      message:  `${context} — venue is incorrectly marked as claimed. Manual fix required.`,
+      metadata: { Email: email ?? "(unknown)", "Venue ID": venueId, "Rollback Error": error.message },
+    });
   }
 }
 
@@ -159,6 +184,18 @@ export async function activateAccountAction(
           "An account with this email already exists. Please sign in instead.",
       };
     }
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Account Activation Failed — Auth User Creation",
+      message:  "Unexpected auth user creation failure during operator self-activation. Operator cannot activate their account.",
+      metadata: {
+        Email:       email ?? "(unknown)",
+        "Claim ID":  claim.id as string,
+        "Venue ID":  claim.venue_id as string,
+        Error:       createUserError?.message ?? "unknown",
+      },
+    });
     return {
       error:
         createUserError?.message ??
@@ -184,7 +221,7 @@ export async function activateAccountAction(
       "[activateAccountAction] Operator insert failed:",
       operatorError.message
     );
-    await rollbackAuthUser(supabase, userId, "operator insert failed");
+    await rollbackAuthUser(supabase, userId, "operator insert failed", userEmail);
     return { error: "Failed to create operator account. Please try again." };
   }
 
@@ -202,8 +239,8 @@ export async function activateAccountAction(
       "[activateAccountAction] Venue link failed — rolling back operator + auth user:",
       { venueId: claim.venue_id, operatorId: userId, error: venueError.message }
     );
-    await rollbackOperator(supabase, userId, "venue link failed");
-    await rollbackAuthUser(supabase, userId, "venue link failed");
+    await rollbackOperator(supabase, userId, "venue link failed", userEmail);
+    await rollbackAuthUser(supabase, userId, "venue link failed", userEmail);
     return { error: "Failed to link your venue to this account. Please try again." };
   }
 
@@ -221,9 +258,9 @@ export async function activateAccountAction(
       "[activateAccountAction] Token clear failed — rolling back venue link, operator + auth user:",
       { claimId: claim.id, operatorId: userId, error: tokenClearError.message }
     );
-    await rollbackVenueLink(supabase, claim.venue_id as string, "token clear failed");
-    await rollbackOperator(supabase, userId, "token clear failed");
-    await rollbackAuthUser(supabase, userId, "token clear failed");
+    await rollbackVenueLink(supabase, claim.venue_id as string, "token clear failed", userEmail);
+    await rollbackOperator(supabase, userId, "token clear failed", userEmail);
+    await rollbackAuthUser(supabase, userId, "token clear failed", userEmail);
     return { error: "Activation could not be completed. Please try again." };
   }
 

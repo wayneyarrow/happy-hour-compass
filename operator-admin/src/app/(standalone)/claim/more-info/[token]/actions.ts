@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendClaimInfoSubmittedNotificationEmail } from "@/lib/email";
+import { sendSlackAlert } from "@/lib/slack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,13 @@ export async function submitClaimMoreInfoAction(
 
   if (updateError) {
     console.error("[submitClaimMoreInfoAction] Update error:", updateError.message);
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "warning",
+      title:    "Claim More-Info Submission Failed — DB Write Error",
+      message:  "Claimant submitted additional info but the DB update failed. Claim remains in 'needs_more_info'. Claimant can retry (token still valid).",
+      metadata: { "Claim ID": claimId, Email: claimantEmail, Venue: venueName, Error: updateError.message },
+    });
     return { error: "Something went wrong saving your response. Please try again." };
   }
 
@@ -159,6 +167,13 @@ export async function submitClaimMoreInfoAction(
     console.error("[submitClaimMoreInfoAction] Founder notification email failed.", {
       claimId,
       error: notifyResult.error,
+    });
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "warning",
+      title:    "Claim More-Info Submitted — Founder Notification Email Failed",
+      message:  "Claimant submitted additional info successfully but the founder notification email could not be sent. Manual review required.",
+      metadata: { "Claim ID": claimId, Email: claimantEmail, Venue: venueName, Error: notifyResult.error ?? "unknown" },
     });
   }
 

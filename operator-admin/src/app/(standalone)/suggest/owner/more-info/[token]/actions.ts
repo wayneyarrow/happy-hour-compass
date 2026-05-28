@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOperatorSubmissionInfoSubmittedNotificationEmail } from "@/lib/email";
+import { sendSlackAlert } from "@/lib/slack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,13 @@ export async function submitMoreInfoAction(
 
   if (updateError) {
     console.error("[submitMoreInfoAction] Update error:", updateError.message);
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "warning",
+      title:    "Submission More-Info DB Write Failed",
+      message:  "Submitter submitted additional info but the DB update failed. Submission remains in 'needs_more_info'. Submitter can retry (token still valid).",
+      metadata: { "Submission ID": submissionRow.id as string, Email: submissionRow.email as string, Business: venueName, Error: updateError.message },
+    });
     return { error: "Something went wrong saving your response. Please try again." };
   }
 
@@ -162,6 +170,13 @@ export async function submitMoreInfoAction(
     console.error("[submitMoreInfoAction] Founder notification email failed.", {
       submissionId: row.id,
       error: notifyResult.error,
+    });
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "warning",
+      title:    "Submission More-Info Submitted — Founder Notification Email Failed",
+      message:  "Submitter successfully submitted additional info but the founder notification email could not be sent. Manual review required.",
+      metadata: { "Submission ID": row.id as string, Email: row.email as string, Business: venueName, Error: notifyResult.error ?? "unknown" },
     });
   }
 
