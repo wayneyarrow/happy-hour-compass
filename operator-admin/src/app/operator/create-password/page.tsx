@@ -136,13 +136,13 @@ export default function CreatePasswordPage() {
             </h1>
             <p className="text-sm text-gray-500 mb-5">
               This password setup link has expired or has already been used.
-              Please contact us if you need a new link.
+              You can request a new link below.
             </p>
             <a
-              href="/login"
+              href="/forgot-password"
               className="text-sm text-amber-600 hover:text-amber-700 font-medium"
             >
-              Go to sign in
+              Request a new link →
             </a>
           </div>
         </div>

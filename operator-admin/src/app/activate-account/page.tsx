@@ -22,14 +22,13 @@ function InvalidLinkPage() {
             Link unavailable
           </h1>
           <p className="text-sm text-gray-500 mb-5">
-            This activation link is invalid or has expired. Activation links are
-            valid for 7 days after your claim is approved.
+            Your setup link has expired. You can request a new password setup link below.
           </p>
           <a
-            href="/login"
+            href="/forgot-password"
             className="text-sm text-amber-600 hover:text-amber-700 font-medium"
           >
-            Go to sign in
+            Request a new link →
           </a>
         </div>
       </div>
