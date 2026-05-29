@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
+import { SEARCH_TAG_GROUPS } from "@/lib/searchTags";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
 import { VenueMapView } from "./VenueMapView";
 import { trackEvent } from "@/lib/analytics";
@@ -71,8 +72,24 @@ export function VenueDiscovery({ venues }: Props) {
   const [fineDiningActive, setFineDiningActive] = useState(false);
   const [underTenActive, setUnderTenActive] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeTagFilters, setActiveTagFilters] = useState<Set<string>>(new Set());
+  const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
   const searchTracked = useRef(false);
   const isMap = view === "map";
+
+  function toggleTagFilter(tag: string) {
+    trackEvent("tag_filter_used", { tag });
+    setActiveTagFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
+
+  function clearTagFilters() {
+    setActiveTagFilters(new Set());
+  }
 
   // Restore the list scroll position when returning from a venue detail page.
   // The position is saved to sessionStorage on venue card click (VenueList.tsx)
@@ -169,7 +186,12 @@ export function VenueDiscovery({ venues }: Props) {
         ? v.establishmentType?.toLowerCase() === "fine dining"
         : true
     )
-    .filter((v) => (underTenActive ? v.hasUnderTenItem : true));
+    .filter((v) => (underTenActive ? v.hasUnderTenItem : true))
+    .filter((v) => {
+      if (activeTagFilters.size === 0) return true;
+      // OR logic: venue matches if it has ANY of the selected tags
+      return [...activeTagFilters].some((tag) => v.searchTags.includes(tag));
+    });
 
   function handleNearMeClick() {
     if (nearMeActive) {
@@ -254,6 +276,103 @@ export function VenueDiscovery({ venues }: Props) {
             {isMap ? <ListIcon /> : <MapPinIcon />}
             {isMap ? "List" : "Map"}
           </button>
+        </div>
+
+        {/* Advanced Search — expandable tag filter panel, sits between search bar and filter chips */}
+        <div style={{ paddingTop: 10, paddingBottom: 4 }}>
+          <button
+            type="button"
+            onClick={() => setIsTagPanelOpen((o) => !o)}
+            className="inline-flex items-center gap-1.5 transition-colors"
+            style={{
+              background: isTagPanelOpen || activeTagFilters.size > 0 ? "#eff6ff" : "transparent",
+              color: isTagPanelOpen || activeTagFilters.size > 0 ? "#2563eb" : "#6b7280",
+              border: `1.5px solid ${isTagPanelOpen || activeTagFilters.size > 0 ? "#bfdbfe" : "#e5e7eb"}`,
+              borderRadius: 8,
+              padding: "6px 10px",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            {/* Filter funnel icon */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{ width: 13, height: 13, flexShrink: 0 }}>
+              <path d="M22 3H2l8 9.46V19l4 2V12.46z" />
+            </svg>
+            Advanced Search
+            {activeTagFilters.size > 0 && (
+              <span style={{
+                background: "#3b82f6",
+                color: "white",
+                borderRadius: 10,
+                padding: "1px 6px",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: "1.6",
+              }}>
+                {activeTagFilters.size}
+              </span>
+            )}
+            {/* Chevron — rotates when panel is open */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{
+                width: 12, height: 12, flexShrink: 0,
+                transform: isTagPanelOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 150ms",
+              }}>
+              <path d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {isTagPanelOpen && (
+            <div style={{ marginTop: 10, maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, paddingBottom: 2 }}>
+              {SEARCH_TAG_GROUPS.map((group) => (
+                <div key={group.label}>
+                  <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", color: "#9ca3af", marginBottom: 6 }}>
+                    {group.label}
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {group.tags.map((tag) => {
+                      const isActive = activeTagFilters.has(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTagFilter(tag)}
+                          className="whitespace-nowrap transition-all"
+                          style={isActive ? {
+                            background: "#3b82f6",
+                            color: "white",
+                            border: "2px solid #3b82f6",
+                            borderRadius: 20,
+                            padding: "5px 12px",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            boxShadow: "0 1px 3px rgba(59,130,246,0.3)",
+                          } : {
+                            background: "white",
+                            color: "#374151",
+                            border: "2px solid #d1d5db",
+                            borderRadius: 20,
+                            padding: "5px 12px",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Filter section — mirrors .filter-section */}
@@ -351,6 +470,58 @@ export function VenueDiscovery({ venues }: Props) {
 
       </div>
 
+      {/* Active tag filters bar — visible whenever tags are selected */}
+      {activeTagFilters.size > 0 && (
+        <div style={{
+          background: "#eff6ff",
+          borderBottom: "1px solid #bfdbfe",
+          padding: "8px 20px",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 6,
+        }}>
+          {[...activeTagFilters].map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggleTagFilter(tag)}
+              className="inline-flex items-center transition-opacity hover:opacity-80"
+              style={{
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: 20,
+                padding: "4px 8px 4px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                gap: 5,
+              }}
+            >
+              {tag}
+              <span style={{ opacity: 0.75, fontSize: 10, lineHeight: 1 }}>✕</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearTagFilters}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6b7280",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              padding: "4px 4px",
+              marginLeft: 2,
+            }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {/* Content area — mirrors .content: padding 20px */}
       <div style={{ padding: "20px 20px 140px" }}>
         {isMap && (
@@ -370,14 +541,33 @@ export function VenueDiscovery({ venues }: Props) {
             the scroll container from accumulating scrollTop, which would
             shift Google Maps marker overlays relative to the tile layer. */}
         {filteredVenues.length === 0 ? (
-          searchTerm ? (
-            /* Empty state — mirrors original: 🔍 icon, "No matches" title, hint body */
+          (searchTerm || activeTagFilters.size > 0) ? (
+            /* Empty state — shown when keyword search or tag filters produce no results */
             <div className="flex flex-col items-center justify-center text-center py-16 px-10">
               <div className="text-5xl opacity-50 mb-4">🔍</div>
               <p className="text-lg font-semibold text-gray-700 mb-2">No matches</p>
               <p className="text-sm text-gray-500">
-                Try clearing filters or searching a different area.
+                Try adjusting your filters or searching a different area.
               </p>
+              {activeTagFilters.size > 0 && (
+                <button
+                  type="button"
+                  onClick={clearTagFilters}
+                  style={{
+                    marginTop: 14,
+                    background: "none",
+                    border: "1.5px solid #d1d5db",
+                    borderRadius: 8,
+                    padding: "7px 16px",
+                    fontSize: 14,
+                    color: "#374151",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Clear tag filters
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-gray-500 text-sm">No venues available right now.</p>
