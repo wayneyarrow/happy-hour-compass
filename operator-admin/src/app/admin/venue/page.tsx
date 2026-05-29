@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { parseOperatorPlan, maxSearchTags } from "@/lib/plans";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
 import BusinessDetailsForm from "./BusinessDetailsForm";
 import PaymentTypesForm from "./PaymentTypesForm";
 import LinksForm from "./LinksForm";
+import SearchTagsForm from "./SearchTagsForm";
 import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
 import VenueImagesSection from "./VenueImagesSection";
@@ -33,6 +35,8 @@ type AdminVenueRow = {
   menu_url?: string | null;
   is_published?: boolean | null;
   establishment_type?: string | null;
+  /** PostgreSQL TEXT[] — returned as string[] by the Supabase client */
+  search_tags?: string[] | null;
 };
 
 /**
@@ -61,6 +65,7 @@ type VenueSection =
   | "business-hours"
   | "payment-types"
   | "links"
+  | "search-tags"
   | "images"
   | "publish";
 
@@ -119,6 +124,11 @@ export default async function AdminVenuePage({
   // Key for PaymentTypesForm — forces remount when stored payment types change
   // after router.refresh(), so controlled state re-initialises from fresh props.
   const paymentTypesKey = JSON.stringify(paymentTypes);
+
+  // Search tags — TEXT[] column returned as string[] by Supabase client.
+  const currentSearchTags = Array.isArray(venue?.search_tags) ? venue.search_tags : [];
+  const operatorPlan = parseOperatorPlan(operator?.plan);
+  const tagLimit = maxSearchTags(operatorPlan);
 
   return (
     <div className="max-w-2xl">
@@ -254,7 +264,22 @@ export default async function AdminVenuePage({
             />
           </AccordionSection>
 
-          {/* Section 5: Images */}
+          {/* Section 5: Search tags */}
+          <AccordionSection
+            id="search-tags"
+            title="Search tags"
+            description="Help customers discover your venue based on what makes it special."
+            defaultOpen={isOpen(section, "search-tags")}
+          >
+            <SearchTagsForm
+              venueId={venue.id}
+              initialTags={currentSearchTags}
+              plan={operatorPlan}
+              tagLimit={tagLimit}
+            />
+          </AccordionSection>
+
+          {/* Section 6: Images */}
           <AccordionSection
             id="images"
             title="Venue images"

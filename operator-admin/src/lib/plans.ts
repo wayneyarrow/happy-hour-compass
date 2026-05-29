@@ -187,3 +187,21 @@ export function maxDrinkSpecials(plan: OperatorPlan): number {
     case "enterprise": return Infinity;
   }
 }
+
+/**
+ * Maximum number of search tags for the operator's plan.
+ * Returns Infinity for enterprise (unlimited).
+ *
+ *   FREE       → 0    (paid discovery feature — not available on free)
+ *   PRO        → 5
+ *   PREMIUM    → 10
+ *   ENTERPRISE → Infinity
+ */
+export function maxSearchTags(plan: OperatorPlan): number {
+  switch (plan) {
+    case "free":       return 0;
+    case "pro":        return 5;
+    case "premium":    return 10;
+    case "enterprise": return Infinity;
+  }
+}

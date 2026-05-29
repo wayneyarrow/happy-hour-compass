@@ -62,3 +62,9 @@ export const PAYMENT_OPTIONS = [
   "MasterCard",
   "Amex",
 ] as const;
+
+export type SearchTagsState = {
+  success?: boolean;
+  errors?: { form?: string; tags?: string };
+  values?: { tags: string[] };
+};

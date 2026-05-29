@@ -249,8 +249,27 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
             />
 
           </div>
-        </div>
 
+          {/* Search tags — only rendered when the venue has tags */}
+          {venue.searchTags.length > 0 && (
+            <div className="mt-5">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.5px] text-gray-500 mb-2">
+                Tags
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {venue.searchTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-[13px] font-medium"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
 
       {/* ── Claim section ─────────────────────────────────────────────────────

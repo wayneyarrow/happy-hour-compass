@@ -139,11 +139,14 @@ export function VenueDiscovery({ venues }: Props) {
   const NEAR_ME_RADIUS_KM = 25;
 
   const filteredVenues = venues
-    .filter((v) =>
-      searchTerm
-        ? v.name.toLowerCase().includes(searchTerm.toLowerCase())
-        : true
-    )
+    .filter((v) => {
+      if (!searchTerm) return true;
+      const q = searchTerm.toLowerCase();
+      return (
+        v.name.toLowerCase().includes(q) ||
+        v.searchTags.some((tag) => tag.toLowerCase().includes(q))
+      );
+    })
     .filter((v) =>
       happeningNowActive ? isHappeningNow(v.happyHourWeekly) : true
     )
