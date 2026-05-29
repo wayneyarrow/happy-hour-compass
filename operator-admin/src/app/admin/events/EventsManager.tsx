@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/browser";
 import EventForm from "./EventForm";
 import type { EventRow } from "./EventForm";
 import { deleteEventAction } from "./actions";
+import type { OperatorPlan } from "@/lib/plans";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,9 +36,10 @@ type Props = {
   initialEvents: EventRow[];
   operatorId: string;
   venueId: string;
+  operatorPlan: OperatorPlan;
 };
 
-export default function EventsManager({ initialEvents, operatorId, venueId }: Props) {
+export default function EventsManager({ initialEvents, operatorId, venueId, operatorPlan }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -242,6 +244,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId }: Pr
                 initialEvent={selectedEvent}
                 operatorId={operatorId}
                 venueId={venueId}
+                operatorPlan={operatorPlan}
                 onSaved={handleSaved}
               />
             </div>

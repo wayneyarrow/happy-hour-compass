@@ -121,6 +121,17 @@ export function canUseAdvancedEvents(plan: OperatorPlan): boolean {
 }
 
 /**
+ * Recurring event scheduling — daily, weekly, monthly, and any future patterns.
+ * One-time (no repeat) events remain available on all plans.
+ *
+ * This is the single named entitlement for recurring events.  It intentionally
+ * mirrors canUseAdvancedEvents so the two stay in sync as plans evolve.
+ */
+export function canUseRecurringEvents(plan: OperatorPlan): boolean {
+  return plan === "pro" || plan === "premium" || plan === "enterprise";
+}
+
+/**
  * Custom search tag management beyond the default auto-generated tag set.
  * Allows operators to surface their venue for specific consumer searches.
  */

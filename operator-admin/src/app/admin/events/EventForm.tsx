@@ -2,16 +2,21 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { slugify } from "@/lib/slugify";
 import {
   processImageFile,
   ImageTooLargeError,
   InvalidImageTypeError,
 } from "@/lib/imageProcessing";
+import { canUseRecurringEvents } from "@/lib/plans";
+import type { OperatorPlan } from "@/lib/plans";
+import {
+  type Recurrence,
+  isRecurring,
+  toRecurrence,
+} from "./recurrenceUtils";
+import { saveEventAction } from "./actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type Recurrence = "none" | "daily" | "weekly" | "monthly";
 
 type EventFormState = {
   title: string;
@@ -43,6 +48,7 @@ type Props = {
   initialEvent?: EventRow | null;
   operatorId: string;
   venueId: string;
+  operatorPlan: OperatorPlan;
   /** Called after a successful insert or update with the saved event's id. */
   onSaved?: (eventId: string) => void;
 };
@@ -50,12 +56,6 @@ type Props = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DESCRIPTION_MAX = 280;
-
-const KNOWN_RECURRENCES = new Set<Recurrence>(["none", "daily", "weekly", "monthly"]);
-
-function toRecurrence(val: string | null | undefined): Recurrence {
-  return val && KNOWN_RECURRENCES.has(val as Recurrence) ? (val as Recurrence) : "none";
-}
 
 // 30-minute increments from 10:00 AM to 11:30 PM
 const TIME_OPTIONS: string[] = (() => {
@@ -146,27 +146,6 @@ function getDateTimePreview(state: EventFormState): string | null {
   }
 }
 
-// ── Legacy field derivation (backward-compat for consumer app) ─────────────────
-
-function deriveEventTime(startTime: string, endTime: string): string | null {
-  if (!startTime) return null;
-  return endTime ? `${startTime} – ${endTime}` : startTime;
-}
-
-function deriveEventFrequency(recurrence: Recurrence, firstDate: string): string | null {
-  switch (recurrence) {
-    case "weekly":
-      return firstDate ? `Every ${weekdayNameFromDate(firstDate)}` : "Weekly";
-    case "daily":
-      return "Every day";
-    case "monthly":
-      return firstDate ? `Every month on the ${dayOfMonthFromDate(firstDate)}` : "Monthly";
-    case "none":
-    default:
-      return firstDate ? formatDate(firstDate) : null;
-  }
-}
-
 // ── Style constants ───────────────────────────────────────────────────────────
 
 const inputCls =
@@ -178,7 +157,7 @@ const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function EventForm({ initialEvent, operatorId, venueId, onSaved }: Props) {
+export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, onSaved }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
@@ -193,7 +172,10 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [recurrenceUpsellVisible, setRecurrenceUpsellVisible] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const canRecur = canUseRecurringEvents(operatorPlan);
 
   // Hydrate from server-loaded event data.
   useEffect(() => {
@@ -246,73 +228,31 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
     setIsSaving(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
 
-    // ── Derive legacy fields ──────────────────────────────────────────────
-    const event_time = deriveEventTime(formState.startTime, formState.endTime);
-    const event_frequency = deriveEventFrequency(formState.recurrence, formState.firstDate);
+    const result = await saveEventAction(
+      {
+        venueId,
+        title: formState.title || null,
+        description: formState.description || null,
+        firstDate: formState.firstDate,
+        startTime: formState.startTime,
+        endTime: formState.endTime || null,
+        recurrence: formState.recurrence,
+        isPublished: formState.isPublished,
+      },
+      currentEventId
+    );
 
-    const sharedFields = {
-      title: formState.title || null,
-      description: formState.description || null,
-      first_date: formState.firstDate || null,
-      start_time: formState.startTime || null,
-      end_time: formState.endTime || null,
-      recurrence: formState.recurrence,
-      event_time,
-      event_frequency,
-      is_published: formState.isPublished,
-      updated_by_operator_id: operatorId,
-    };
-
-    const supabase = createClient();
-    let savedId: string;
-
-    if (currentEventId) {
-      // ── Update ──────────────────────────────────────────────────────────
-      const { error: updateError } = await supabase
-        .from("events")
-        .update({ ...sharedFields, updated_at: new Date().toISOString() })
-        .eq("id", currentEventId)
-        .eq("created_by_operator_id", operatorId);
-
-      if (updateError) {
-        console.error("[EventForm] Update failed:", updateError);
-        setError(updateError.message || "Failed to save event. Please try again.");
-        setIsSaving(false);
-        return;
-      }
-
-      savedId = currentEventId;
-    } else {
-      // ── Insert ──────────────────────────────────────────────────────────
-      const baseSlug = slugify(formState.title);
-      const slug = baseSlug || crypto.randomUUID();
-
-      const { data: inserted, error: insertError } = await supabase
-        .from("events")
-        .insert([{
-          ...sharedFields,
-          slug,
-          venue_id: venueId,
-          created_by_operator_id: operatorId,
-        }])
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error("[EventForm] Insert failed:", insertError);
-        setError(insertError.message || "Failed to create event. Please try again.");
-        setIsSaving(false);
-        return;
-      }
-
-      setCurrentEventId(inserted.id);
-      savedId = inserted.id;
+    if ("error" in result) {
+      setError(result.error);
+      setIsSaving(false);
+      return;
     }
 
+    setCurrentEventId(result.savedId);
     setIsSaving(false);
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
-    onSaved?.(savedId);
+    onSaved?.(result.savedId);
   };
 
   // ── Image upload / remove ─────────────────────────────────────────────────
@@ -506,17 +446,67 @@ export default function EventForm({ initialEvent, operatorId, venueId, onSaved }
         <label htmlFor="event-recurrence" className={labelCls}>
           Repeats
         </label>
+        {/* Downgrade notice: existing recurring event on free plan */}
+        {!canRecur && initialEvent && isRecurring(formState.recurrence) && (
+          <div className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            This event has a recurring schedule from a previous plan. To edit the
+            schedule, upgrade to Pro or switch &ldquo;Repeats&rdquo; to{" "}
+            &ldquo;One-time&rdquo; to save other changes.
+          </div>
+        )}
         <select
           id="event-recurrence"
           value={formState.recurrence}
-          onChange={(e) => update("recurrence", e.target.value as Recurrence)}
+          onChange={(e) => {
+            const val = e.target.value as Recurrence;
+            if (isRecurring(val) && !canRecur) {
+              setRecurrenceUpsellVisible(true);
+              return;
+            }
+            setRecurrenceUpsellVisible(false);
+            update("recurrence", val);
+          }}
           disabled={isSaving}
           className={inputCls}
         >
           {RECURRENCE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
+            <option key={value} value={value}>
+              {isRecurring(value) && !canRecur ? `${label} (Pro+)` : label}
+            </option>
           ))}
         </select>
+        {recurrenceUpsellVisible && (
+          <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <svg
+                className="w-3.5 h-3.5 shrink-0 text-amber-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+              <p className="text-sm font-semibold text-amber-900">Recurring Events</p>
+            </div>
+            <p className="text-sm text-amber-800 leading-snug">
+              Create an event once and automatically repeat it — daily, weekly, or monthly.
+              No re-entering details each time.
+            </p>
+            <p className="text-xs text-amber-700">
+              Great for trivia nights, karaoke, live music, weekly specials, and regular promotions.
+            </p>
+            <p className="text-xs font-medium text-amber-800 pt-0.5">
+              Available on Pro and Premium plans.
+              {/* Upgrade action can be added here */}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Date & Time preview — hidden until both date and start time are set */}

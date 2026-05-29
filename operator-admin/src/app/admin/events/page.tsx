@@ -5,6 +5,7 @@ export const metadata = { title: "Events" };
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { parseOperatorPlan } from "@/lib/plans";
 import Link from "next/link";
 import EventsManager from "./EventsManager";
 import type { EventRow } from "./EventForm";
@@ -125,6 +126,7 @@ export default async function AdminEventsPage() {
           initialEvents={initialEvents}
           operatorId={operator!.id}
           venueId={venue!.id}
+          operatorPlan={parseOperatorPlan(operator!.plan)}
         />
       )}
     </div>
