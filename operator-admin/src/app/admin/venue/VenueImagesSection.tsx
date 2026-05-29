@@ -21,10 +21,6 @@ type MediaRow = {
   sort_order: number;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const MAX_IMAGES = 5;
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -47,9 +43,11 @@ type Props = {
   venueId: string | null | undefined;
   /** Used to show the correct placeholder preview when no images are uploaded. */
   establishmentType?: string | null;
+  /** Maximum number of images allowed on this operator's plan. */
+  imageLimit: number;
 };
 
-export default function VenueImagesSection({ venueId, establishmentType }: Props) {
+export default function VenueImagesSection({ venueId, establishmentType, imageLimit }: Props) {
   const [images, setImages] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -89,7 +87,7 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
     if (!files || !venueId) return;
     setError(null);
 
-    const slots = MAX_IMAGES - images.length;
+    const slots = imageLimit - images.length;
     if (slots <= 0) return;
 
     setUploading(true);
@@ -200,7 +198,7 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const atMax = images.length >= MAX_IMAGES;
+  const atMax = images.length >= imageLimit;
 
   return (
     <div className="space-y-4">
@@ -246,10 +244,10 @@ export default function VenueImagesSection({ venueId, establishmentType }: Props
             onChange={(e) => handleUpload(e.target.files)}
           />
         </label>
-        <span className="text-xs text-gray-400">
+        <span className={`text-xs tabular-nums ${atMax ? "font-semibold text-amber-700" : "text-gray-400"}`}>
           {atMax
-            ? "Maximum of 5 images reached."
-            : `${images.length} / ${MAX_IMAGES} images uploaded`}
+            ? `${images.length} / ${imageLimit} — limit reached`
+            : `${images.length} / ${imageLimit} images uploaded`}
         </span>
       </div>
 

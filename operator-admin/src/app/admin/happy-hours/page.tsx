@@ -6,6 +6,7 @@ export const metadata = { title: "Happy Hours" };
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
 import AccordionSection from "../venue/AccordionSection";
 import HhTimesSection from "./HhTimesSection";
 import TaglineForm from "./TaglineForm";
@@ -122,15 +123,13 @@ function parseSpecials(raw: string | null | undefined): HhItem[] {
           typeof item.name === "string"
       )
     ) {
-      // Cap at 3 — the UI supports at most 3 specials per type.
-      return (parsed as HhItem[]).slice(0, 3);
+      return parsed as HhItem[];
     }
   } catch {
     // Legacy plain text: split by newline, parse price/notes from each line.
     return raw
       .split("\n")
       .filter((line) => line.trim())
-      .slice(0, 3)
       .map(parseLegacySpecialLine);
   }
 
@@ -185,6 +184,10 @@ export default async function AdminHappyHoursPage({
 
   const foodItems = parseSpecials(venue?.hh_food_details);
   const drinkItems = parseSpecials(venue?.hh_drink_details);
+
+  const operatorPlan = parseOperatorPlan(operator?.plan);
+  const foodLimit  = maxFoodSpecials(operatorPlan);
+  const drinkLimit = maxDrinkSpecials(operatorPlan);
 
   return (
     <div className="max-w-2xl">
@@ -260,6 +263,7 @@ export default async function AdminHappyHoursPage({
               venueId={venue.id}
               type="food"
               initialItems={foodItems}
+              itemLimit={foodLimit}
             />
           </AccordionSection>
 
@@ -273,6 +277,7 @@ export default async function AdminHappyHoursPage({
               venueId={venue.id}
               type="drink"
               initialItems={drinkItems}
+              itemLimit={drinkLimit}
             />
           </AccordionSection>
 

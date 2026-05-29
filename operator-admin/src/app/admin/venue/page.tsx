@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { parseOperatorPlan, maxSearchTags } from "@/lib/plans";
+import { parseOperatorPlan, maxSearchTags, maxImages } from "@/lib/plans";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
 import BusinessDetailsForm from "./BusinessDetailsForm";
@@ -128,7 +128,8 @@ export default async function AdminVenuePage({
   // Search tags — TEXT[] column returned as string[] by Supabase client.
   const currentSearchTags = Array.isArray(venue?.search_tags) ? venue.search_tags : [];
   const operatorPlan = parseOperatorPlan(operator?.plan);
-  const tagLimit = maxSearchTags(operatorPlan);
+  const tagLimit   = maxSearchTags(operatorPlan);
+  const imageLimit = maxImages(operatorPlan);
 
   return (
     <div className="max-w-2xl">
@@ -283,12 +284,13 @@ export default async function AdminVenuePage({
           <AccordionSection
             id="images"
             title="Venue images"
-            description="Upload up to 5 images. The first image is used as the primary image."
+            description={`Upload up to ${imageLimit} image${imageLimit === 1 ? "" : "s"}. The first image is used as the primary image.`}
             defaultOpen={isOpen(section, "images")}
           >
             <VenueImagesSection
               venueId={venue.id}
               establishmentType={venue.establishment_type}
+              imageLimit={imageLimit}
             />
           </AccordionSection>
 

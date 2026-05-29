@@ -27,11 +27,9 @@ type Props = {
   /** "food" binds to hh_food_details; "drink" binds to hh_drink_details */
   type: "food" | "drink";
   initialItems: HhItem[];
+  /** Maximum number of items allowed on this operator's plan. */
+  itemLimit: number;
 };
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const MAX_ITEMS = 3;
 
 const initialState: SpecialsState = {};
 
@@ -91,7 +89,7 @@ function DragHandle() {
 
 // ── SpecialsForm ──────────────────────────────────────────────────────────────
 
-export default function SpecialsForm({ venueId, type, initialItems }: Props) {
+export default function SpecialsForm({ venueId, type, initialItems, itemLimit }: Props) {
   const router = useRouter();
 
   // Select the correct server action based on type
@@ -140,7 +138,7 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
   // ── Item helpers ────────────────────────────────────────────────────────────
 
   function addItem() {
-    if (items.length >= MAX_ITEMS) return;
+    if (items.length >= itemLimit) return;
     setItems((prev) => [...prev, { name: "", price: "", notes: "" }]);
     setRowErrors((prev) => [...prev, null]);
   }
@@ -285,10 +283,10 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
     type === "food"
       ? "Add one food special per row. These will appear as bullet points in your listing."
       : "Add one drink special per row. These will appear as bullet points in your listing.";
-  const maxHelperText =
-    type === "food"
-      ? "You can add up to 3 food specials."
-      : "You can add up to 3 drink specials.";
+  const filledCount = items.filter(
+    (item) => item.name.trim() || item.price.trim() || item.notes.trim()
+  ).length;
+  const atLimit = items.length >= itemLimit;
   const namePlaceholder = type === "food" ? "Smash Burger" : "House Pint";
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -430,19 +428,33 @@ export default function SpecialsForm({ venueId, type, initialItems }: Props) {
         })}
       </div>
 
-      {/* Add item button */}
-      {items.length < MAX_ITEMS && (
-        <button
-          type="button"
-          onClick={addItem}
-          disabled={isPending}
-          className="text-sm text-amber-600 hover:text-amber-700 font-medium transition-colors disabled:opacity-50"
-        >
-          {addLabel}
-        </button>
-      )}
+      {/* Add item button + count badge */}
+      <div className="flex items-center gap-3">
+        {!atLimit && (
+          <button
+            type="button"
+            onClick={addItem}
+            disabled={isPending}
+            className="text-sm text-amber-600 hover:text-amber-700 font-medium transition-colors disabled:opacity-50"
+          >
+            {addLabel}
+          </button>
+        )}
+        <span className={`text-xs tabular-nums ${filledCount >= itemLimit ? "font-semibold text-amber-700" : "text-gray-400"}`}>
+          {filledCount} / {itemLimit} used
+        </span>
+      </div>
 
-      <p className="text-xs text-gray-400">{maxHelperText}</p>
+      {/* At-limit upsell */}
+      {atLimit && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+          {type === "food"
+            ? `You've reached the ${itemLimit}-item limit for your plan.`
+            : `You've reached the ${itemLimit}-item limit for your plan.`}{" "}
+          Upgrade to Pro to add more {type === "food" ? "food" : "drink"} specials.
+          {/* Upgrade link/button can be added here */}
+        </div>
+      )}
 
       {reorderError && (
         <p className="text-xs text-red-600" role="alert">

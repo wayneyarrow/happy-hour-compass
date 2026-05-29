@@ -1,6 +1,7 @@
 "use server";
 
 import { resolveOperatorContext } from "@/lib/impersonation";
+import { parseOperatorPlan, maxImages } from "@/lib/plans";
 
 const BUCKET = "venue-images";
 
@@ -20,6 +21,24 @@ export async function uploadVenueImageAction(
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
 
+  // Count existing images before uploading — used for both the plan limit check
+  // and deriving sort_order so we don't pay two round-trips.
+  const { data: existing } = await ctx.supabase
+    .from("media")
+    .select("id")
+    .eq("venue_id", targetVenueId)
+    .eq("type", "venue_image");
+  const existingCount = existing?.length ?? 0;
+
+  const plan = parseOperatorPlan(ctx.operator?.plan);
+  const imageLimit = maxImages(plan);
+
+  if (existingCount >= imageLimit) {
+    return {
+      error: `You've reached your image limit (${imageLimit}) for your current plan. Remove an image or upgrade to upload more.`,
+    };
+  }
+
   const bytes = await file.arrayBuffer();
   const path = `venues/${targetVenueId}/${crypto.randomUUID()}.jpg`;
 
@@ -37,13 +56,7 @@ export async function uploadVenueImageAction(
 
   const { data: urlData } = ctx.supabase.storage.from(BUCKET).getPublicUrl(path);
 
-  // Re-query live count to derive a sequential sort_order for this upload.
-  const { data: existing } = await ctx.supabase
-    .from("media")
-    .select("id")
-    .eq("venue_id", targetVenueId)
-    .eq("type", "venue_image");
-  const sortOrder = existing?.length ?? 0;
+  const sortOrder = existingCount;
 
   const { error: insertError } = await ctx.supabase.from("media").insert({
     venue_id: targetVenueId,

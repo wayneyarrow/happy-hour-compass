@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
+import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ function validateAndParseItems(raw: string): {
     });
   }
 
-  return { items: items.slice(0, 3) };
+  return { items };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,6 +179,32 @@ export async function updateFoodSpecialsAction(
     return {
       errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
     };
+  }
+
+  const plan = parseOperatorPlan(ctx.operator?.plan);
+  const maxItems = maxFoodSpecials(plan);
+
+  if (items.length > maxItems) {
+    // Downgrade protection: allow saving if operator is not adding new items beyond
+    // what is currently stored (i.e. editing/removing from a previously larger set).
+    const { data: current } = await ctx.supabase
+      .from("venues")
+      .select("hh_food_details")
+      .eq("id", venueId)
+      .maybeSingle();
+    let currentCount = 0;
+    try {
+      const parsed = JSON.parse((current as { hh_food_details?: string | null } | null)?.hh_food_details ?? "[]");
+      if (Array.isArray(parsed)) currentCount = parsed.length;
+    } catch { /* treat unparseable legacy text as 0 to be safe */ }
+
+    if (items.length > currentCount) {
+      return {
+        errors: {
+          form: `Your plan allows up to ${maxItems} food special${maxItems === 1 ? "" : "s"}. Remove items to stay within your plan limit.`,
+        },
+      };
+    }
   }
 
   const updates = {
@@ -224,6 +251,30 @@ export async function updateDrinkSpecialsAction(
     return {
       errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
     };
+  }
+
+  const plan = parseOperatorPlan(ctx.operator?.plan);
+  const maxItems = maxDrinkSpecials(plan);
+
+  if (items.length > maxItems) {
+    const { data: current } = await ctx.supabase
+      .from("venues")
+      .select("hh_drink_details")
+      .eq("id", venueId)
+      .maybeSingle();
+    let currentCount = 0;
+    try {
+      const parsed = JSON.parse((current as { hh_drink_details?: string | null } | null)?.hh_drink_details ?? "[]");
+      if (Array.isArray(parsed)) currentCount = parsed.length;
+    } catch { /* treat unparseable legacy text as 0 to be safe */ }
+
+    if (items.length > currentCount) {
+      return {
+        errors: {
+          form: `Your plan allows up to ${maxItems} drink special${maxItems === 1 ? "" : "s"}. Remove items to stay within your plan limit.`,
+        },
+      };
+    }
   }
 
   const updates = {
