@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   updateFoodSpecialsAction,
   updateDrinkSpecialsAction,
@@ -448,11 +449,14 @@ export default function SpecialsForm({ venueId, type, initialItems, itemLimit }:
       {/* At-limit upsell */}
       {atLimit && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-          {type === "food"
-            ? `You've reached the ${itemLimit}-item limit for your plan.`
-            : `You've reached the ${itemLimit}-item limit for your plan.`}{" "}
-          Upgrade to Pro to add more {type === "food" ? "food" : "drink"} specials.
-          {/* Upgrade link/button can be added here */}
+          You&apos;ve reached the {itemLimit}-item limit for your plan. Upgrade to
+          Pro to add more {type === "food" ? "food" : "drink"} specials.{" "}
+          <Link
+            href="/admin/billing"
+            className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+          >
+            View Plan Options
+          </Link>
         </div>
       )}
 

@@ -7,6 +7,7 @@ import {
   ImageTooLargeError,
   InvalidImageTypeError,
 } from "@/lib/imageProcessing";
+import Link from "next/link";
 import { canUseRecurringEvents } from "@/lib/plans";
 import type { OperatorPlan } from "@/lib/plans";
 import {
@@ -451,7 +452,13 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
           <div className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
             This event has a recurring schedule from a previous plan. To edit the
             schedule, upgrade to Pro or switch &ldquo;Repeats&rdquo; to{" "}
-            &ldquo;One-time&rdquo; to save other changes.
+            &ldquo;One-time&rdquo; to save other changes.{" "}
+            <Link
+              href="/admin/billing"
+              className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+            >
+              View Plan Options
+            </Link>
           </div>
         )}
         <select
@@ -502,8 +509,13 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
               Great for trivia nights, karaoke, live music, weekly specials, and regular promotions.
             </p>
             <p className="text-xs font-medium text-amber-800 pt-0.5">
-              Available on Pro and Premium plans.
-              {/* Upgrade action can be added here */}
+              Available on Pro and Premium plans.{" "}
+              <Link
+                href="/admin/billing"
+                className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+              >
+                View Plan Options
+              </Link>
             </p>
           </div>
         )}

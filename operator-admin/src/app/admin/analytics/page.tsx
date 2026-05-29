@@ -187,6 +187,12 @@ function LockedSection({
           </li>
         ))}
       </ul>
+      <Link
+        href="/admin/billing"
+        className="inline-block mt-3 text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-gray-500 transition-colors"
+      >
+        View Plan Options
+      </Link>
     </div>
   );
 }

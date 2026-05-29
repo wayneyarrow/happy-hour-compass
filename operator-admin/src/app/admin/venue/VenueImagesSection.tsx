@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import {
   processImageFile,
@@ -250,6 +251,20 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
             : `${images.length} / ${imageLimit} images uploaded`}
         </span>
       </div>
+
+      {/* At-limit upsell */}
+      {atMax && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+          You&apos;ve reached the image limit for your plan. Upgrade to add more
+          venue photos and show customers more of what makes your place special.{" "}
+          <Link
+            href="/admin/billing"
+            className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+          >
+            View Plan Options
+          </Link>
+        </div>
+      )}
 
       {/* Thumbnail grid */}
       {loading ? (
