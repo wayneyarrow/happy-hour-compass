@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -9,12 +10,31 @@ export type OperatorRow = {
   name: string | null;
   email: string;
   is_approved: boolean;
+  plan: string; // raw DB string; displayed via PlanBadge
   venueName: string | null;
   venueSlug: string | null;
   created_at: string; // pre-formatted
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
+
+const PLAN_STYLES: Record<OperatorPlan, string> = {
+  free:       "bg-gray-100 text-gray-600",
+  pro:        "bg-amber-100 text-amber-700",
+  premium:    "bg-blue-100 text-blue-700",
+  enterprise: "bg-purple-100 text-purple-700",
+};
+
+function PlanBadge({ plan }: { plan: string }) {
+  const key = (plan ?? "free") as OperatorPlan;
+  const styles = PLAN_STYLES[key] ?? PLAN_STYLES.free;
+  const label  = PLAN_LABELS[key]  ?? "Free";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles}`}>
+      {label}
+    </span>
+  );
+}
 
 function ApprovedBadge({ approved }: { approved: boolean }) {
   return approved ? (
@@ -102,6 +122,9 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                     Status
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Plan
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     Venue
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -123,6 +146,11 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                     {/* Approval status */}
                     <td className="px-4 py-3">
                       <ApprovedBadge approved={op.is_approved} />
+                    </td>
+
+                    {/* Plan */}
+                    <td className="px-4 py-3">
+                      <PlanBadge plan={op.plan} />
                     </td>
 
                     {/* Venue name + slug */}

@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { type OperatorPlan } from "@/lib/plans";
 
 /** Shape of a row from the `operators` table (selected fields). */
 export type OperatorRow = {
@@ -9,6 +10,7 @@ export type OperatorRow = {
   name: string | null;
   is_approved: boolean;
   role: string;
+  plan: OperatorPlan;
   created_at: string;
   updated_at: string;
   /** Null until the operator dismisses the V2 intro banner for the first time. */
@@ -16,7 +18,7 @@ export type OperatorRow = {
 };
 
 export const OPERATOR_SELECT =
-  "id, email, first_name, last_name, name, is_approved, role, created_at, updated_at, " +
+  "id, email, first_name, last_name, name, is_approved, role, plan, created_at, updated_at, " +
   "homepage_v2_intro_seen_at";
 
 /**

@@ -22,7 +22,7 @@ export default async function ControlPanelOperatorsPage() {
   // Fetch all operators ordered by most recently created
   const { data: opsData, error: opsError } = await supabase
     .from("operators")
-    .select("id, name, email, is_approved, created_at")
+    .select("id, name, email, is_approved, plan, created_at")
     .order("created_at", { ascending: false });
 
   // Fetch venues so we can map operator → venue
@@ -49,6 +49,7 @@ export default async function ControlPanelOperatorsPage() {
         name:        (op.name as string | null) ?? null,
         email:       op.email as string,
         is_approved: op.is_approved as boolean,
+        plan:        (op.plan as string) ?? "free",
         venueName:   venue?.name ?? null,
         venueSlug:   venue?.slug ?? null,
         created_at:  formatDate(op.created_at as string),
