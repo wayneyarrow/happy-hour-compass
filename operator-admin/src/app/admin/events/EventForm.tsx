@@ -43,6 +43,7 @@ export type EventRow = {
   venue_id: string | null;
   created_by_operator_id: string | null;
   image_url: string | null;
+  updated_at?: string | null;
 };
 
 type Props = {
