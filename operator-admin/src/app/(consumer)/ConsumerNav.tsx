@@ -3,30 +3,49 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/**
- * Fixed bottom navigation for the consumer app.
- * Matches the original index.html bottom-nav structure:
- *   Search (🔍) | Saved (bookmark) | Events (🎉) | Add a Happy Hour (+)
- */
 export function ConsumerNav() {
   const pathname = usePathname();
+  const isHome =
+    pathname === "/" || pathname.startsWith("/home");
   const isSearch =
-    pathname === "/" ||
-    pathname.startsWith("/explore") ||
-    pathname.startsWith("/venue");
+    pathname.startsWith("/explore") || pathname.startsWith("/venue");
   const isSaved = pathname.startsWith("/saved");
   const isEvents =
     pathname.startsWith("/events") || pathname.startsWith("/event");
-  const isSuggest = pathname.startsWith("/suggest");
+  const isMore = pathname.startsWith("/suggest");
+
+  const activeClass = "text-blue-500";
+  const inactiveClass = "text-gray-400";
 
   return (
     <nav className="bg-white border-t border-gray-200 flex shrink-0">
-      {/* Search tab — links to /explore (full search + filter); home (/) is
-          accessed via the WelcomeGate launch flow or "Browse all" CTA */}
+      {/* Home */}
+      <Link
+        href="/"
+        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
+          isHome ? activeClass : inactiveClass
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-5 h-5 mb-1"
+        >
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+        Home
+      </Link>
+
+      {/* Search */}
       <Link
         href="/explore"
         className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
-          isSearch ? "text-blue-500" : "text-gray-400"
+          isSearch ? activeClass : inactiveClass
         }`}
       >
         <svg
@@ -44,46 +63,11 @@ export function ConsumerNav() {
         Search
       </Link>
 
-      {/* Saved tab — bookmark icon, matches original nav */}
+      {/* Saved */}
       <Link
         href="/saved"
         className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
-          isSaved ? "text-blue-500" : "text-gray-400"
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          className="w-5 h-5 mb-1"
-        >
-          <path
-            d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-            stroke={isSaved ? "#3b82f6" : "#9ca3af"}
-            fill={isSaved ? "#3b82f6" : "none"}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Saved
-      </Link>
-
-      {/* Events tab */}
-      <Link
-        href="/events"
-        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
-          isEvents ? "text-blue-500" : "text-gray-400"
-        }`}
-      >
-        <span className="text-xl leading-none mb-1">🎉</span>
-        Events
-      </Link>
-
-      {/* Add tab */}
-      <Link
-        href="/suggest"
-        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
-          isSuggest ? "text-blue-500" : "text-gray-400"
+          isSaved ? activeClass : inactiveClass
         }`}
       >
         <svg
@@ -95,11 +79,57 @@ export function ConsumerNav() {
           strokeLinejoin="round"
           className="w-5 h-5 mb-1"
         >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="16" />
-          <line x1="8" y1="12" x2="16" y2="12" />
+          <path
+            d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+            fill={isSaved ? "currentColor" : "none"}
+          />
         </svg>
-        Add
+        Saved
+      </Link>
+
+      {/* Events — Ticket icon */}
+      <Link
+        href="/events"
+        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
+          isEvents ? activeClass : inactiveClass
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-5 h-5 mb-1"
+        >
+          <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" />
+          <line x1="9" y1="9" x2="9" y2="15" strokeDasharray="2 2" />
+        </svg>
+        Events
+      </Link>
+
+      {/* More — Ellipsis icon */}
+      <Link
+        href="/suggest"
+        className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
+          isMore ? activeClass : inactiveClass
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-5 h-5 mb-1"
+        >
+          <circle cx="5" cy="12" r="1" fill="currentColor" />
+          <circle cx="12" cy="12" r="1" fill="currentColor" />
+          <circle cx="19" cy="12" r="1" fill="currentColor" />
+        </svg>
+        More
       </Link>
     </nav>
   );
