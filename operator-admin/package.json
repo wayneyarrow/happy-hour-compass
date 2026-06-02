@@ -16,6 +16,7 @@
     "hygiene:bc": "tsx scripts/bcHygienePass.ts",
     "enrich:kelowna-geo": "tsx scripts/enrichMissingGeoKelowna.ts",
     "backfill:business-hours": "tsx scripts/backfillMissingBusinessHours.ts",
+    "backfill:seeded-tags": "tsx scripts/backfillSeededTags.ts",
     "export:tag-matrix": "tsx scripts/exportVenueTaggingMatrix.ts"
   },
   "dependencies": {
