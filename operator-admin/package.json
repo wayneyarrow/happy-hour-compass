@@ -15,7 +15,8 @@
     "backfill:google-rating": "tsx scripts/backfillGoogleRating.ts",
     "hygiene:bc": "tsx scripts/bcHygienePass.ts",
     "enrich:kelowna-geo": "tsx scripts/enrichMissingGeoKelowna.ts",
-    "backfill:business-hours": "tsx scripts/backfillMissingBusinessHours.ts"
+    "backfill:business-hours": "tsx scripts/backfillMissingBusinessHours.ts",
+    "export:tag-matrix": "tsx scripts/exportVenueTaggingMatrix.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -39,6 +40,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }
