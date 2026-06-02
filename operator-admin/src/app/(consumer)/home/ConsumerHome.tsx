@@ -8,6 +8,8 @@ import { RailSection } from "./RailSection";
 import { VenueRailCard } from "./VenueRailCard";
 import { EventRailCard, type HomeEventItem } from "./EventRailCard";
 
+const HOME_SCROLL_KEY = "hhc_home_scroll";
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NEARBY_COUNT = 8;
@@ -89,6 +91,43 @@ export function ConsumerHome({
       { timeout: 5000, maximumAge: 60_000 }
     );
   }, [nearbyVenues]);
+
+  // Restore scroll position when back-navigating from a collection view.
+  // Position is saved to sessionStorage by saveScroll (called from each rail's
+  // onViewAll). Same rAF retry loop pattern as VenueDiscovery.tsx.
+  useEffect(() => {
+    const saved = sessionStorage.getItem(HOME_SCROLL_KEY);
+    if (!saved) return;
+    const top = parseInt(saved, 10);
+    if (!top) {
+      sessionStorage.removeItem(HOME_SCROLL_KEY);
+      return;
+    }
+    const el = document.getElementById("consumer-scroll");
+    if (!el) return;
+
+    let rafId: number;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20;
+
+    function tryRestore() {
+      el!.scrollTop = top;
+      if (el!.scrollTop >= top - 1 || attempts >= MAX_ATTEMPTS) {
+        sessionStorage.removeItem(HOME_SCROLL_KEY);
+        return;
+      }
+      attempts++;
+      rafId = requestAnimationFrame(tryRestore);
+    }
+
+    rafId = requestAnimationFrame(tryRestore);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  function saveScroll() {
+    const el = document.getElementById("consumer-scroll");
+    if (el) sessionStorage.setItem(HOME_SCROLL_KEY, String(el.scrollTop));
+  }
 
   return (
     <>
@@ -181,7 +220,8 @@ export function ConsumerHome({
         {spotlightVenues.length > 0 && (
           <RailSection
             title="🌟 Spotlight Venues"
-            viewAllHref="/explore"
+            viewAllHref="/home/collections/spotlight"
+            onViewAll={saveScroll}
           >
             {spotlightVenues.map((v) => (
               <VenueRailCard key={v.id} venue={v} />
@@ -193,7 +233,8 @@ export function ConsumerHome({
         {patioPicksVenues.length > 0 && (
           <RailSection
             title="☀️ Patio Picks"
-            viewAllHref="/explore"
+            viewAllHref="/home/collections/patio-picks"
+            onViewAll={saveScroll}
           >
             {patioPicksVenues.map((v) => (
               <VenueRailCard key={v.id} venue={v} />
@@ -205,7 +246,8 @@ export function ConsumerHome({
         {sortedNearby.length > 0 && (
           <RailSection
             title="📍 Featured Nearby"
-            viewAllHref="/explore"
+            viewAllHref="/home/collections/featured-nearby"
+            onViewAll={saveScroll}
           >
             {sortedNearby.map((v) => (
               <VenueRailCard key={v.id} venue={v} />
@@ -217,7 +259,8 @@ export function ConsumerHome({
         {newThisWeekVenues.length > 0 && (
           <RailSection
             title="✨ New This Week"
-            viewAllHref="/explore"
+            viewAllHref="/home/collections/new-this-week"
+            onViewAll={saveScroll}
           >
             {newThisWeekVenues.map((v) => (
               <VenueRailCard key={v.id} venue={v} />
@@ -229,8 +272,9 @@ export function ConsumerHome({
         {featuredEvents.length > 0 && (
           <RailSection
             title="🎉 Featured Events"
-            viewAllHref="/events"
+            viewAllHref="/home/collections/featured-events"
             viewAllLabel="All events"
+            onViewAll={saveScroll}
           >
             {featuredEvents.map((e) => (
               <EventRailCard key={e.id} event={e} />

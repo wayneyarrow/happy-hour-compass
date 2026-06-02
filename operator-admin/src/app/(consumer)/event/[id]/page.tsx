@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { getEventForConsumerById } from "@/lib/data/events";
 import { EventBookmarkButton } from "../../EventBookmarkButton";
 import { ShareButton } from "./ShareButton";
 import { JumpChips } from "./JumpChips";
 import { BusinessHoursRow } from "./BusinessHoursRow";
+import { EventBackButton } from "./EventBackButton";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -63,14 +63,8 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           Matches original .detail-page-header:
           padding: 16px 20px, border-bottom: 1px solid #e5e7eb, flex, space-between */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 flex items-center px-5 py-4">
-        {/* Back button — .detail-back-btn: blue-500, 24px bold */}
-        <Link
-          href="/events"
-          className="text-blue-500 text-2xl font-bold leading-none shrink-0"
-          aria-label="Back to Events"
-        >
-          ←
-        </Link>
+        {/* Back button — router.back() so collection context is preserved */}
+        <EventBackButton />
         {/* Title — .detail-page-title: 18px bold gray-900, flex-1, ml-3 (12px) */}
         <h1 className="flex-1 text-[18px] font-bold text-gray-900 ml-3 truncate">
           {event.title}

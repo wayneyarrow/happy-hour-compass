@@ -7,6 +7,7 @@ type Props = {
   subtitle?: string;
   viewAllHref?: string;
   viewAllLabel?: string;
+  onViewAll?: () => void;
   children: React.ReactNode;
 };
 
@@ -15,6 +16,7 @@ export function RailSection({
   subtitle,
   viewAllHref,
   viewAllLabel = "See all",
+  onViewAll,
   children,
 }: Props) {
   return (
@@ -57,6 +59,7 @@ export function RailSection({
         {viewAllHref && (
           <Link
             href={viewAllHref}
+            onClick={onViewAll}
             style={{
               fontSize: 13,
               fontWeight: 500,
