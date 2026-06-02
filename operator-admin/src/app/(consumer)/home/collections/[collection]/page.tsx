@@ -32,23 +32,58 @@ function isNearMarket(lat: number | null, lng: number | null): boolean {
 }
 
 // ─── Collection registry ──────────────────────────────────────────────────────
+// tag: when set, filters venues where seededTags or searchTags includes the value.
 
 type CollectionSlug =
   | "spotlight"
   | "patio-picks"
   | "featured-nearby"
   | "new-this-week"
-  | "featured-events";
+  | "featured-events"
+  // Browse by Experience
+  | "patio"
+  | "dog-friendly"
+  | "trivia"
+  | "live-music"
+  | "sports-bar"
+  // Browse by Food
+  | "pizza"
+  | "burgers"
+  | "tacos"
+  | "seafood"
+  // Browse by Drinks
+  | "craft-beer"
+  | "cocktails"
+  | "wine";
 
 const COLLECTIONS: Record<
   CollectionSlug,
-  { title: string; type: "venue" | "event" }
+  { title: string; type: "venue" | "event"; tag?: string }
 > = {
+  // ── Curated rails ────────────────────────────────────────────────────────────
   spotlight:         { title: "Spotlight Venues", type: "venue" },
   "patio-picks":     { title: "Patio Picks",      type: "venue" },
   "featured-nearby": { title: "Featured Nearby",  type: "venue" },
   "new-this-week":   { title: "New This Week",    type: "venue" },
   "featured-events": { title: "Featured Events",  type: "event" },
+
+  // ── Browse by Experience ─────────────────────────────────────────────────────
+  patio:          { title: "Patio",        type: "venue", tag: "Patio"          },
+  "dog-friendly": { title: "Dog Friendly", type: "venue", tag: "Dog Friendly"   },
+  trivia:         { title: "Trivia",       type: "venue", tag: "Trivia Nights"  },
+  "live-music":   { title: "Live Music",   type: "venue", tag: "Live Music"     },
+  "sports-bar":   { title: "Sports Bar",   type: "venue", tag: "Sports Viewing" },
+
+  // ── Browse by Food ───────────────────────────────────────────────────────────
+  pizza:   { title: "Pizza",   type: "venue", tag: "Pizza"   },
+  burgers: { title: "Burgers", type: "venue", tag: "Burgers" },
+  tacos:   { title: "Tacos",   type: "venue", tag: "Tacos"   },
+  seafood: { title: "Seafood", type: "venue", tag: "Seafood" },
+
+  // ── Browse by Drinks ─────────────────────────────────────────────────────────
+  "craft-beer": { title: "Craft Beer", type: "venue", tag: "Craft Beer" },
+  cocktails:    { title: "Cocktails",  type: "venue", tag: "Cocktails"  },
+  wine:         { title: "Wine",       type: "venue", tag: "Wine"       },
 };
 
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -84,33 +119,45 @@ export default async function CollectionPage({ params }: Props) {
   const venues = await getPublishedVenuesForConsumer();
 
   let filtered;
-  switch (collection as CollectionSlug) {
-    case "spotlight":
-      filtered = venues.filter((v) => v.isVerified);
-      break;
 
-    case "patio-picks":
-      filtered = venues.filter(
-        (v) =>
-          v.seededTags.includes("Patio") || v.searchTags.includes("Patio")
-      );
-      break;
+  // Tag-based collections: match on tag AND apply market radius so browse
+  // results stay local (same 50 km cap as Featured Nearby).
+  if (meta.tag) {
+    const { tag } = meta;
+    filtered = venues.filter(
+      (v) =>
+        isNearMarket(v.latitude, v.longitude) &&
+        (v.seededTags.includes(tag) || v.searchTags.includes(tag))
+    );
+  } else {
+    switch (collection as CollectionSlug) {
+      case "spotlight":
+        filtered = venues.filter((v) => v.isVerified);
+        break;
 
-    case "featured-nearby":
-      // Market-filtered pool; VenueList geo-sorts client-side automatically.
-      filtered = venues.filter((v) => isNearMarket(v.latitude, v.longitude));
-      break;
+      case "patio-picks":
+        filtered = venues.filter(
+          (v) =>
+            v.seededTags.includes("Patio") || v.searchTags.includes("Patio")
+        );
+        break;
 
-    case "new-this-week": {
-      const cutoff = new Date(Date.now() - NEW_WINDOW_MS).toISOString();
-      filtered = [...venues]
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .filter((v) => v.createdAt >= cutoff);
-      break;
+      case "featured-nearby":
+        // Market-filtered pool; VenueList geo-sorts client-side automatically.
+        filtered = venues.filter((v) => isNearMarket(v.latitude, v.longitude));
+        break;
+
+      case "new-this-week": {
+        const cutoff = new Date(Date.now() - NEW_WINDOW_MS).toISOString();
+        filtered = [...venues]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .filter((v) => v.createdAt >= cutoff);
+        break;
+      }
+
+      default:
+        filtered = venues;
     }
-
-    default:
-      filtered = venues;
   }
 
   return (

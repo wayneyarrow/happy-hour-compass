@@ -3,6 +3,12 @@ import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { WelcomeGate } from "./WelcomeGate";
 import { ConsumerHome } from "./home/ConsumerHome";
 import type { HomeEventItem } from "./home/EventRailCard";
+import {
+  EXPERIENCE_CATEGORIES,
+  FOOD_CATEGORIES,
+  DRINKS_CATEGORIES,
+  type BrowseCategory,
+} from "./home/browseCategories";
 
 export const metadata: Metadata = {
   title: { absolute: "Happy Hour Compass" },
@@ -18,6 +24,11 @@ export const dynamic = "force-dynamic";
 const RAIL_MAX = 12;
 const NEARBY_POOL = 30; // pool passed to client for geo sorting
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30-day window
+
+// Minimum local venues a browse category must have to appear on the homepage.
+// Categories below this threshold are hidden from the homepage Browse rows but
+// remain visible on Browse Hub pages (they degrade gracefully with an empty state).
+const BROWSE_MIN_LOCAL = 4;
 
 // ─── Market config (V1 — Central Okanagan) ───────────────────────────────────
 // Used to pre-filter the Featured Nearby pool so out-of-market venues
@@ -43,6 +54,28 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 function isNearMarket(lat: number | null, lng: number | null): boolean {
   if (lat === null || lng === null) return true;
   return haversineKm(MARKET_LAT, MARKET_LNG, lat, lng) <= NEARBY_RADIUS_KM;
+}
+
+// ─── Browse category threshold helper ────────────────────────────────────────
+// Returns the number of local venues (within market radius) that match a tag.
+// Used server-side to decide which browse categories appear on the homepage.
+
+function countLocalTag(
+  venues: Awaited<ReturnType<typeof getPublishedVenuesForConsumer>>,
+  tag: string
+): number {
+  return venues.filter(
+    (v) =>
+      isNearMarket(v.latitude, v.longitude) &&
+      (v.seededTags.includes(tag) || v.searchTags.includes(tag))
+  ).length;
+}
+
+function filterBrowseCategories(
+  venues: Awaited<ReturnType<typeof getPublishedVenuesForConsumer>>,
+  categories: BrowseCategory[]
+): BrowseCategory[] {
+  return categories.filter((c) => countLocalTag(venues, c.tag) >= BROWSE_MIN_LOCAL);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +121,11 @@ export default async function ConsumerHomePage() {
     )
     .slice(0, RAIL_MAX);
 
+  // ── Browse sections — only categories with ≥ BROWSE_MIN_LOCAL local venues ─
+  const browseExperienceCategories = filterBrowseCategories(venues, EXPERIENCE_CATEGORIES);
+  const browseFoodCategories       = filterBrowseCategories(venues, FOOD_CATEGORIES);
+  const browseDrinksCategories     = filterBrowseCategories(venues, DRINKS_CATEGORIES);
+
   return (
     <main className="bg-gray-50">
       <WelcomeGate>
@@ -97,6 +135,9 @@ export default async function ConsumerHomePage() {
           nearbyVenues={nearbyVenues}
           newThisWeekVenues={newThisWeekVenues}
           featuredEvents={featuredEvents}
+          browseExperienceCategories={browseExperienceCategories}
+          browseFoodCategories={browseFoodCategories}
+          browseDrinksCategories={browseDrinksCategories}
         />
       </WelcomeGate>
     </main>

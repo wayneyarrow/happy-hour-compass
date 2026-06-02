@@ -7,6 +7,8 @@ import { haversineKm } from "../VenueList";
 import { RailSection } from "./RailSection";
 import { VenueRailCard } from "./VenueRailCard";
 import { EventRailCard, type HomeEventItem } from "./EventRailCard";
+import { BrowseSection } from "./BrowseSection";
+import type { BrowseCategory } from "./browseCategories";
 
 const HOME_SCROLL_KEY = "hhc_home_scroll";
 
@@ -49,6 +51,11 @@ export type HomepageData = {
   nearbyVenues: ConsumerVenue[];   // full pool; geo-sorted client-side
   newThisWeekVenues: ConsumerVenue[];
   featuredEvents: HomeEventItem[];
+  // Browse sections — pre-filtered server-side to ≥ BROWSE_MIN_LOCAL local venues.
+  // Empty arrays hide the section from the homepage entirely.
+  browseExperienceCategories: BrowseCategory[];
+  browseFoodCategories: BrowseCategory[];
+  browseDrinksCategories: BrowseCategory[];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +66,9 @@ export function ConsumerHome({
   nearbyVenues,
   newThisWeekVenues,
   featuredEvents,
+  browseExperienceCategories = [],
+  browseFoodCategories = [],
+  browseDrinksCategories = [],
 }: HomepageData) {
   // Time-based greeting — safe to derive synchronously in a client component
   // (ConsumerHome is only mounted after WelcomeGate reaches phase "done", so
@@ -280,6 +290,48 @@ export function ConsumerHome({
               <EventRailCard key={e.id} event={e} />
             ))}
           </RailSection>
+        )}
+
+        {/* ── Browse sections ──────────────────────────────────────────────── */}
+        {(browseExperienceCategories.length > 0 ||
+          browseFoodCategories.length > 0 ||
+          browseDrinksCategories.length > 0) && (
+          <div
+            style={{
+              margin: "4px 20px 28px",
+              borderTop: "1px solid #f3f4f6",
+            }}
+          />
+        )}
+
+        {/* Browse by Experience — hidden if < BROWSE_MIN_LOCAL local venues */}
+        {browseExperienceCategories.length > 0 && (
+          <BrowseSection
+            title="Browse by Experience"
+            categories={browseExperienceCategories}
+            seeAllHref="/home/browse/experience"
+            onNav={saveScroll}
+          />
+        )}
+
+        {/* Browse by Food */}
+        {browseFoodCategories.length > 0 && (
+          <BrowseSection
+            title="Browse by Food"
+            categories={browseFoodCategories}
+            seeAllHref="/home/browse/food"
+            onNav={saveScroll}
+          />
+        )}
+
+        {/* Browse by Drinks */}
+        {browseDrinksCategories.length > 0 && (
+          <BrowseSection
+            title="Browse by Drinks"
+            categories={browseDrinksCategories}
+            seeAllHref="/home/browse/drinks"
+            onNav={saveScroll}
+          />
         )}
 
         {/* Browse all — bottom CTA when rails alone don't cover all venues */}
