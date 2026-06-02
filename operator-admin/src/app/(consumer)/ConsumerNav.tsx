@@ -10,7 +10,10 @@ import { usePathname } from "next/navigation";
  */
 export function ConsumerNav() {
   const pathname = usePathname();
-  const isSearch = pathname === "/" || pathname.startsWith("/venue");
+  const isSearch =
+    pathname === "/" ||
+    pathname.startsWith("/explore") ||
+    pathname.startsWith("/venue");
   const isSaved = pathname.startsWith("/saved");
   const isEvents =
     pathname.startsWith("/events") || pathname.startsWith("/event");
@@ -18,9 +21,10 @@ export function ConsumerNav() {
 
   return (
     <nav className="bg-white border-t border-gray-200 flex shrink-0">
-      {/* Search tab */}
+      {/* Search tab — links to /explore (full search + filter); home (/) is
+          accessed via the WelcomeGate launch flow or "Browse all" CTA */}
       <Link
-        href="/"
+        href="/explore"
         className={`flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors ${
           isSearch ? "text-blue-500" : "text-gray-400"
         }`}

@@ -85,6 +85,14 @@ export type ConsumerVenue = {
    * Powers keyword search matching and the future Discover Page.
    */
   searchTags: string[];
+  /**
+   * Platform-generated discovery tags from Google Places metadata and HH
+   * specials content.  See src/lib/seededTags.ts and migration 032.
+   * Empty array until the backfill script has been run.
+   */
+  seededTags: string[];
+  /** ISO timestamp when the venue row was created in Supabase. */
+  createdAt: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -509,6 +517,8 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     placeId: typeof row.place_id === "string" ? row.place_id : null,
     isVerified: row.is_verified === true,
     searchTags: Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
+    seededTags: Array.isArray(row.seeded_tags) ? (row.seeded_tags as string[]) : [],
+    createdAt: (row.created_at as string) ?? "",
   };
 }
 
@@ -534,7 +544,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type, is_verified, search_tags"
+          "establishment_type, is_verified, search_tags, seeded_tags, created_at"
       )
       .eq("is_published", true)
       .order("name", { ascending: true });
