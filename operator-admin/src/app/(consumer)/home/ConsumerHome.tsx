@@ -181,7 +181,6 @@ export function ConsumerHome({
         {spotlightVenues.length > 0 && (
           <RailSection
             title="🌟 Spotlight Venues"
-            subtitle="Verified happy hours"
             viewAllHref="/explore"
           >
             {spotlightVenues.map((v) => (
@@ -194,7 +193,6 @@ export function ConsumerHome({
         {patioPicksVenues.length > 0 && (
           <RailSection
             title="☀️ Patio Picks"
-            subtitle="Outdoor happy hours"
             viewAllHref="/explore"
           >
             {patioPicksVenues.map((v) => (
@@ -207,7 +205,6 @@ export function ConsumerHome({
         {sortedNearby.length > 0 && (
           <RailSection
             title="📍 Featured Nearby"
-            subtitle={MARKET_LABEL}
             viewAllHref="/explore"
           >
             {sortedNearby.map((v) => (
@@ -220,7 +217,6 @@ export function ConsumerHome({
         {newThisWeekVenues.length > 0 && (
           <RailSection
             title="✨ New This Week"
-            subtitle="Recently added"
             viewAllHref="/explore"
           >
             {newThisWeekVenues.map((v) => (

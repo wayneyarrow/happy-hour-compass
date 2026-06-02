@@ -5,22 +5,50 @@ import Link from "next/link";
 import { BookmarkButton } from "../BookmarkButton";
 import type { ConsumerVenue } from "@/lib/data/venues";
 
-// ─── time helpers ─────────────────────────────────────────────────────────────
+// ─── status helpers ───────────────────────────────────────────────────────────
 
 const DAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday",
   "Thursday", "Friday", "Saturday",
 ] as const;
 
-type HhStatus = { happening: boolean; nextLabel: string | null };
+type CardStatus = {
+  /**
+   * "now"       — HH currently active
+   * "today"     — HH occurs later today (not yet started)
+   * "available" — venue offers HH but already ended today, not today, or another day
+   * "none"      — no HH data
+   */
+  hhStatus: "now" | "today" | "available" | "none";
+  /**
+   * "open"  — venue is open right now
+   * "closed"— venue is closed right now (hours data exists)
+   * null    — no hours data configured; hide business status
+   */
+  businessStatus: "open" | "closed" | null;
+};
 
-function computeHhStatus(happyHourWeekly: ConsumerVenue["happyHourWeekly"]): HhStatus {
+const NEUTRAL: CardStatus = { hhStatus: "none", businessStatus: null };
+
+function parseAmPmToMin(s: string): number | null {
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+  if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function computeCardStatus(venue: ConsumerVenue): CardStatus {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const todayName = DAYS[now.getDay()];
-  const todaySlots = happyHourWeekly[todayName] ?? [];
 
-  const happening = todaySlots.some((slot) => {
+  // ── Happy-hour status ─────────────────────────────────────────────────────
+  const todaySlots = venue.happyHourWeekly[todayName] ?? [];
+
+  const hhNow = todaySlots.some((slot) => {
     const [sh, sm] = slot.start.split(":").map(Number);
     const startMin = sh * 60 + sm;
     const endMin =
@@ -33,27 +61,46 @@ function computeHhStatus(happyHourWeekly: ConsumerVenue["happyHourWeekly"]): HhS
     return nowMin >= startMin && nowMin < endMin;
   });
 
-  if (happening) return { happening: true, nextLabel: null };
-
-  // Scan forward up to 7 days for the next upcoming slot
-  for (let offset = 0; offset < 7; offset++) {
-    const dayIdx = (now.getDay() + offset) % 7;
-    const daySlots = happyHourWeekly[DAYS[dayIdx]] ?? [];
-    for (const slot of daySlots) {
+  let hhStatus: CardStatus["hhStatus"];
+  if (hhNow) {
+    hhStatus = "now";
+  } else {
+    const hhLaterToday = todaySlots.some((slot) => {
       const [sh, sm] = slot.start.split(":").map(Number);
-      const startMin = sh * 60 + sm;
-      if (offset === 0 && startMin <= nowMin) continue; // already past today
-      const h = sh > 12 ? sh - 12 : sh === 0 ? 12 : sh;
-      const ampm = sh >= 12 ? "PM" : "AM";
-      const t = sm === 0 ? `${h} ${ampm}` : `${h}:${sm.toString().padStart(2, "0")} ${ampm}`;
-      return {
-        happening: false,
-        nextLabel: offset === 0 ? `Starts ${t}` : `${DAYS[dayIdx].slice(0, 3)} ${t}`,
-      };
+      return sh * 60 + sm > nowMin;
+    });
+    if (hhLaterToday) {
+      hhStatus = "today";
+    } else {
+      const anyHhDay = DAYS.some((d) => (venue.happyHourWeekly[d] ?? []).length > 0);
+      hhStatus = anyHhDay ? "available" : "none";
     }
   }
 
-  return { happening: false, nextLabel: null };
+  // ── Business open/closed status ───────────────────────────────────────────
+  // Return null (hide) when no hours have been configured for any day.
+  const hasAnyHours = DAYS.some(
+    (d) => venue.hoursWeekly[d] && venue.hoursWeekly[d] !== "CLOSED"
+  );
+
+  let businessStatus: CardStatus["businessStatus"] = null;
+  if (hasAnyHours) {
+    const entry = venue.hoursWeekly[todayName];
+    if (!entry || entry === "CLOSED") {
+      businessStatus = "closed";
+    } else {
+      const parts = entry.split(" - ");
+      if (parts.length === 2) {
+        const open = parseAmPmToMin(parts[0]);
+        const close = parseAmPmToMin(parts[1]);
+        if (open !== null && close !== null && close > open) {
+          businessStatus = nowMin >= open && nowMin < close ? "open" : "closed";
+        }
+      }
+    }
+  }
+
+  return { hhStatus, businessStatus };
 }
 
 // ─── image helper ─────────────────────────────────────────────────────────────
@@ -72,57 +119,76 @@ function getVenueImageSrc(establishmentType: string): string {
 type Props = { venue: ConsumerVenue };
 
 /**
- * Portrait venue card for horizontal rails.
- * OpenTable-inspired: image on top, content below.
- * 152 px wide so 2.5 cards peek on a 375 px frame.
+ * Portrait venue card for horizontal rails — OpenTable-inspired.
+ *
+ * V1 status model (no times or schedules on card):
+ *   Image badge:  "Happy Hour Now"  (green)  — when HH is currently active
+ *   Status row:
+ *     Business:   "Open Now"        (green pill)
+ *                 "Closed"          (gray pill)   hidden when no hours data
+ *     HH:         "Happy Hour Now"  (amber pill)
+ *                 "Happy Hour Today"(amber pill)
+ *                 "Happy Hour Available" (gray pill)
+ *                 hidden when no HH data
+ *     Rating:     ★ X.X             (plain text)  hidden when no rating
+ *
+ * Sizing: 240 px wide → ~1.4 cards visible on the 375 px phone frame.
+ * Image: 148 px high (8:5 ratio).
  */
 export function VenueRailCard({ venue }: Props) {
-  // Initialise to neutral to avoid SSR/hydration mismatch (time-dependent)
-  const [hhStatus, setHhStatus] = useState<HhStatus>({ happening: false, nextLabel: null });
+  // Initialise neutral — avoids SSR/hydration mismatch (all derived values are time-dependent)
+  const [status, setStatus] = useState<CardStatus>(NEUTRAL);
 
   useEffect(() => {
-    setHhStatus(computeHhStatus(venue.happyHourWeekly));
-  }, [venue.happyHourWeekly]);
+    setStatus(computeCardStatus(venue));
+  }, [venue]);
 
   const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
-  const tagline =
-    venue.happyHourTagline ||
-    venue.specialsFood[0] ||
-    venue.specialsDrinks[0] ||
-    "Happy Hour Specials";
+
+  // Badge label + colours for the HH status pill
+  const hhPill: { label: string; bg: string; color: string } | null =
+    status.hhStatus === "now"
+      ? { label: "Happy Hour Now",       bg: "#fef3c7", color: "#b45309" }
+      : status.hhStatus === "today"
+      ? { label: "Happy Hour Today",     bg: "#fef3c7", color: "#b45309" }
+      : status.hhStatus === "available"
+      ? { label: "Happy Hour Available", bg: "#f3f4f6", color: "#6b7280" }
+      : null;
 
   return (
     <Link
       href={`/venue/${venue.id}`}
-      style={{ display: "block", width: 152, flexShrink: 0, textDecoration: "none" }}
+      style={{ display: "block", width: 240, flexShrink: 0, textDecoration: "none" }}
     >
       <div
         style={{
           background: "white",
-          borderRadius: 10,
+          borderRadius: 14,
           overflow: "hidden",
           border: "1px solid #e5e7eb",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          transition: "box-shadow 0.15s, border-color 0.15s",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+          transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
           height: "100%",
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.13)";
+          el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.15)";
           el.style.borderColor = "#d1d5db";
+          el.style.transform = "translateY(-1px)";
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 1px 3px rgba(0,0,0,0.08)";
+          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)";
           el.style.borderColor = "#e5e7eb";
+          el.style.transform = "translateY(0)";
         }}
       >
-        {/* ── Image ──────────────────────────────────────────────────── */}
+        {/* ── Image ──────────────────────────────────────────────────────────── */}
         <div
           style={{
             position: "relative",
             width: "100%",
-            height: 100,
+            height: 148,
             background: "#f3f4f6",
             overflow: "hidden",
           }}
@@ -134,50 +200,76 @@ export function VenueRailCard({ venue }: Props) {
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
 
-          {/* Bookmark — top-right, semi-transparent backing */}
+          {/* Subtle bottom scrim — grounds the content panel */}
           <div
             style={{
               position: "absolute",
-              top: 4,
-              right: 4,
-              background: "rgba(255,255,255,0.82)",
+              inset: 0,
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.18) 100%)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Bookmark — top-right, frosted circle */}
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              background: "rgba(255,255,255,0.88)",
               borderRadius: "50%",
+              backdropFilter: "blur(4px)",
             }}
             onClick={(e) => e.preventDefault()}
           >
             <BookmarkButton venueId={venue.id} variant="list" />
           </div>
 
-          {/* "On Now" badge — bottom-left */}
-          {hhStatus.happening && (
-            <div style={{ position: "absolute", bottom: 5, left: 6 }}>
+          {/* "Happy Hour Now" image badge — bottom-left, only when HH is active */}
+          {status.hhStatus === "now" && (
+            <div style={{ position: "absolute", bottom: 9, left: 9 }}>
               <span
                 style={{
-                  fontSize: 10,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontSize: 11,
                   fontWeight: 700,
-                  padding: "2px 6px",
+                  padding: "3px 9px",
                   borderRadius: 20,
                   background: "#dcfce7",
                   color: "#166534",
-                  letterSpacing: "0.2px",
+                  letterSpacing: "0.1px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
                 }}
               >
-                On Now
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#16a34a",
+                    flexShrink: 0,
+                    display: "inline-block",
+                  }}
+                />
+                Happy Hour Now
               </span>
             </div>
           )}
         </div>
 
-        {/* ── Content ────────────────────────────────────────────────── */}
-        <div style={{ padding: 9 }}>
-          {/* Name */}
+        {/* ── Content ────────────────────────────────────────────────────────── */}
+        <div style={{ padding: 12 }}>
+
+          {/* Venue name — primary hierarchy */}
           <p
             style={{
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: 700,
               color: "#111827",
-              lineHeight: 1.25,
-              marginBottom: 2,
+              lineHeight: 1.2,
+              marginBottom: 3,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -187,81 +279,109 @@ export function VenueRailCard({ venue }: Props) {
             {venue.name}
           </p>
 
-          {/* Establishment type */}
-          {venue.establishmentType && (
-            <p
+          {/* Venue type + Rating row
+               Type truncates left; rating right-aligns via marginLeft:auto.
+               Row is skipped when neither field has data. */}
+          {(venue.establishmentType || venue.googleRating !== null) && (
+            <div
               style={{
-                fontSize: 10,
-                color: "#9ca3af",
-                marginBottom: 4,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 8,
               }}
             >
-              {venue.establishmentType}
-            </p>
+              {venue.establishmentType && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "0.1px",
+                    minWidth: 0,
+                    flex: "1 1 0",
+                  }}
+                >
+                  {venue.establishmentType}
+                </span>
+              )}
+              {venue.googleRating !== null && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "#6b7280",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                    marginLeft: "auto",
+                  }}
+                >
+                  ⭐ {venue.googleRating.toFixed(1)}
+                </span>
+              )}
+            </div>
           )}
 
-          {/* Tagline / specials preview */}
-          <p
-            style={{
-              fontSize: 11,
-              color: "#374151",
-              lineHeight: 1.35,
-              marginBottom: 5,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {tagline}
-          </p>
+          {/* ── Status row ─────────────────────────────────────────────────────
+               Business status · HH status.
+               No times, no schedules, no day references.
+               Rating lives on the type row above. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
 
-          {/* Meta row: verified, rating, next HH */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-            {venue.isVerified && (
+            {/* Business status — hidden when hours data is unavailable */}
+            {status.businessStatus === "open" && (
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 600,
-                  padding: "1px 5px",
-                  borderRadius: 4,
-                  background: "#dbeafe",
-                  color: "#1e40af",
+                  padding: "2px 7px",
+                  borderRadius: 5,
+                  background: "#dcfce7",
+                  color: "#166534",
                   flexShrink: 0,
+                  whiteSpace: "nowrap",
                 }}
               >
-                ✓
+                Open Now
               </span>
             )}
-            {venue.googleRating !== null && (
+            {status.businessStatus === "closed" && (
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 500,
+                  padding: "2px 7px",
+                  borderRadius: 5,
+                  background: "#f3f4f6",
                   color: "#6b7280",
                   flexShrink: 0,
+                  whiteSpace: "nowrap",
                 }}
               >
-                ★ {venue.googleRating.toFixed(1)}
+                Closed
               </span>
             )}
-            {!hhStatus.happening && hhStatus.nextLabel && (
+
+            {/* HH status pill — no times, no day refs */}
+            {hhPill && (
               <span
                 style={{
-                  fontSize: 10,
-                  color: "#9ca3af",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "2px 7px",
+                  borderRadius: 5,
+                  background: hhPill.bg,
+                  color: hhPill.color,
+                  flexShrink: 0,
                   whiteSpace: "nowrap",
-                  minWidth: 0,
                 }}
               >
-                {hhStatus.nextLabel}
+                {hhPill.label}
               </span>
             )}
+
           </div>
         </div>
       </div>

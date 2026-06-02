@@ -77,7 +77,7 @@ export function RailSection({
         className="hhc-rail"
         style={{
           display: "flex",
-          gap: 10,
+          gap: 12,
           overflowX: "auto",
           padding: "2px 20px 6px",
           scrollbarWidth: "none",

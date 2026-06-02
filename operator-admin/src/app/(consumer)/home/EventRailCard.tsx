@@ -14,53 +14,80 @@ export type HomeEventItem = {
 type Props = { event: HomeEventItem };
 
 /**
- * Landscape event card for the Featured Events horizontal rail.
- * 215 px wide so ~1.7 cards peek on a 375 px frame.
+ * Event card for the Featured Events horizontal rail.
+ *
+ * Same 240 px width as VenueRailCard so the two rail types feel cohesive.
+ * Uses an amber gradient header (no image URL in HomeEventItem) to give
+ * visual weight comparable to the venue image above the fold.
  */
 export function EventRailCard({ event }: Props) {
   return (
     <Link
       href={`/event/${event.id}`}
-      style={{ display: "block", width: 215, flexShrink: 0, textDecoration: "none" }}
+      style={{ display: "block", width: 240, flexShrink: 0, textDecoration: "none" }}
     >
       <div
         style={{
           background: "white",
-          borderRadius: 10,
+          borderRadius: 14,
+          overflow: "hidden",
           border: "1px solid #e5e7eb",
-          padding: "12px 13px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
-          transition: "box-shadow 0.15s, border-color 0.15s",
-          minHeight: 80,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.09)",
+          transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
+          height: "100%",
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.11)";
+          el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.14)";
           el.style.borderColor = "#d1d5db";
+          el.style.transform = "translateY(-1px)";
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 1px 3px rgba(0,0,0,0.07)";
+          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.09)";
           el.style.borderColor = "#e5e7eb";
+          el.style.transform = "translateY(0)";
         }}
       >
-        {/* Icon + title */}
+        {/* ── Accent header — amber gradient replaces image for events ───────── */}
         <div
           style={{
+            height: 72,
+            background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
             display: "flex",
-            alignItems: "flex-start",
-            gap: 7,
-            marginBottom: 6,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>🎉</span>
+          {/* Frosted circle with emoji */}
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.22)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 22,
+              lineHeight: 1,
+            }}
+          >
+            🎉
+          </div>
+        </div>
+
+        {/* ── Content ─────────────────────────────────────────────────────────── */}
+        <div style={{ padding: 12 }}>
+
+          {/* Title — primary hierarchy */}
           <p
             style={{
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: 700,
               color: "#111827",
-              lineHeight: 1.3,
-              margin: 0,
+              lineHeight: 1.25,
+              marginBottom: 5,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -69,31 +96,39 @@ export function EventRailCard({ event }: Props) {
           >
             {event.title}
           </p>
+
+          {/* Venue name — secondary label */}
+          {event.venueName && (
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: "#3b82f6",
+                marginBottom: 4,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {event.venueName}
+            </p>
+          )}
+
+          {/* Schedule — supporting detail */}
+          {event.nextOccurrenceLabel && (
+            <p
+              style={{
+                fontSize: 12,
+                color: "#9ca3af",
+                lineHeight: 1.35,
+                margin: 0,
+              }}
+            >
+              {event.nextOccurrenceLabel}
+            </p>
+          )}
+
         </div>
-
-        {/* Venue name */}
-        {event.venueName && (
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: "#3b82f6",
-              marginBottom: 3,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {event.venueName}
-          </p>
-        )}
-
-        {/* Schedule label */}
-        {event.nextOccurrenceLabel && (
-          <p style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.3, margin: 0 }}>
-            {event.nextOccurrenceLabel}
-          </p>
-        )}
       </div>
     </Link>
   );
