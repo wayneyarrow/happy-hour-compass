@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import type { DiscoverEventItem } from "@/lib/discover/discoverEngine";
 
-/** Minimal event shape needed for the homepage events rail. */
-export type HomeEventItem = {
-  id: string;
-  title: string;
-  venueName: string;
-  venueSlug: string;
-  nextOccurrenceLabel: string;
-};
+/**
+ * HomeEventItem — re-exported from the Discover Engine for backwards compat.
+ * UI components that import this type continue to work without changes.
+ */
+export type HomeEventItem = DiscoverEventItem;
 
 type Props = { event: HomeEventItem };
 

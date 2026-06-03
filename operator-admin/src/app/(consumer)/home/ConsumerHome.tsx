@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
-import { haversineKm } from "../VenueList";
+import { haversineKm, MARKET_LABEL } from "@/lib/discover/discoverEngine";
 import { RailSection } from "./RailSection";
 import { VenueRailCard } from "./VenueRailCard";
 import { EventRailCard, type HomeEventItem } from "./EventRailCard";
@@ -23,10 +23,6 @@ function computeGreeting(): string {
   return "Good evening";
 }
 
-// ─── Market config (V1 — hardcoded Central Okanagan) ─────────────────────────
-// Future: replace with MarketConfig object selected by homepage configuration.
-
-const MARKET_LABEL = "Central Okanagan";
 
 // ─── Homepage configuration (V1) ─────────────────────────────────────────────
 // Rail Library architecture: each rail is declared as a RailConfig entry with

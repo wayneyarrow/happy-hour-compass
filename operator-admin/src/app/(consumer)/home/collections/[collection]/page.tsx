@@ -1,38 +1,23 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import type { ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
+import {
+  getSpotlightVenues,
+  getPatioPicks,
+  getFeaturedNearby,
+  getNewThisWeek,
+  getTaggedVenues,
+} from "@/lib/discover/discoverEngine";
 import { CollectionVenueView } from "./CollectionVenueView";
 import { CollectionEventView } from "./CollectionEventView";
 
 export const dynamic = "force-dynamic";
 
-// ─── Market config (V1 — Central Okanagan) ───────────────────────────────────
-// Mirrors the filter in the home page rail so Featured Nearby collection
-// stays local. Venues without coordinates are included permissively.
-
-const MARKET_LAT = 49.888;   // Kelowna, BC
-const MARKET_LNG = -119.496;
-const NEARBY_RADIUS_KM = 50;
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function isNearMarket(lat: number | null, lng: number | null): boolean {
-  if (lat === null || lng === null) return true;
-  return haversineKm(MARKET_LAT, MARKET_LNG, lat, lng) <= NEARBY_RADIUS_KM;
-}
-
 // ─── Collection registry ──────────────────────────────────────────────────────
-// tag: when set, filters venues where seededTags or searchTags includes the value.
+// tag: when set, delegates filtering to getTaggedVenues() (market-capped).
+// Curated collections (spotlight, patio-picks, etc.) use named engine functions.
 
 type CollectionSlug =
   | "spotlight"
@@ -86,8 +71,6 @@ const COLLECTIONS: Record<
   wine:         { title: "Wine",       type: "venue", tag: "Wine"       },
 };
 
-const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = { params: Promise<{ collection: string }> };
@@ -114,47 +97,30 @@ export default async function CollectionPage({ params }: Props) {
   }
 
   // ── Venue collections ───────────────────────────────────────────────────────
-  // Each filter mirrors the exact logic used in the home page rail (page.tsx),
-  // but without the RAIL_MAX slice so the collection shows the full set.
+  // Collections show the full filtered set (no RAIL_MAX slice).
+  // All filtering/sorting delegated to the Discover Engine.
   const venues = await getPublishedVenuesForConsumer();
 
-  let filtered;
+  let filtered: ConsumerVenue[];
 
-  // Tag-based collections: match on tag AND apply market radius so browse
-  // results stay local (same 50 km cap as Featured Nearby).
   if (meta.tag) {
-    const { tag } = meta;
-    filtered = venues.filter(
-      (v) =>
-        isNearMarket(v.latitude, v.longitude) &&
-        (v.seededTags.includes(tag) || v.searchTags.includes(tag))
-    );
+    // Tag-based browse collections — market-capped via getTaggedVenues.
+    filtered = getTaggedVenues(venues, meta.tag);
   } else {
     switch (collection as CollectionSlug) {
       case "spotlight":
-        filtered = venues.filter((v) => v.isVerified);
+        filtered = getSpotlightVenues(venues);
         break;
-
       case "patio-picks":
-        filtered = venues.filter(
-          (v) =>
-            v.seededTags.includes("Patio") || v.searchTags.includes("Patio")
-        );
+        filtered = getPatioPicks(venues);
         break;
-
       case "featured-nearby":
-        // Market-filtered pool; VenueList geo-sorts client-side automatically.
-        filtered = venues.filter((v) => isNearMarket(v.latitude, v.longitude));
+        // VenueList geo-sorts client-side after mount.
+        filtered = getFeaturedNearby(venues);
         break;
-
-      case "new-this-week": {
-        const cutoff = new Date(Date.now() - NEW_WINDOW_MS).toISOString();
-        filtered = [...venues]
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .filter((v) => v.createdAt >= cutoff);
+      case "new-this-week":
+        filtered = getNewThisWeek(venues);
         break;
-      }
-
       default:
         filtered = venues;
     }
