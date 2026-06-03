@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import {
   getSpotlightVenues,
@@ -99,27 +100,32 @@ export default async function CollectionPage({ params }: Props) {
   // ── Venue collections ───────────────────────────────────────────────────────
   // Collections show the full filtered set (no RAIL_MAX slice).
   // All filtering/sorting delegated to the Discover Engine.
-  const venues = await getPublishedVenuesForConsumer();
+  // Rail overrides fetched in parallel so internal curation applies here too.
+  const [venues, allOverrides] = await Promise.all([
+    getPublishedVenuesForConsumer(),
+    getAllRailOverrides(),
+  ]);
 
   let filtered: ConsumerVenue[];
 
   if (meta.tag) {
     // Tag-based browse collections — market-capped via getTaggedVenues.
+    // Tag collections don't have rail-level overrides in V1.
     filtered = getTaggedVenues(venues, meta.tag);
   } else {
     switch (collection as CollectionSlug) {
       case "spotlight":
-        filtered = getSpotlightVenues(venues);
+        filtered = getSpotlightVenues(venues, allOverrides["spotlight"]);
         break;
       case "patio-picks":
-        filtered = getPatioPicks(venues);
+        filtered = getPatioPicks(venues, allOverrides["patio-picks"]);
         break;
       case "featured-nearby":
         // VenueList geo-sorts client-side after mount.
-        filtered = getFeaturedNearby(venues);
+        filtered = getFeaturedNearby(venues, allOverrides["featured-nearby"]);
         break;
       case "new-this-week":
-        filtered = getNewThisWeek(venues);
+        filtered = getNewThisWeek(venues, allOverrides["new-this-week"]);
         break;
       default:
         filtered = venues;

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
 import { WelcomeGate } from "./WelcomeGate";
 import { ConsumerHome } from "./home/ConsumerHome";
 import {
@@ -26,19 +27,24 @@ export const dynamic = "force-dynamic";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rail selection is handled entirely by the Discover Engine.
-// This page fetches venue data once, then delegates all filtering/sorting to
-// engine functions.  To change rail behaviour, update discoverEngine.ts.
+// This page fetches venue data and rail overrides once, then delegates all
+// filtering/sorting/curation to engine functions.
+// To change rail behaviour, update discoverEngine.ts.
+// To manage internal curation, use /control-panel/discover.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default async function ConsumerHomePage() {
-  const venues = await getPublishedVenuesForConsumer();
+  const [venues, allOverrides] = await Promise.all([
+    getPublishedVenuesForConsumer(),
+    getAllRailOverrides(),
+  ]);
 
   // ── Homepage rails ────────────────────────────────────────────────────────
-  const spotlightVenues   = getSpotlightVenues(venues).slice(0, RAIL_MAX);
-  const patioPicksVenues  = getPatioPicks(venues).slice(0, RAIL_MAX);
-  const nearbyVenues      = getFeaturedNearby(venues).slice(0, NEARBY_POOL);
-  const newThisWeekVenues = getNewThisWeek(venues).slice(0, RAIL_MAX);
-  const featuredEvents    = getFeaturedEvents(venues).slice(0, RAIL_MAX);
+  const spotlightVenues   = getSpotlightVenues(venues, allOverrides["spotlight"]).slice(0, RAIL_MAX);
+  const patioPicksVenues  = getPatioPicks(venues, allOverrides["patio-picks"]).slice(0, RAIL_MAX);
+  const nearbyVenues      = getFeaturedNearby(venues, allOverrides["featured-nearby"]).slice(0, NEARBY_POOL);
+  const newThisWeekVenues = getNewThisWeek(venues, allOverrides["new-this-week"]).slice(0, RAIL_MAX);
+  const featuredEvents    = getFeaturedEvents(venues, allOverrides["featured-events"]).slice(0, RAIL_MAX);
 
   // ── Browse sections — filter to categories with ≥ BROWSE_MIN_LOCAL venues ─
   const browseExperienceCategories = filterBrowseCategories(venues, EXPERIENCE_CATEGORIES);

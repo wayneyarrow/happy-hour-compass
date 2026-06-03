@@ -28,6 +28,13 @@ export type ConsumerVenueImage = {
 export type ConsumerVenue = {
   /** Venue slug (string ID used for lookups, e.g. "kelowna-the-keg") */
   id: string;
+  /**
+   * Raw Supabase UUID for this venue row.
+   * Used by the Discover Engine to cross-reference rail overrides
+   * (discover_rail_overrides.venue_id) and by the Control Panel for mutations.
+   * Not rendered in consumer UI.
+   */
+  venueUuid: string;
   name: string;
   /** Venue category — defaults to "Restaurant" (not stored in DB) */
   type: string;
@@ -513,6 +520,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
 
   return {
     id: (row.slug as string) ?? "",
+    venueUuid: (row.id as string) ?? "",
     name: (row.name as string) ?? "",
     type: "Restaurant",
     establishmentType: (row.establishment_type as string) ?? "Restaurant and Bar",

@@ -2,6 +2,12 @@ import Link from "next/link";
 
 const SECTIONS = [
   {
+    title: "Discover Management",
+    href: "/control-panel/discover",
+    description: "Manage Consumer Home discovery rails. Preview each rail, adjust internal boost, toggle spotlight eligibility, and add or remove venues via internal curation.",
+    status: "active" as const,
+  },
+  {
     title: "Claims",
     href: "/control-panel/claims",
     description: "Review venue ownership claims submitted by operators. Approve, reject, or request more information.",
