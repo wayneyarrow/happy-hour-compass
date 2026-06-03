@@ -93,6 +93,32 @@ export type ConsumerVenue = {
   seededTags: string[];
   /** ISO timestamp when the venue row was created in Supabase. */
   createdAt: string;
+
+  // ── Discover Engine controls (migration 033) ────────────────────────────────
+  /**
+   * Internal ranking boost (0–100).  Higher values increase likelihood of
+   * better placement across all discovery rails without bypassing eligibility.
+   * Managed by internal team only; no operator UI.
+   */
+  internalBoost: number;
+  /**
+   * When true the venue is in the primary Spotlight pool.
+   * When false the venue may still appear via the isVerified fallback while
+   * the spotlight_eligible pool is being built out.
+   */
+  spotlightEligible: boolean;
+  /**
+   * When true the venue is hidden from all Consumer Home rails and browse
+   * collections.  Events from an excluded venue are also excluded from
+   * Featured Events.
+   */
+  excludeFromDiscover: boolean;
+  /**
+   * The operator's current plan tier, joined from the operators table.
+   * Defaults to "free" for seeded/imported venues with no operator.
+   * Used by the Discover Engine for plan-based weighting (not guaranteed placement).
+   */
+  operatorPlan: "free" | "pro" | "premium" | "enterprise";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,6 +545,15 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     searchTags: Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
     seededTags: Array.isArray(row.seeded_tags) ? (row.seeded_tags as string[]) : [],
     createdAt: (row.created_at as string) ?? "",
+    internalBoost: typeof row.internal_boost === "number" ? row.internal_boost : 0,
+    spotlightEligible: row.spotlight_eligible === true,
+    excludeFromDiscover: row.exclude_from_discover === true,
+    // operators is a nested object from the joined operators table; null for seeded venues
+    operatorPlan: (() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const plan = (row.operators as Record<string, any> | null)?.plan;
+      return (plan === "pro" || plan === "premium" || plan === "enterprise") ? plan : "free";
+    })() as "free" | "pro" | "premium" | "enterprise",
   };
 }
 
@@ -544,7 +579,11 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at"
+          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
+          "internal_boost, spotlight_eligible, exclude_from_discover, " +
+          // Join operator plan — used by Discover Engine for plan-based weighting.
+          // created_by_operator_id is null for seeded/imported venues; operators will be null for those rows.
+          "operators!created_by_operator_id(plan)"
       )
       .eq("is_published", true)
       .order("name", { ascending: true });
