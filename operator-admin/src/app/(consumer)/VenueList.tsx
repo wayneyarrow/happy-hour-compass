@@ -120,6 +120,12 @@ type VenueWithDist = {
 
 type Props = {
   venues: ConsumerVenue[];
+  /**
+   * When true (default), requests geolocation after mount and re-sorts venues
+   * nearest-first. Set to false for curated rails (spotlight, patio-picks, etc.)
+   * where the Discover Engine ordering must be preserved.
+   */
+  geoSort?: boolean;
 };
 
 /**
@@ -127,7 +133,7 @@ type Props = {
  * Card layout mirrors original index.html .listing-item structure:
  * 72×72 image | name + bookmark / offer text / meta (badge · distance · category)
  */
-export function VenueList({ venues }: Props) {
+export function VenueList({ venues, geoSort = true }: Props) {
   const [sorted, setSorted] = useState<VenueWithDist[]>(
     () =>
       venues.map((v) => ({
@@ -165,7 +171,9 @@ export function VenueList({ venues }: Props) {
   }, [venues]);
 
   // Request geolocation and re-sort nearest-first, preserving derived values.
+  // Skipped when geoSort=false so curated rail collections preserve engine ordering.
   useEffect(() => {
+    if (!geoSort) return;
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
@@ -196,7 +204,7 @@ export function VenueList({ venues }: Props) {
       },
       { timeout: 5000, maximumAge: 60_000 }
     );
-  }, [venues]);
+  }, [venues, geoSort]);
 
   return (
     <ul>

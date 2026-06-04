@@ -38,6 +38,7 @@ function rowToOverride(row: Record<string, unknown>): RailOverrideRow {
 const emptyByRail = (): Record<RailKey, RailOverrideRow[]> => ({
   "spotlight":       [],
   "patio-picks":     [],
+  "highly-rated":    [],
   "featured-nearby": [],
   "new-this-week":   [],
   "featured-events": [],

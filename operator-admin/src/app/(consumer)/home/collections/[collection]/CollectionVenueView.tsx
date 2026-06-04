@@ -7,9 +7,11 @@ import { CollectionHeader } from "./CollectionHeader";
 type Props = {
   title: string;
   venues: ConsumerVenue[];
+  /** Pass true only for geo-sorted collections (Featured Nearby). Default false preserves engine ordering. */
+  geoSort?: boolean;
 };
 
-export function CollectionVenueView({ title, venues }: Props) {
+export function CollectionVenueView({ title, venues, geoSort = false }: Props) {
   return (
     <>
       <CollectionHeader title={title} />
@@ -41,7 +43,7 @@ export function CollectionVenueView({ title, venues }: Props) {
             </p>
           </div>
         ) : (
-          <VenueList venues={venues} />
+          <VenueList venues={venues} geoSort={geoSort} />
         )}
       </div>
     </>

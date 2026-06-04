@@ -13,6 +13,7 @@ import {
   NEARBY_POOL,
   getSpotlightVenues,
   getPatioPicks,
+  getHighlyRated,
   getFeaturedNearby,
   getNewThisWeek,
   getFeaturedEvents,
@@ -40,11 +41,12 @@ export default async function ConsumerHomePage() {
   ]);
 
   // ── Homepage rails ────────────────────────────────────────────────────────
-  const spotlightVenues   = getSpotlightVenues(venues, allOverrides["spotlight"]).slice(0, RAIL_MAX);
-  const patioPicksVenues  = getPatioPicks(venues, allOverrides["patio-picks"]).slice(0, RAIL_MAX);
-  const nearbyVenues      = getFeaturedNearby(venues, allOverrides["featured-nearby"]).slice(0, NEARBY_POOL);
-  const newThisWeekVenues = getNewThisWeek(venues, allOverrides["new-this-week"]).slice(0, RAIL_MAX);
-  const featuredEvents    = getFeaturedEvents(venues, allOverrides["featured-events"]).slice(0, RAIL_MAX);
+  const spotlightVenues    = getSpotlightVenues(venues, allOverrides["spotlight"]).slice(0, RAIL_MAX);
+  const patioPicksVenues   = getPatioPicks(venues, allOverrides["patio-picks"]).slice(0, RAIL_MAX);
+  const highlyRatedVenues  = getHighlyRated(venues, allOverrides["highly-rated"]).slice(0, RAIL_MAX);
+  const nearbyVenues       = getFeaturedNearby(venues, allOverrides["featured-nearby"]).slice(0, NEARBY_POOL);
+  const newThisWeekVenues  = getNewThisWeek(venues, allOverrides["new-this-week"]).slice(0, RAIL_MAX);
+  const featuredEvents     = getFeaturedEvents(venues, allOverrides["featured-events"]).slice(0, RAIL_MAX);
 
   // ── Browse sections — filter to categories with ≥ BROWSE_MIN_LOCAL venues ─
   const browseExperienceCategories = filterBrowseCategories(venues, EXPERIENCE_CATEGORIES);
@@ -57,6 +59,7 @@ export default async function ConsumerHomePage() {
         <ConsumerHome
           spotlightVenues={spotlightVenues}
           patioPicksVenues={patioPicksVenues}
+          highlyRatedVenues={highlyRatedVenues}
           nearbyVenues={nearbyVenues}
           newThisWeekVenues={newThisWeekVenues}
           featuredEvents={featuredEvents}

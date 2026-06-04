@@ -71,6 +71,11 @@ export const BROWSE_MIN_LOCAL = 4;
 
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Minimum Google rating to enter the Highly Rated primary pool.
+// Fallback pool accepts venues rated at or above RATED_THRESHOLD.
+const HIGH_RATING_THRESHOLD = 4.0;
+const RATED_THRESHOLD = 3.5;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type DiscoverEventItem = {
@@ -349,6 +354,56 @@ export function getNewThisWeek(
 }
 
 /**
+ * Highly Rated — local, discover-eligible venues with strong Google ratings.
+ *
+ * Primary pool: venues with googleRating >= 4.0.
+ * Fallback pool: rated venues >= 3.5 (fills rail when primary pool is thin).
+ * Sort: rating DESC, then discover score as tiebreaker.
+ *
+ * Override semantics:
+ *   include — adds a venue even if it doesn't meet the rating threshold.
+ *   exclude — removes a high-rated venue from this rail.
+ */
+export function getHighlyRated(
+  venues: ConsumerVenue[],
+  overrides: RailOverride[] = []
+): ConsumerVenue[] {
+  const { excludedUuids, includedUuids } = splitOverrides(overrides);
+
+  const eligible = venues.filter(
+    (v) =>
+      !excludedUuids.has(v.venueUuid) &&
+      isNearMarket(v.latitude, v.longitude) &&
+      isDiscoverEligible(v) &&
+      v.googleRating !== null
+  );
+
+  const primary = dedupeById(
+    eligible.filter((v) => v.googleRating! >= HIGH_RATING_THRESHOLD)
+  );
+
+  const primaryUuids = new Set(primary.map((v) => v.venueUuid));
+
+  const fallback = dedupeById(
+    eligible.filter(
+      (v) =>
+        !primaryUuids.has(v.venueUuid) &&
+        v.googleRating! >= RATED_THRESHOLD
+    )
+  );
+
+  const systemUuids = new Set([...primaryUuids, ...fallback.map((v) => v.venueUuid)]);
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+
+  return dedupeById([...includePool, ...primary, ...fallback]).sort((a, b) => {
+    const rA = a.googleRating ?? 0;
+    const rB = b.googleRating ?? 0;
+    if (rB !== rA) return rB - rA;
+    return scoreVenueForDiscover(b) - scoreVenueForDiscover(a);
+  });
+}
+
+/**
  * Featured Events — events flattened from local, discover-eligible venues.
  *
  * Override semantics (V1):
@@ -441,6 +496,7 @@ export function getRailVenuesByKey(
     case "patio-picks":     return getPatioPicks(venues, overrides);
     case "featured-nearby": return getFeaturedNearby(venues, overrides);
     case "new-this-week":   return getNewThisWeek(venues, overrides);
+    case "highly-rated":    return getHighlyRated(venues, overrides);
     default:                return [];
   }
 }

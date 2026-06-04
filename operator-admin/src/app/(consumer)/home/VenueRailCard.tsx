@@ -145,11 +145,11 @@ export function VenueRailCard({ venue }: Props) {
 
   const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
 
-  // Badge label + colours for the HH status pill
+  // HH status pill in the card content area.
+  // When hhStatus === "now" the green image badge (bottom-left of photo) already
+  // shows "Happy Hour Now" — suppress the pill here to avoid double-showing.
   const hhPill: { label: string; bg: string; color: string } | null =
-    status.hhStatus === "now"
-      ? { label: "Happy Hour Now",       bg: "#fef3c7", color: "#b45309" }
-      : status.hhStatus === "today"
+    status.hhStatus === "today"
       ? { label: "Happy Hour Today",     bg: "#fef3c7", color: "#b45309" }
       : status.hhStatus === "available"
       ? { label: "Happy Hour Available", bg: "#f3f4f6", color: "#6b7280" }

@@ -86,7 +86,7 @@ export function BookmarkButton({ venueId, className = "", variant = "list" }: Pr
           width: isHeader ? 22 : 18,
           height: isHeader ? 22 : 18,
           fill: saved ? "#f97316" : "none",
-          stroke: saved ? "#f97316" : isHeader ? "#6b7280" : "#d1d5db",
+          stroke: saved ? "#f97316" : "#6b7280",
           strokeWidth: 2,
           transition: "fill 0.2s, stroke 0.2s",
         }}

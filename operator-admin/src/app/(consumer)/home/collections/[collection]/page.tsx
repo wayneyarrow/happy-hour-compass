@@ -3,12 +3,13 @@ import type { Metadata } from "next";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
-import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import {
   getSpotlightVenues,
   getPatioPicks,
+  getHighlyRated,
   getFeaturedNearby,
   getNewThisWeek,
+  getFeaturedEvents,
   getTaggedVenues,
 } from "@/lib/discover/discoverEngine";
 import { CollectionVenueView } from "./CollectionVenueView";
@@ -23,6 +24,7 @@ export const dynamic = "force-dynamic";
 type CollectionSlug =
   | "spotlight"
   | "patio-picks"
+  | "highly-rated"
   | "featured-nearby"
   | "new-this-week"
   | "featured-events"
@@ -49,6 +51,7 @@ const COLLECTIONS: Record<
   // ── Curated rails ────────────────────────────────────────────────────────────
   spotlight:         { title: "Spotlight Venues", type: "venue" },
   "patio-picks":     { title: "Patio Picks",      type: "venue" },
+  "highly-rated":    { title: "Highly Rated",     type: "venue" },
   "featured-nearby": { title: "Featured Nearby",  type: "venue" },
   "new-this-week":   { title: "New This Week",    type: "venue" },
   "featured-events": { title: "Featured Events",  type: "event" },
@@ -87,9 +90,33 @@ export default async function CollectionPage({ params }: Props) {
   const meta = COLLECTIONS[collection as CollectionSlug];
   if (!meta) notFound();
 
+  // Fetch venues + overrides once for all collection types.
+  // Events collection uses getFeaturedEvents (same engine source as homepage rail)
+  // so it also needs the full venue set and overrides.
+  const [venues, allOverrides] = await Promise.all([
+    getPublishedVenuesForConsumer(),
+    getAllRailOverrides(),
+  ]);
+
   // ── Events collection ───────────────────────────────────────────────────────
+  // Uses getFeaturedEvents so market filtering, eligibility, and overrides all
+  // match the homepage Featured Events rail (same source of truth).
   if (meta.type === "event") {
-    const events = await getPublishedEventsForConsumer();
+    const engineEvents = getFeaturedEvents(venues, allOverrides["featured-events"]);
+    // Map DiscoverEventItem → ConsumerEventListItem shape expected by EventCard.
+    // EventCard only renders id, title, venueName, nextOccurrenceLabel — the
+    // remaining fields are present on ConsumerEventListItem but unused here.
+    const events = engineEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      venueName: e.venueName,
+      nextOccurrenceLabel: e.nextOccurrenceLabel,
+      description: null,
+      imageUrl: null,
+      venueId: e.venueSlug,
+      firstDate: null,
+      recurrence: null,
+    }));
     return (
       <main className="bg-gray-50 min-h-full">
         <CollectionEventView title={meta.title} events={events} />
@@ -99,13 +126,8 @@ export default async function CollectionPage({ params }: Props) {
 
   // ── Venue collections ───────────────────────────────────────────────────────
   // Collections show the full filtered set (no RAIL_MAX slice).
-  // All filtering/sorting delegated to the Discover Engine.
-  // Rail overrides fetched in parallel so internal curation applies here too.
-  const [venues, allOverrides] = await Promise.all([
-    getPublishedVenuesForConsumer(),
-    getAllRailOverrides(),
-  ]);
-
+  // All filtering/sorting delegated to the Discover Engine — same functions and
+  // overrides as the homepage rail, so See All always matches the rail source.
   let filtered: ConsumerVenue[];
 
   if (meta.tag) {
@@ -120,8 +142,10 @@ export default async function CollectionPage({ params }: Props) {
       case "patio-picks":
         filtered = getPatioPicks(venues, allOverrides["patio-picks"]);
         break;
+      case "highly-rated":
+        filtered = getHighlyRated(venues, allOverrides["highly-rated"]);
+        break;
       case "featured-nearby":
-        // VenueList geo-sorts client-side after mount.
         filtered = getFeaturedNearby(venues, allOverrides["featured-nearby"]);
         break;
       case "new-this-week":
@@ -132,9 +156,13 @@ export default async function CollectionPage({ params }: Props) {
     }
   }
 
+  // Only Featured Nearby geo-sorts (VenueList re-orders client-side by distance).
+  // All other curated collections preserve the Discover Engine's scored ordering.
+  const geoSort = collection === "featured-nearby";
+
   return (
     <main className="bg-gray-50 min-h-full">
-      <CollectionVenueView title={meta.title} venues={filtered} />
+      <CollectionVenueView title={meta.title} venues={filtered} geoSort={geoSort} />
     </main>
   );
 }

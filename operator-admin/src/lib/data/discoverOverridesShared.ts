@@ -9,6 +9,7 @@
 export const RAIL_KEYS = [
   "spotlight",
   "patio-picks",
+  "highly-rated",
   "featured-nearby",
   "new-this-week",
   "featured-events",
@@ -19,6 +20,7 @@ export type RailKey = (typeof RAIL_KEYS)[number];
 export const RAIL_LABELS: Record<RailKey, string> = {
   "spotlight":       "Spotlight Venues",
   "patio-picks":     "Patio Picks",
+  "highly-rated":    "Highly Rated",
   "featured-nearby": "Featured Nearby",
   "new-this-week":   "New This Week",
   "featured-events": "Featured Events",

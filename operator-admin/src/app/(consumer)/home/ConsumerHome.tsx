@@ -44,11 +44,12 @@ function computeGreeting(): string {
 export type HomepageData = {
   spotlightVenues: ConsumerVenue[];
   patioPicksVenues: ConsumerVenue[];
+  highlyRatedVenues: ConsumerVenue[];
   nearbyVenues: ConsumerVenue[];   // full pool; geo-sorted client-side
   newThisWeekVenues: ConsumerVenue[];
   featuredEvents: HomeEventItem[];
   // Browse sections — pre-filtered server-side to ≥ BROWSE_MIN_LOCAL local venues.
-  // Empty arrays hide the section from the homepage entirely.
+  // Retained for Browse Strategy V2; currently hidden from homepage rendering.
   browseExperienceCategories: BrowseCategory[];
   browseFoodCategories: BrowseCategory[];
   browseDrinksCategories: BrowseCategory[];
@@ -59,6 +60,7 @@ export type HomepageData = {
 export function ConsumerHome({
   spotlightVenues,
   patioPicksVenues,
+  highlyRatedVenues,
   nearbyVenues,
   newThisWeekVenues,
   featuredEvents,
@@ -168,7 +170,6 @@ export function ConsumerHome({
             display: "inline-flex",
             alignItems: "center",
             gap: 5,
-            marginBottom: 16,
           }}
         >
           <svg
@@ -188,44 +189,17 @@ export function ConsumerHome({
           </span>
         </div>
 
-        {/* Search CTA — tappable placeholder that navigates to /explore */}
-        <Link href="/explore" style={{ display: "block", textDecoration: "none" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "#f9fafb",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              padding: "11px 14px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#9ca3af"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ width: 16, height: 16, flexShrink: 0 }}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <span style={{ fontSize: 15, color: "#9ca3af" }}>Search venues…</span>
-          </div>
-        </Link>
       </div>
 
       {/* ── Rails ───────────────────────────────────────────────────────────── */}
-      <div style={{ paddingTop: 24, paddingBottom: 110 }}>
+      {/* onClick bubbles up from every venue/event card tap to save scroll position
+          before Next.js navigates away — sessionStorage is then read on return. */}
+      <div style={{ paddingTop: 24, paddingBottom: 110 }} onClick={saveScroll}>
 
-        {/* Rail 1 — Spotlight Venues (isVerified) */}
+        {/* Rail 1 — Spotlight Venues */}
         {spotlightVenues.length > 0 && (
           <RailSection
-            title="🌟 Spotlight Venues"
+            title="Spotlight Venues"
             viewAllHref="/home/collections/spotlight"
             onViewAll={saveScroll}
           >
@@ -235,10 +209,10 @@ export function ConsumerHome({
           </RailSection>
         )}
 
-        {/* Rail 2 — Patio Picks (seededTags or searchTags contains "Patio") */}
+        {/* Rail 2 — Patio Picks */}
         {patioPicksVenues.length > 0 && (
           <RailSection
-            title="☀️ Patio Picks"
+            title="Patio Picks"
             viewAllHref="/home/collections/patio-picks"
             onViewAll={saveScroll}
           >
@@ -248,10 +222,23 @@ export function ConsumerHome({
           </RailSection>
         )}
 
-        {/* Rail 3 — Featured Nearby (geo-sorted client-side) */}
+        {/* Rail 3 — Highly Rated (googleRating ≥ 4.0, fallback ≥ 3.5) */}
+        {highlyRatedVenues.length > 0 && (
+          <RailSection
+            title="Highly Rated"
+            viewAllHref="/home/collections/highly-rated"
+            onViewAll={saveScroll}
+          >
+            {highlyRatedVenues.map((v) => (
+              <VenueRailCard key={v.id} venue={v} />
+            ))}
+          </RailSection>
+        )}
+
+        {/* Rail 4 — Featured Nearby (geo-sorted client-side) */}
         {sortedNearby.length > 0 && (
           <RailSection
-            title="📍 Featured Nearby"
+            title="Featured Nearby"
             viewAllHref="/home/collections/featured-nearby"
             onViewAll={saveScroll}
           >
@@ -261,10 +248,10 @@ export function ConsumerHome({
           </RailSection>
         )}
 
-        {/* Rail 4 — New This Week (recently added venues) */}
+        {/* Rail 5 — New This Week (recently added venues) */}
         {newThisWeekVenues.length > 0 && (
           <RailSection
-            title="✨ New This Week"
+            title="New This Week"
             viewAllHref="/home/collections/new-this-week"
             onViewAll={saveScroll}
           >
@@ -274,10 +261,10 @@ export function ConsumerHome({
           </RailSection>
         )}
 
-        {/* Rail 5 — Featured Events */}
+        {/* Rail 6 — Featured Events */}
         {featuredEvents.length > 0 && (
           <RailSection
-            title="🎉 Featured Events"
+            title="Featured Events"
             viewAllHref="/home/collections/featured-events"
             viewAllLabel="All events"
             onViewAll={saveScroll}
@@ -289,7 +276,22 @@ export function ConsumerHome({
         )}
 
         {/* ── Browse sections ──────────────────────────────────────────────── */}
-        {(browseExperienceCategories.length > 0 ||
+        {/*
+          TODO (Browse Strategy V2):
+          Browse rails are temporarily hidden from Consumer Home during beta polish.
+          Infrastructure intentionally retained (browseCategories.ts, BrowseSection,
+          BrowseTile, browse/[browse] routes, collection slugs, filterBrowseCategories).
+          Future revisit should evaluate:
+            - Search Tag integration
+            - Category taxonomy redesign
+            - Inventory thresholds per category
+            - Market-specific browse categories
+            - Improved category eligibility rules
+
+          To re-enable, restore the three BrowseSection blocks and the divider below.
+        */}
+
+        {false && (browseExperienceCategories.length > 0 ||
           browseFoodCategories.length > 0 ||
           browseDrinksCategories.length > 0) && (
           <div
@@ -300,8 +302,8 @@ export function ConsumerHome({
           />
         )}
 
-        {/* Browse by Experience — hidden if < BROWSE_MIN_LOCAL local venues */}
-        {browseExperienceCategories.length > 0 && (
+        {/* Browse by Experience — hidden (Browse Strategy V2) */}
+        {false && browseExperienceCategories.length > 0 && (
           <BrowseSection
             title="Browse by Experience"
             categories={browseExperienceCategories}
@@ -310,8 +312,8 @@ export function ConsumerHome({
           />
         )}
 
-        {/* Browse by Food */}
-        {browseFoodCategories.length > 0 && (
+        {/* Browse by Food — hidden (Browse Strategy V2) */}
+        {false && browseFoodCategories.length > 0 && (
           <BrowseSection
             title="Browse by Food"
             categories={browseFoodCategories}
@@ -320,8 +322,8 @@ export function ConsumerHome({
           />
         )}
 
-        {/* Browse by Drinks */}
-        {browseDrinksCategories.length > 0 && (
+        {/* Browse by Drinks — hidden (Browse Strategy V2) */}
+        {false && browseDrinksCategories.length > 0 && (
           <BrowseSection
             title="Browse by Drinks"
             categories={browseDrinksCategories}
