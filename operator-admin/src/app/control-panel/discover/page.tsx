@@ -96,7 +96,6 @@ export default async function DiscoverPage({ searchParams }: Props) {
   ) as Record<RailKey, number>;
 
   const totalInRail = isFeaturedEvents ? eventVenues.length : railVenues.length;
-  const showSpotlightControl = rail === "spotlight";
 
   return (
     <div className="max-w-4xl">
@@ -130,7 +129,7 @@ export default async function DiscoverPage({ searchParams }: Props) {
           Events appear automatically for any published, discover-eligible local venue
           that has events. To remove a venue&apos;s events from this rail, use
           &quot;Nix from rail&quot; below. To remove a venue from all discovery,
-          use the &quot;Exclude all&quot; toggle.
+          use the &quot;Exclude From Discover&quot; toggle.
         </div>
       )}
 
@@ -142,8 +141,7 @@ export default async function DiscoverPage({ searchParams }: Props) {
           <span className="w-16 text-right">Plan</span>
           <span className="w-16 text-right">Source</span>
           <span className="w-20 text-right">Boost</span>
-          {showSpotlightControl && <span className="w-16 text-right">Spotlight</span>}
-          <span className="w-20 text-right">Exclude all</span>
+          <span className="w-24 text-right">Exclude From Discover</span>
           <span className="w-20 text-right"></span>
         </div>
 
@@ -160,7 +158,6 @@ export default async function DiscoverPage({ searchParams }: Props) {
                 venue={v}
                 railKey={rail}
                 source={includeUuids.has(v.venueUuid) ? "override" : "algorithm"}
-                showSpotlightControl={false}
               />
             ))
           )
@@ -175,7 +172,6 @@ export default async function DiscoverPage({ searchParams }: Props) {
               venue={v}
               railKey={rail}
               source={includeUuids.has(v.venueUuid) ? "override" : "algorithm"}
-              showSpotlightControl={showSpotlightControl}
             />
           ))
         )}

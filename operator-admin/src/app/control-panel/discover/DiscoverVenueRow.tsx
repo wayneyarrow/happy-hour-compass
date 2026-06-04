@@ -7,7 +7,6 @@ import type { RailKey } from "@/lib/data/discoverOverridesShared";
 import { EXCLUDE_REASON_TYPES } from "@/lib/data/discoverOverridesShared";
 import {
   updateBoostAction,
-  updateSpotlightEligibleAction,
   updateExcludeFromDiscoverAction,
   removeFromRailAction,
 } from "./actions";
@@ -16,7 +15,6 @@ type Props = {
   venue: ConsumerVenue;
   railKey: RailKey;
   source: "algorithm" | "override";
-  showSpotlightControl: boolean;
 };
 
 const PLAN_BADGE: Record<string, string> = {
@@ -30,7 +28,6 @@ export function DiscoverVenueRow({
   venue,
   railKey,
   source,
-  showSpotlightControl,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -51,13 +48,6 @@ export function DiscoverVenueRow({
     boostRef.current = boost;
     startTransition(async () => {
       await updateBoostAction(venue.venueUuid, boost);
-      refresh();
-    });
-  };
-
-  const handleSpotlightToggle = (checked: boolean) => {
-    startTransition(async () => {
-      await updateSpotlightEligibleAction(venue.venueUuid, checked);
       refresh();
     });
   };
@@ -126,19 +116,6 @@ export function DiscoverVenueRow({
         />
       </label>
 
-      {/* Spotlight eligible toggle */}
-      {showSpotlightControl && (
-        <label className="shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={venue.spotlightEligible}
-            onChange={(e) => handleSpotlightToggle(e.target.checked)}
-            className="rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-          />
-          Spotlight
-        </label>
-      )}
-
       {/* Exclude from discover toggle */}
       <label className="shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
         <input
@@ -147,7 +124,7 @@ export function DiscoverVenueRow({
           onChange={(e) => handleExcludeToggle(e.target.checked)}
           className="rounded border-gray-300 text-red-500 focus:ring-red-400"
         />
-        Exclude all
+        Exclude From Discover
       </label>
 
       {/* Nix button */}
