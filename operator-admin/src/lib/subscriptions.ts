@@ -41,6 +41,24 @@ const SUBSCRIPTION_SELECT =
   "billing_provider_customer_id, billing_provider_subscription_id, " +
   "current_period_start, current_period_end, created_at, updated_at";
 
+// Raw shape returned by Supabase before our type coercions.
+// Needed because there are no generated Supabase types in this project —
+// the untyped client infers GenericStringError for unknown tables, which
+// blocks property access. Pattern matches ensureOperator.ts / venueNotes.ts.
+type SubscriptionDbRow = {
+  id: string;
+  operator_id: string;
+  plan_code: string | null;
+  status: string | null;
+  billing_provider: string | null;
+  billing_provider_customer_id: string | null;
+  billing_provider_subscription_id: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Read helpers
@@ -68,18 +86,20 @@ export async function getOperatorSubscription(
 
   if (!data) return null;
 
+  const row = data as unknown as SubscriptionDbRow;
+
   return {
-    id:                               data.id as string,
-    operator_id:                      data.operator_id as string,
-    plan_code:                        parseOperatorPlan(data.plan_code),
-    status:                           (data.status ?? "active") as SubscriptionStatus,
-    billing_provider:                 (data.billing_provider ?? "manual") as BillingProvider,
-    billing_provider_customer_id:     (data.billing_provider_customer_id as string | null) ?? null,
-    billing_provider_subscription_id: (data.billing_provider_subscription_id as string | null) ?? null,
-    current_period_start:             (data.current_period_start as string | null) ?? null,
-    current_period_end:               (data.current_period_end as string | null) ?? null,
-    created_at:                       data.created_at as string,
-    updated_at:                       data.updated_at as string,
+    id:                               row.id,
+    operator_id:                      row.operator_id,
+    plan_code:                        parseOperatorPlan(row.plan_code),
+    status:                           (row.status ?? "active") as SubscriptionStatus,
+    billing_provider:                 (row.billing_provider ?? "manual") as BillingProvider,
+    billing_provider_customer_id:     row.billing_provider_customer_id,
+    billing_provider_subscription_id: row.billing_provider_subscription_id,
+    current_period_start:             row.current_period_start,
+    current_period_end:               row.current_period_end,
+    created_at:                       row.created_at,
+    updated_at:                       row.updated_at,
   };
 }
 
