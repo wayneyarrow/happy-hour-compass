@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { VenueDiscovery } from "../VenueDiscovery";
 
 export const metadata: Metadata = {
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ExplorePage() {
-  const venues = await getPublishedVenuesForConsumer();
+  const allVenues = await getPublishedVenuesForConsumer();
+  // Scope search results to the active market — same geography gate used by all discover rails.
+  const venues = allVenues.filter((v) => isNearMarket(v.latitude, v.longitude));
   return (
     <main className="bg-gray-50">
       <style>{`

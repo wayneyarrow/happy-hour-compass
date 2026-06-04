@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { SEARCH_TAG_GROUPS } from "@/lib/searchTags";
+import { MARKET_LABEL } from "@/lib/discover/discoverEngine";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
 import { VenueMapView } from "./VenueMapView";
 import { trackEvent } from "@/lib/analytics";
@@ -215,6 +216,25 @@ export function VenueDiscovery({ venues }: Props) {
     <>
       {/* Search + filter header — mirrors original search screen layout (white bg, 20px padding) */}
       <div className="bg-white border-b border-[#e5e7eb]" style={{ padding: "20px 20px 0" }}>
+
+        {/* Active market chip — matches homepage pattern; prepared for future market switching */}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 12 }}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#9ca3af"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ width: 13, height: 13, flexShrink: 0 }}
+          >
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>
+            {MARKET_LABEL}
+          </span>
+        </div>
 
         {/* Search controls row: input + view toggle — mirrors .search-controls */}
         <div className="flex items-center gap-2">
