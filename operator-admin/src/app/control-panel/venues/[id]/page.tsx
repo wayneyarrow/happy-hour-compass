@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
+import { getVenueNotes } from "@/lib/data/venueNotes";
 import ImpersonateButton from "./ImpersonateButton";
+import { ExcludeDiscoverControl } from "./ExcludeDiscoverControl";
+import VenueNotesSection from "./VenueNotesSection";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -28,6 +31,12 @@ type VenueDetail = {
   claimed_by: string | null;
   claimed_at: string | null;
   is_verified: boolean;
+  // Discovery controls
+  internal_boost: number;
+  spotlight_eligible: boolean;
+  exclude_from_discover: boolean;
+  // Operator plan (via FK — may be null for unclaimed venues)
+  operator_plan: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -70,6 +79,13 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+const PLAN_BADGE: Record<string, string> = {
+  enterprise: "bg-purple-100 text-purple-700 border border-purple-300",
+  premium:    "bg-amber-100  text-amber-700  border border-amber-300",
+  pro:        "bg-sky-100    text-sky-700    border border-sky-300",
+  free:       "bg-gray-100   text-gray-500   border border-gray-300",
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ControlPanelVenueDetailPage({
@@ -80,15 +96,20 @@ export default async function ControlPanelVenueDetailPage({
   const { id } = await params;
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
-    .from("venues")
-    .select(
-      `id, slug, name, is_published, created_at,
-       address_line1, city, region, postal_code, country, phone, website_url,
-       place_id, created_by_operator_id, claimed_by, claimed_at, is_verified`
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data, error }, { notes }] = await Promise.all([
+    supabase
+      .from("venues")
+      .select(
+        `id, slug, name, is_published, created_at,
+         address_line1, city, region, postal_code, country, phone, website_url,
+         place_id, created_by_operator_id, claimed_by, claimed_at, is_verified,
+         internal_boost, spotlight_eligible, exclude_from_discover,
+         operators!created_by_operator_id(plan)`
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    getVenueNotes(id),
+  ]);
 
   if (error) {
     return (
@@ -112,6 +133,13 @@ export default async function ControlPanelVenueDetailPage({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const v = data as Record<string, any>;
+
+  // Supabase returns embedded relations as arrays when there are no generated types.
+  const operatorRaw = v.operators;
+  const operatorPlan: string | null = Array.isArray(operatorRaw)
+    ? (operatorRaw[0]?.plan as string | null) ?? null
+    : (operatorRaw?.plan as string | null) ?? null;
+
   const venue: VenueDetail = {
     id:                     v.id as string,
     slug:                   v.slug as string,
@@ -130,9 +158,14 @@ export default async function ControlPanelVenueDetailPage({
     claimed_by:             v.claimed_by as string | null,
     claimed_at:             v.claimed_at as string | null,
     is_verified:            v.is_verified === true,
+    internal_boost:         (v.internal_boost as number | null) ?? 0,
+    spotlight_eligible:     v.spotlight_eligible === true,
+    exclude_from_discover:  v.exclude_from_discover === true,
+    operator_plan:          operatorPlan,
   };
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
+  const discoverStatus = venue.exclude_from_discover ? "Excluded" : "Active";
 
   return (
     <div className="max-w-3xl">
@@ -173,6 +206,11 @@ export default async function ControlPanelVenueDetailPage({
             {venue.is_verified && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                 Verified ✓
+              </span>
+            )}
+            {venue.exclude_from_discover && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                Excl. from Discover
               </span>
             )}
           </div>
@@ -273,6 +311,73 @@ export default async function ControlPanelVenueDetailPage({
             <MetaRow label="Claimed at">{fmt(venue.claimed_at)}</MetaRow>
           </dl>
         </Section>
+
+        {/* D. Discovery snapshot */}
+        <Section title="Discovery">
+          <dl className="space-y-2.5 mb-5">
+            <MetaRow label="Operator plan">
+              {venue.operator_plan ? (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                    PLAN_BADGE[venue.operator_plan] ?? PLAN_BADGE.free
+                  }`}
+                >
+                  {venue.operator_plan}
+                </span>
+              ) : (
+                <span className="text-gray-400 italic">Unclaimed / no plan</span>
+              )}
+            </MetaRow>
+            <MetaRow label="Internal boost">
+              <span className={venue.internal_boost > 0 ? "text-amber-700 font-medium" : "text-gray-500"}>
+                {venue.internal_boost}
+                {venue.internal_boost > 0 && (
+                  <span className="ml-1.5 text-xs px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded">
+                    Boosted
+                  </span>
+                )}
+              </span>
+            </MetaRow>
+            <MetaRow label="Spotlight eligible">
+              {venue.spotlight_eligible ? (
+                <span className="text-blue-700 font-medium">Yes</span>
+              ) : (
+                <span className="text-gray-500">No</span>
+              )}
+            </MetaRow>
+            <MetaRow label="Discover status">
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  discoverStatus === "Active"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {discoverStatus}
+              </span>
+            </MetaRow>
+          </dl>
+
+          {/* Exclude From Discover control */}
+          <ExcludeDiscoverControl
+            venueId={venue.id}
+            initialValue={venue.exclude_from_discover}
+          />
+
+          <p className="mt-3 text-xs text-gray-400">
+            Rail-level nix overrides can be managed on the{" "}
+            <Link
+              href="/control-panel/discover"
+              className="text-amber-700 hover:underline"
+            >
+              Discover Management
+            </Link>{" "}
+            page.
+          </p>
+        </Section>
+
+        {/* E. Internal notes */}
+        <VenueNotesSection venueId={venue.id} initialNotes={notes} />
       </div>
     </div>
   );

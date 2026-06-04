@@ -13,10 +13,10 @@ type Props = {
 };
 
 const PLAN_BADGE: Record<string, string> = {
-  premium:    "bg-amber-100 text-amber-800",
-  enterprise: "bg-purple-100 text-purple-800",
-  pro:        "bg-blue-100 text-blue-800",
-  free:       "bg-gray-100 text-gray-500",
+  enterprise: "bg-purple-100 text-purple-700 border border-purple-300",
+  premium:    "bg-amber-100  text-amber-700  border border-amber-300",
+  pro:        "bg-sky-100    text-sky-700    border border-sky-300",
+  free:       "bg-gray-100   text-gray-500   border border-gray-300",
 };
 
 export function AddVenuePanel({ candidates, railKey }: Props) {

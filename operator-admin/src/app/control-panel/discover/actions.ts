@@ -8,13 +8,41 @@ import { RAIL_KEYS } from "@/lib/data/discoverOverridesShared";
 
 // ─── Shared auth helper ───────────────────────────────────────────────────────
 
-async function getAdminEmail(): Promise<string | null> {
+async function getAdmin(): Promise<{ id: string; email: string | null } | null> {
   try {
     const client = await createClient();
     const { data: { user } } = await client.auth.getUser();
-    return user?.email ?? null;
+    if (!user) return null;
+    return { id: user.id, email: user.email ?? null };
   } catch {
     return null;
+  }
+}
+
+// ─── Internal note helper ─────────────────────────────────────────────────────
+// Awaited after each main action so the insert completes before the serverless
+// context is torn down. Errors are logged but never surfaced to the caller —
+// a failed note must not roll back the main discover action.
+
+async function appendVenueNote(
+  venueUuid: string,
+  note: string,
+  admin: { id: string; email: string | null } | null
+): Promise<void> {
+  if (!admin) return;
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("venue_notes").insert({
+      venue_id:         venueUuid,
+      note,
+      created_by:       admin.id,
+      created_by_email: admin.email,
+    });
+    if (error) {
+      console.error("[appendVenueNote] Insert failed:", error.message, { venueUuid, note });
+    }
+  } catch (err) {
+    console.error("[appendVenueNote] Unexpected error:", err, { venueUuid });
   }
 }
 
@@ -33,6 +61,7 @@ export async function updateBoostAction(
   boost: number
 ): Promise<ActionResult> {
   const clampedBoost = Math.max(0, Math.min(100, Math.round(boost)));
+  const admin = await getAdmin();
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -44,6 +73,8 @@ export async function updateBoostAction(
       console.error("[updateBoostAction] Supabase error:", error);
       return { success: false, error: "Failed to save boost." };
     }
+
+    await appendVenueNote(venueUuid, `Internal boost set to ${clampedBoost}.`, admin);
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -61,6 +92,7 @@ export async function updateSpotlightEligibleAction(
   venueUuid: string,
   value: boolean
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -72,6 +104,12 @@ export async function updateSpotlightEligibleAction(
       console.error("[updateSpotlightEligibleAction] Supabase error:", error);
       return { success: false, error: "Failed to update Spotlight Eligible." };
     }
+
+    await appendVenueNote(
+      venueUuid,
+      `Spotlight eligible ${value ? "enabled" : "disabled"}.`,
+      admin
+    );
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -90,6 +128,7 @@ export async function updateExcludeFromDiscoverAction(
   venueUuid: string,
   value: boolean
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -101,6 +140,14 @@ export async function updateExcludeFromDiscoverAction(
       console.error("[updateExcludeFromDiscoverAction] Supabase error:", error);
       return { success: false, error: "Failed to update Exclude From Discover." };
     }
+
+    await appendVenueNote(
+      venueUuid,
+      value
+        ? "Venue excluded from discover (all rails)."
+        : "Venue restored to discover eligibility.",
+      admin
+    );
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -130,7 +177,7 @@ export async function addToRailAction(
 
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const adminEmail = await getAdminEmail();
+  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -145,9 +192,8 @@ export async function addToRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  adminEmail,
-          // created_at / created_by only set on first insert (upsert ignoreDuplicates=false)
-          created_by: adminEmail,
+          updated_by:  admin?.email ?? null,
+          created_by:  admin?.email ?? null,
         },
         { onConflict: "rail_key,venue_id" }
       );
@@ -156,6 +202,14 @@ export async function addToRailAction(
       console.error("[addToRailAction] Supabase error:", error);
       return { success: false, error: "Failed to add venue to rail." };
     }
+
+    const reasonSuffix = reasonType ? ` Reason: ${reasonType}.` : "";
+    const noteSuffix   = note ? ` "${note}"` : "";
+    await appendVenueNote(
+      venueUuid,
+      `Added to ${railKey} rail via override.${reasonSuffix}${noteSuffix}`,
+      admin
+    );
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -182,7 +236,7 @@ export async function removeFromRailAction(
 
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const adminEmail = await getAdminEmail();
+  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -197,8 +251,8 @@ export async function removeFromRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  adminEmail,
-          created_by:  adminEmail,
+          updated_by:  admin?.email ?? null,
+          created_by:  admin?.email ?? null,
         },
         { onConflict: "rail_key,venue_id" }
       );
@@ -207,6 +261,14 @@ export async function removeFromRailAction(
       console.error("[removeFromRailAction] Supabase error:", error);
       return { success: false, error: "Failed to remove venue from rail." };
     }
+
+    const reasonSuffix = reasonType ? ` Reason: ${reasonType}.` : "";
+    const noteSuffix   = note ? ` "${note}"` : "";
+    await appendVenueNote(
+      venueUuid,
+      `Removed from ${railKey} rail via nix override.${reasonSuffix}${noteSuffix}`,
+      admin
+    );
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -225,6 +287,7 @@ export async function restoreToAlgorithmAction(
   railKey: RailKey,
   venueUuid: string
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -237,6 +300,12 @@ export async function restoreToAlgorithmAction(
       console.error("[restoreToAlgorithmAction] Supabase error:", error);
       return { success: false, error: "Failed to restore venue." };
     }
+
+    await appendVenueNote(
+      venueUuid,
+      `Restored to algorithm on ${railKey} rail (override removed).`,
+      admin
+    );
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");

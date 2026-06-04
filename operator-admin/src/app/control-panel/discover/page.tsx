@@ -133,16 +133,21 @@ export default async function DiscoverPage({ searchParams }: Props) {
         </div>
       )}
 
+      {/* ── Add venue — placed before the table for discoverability ──────── */}
+      <AddVenuePanel candidates={addCandidates} railKey={rail} />
+
       {/* ── In-rail venue list ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-4">
-        {/* Column headers */}
+      <div className="bg-white rounded-xl border border-gray-200 mt-4 mb-4">
+        {/* Column headers — widths must match DiscoverVenueRow cell widths */}
         <div className="hidden sm:flex items-center gap-x-4 px-4 py-2 border-b border-gray-100 text-xs font-medium text-gray-400 uppercase tracking-wide">
-          <span className="flex-1">Venue</span>
-          <span className="w-16 text-right">Plan</span>
-          <span className="w-16 text-right">Source</span>
-          <span className="w-20 text-right">Boost</span>
-          <span className="w-24 text-right">Exclude From Discover</span>
-          <span className="w-20 text-right"></span>
+          <span className="flex-1 min-w-0">Venue</span>
+          <span className="shrink-0 w-16 text-center">Plan</span>
+          <span className="shrink-0 w-20 text-center">Source</span>
+          <span className="shrink-0 w-16 text-center">Boost</span>
+          <span className="shrink-0 w-24 text-center leading-tight">
+            Exclude<br /><span className="normal-case text-[10px] tracking-normal">from discover</span>
+          </span>
+          <span className="shrink-0 w-20"></span>
         </div>
 
         {/* Venue rows */}
@@ -176,9 +181,6 @@ export default async function DiscoverPage({ searchParams }: Props) {
           ))
         )}
       </div>
-
-      {/* ── Add venue ─────────────────────────────────────────────────────── */}
-      <AddVenuePanel candidates={addCandidates} railKey={rail} />
 
       {/* ── Removed from rail ─────────────────────────────────────────────── */}
       {removedVenues.length > 0 && (
