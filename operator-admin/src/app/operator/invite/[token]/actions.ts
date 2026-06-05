@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getMembershipByToken } from "@/lib/memberships";
 import { sendSlackAlert } from "@/lib/slack";
+import { addSystemVenueNote } from "@/lib/data/venueNotes";
 
 export type AcceptInviteState = {
   error?:        string;
@@ -82,6 +83,12 @@ export async function acceptInviteAction(
         .eq("role",   "member")
         .eq("status", "invited");
 
+      await addSystemVenueNote(
+        membership.operator_id,
+        `${membership.email} accepted their team member invite.`,
+        membership.email
+      );
+
       return { existingUser: true };
     }
 
@@ -146,6 +153,12 @@ export async function acceptInviteAction(
 
     return { error: "Failed to activate your membership. Please try again." };
   }
+
+  await addSystemVenueNote(
+    membership.operator_id,
+    `${membership.email} accepted their team member invite.`,
+    membership.email
+  );
 
   return { success: true };
 }

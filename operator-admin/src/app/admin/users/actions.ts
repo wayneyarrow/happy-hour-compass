@@ -7,6 +7,7 @@ import { getMembershipRole, countOperatorMembers } from "@/lib/memberships";
 import { maxUsers, parseOperatorPlan } from "@/lib/plans";
 import { sendMemberInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
+import { addSystemVenueNote } from "@/lib/data/venueNotes";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,14 @@ export async function inviteUserAction(
   }
 
   revalidatePath("/admin/users");
+
+  const ownerEmail = ctx.user?.email ?? ctx.operator?.email ?? null;
+  await addSystemVenueNote(
+    operatorId,
+    `Team member invite sent to ${normalizedEmail} by ${ownerEmail ?? "unknown"}.`,
+    ownerEmail
+  );
+
   return { ok: true };
 }
 
@@ -194,7 +203,7 @@ export async function removeMemberAction(
 
   if (!target) return { ok: false, error: "Membership not found." };
 
-  const t = target as { role: string; status: string };
+  const t = target as { email: string; role: string; status: string };
   if (t.role === "owner")    return { ok: false, error: "You cannot remove the account owner." };
   if (t.status !== "active") return { ok: false, error: "This user is not an active member." };
 
@@ -210,6 +219,14 @@ export async function removeMemberAction(
   }
 
   revalidatePath("/admin/users");
+
+  const ownerEmail = auth.ctx.user?.email ?? auth.ctx.operator?.email ?? null;
+  await addSystemVenueNote(
+    operatorId,
+    `Team member ${t.email} removed by ${ownerEmail ?? "unknown"}.`,
+    ownerEmail
+  );
+
   return { ok: true };
 }
 
@@ -223,6 +240,17 @@ export async function cancelInviteAction(
   if (!auth.ok) return { ok: false, error: auth.error };
 
   const supabase = createAdminClient();
+
+  // Fetch invite email up front for the audit note (needed before the update
+  // clears the row; fine if null — note still records the membership id).
+  const { data: invite } = await supabase
+    .from("operator_memberships")
+    .select("email")
+    .eq("id", membershipId)
+    .eq("operator_id", operatorId)
+    .eq("status", "invited")
+    .maybeSingle();
+  const inviteEmail = (invite as { email?: string } | null)?.email ?? null;
 
   // Mark cancelled; clear token so the link no longer works.
   const { error } = await supabase
@@ -238,5 +266,13 @@ export async function cancelInviteAction(
   }
 
   revalidatePath("/admin/users");
+
+  const ownerEmail = auth.ctx.user?.email ?? auth.ctx.operator?.email ?? null;
+  await addSystemVenueNote(
+    operatorId,
+    `Team member invite for ${inviteEmail ?? membershipId} cancelled by ${ownerEmail ?? "unknown"}.`,
+    ownerEmail
+  );
+
   return { ok: true };
 }

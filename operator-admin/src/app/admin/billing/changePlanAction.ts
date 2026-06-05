@@ -2,9 +2,10 @@
 
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { getMembershipRole } from "@/lib/memberships";
-import { updateOperatorPlan } from "@/lib/subscriptions";
-import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
+import { updateOperatorPlan, getOperatorPlanCode } from "@/lib/subscriptions";
+import { parseOperatorPlan, PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
+import { addSystemVenueNote } from "@/lib/data/venueNotes";
 
 export async function changePlanAction(
   operatorId: string,
@@ -33,10 +34,17 @@ export async function changePlanAction(
     }
   }
 
-  const result = await updateOperatorPlan(operatorId, parseOperatorPlan(newPlan));
+  const oldPlan = await getOperatorPlanCode(operatorId);
+  const result  = await updateOperatorPlan(operatorId, parseOperatorPlan(newPlan));
 
   if (result.ok) {
     revalidatePath("/admin/billing");
+    const actorEmail = ctx.user?.email ?? ctx.operator?.email ?? null;
+    await addSystemVenueNote(
+      operatorId,
+      `Subscription changed from ${PLAN_LABELS[oldPlan]} to ${PLAN_LABELS[parseOperatorPlan(newPlan)]} by ${actorEmail ?? "unknown"}.`,
+      actorEmail
+    );
   }
 
   return result;
