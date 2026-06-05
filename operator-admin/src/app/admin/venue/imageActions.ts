@@ -34,9 +34,10 @@ export async function uploadVenueImageAction(
   const imageLimit = maxImages(plan);
 
   if (existingCount >= imageLimit) {
-    return {
-      error: `You've reached your image limit (${imageLimit}) for your current plan. Remove an image or upgrade to upload more.`,
-    };
+    const { imagesNudge } = await import("@/lib/planNudges");
+    const { atLimitMsg, upgradeSuggestion } = imagesNudge(plan);
+    const detail = upgradeSuggestion ?? "Remove a photo to upload a new one.";
+    return { error: `${atLimitMsg} ${detail}` };
   }
 
   const bytes = await file.arrayBuffer();

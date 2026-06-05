@@ -13,6 +13,7 @@ import {
   type OperatorPlan,
   type AnalyticsTier,
 } from "@/lib/plans";
+import { getMembershipRole } from "@/lib/memberships";
 
 // ── Venue row (only fields analytics needs) ───────────────────────────────────
 
@@ -147,11 +148,13 @@ function LockedSection({
   requiredPlan,
   description,
   features,
+  isOwner,
 }: {
   title: string;
   requiredPlan: "pro" | "premium";
   description: string;
   features: string[];
+  isOwner: boolean;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
@@ -187,12 +190,18 @@ function LockedSection({
           </li>
         ))}
       </ul>
-      <Link
-        href="/admin/billing"
-        className="inline-block mt-3 text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-gray-500 transition-colors"
-      >
-        View Plan Options
-      </Link>
+      {isOwner ? (
+        <Link
+          href="/admin/billing"
+          className="inline-block mt-3 text-xs font-semibold text-gray-400 underline underline-offset-2 hover:text-gray-500 transition-colors"
+        >
+          Change your plan →
+        </Link>
+      ) : (
+        <p className="mt-3 text-xs text-gray-400">
+          Ask the account owner to change the plan.
+        </p>
+      )}
     </div>
   );
 }
@@ -208,6 +217,10 @@ export default async function AdminAnalyticsPage() {
 
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+
+  const currentEmail = user.email ?? operator?.email ?? "";
+  const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
+  const isOwner = isImpersonating || currentRole === "owner";
 
   // Plan is read from operator.plan — provisioned by migration 029.
   // parseOperatorPlan() safely defaults to 'free' for null/undefined.
@@ -362,6 +375,7 @@ export default async function AdminAnalyticsPage() {
                 "Top search tags",
                 "Click-through rate",
               ]}
+              isOwner={isOwner}
             />
           )}
 
@@ -385,6 +399,7 @@ export default async function AdminAnalyticsPage() {
                 "Discover impressions",
                 "Placement-driven views",
               ]}
+              isOwner={isOwner}
             />
           )}
 
@@ -408,6 +423,7 @@ export default async function AdminAnalyticsPage() {
                 "Campaign views",
                 "Campaign engagement",
               ]}
+              isOwner={isOwner}
             />
           )}
 

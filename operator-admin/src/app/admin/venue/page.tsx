@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { parseOperatorPlan, maxSearchTags, maxImages } from "@/lib/plans";
+import { getMembershipRole } from "@/lib/memberships";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
 import BusinessDetailsForm from "./BusinessDetailsForm";
@@ -91,6 +92,10 @@ export default async function AdminVenuePage({
   // imp_session_id cookie is present and valid, otherwise normal context.
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+
+  const currentEmail = user.email ?? operator?.email ?? "";
+  const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
+  const isOwner = isImpersonating || currentRole === "owner";
 
   // Load venue:
   //   Normal / Case A impersonation: filter by created_by_operator_id
@@ -277,6 +282,7 @@ export default async function AdminVenuePage({
               initialTags={currentSearchTags}
               plan={operatorPlan}
               tagLimit={tagLimit}
+              isOwner={isOwner}
             />
           </AccordionSection>
 
@@ -291,6 +297,8 @@ export default async function AdminVenuePage({
               venueId={venue.id}
               establishmentType={venue.establishment_type}
               imageLimit={imageLimit}
+              plan={operatorPlan}
+              isOwner={isOwner}
             />
           </AccordionSection>
 

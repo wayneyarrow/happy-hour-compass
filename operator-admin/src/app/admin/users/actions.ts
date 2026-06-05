@@ -63,10 +63,10 @@ export async function inviteUserAction(
   const userLimit = maxUsers(plan);
   const currentCount = await countOperatorMembers(operatorId);
   if (userLimit !== Infinity && currentCount >= userLimit) {
-    return {
-      ok: false,
-      error: `Your ${plan} plan allows up to ${userLimit} user${userLimit === 1 ? "" : "s"}. Upgrade your plan to invite more team members.`,
-    };
+    const { usersNudge } = await import("@/lib/planNudges");
+    const { atLimitMsg, upgradeSuggestion } = usersNudge(plan);
+    const detail = upgradeSuggestion ?? "Contact us if you need more access.";
+    return { ok: false, error: `${atLimitMsg} ${detail}` };
   }
 
   const supabase = createAdminClient();

@@ -28,7 +28,7 @@ export async function updateSearchTagsAction(
 
   if (!canUseSearchTags(plan)) {
     return {
-      errors: { form: "Search tags are not available on the Free plan. Upgrade to Pro or Premium to unlock this feature." },
+      errors: { form: "Search tags are available on Pro and Premium plans. Upgrade to Pro to help guests find your venue with custom tags." },
     };
   }
 

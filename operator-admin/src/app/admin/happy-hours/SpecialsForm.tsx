@@ -8,6 +8,8 @@ import {
   updateDrinkSpecialsAction,
 } from "./actions";
 import type { HhItem, SpecialsState } from "./types";
+import { foodSpecialsNudge, drinkSpecialsNudge } from "@/lib/planNudges";
+import type { OperatorPlan } from "@/lib/plans";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,10 @@ type Props = {
   initialItems: HhItem[];
   /** Maximum number of items allowed on this operator's plan. */
   itemLimit: number;
+  /** Current operator plan — used for plan-aware upgrade nudges. */
+  plan: OperatorPlan;
+  /** Whether the current user is the account owner (controls CTA wording). */
+  isOwner: boolean;
 };
 
 const initialState: SpecialsState = {};
@@ -90,7 +96,7 @@ function DragHandle() {
 
 // ── SpecialsForm ──────────────────────────────────────────────────────────────
 
-export default function SpecialsForm({ venueId, type, initialItems, itemLimit }: Props) {
+export default function SpecialsForm({ venueId, type, initialItems, itemLimit, plan, isOwner }: Props) {
   const router = useRouter();
 
   // Select the correct server action based on type
@@ -446,19 +452,32 @@ export default function SpecialsForm({ venueId, type, initialItems, itemLimit }:
         </span>
       </div>
 
-      {/* At-limit upsell */}
-      {atLimit && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-          You&apos;ve reached the {itemLimit}-item limit for your plan. Upgrade to
-          Pro to add more {type === "food" ? "food" : "drink"} specials.{" "}
-          <Link
-            href="/admin/billing"
-            className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-          >
-            View Plan Options
-          </Link>
-        </div>
-      )}
+      {/* At-limit nudge */}
+      {atLimit && (() => {
+        const { atLimitMsg, upgradeSuggestion } =
+          type === "food" ? foodSpecialsNudge(plan) : drinkSpecialsNudge(plan);
+        return (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            {atLimitMsg}
+            {upgradeSuggestion && <> {upgradeSuggestion}</>}
+            {upgradeSuggestion && (
+              <>
+                {" "}
+                {isOwner ? (
+                  <Link
+                    href="/admin/billing"
+                    className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+                  >
+                    Change your plan →
+                  </Link>
+                ) : (
+                  <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {reorderError && (
         <p className="text-xs text-red-600" role="alert">

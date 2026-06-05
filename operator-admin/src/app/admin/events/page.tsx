@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { parseOperatorPlan } from "@/lib/plans";
+import { getMembershipRole } from "@/lib/memberships";
 import Link from "next/link";
 import EventsManager from "./EventsManager";
 import type { EventRow } from "./EventForm";
@@ -17,6 +18,10 @@ export default async function AdminEventsPage() {
 
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+
+  const currentEmail = user.email ?? operator?.email ?? "";
+  const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
+  const isOwner = isImpersonating || currentRole === "owner";
 
   // Load venue — by operator ownership (normal/Case A) or directly by id (Case B).
   let venueData: { id: string; name: string } | null = null;
@@ -127,6 +132,7 @@ export default async function AdminEventsPage() {
           operatorId={operator!.id}
           venueId={venue!.id}
           operatorPlan={parseOperatorPlan(operator!.plan)}
+          isOwner={isOwner}
         />
       )}
     </div>

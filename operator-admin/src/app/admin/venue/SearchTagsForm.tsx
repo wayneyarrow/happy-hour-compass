@@ -7,6 +7,7 @@ import { updateSearchTagsAction } from "./searchTagsActions";
 import { SEARCH_TAG_GROUPS } from "@/lib/searchTags";
 import type { SearchTagsState } from "./types";
 import type { OperatorPlan } from "@/lib/plans";
+import { searchTagsNudge } from "@/lib/planNudges";
 
 const UPSELL_EXAMPLE_TAGS = ["Patio", "Wings", "Craft Beer", "Live Music", "Cocktails"];
 
@@ -15,6 +16,7 @@ type Props = {
   initialTags: string[];
   plan: OperatorPlan;
   tagLimit: number;
+  isOwner: boolean;
 };
 
 const initialState: SearchTagsState = {};
@@ -24,6 +26,7 @@ export default function SearchTagsForm({
   initialTags,
   plan,
   tagLimit,
+  isOwner,
 }: Props) {
   const router = useRouter();
   const boundAction = updateSearchTagsAction.bind(null, venueId);
@@ -80,19 +83,23 @@ export default function SearchTagsForm({
 
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4">
           <p className="text-sm font-semibold text-amber-800 mb-1">
-            Available with Pro and Premium plans
+            Available on Pro and Premium
           </p>
           <p className="text-sm text-amber-700 mb-2">
-            Add search tags to help customers find your venue when searching for
+            Add search tags to help guests find your venue when searching for
             &ldquo;patio&rdquo;, &ldquo;wings&rdquo;, &ldquo;dog friendly&rdquo;,
-            and more.
+            and more. Upgrade to Pro to unlock this feature.
           </p>
-          <Link
-            href="/admin/billing"
-            className="text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900 transition-colors"
-          >
-            View Plan Options
-          </Link>
+          {isOwner ? (
+            <Link
+              href="/admin/billing"
+              className="text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900 transition-colors"
+            >
+              Change your plan →
+            </Link>
+          ) : (
+            <span className="text-xs text-amber-700">Ask the account owner to change the plan.</span>
+          )}
         </div>
       </div>
     );
@@ -193,21 +200,29 @@ export default function SearchTagsForm({
         ))}
       </div>
 
-      {/* At-limit upsell — shown on paid plans that have used all their tags */}
-      {atLimit && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-          You&apos;ve reached the search tag limit for your plan.
-          {plan === "pro" && (
-            <> Upgrade to Premium to use up to 10 search tags and improve discoverability.</>
-          )}{" "}
-          <Link
-            href="/admin/billing"
-            className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-          >
-            View Plan Options
-          </Link>
-        </div>
-      )}
+      {/* At-limit nudge */}
+      {atLimit && (() => {
+        const { atLimitMsg, upgradeSuggestion } = searchTagsNudge(plan);
+        return (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            {atLimitMsg}
+            {upgradeSuggestion && <> {upgradeSuggestion}</>}
+            {" "}
+            {upgradeSuggestion && (
+              isOwner ? (
+                <Link
+                  href="/admin/billing"
+                  className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+                >
+                  Change your plan →
+                </Link>
+              ) : (
+                <span className="text-amber-700">Ask the account owner to change the plan.</span>
+              )
+            )}
+          </div>
+        );
+      })()}
 
       {/* Save row */}
       <div className="flex items-center gap-3">

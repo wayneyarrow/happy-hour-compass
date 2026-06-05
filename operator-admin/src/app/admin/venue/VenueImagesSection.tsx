@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { imagesNudge } from "@/lib/planNudges";
+import type { OperatorPlan } from "@/lib/plans";
 import { createClient } from "@/lib/supabase/browser";
 import {
   processImageFile,
@@ -46,9 +48,13 @@ type Props = {
   establishmentType?: string | null;
   /** Maximum number of images allowed on this operator's plan. */
   imageLimit: number;
+  /** Current operator plan — used for plan-aware upgrade nudges. */
+  plan: OperatorPlan;
+  /** Whether the current user is the account owner (controls CTA wording). */
+  isOwner: boolean;
 };
 
-export default function VenueImagesSection({ venueId, establishmentType, imageLimit }: Props) {
+export default function VenueImagesSection({ venueId, establishmentType, imageLimit, plan, isOwner }: Props) {
   const [images, setImages] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -252,19 +258,31 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
         </span>
       </div>
 
-      {/* At-limit upsell */}
-      {atMax && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-          You&apos;ve reached the image limit for your plan. Upgrade to add more
-          venue photos and show customers more of what makes your place special.{" "}
-          <Link
-            href="/admin/billing"
-            className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-          >
-            View Plan Options
-          </Link>
-        </div>
-      )}
+      {/* At-limit nudge */}
+      {atMax && (() => {
+        const { atLimitMsg, upgradeSuggestion } = imagesNudge(plan);
+        return (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            {atLimitMsg}
+            {upgradeSuggestion && <> {upgradeSuggestion}</>}
+            {upgradeSuggestion && (
+              <>
+                {" "}
+                {isOwner ? (
+                  <Link
+                    href="/admin/billing"
+                    className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+                  >
+                    Change your plan →
+                  </Link>
+                ) : (
+                  <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Thumbnail grid */}
       {loading ? (

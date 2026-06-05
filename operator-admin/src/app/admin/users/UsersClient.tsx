@@ -10,6 +10,7 @@ import {
 } from "./actions";
 import type { OperatorPlan } from "@/lib/plans";
 import { PLAN_LABELS } from "@/lib/plans";
+import { usersNudge } from "@/lib/planNudges";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,7 @@ export default function UsersClient({
   const isOwner    = currentRole === "owner";
   const isMember   = currentRole === "member";
   const isAtLimit  = userLimit !== Infinity && totalCount >= userLimit;
+  const nudge      = usersNudge(plan);
 
   const activeMembers  = memberships.filter((m) => m.status === "active");
   const pendingInvites = memberships.filter((m) => m.status === "invited");
@@ -342,7 +344,7 @@ export default function UsersClient({
             type="button"
             onClick={() => { setActionError(null); setIsInviteOpen(true); }}
             disabled={isAtLimit}
-            title={isAtLimit ? `Your ${PLAN_LABELS[plan]} plan is at its user limit. Upgrade to add more.` : undefined}
+            title={isAtLimit ? `${nudge.atLimitMsg}${nudge.upgradeSuggestion ? ` ${nudge.upgradeSuggestion}` : ""}` : undefined}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed shrink-0"
           >
             Invite User
@@ -371,9 +373,19 @@ export default function UsersClient({
             Plan Usage
           </p>
           <p className="text-sm font-medium text-gray-700">{limitLabel}</p>
-          {isAtLimit && isOwner && (
+          {isAtLimit && nudge.upgradeSuggestion && (
             <p className="text-xs text-amber-600 mt-0.5">
-              Upgrade your plan to invite more team members.
+              {nudge.upgradeSuggestion}{" "}
+              {isOwner ? (
+                <a
+                  href="/admin/billing"
+                  className="font-semibold underline underline-offset-1 hover:text-amber-700 transition-colors"
+                >
+                  Change your plan →
+                </a>
+              ) : (
+                <span>Ask the account owner to change the plan.</span>
+              )}
             </p>
           )}
         </div>

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
+import { getMembershipRole } from "@/lib/memberships";
 import AccordionSection from "../venue/AccordionSection";
 import HhTimesSection from "./HhTimesSection";
 import TaglineForm from "./TaglineForm";
@@ -159,6 +160,10 @@ export default async function AdminHappyHoursPage({
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
+  const currentEmail = user.email ?? operator?.email ?? "";
+  const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
+  const isOwner = isImpersonating || currentRole === "owner";
+
   let venueData: HappyHoursVenueRow | null = null;
   let venueError: { message: string } | null = null;
 
@@ -264,6 +269,8 @@ export default async function AdminHappyHoursPage({
               type="food"
               initialItems={foodItems}
               itemLimit={foodLimit}
+              plan={operatorPlan}
+              isOwner={isOwner}
             />
           </AccordionSection>
 
@@ -278,6 +285,8 @@ export default async function AdminHappyHoursPage({
               type="drink"
               initialItems={drinkItems}
               itemLimit={drinkLimit}
+              plan={operatorPlan}
+              isOwner={isOwner}
             />
           </AccordionSection>
 

@@ -51,6 +51,8 @@ type Props = {
   operatorId: string;
   venueId: string;
   operatorPlan: OperatorPlan;
+  /** Whether the current user is the account owner (controls CTA wording). */
+  isOwner: boolean;
   /** Called after a successful insert or update with the saved event's id. */
   onSaved?: (eventId: string) => void;
 };
@@ -159,7 +161,7 @@ const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, onSaved }: Props) {
+export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, isOwner, onSaved }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
@@ -454,12 +456,16 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             This event has a recurring schedule from a previous plan. To edit the
             schedule, upgrade to Pro or switch &ldquo;Repeats&rdquo; to{" "}
             &ldquo;One-time&rdquo; to save other changes.{" "}
-            <Link
-              href="/admin/billing"
-              className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-            >
-              View Plan Options
-            </Link>
+            {isOwner ? (
+              <Link
+                href="/admin/billing"
+                className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+              >
+                Change your plan →
+              </Link>
+            ) : (
+              <span className="text-amber-700">Ask the account owner to change the plan.</span>
+            )}
           </div>
         )}
         <select
@@ -511,12 +517,16 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             </p>
             <p className="text-xs font-medium text-amber-800 pt-0.5">
               Available on Pro and Premium plans.{" "}
-              <Link
-                href="/admin/billing"
-                className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-              >
-                View Plan Options
-              </Link>
+              {isOwner ? (
+                <Link
+                  href="/admin/billing"
+                  className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+                >
+                  Change your plan →
+                </Link>
+              ) : (
+                <span className="text-amber-700">Ask the account owner to change the plan.</span>
+              )}
             </p>
           </div>
         )}

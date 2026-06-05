@@ -106,9 +106,10 @@ type Props = {
   operatorId: string;
   venueId: string;
   operatorPlan: OperatorPlan;
+  isOwner: boolean;
 };
 
-export default function EventsManager({ initialEvents, operatorId, venueId, operatorPlan }: Props) {
+export default function EventsManager({ initialEvents, operatorId, venueId, operatorPlan, isOwner }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -366,6 +367,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
                 operatorId={operatorId}
                 venueId={venueId}
                 operatorPlan={operatorPlan}
+                isOwner={isOwner}
                 onSaved={handleSaved}
               />
             </div>
