@@ -276,6 +276,14 @@ async function buildNormalContext(): Promise<OperatorContext> {
   const membership = await getActiveMembershipForAuthUser(user.id);
 
   // ── Step 1: Fast path — confirmed member membership ───────────────────────
+  // Uses adminClient for ctx.supabase — the same pattern as impersonation.
+  // Rationale: venue/event/media RLS policies check operators.email = jwt.email.
+  // A member's JWT email maps to their own personal operator, not the operator
+  // they were invited to manage. The session client would therefore be blocked
+  // by RLS for all venue operations on the invited operator's data. Using the
+  // admin client bypasses RLS; application-level filters (created_by_operator_id
+  // in buildVenueUpdate, venue_id in image/event queries) enforce the correct
+  // authorization boundary — exactly as impersonation already does.
   if (membership?.role === "member") {
     const adminClient = createAdminClient();
     const { data: operatorData, error: operatorLoadError } = await adminClient
@@ -286,7 +294,7 @@ async function buildNormalContext(): Promise<OperatorContext> {
 
     if (operatorData) {
       return {
-        supabase,
+        supabase: adminClient,   // admin client — bypasses email-based RLS for members
         user,
         operator: operatorData as unknown as OperatorRow,
         operatorError: null,
@@ -313,6 +321,7 @@ async function buildNormalContext(): Promise<OperatorContext> {
   //   B) Fast path returned an owner membership (member row invisible due to
   //      null/stale auth_user_id, but member context must still take priority).
   // Corrects auth_user_id on the membership row so Step 1 handles future logins.
+  // Uses adminClient for the same reason as Step 1.
   if (user.email) {
     const memberMembership = await getActiveMemberMembershipByEmail(user.email);
 
@@ -338,7 +347,7 @@ async function buildNormalContext(): Promise<OperatorContext> {
 
       if (operatorData) {
         return {
-          supabase,
+          supabase: adminClient,   // admin client — bypasses email-based RLS for members
           user,
           operator: operatorData as unknown as OperatorRow,
           operatorError: null,

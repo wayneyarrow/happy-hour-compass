@@ -18,7 +18,7 @@ import {
 } from "@/lib/plans";
 import { getOperatorSubscription, type SubscriptionStatus } from "@/lib/subscriptions";
 import { parseSpecialItemCount } from "@/lib/venueReadiness";
-import { countOperatorMembers } from "@/lib/memberships";
+import { countOperatorMembers, getMembershipRole } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
 
 // ── Plan metadata ─────────────────────────────────────────────────────────────
@@ -262,6 +262,14 @@ export default async function AdminBillingPage() {
   // User count (active + pending invites)
   const userCount = operator ? await countOperatorMembers(operator.id) : 0;
 
+  // Current user's membership role — used to gate the Change Plan button.
+  // Impersonation sessions are treated as owners for plan management.
+  const currentEmail = user.email ?? "";
+  const currentRole  = operator && currentEmail
+    ? await getMembershipRole(operator.id, currentEmail)
+    : null;
+  const isOwner = isImpersonating || currentRole === "owner";
+
   // ── Recommendations ───────────────────────────────────────────────────────
 
   const recs: string[] = [];
@@ -353,6 +361,7 @@ export default async function AdminBillingPage() {
               drinkCount={drinkCount}
               tagCount={tagCount}
               userCount={userCount}
+              isOwner={isOwner}
             />
           </div>
         </div>
