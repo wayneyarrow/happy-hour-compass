@@ -19,6 +19,10 @@ import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession, OPERATOR_SELECT, type OperatorRow } from "@/lib/ensureOperator";
+import {
+  getActiveMembershipForAuthUser,
+  getActiveMemberMembershipByEmail,
+} from "@/lib/memberships";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -240,6 +244,159 @@ async function buildNormalContext(): Promise<OperatorContext> {
     };
   }
 
+  // ── Context resolution: member membership takes priority in V1 ───────────────
+  //
+  // Resolution order (confirmed by DB investigation 2026-06-05):
+  //
+  //   Step 1 — Fast path member: if auth_user_id is already correctly linked
+  //     on a member membership, return the invited operator immediately.
+  //     This is the hot path after the first login corrects the link.
+  //
+  //   Step 2 — Email-based member check: finds active member memberships by
+  //     email, regardless of auth_user_id state. Runs whenever Step 1 didn't
+  //     return a member membership — including when the fast path returned an
+  //     OWNER membership. Member context always wins over owner in V1.
+  //     Corrects auth_user_id as a side effect so Step 1 handles all future
+  //     logins without this overhead.
+  //
+  //   Step 3 — Owner context: used only when no member membership exists at all.
+  //     Reads the operator from the fast-path owner membership (auth_user_id
+  //     matched). For trigger-created memberships (auth_user_id=null), falls
+  //     through to ensureOperatorForSession.
+  //
+  //   Step 4 — ensureOperatorForSession: final fallback for new operators whose
+  //     owner membership has auth_user_id=null (trigger-created, not backfilled).
+  //
+  // Root cause for multi-membership users: when a user is both an owner on
+  // operator A AND an invited member on operator B, the old code committed to
+  // the owner context (fast path) before ever running the email member check.
+  // The member membership had auth_user_id=null so it was invisible to the
+  // auth_user_id query. This fix separates the two decisions.
+
+  const membership = await getActiveMembershipForAuthUser(user.id);
+
+  // ── Step 1: Fast path — confirmed member membership ───────────────────────
+  if (membership?.role === "member") {
+    const adminClient = createAdminClient();
+    const { data: operatorData, error: operatorLoadError } = await adminClient
+      .from("operators")
+      .select(OPERATOR_SELECT)
+      .eq("id", membership.operator_id)
+      .maybeSingle();
+
+    if (operatorData) {
+      return {
+        supabase,
+        user,
+        operator: operatorData as unknown as OperatorRow,
+        operatorError: null,
+        isImpersonating: false,
+        impersonatingVenueId: null,
+        sessionVenueId: null,
+        founderEmail: null,
+        impersonationSessionId: null,
+        venueName: null,
+        operatorEmail: null,
+      };
+    }
+
+    console.warn(
+      "[buildNormalContext] Member membership (fast path) points to missing operator:",
+      membership.operator_id,
+      operatorLoadError?.message ?? "(no error)"
+    );
+  }
+
+  // ── Step 2: Email-based member check — member takes priority over owner ────
+  // Runs when:
+  //   A) Fast path returned null (auth_user_id not yet linked on member row).
+  //   B) Fast path returned an owner membership (member row invisible due to
+  //      null/stale auth_user_id, but member context must still take priority).
+  // Corrects auth_user_id on the membership row so Step 1 handles future logins.
+  if (user.email) {
+    const memberMembership = await getActiveMemberMembershipByEmail(user.email);
+
+    if (memberMembership) {
+      const adminClient = createAdminClient();
+
+      if (memberMembership.auth_user_id !== user.id) {
+        const { error: relinkError } = await adminClient
+          .from("operator_memberships")
+          .update({ auth_user_id: user.id })
+          .eq("id",    memberMembership.id)
+          .eq("email", user.email);
+        if (relinkError) {
+          console.error("[buildNormalContext] auth_user_id relink failed:", relinkError.message);
+        }
+      }
+
+      const { data: operatorData, error: opError } = await adminClient
+        .from("operators")
+        .select(OPERATOR_SELECT)
+        .eq("id", memberMembership.operator_id)
+        .maybeSingle();
+
+      if (operatorData) {
+        return {
+          supabase,
+          user,
+          operator: operatorData as unknown as OperatorRow,
+          operatorError: null,
+          isImpersonating: false,
+          impersonatingVenueId: null,
+          sessionVenueId: null,
+          founderEmail: null,
+          impersonationSessionId: null,
+          venueName: null,
+          operatorEmail: null,
+        };
+      }
+
+      console.warn(
+        "[buildNormalContext] Member membership (email fallback) points to missing operator:",
+        memberMembership.operator_id,
+        opError?.message ?? "(no error)"
+      );
+    }
+  }
+
+  // ── Step 3: Owner context — no member membership exists ──────────────────
+  if (membership?.role === "owner") {
+    const adminClient = createAdminClient();
+    const { data: operatorData, error: operatorLoadError } = await adminClient
+      .from("operators")
+      .select(OPERATOR_SELECT)
+      .eq("id", membership.operator_id)
+      .maybeSingle();
+
+    if (operatorData) {
+      return {
+        supabase,
+        user,
+        operator: operatorData as unknown as OperatorRow,
+        operatorError: null,
+        isImpersonating: false,
+        impersonatingVenueId: null,
+        sessionVenueId: null,
+        founderEmail: null,
+        impersonationSessionId: null,
+        venueName: null,
+        operatorEmail: null,
+      };
+    }
+
+    console.warn(
+      "[buildNormalContext] Owner membership points to missing operator:",
+      membership.operator_id,
+      operatorLoadError?.message ?? "(no error)"
+    );
+  }
+
+  // ── Final fallback: existing operator resolution ──────────────────────────
+  // Used for:
+  //   - New operators whose owner membership has auth_user_id = null (trigger-created).
+  //   - Operators with no membership at all (unusual but handled gracefully).
+  //   - Recovery when operator record is unexpectedly missing above.
   const { operator, error: operatorError } = await ensureOperatorForSession(supabase, user);
 
   return {

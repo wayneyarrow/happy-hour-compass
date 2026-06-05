@@ -257,18 +257,20 @@ type LimitViolation = {
 
 function checkDowngradeViolations(
   targetPlan: VisiblePlan,
-  usage: { images: number; food: number; drinks: number; tags: number }
+  usage: { images: number; food: number; drinks: number; tags: number; users: number }
 ): LimitViolation[] {
   const violations: LimitViolation[] = [];
   const imgLimit   = maxImages(targetPlan);
   const foodLimit  = maxFoodSpecials(targetPlan);
   const drinkLimit = maxDrinkSpecials(targetPlan);
   const tagLimit   = maxSearchTags(targetPlan);
+  const userLimit  = maxUsers(targetPlan);
 
-  if (usage.images > imgLimit)  violations.push({ label: "Photos",         used: usage.images, limit: imgLimit });
-  if (usage.food > foodLimit)   violations.push({ label: "Food Specials",  used: usage.food,   limit: foodLimit });
-  if (usage.drinks > drinkLimit) violations.push({ label: "Drink Specials", used: usage.drinks, limit: drinkLimit });
-  if (usage.tags > tagLimit)    violations.push({ label: "Search Tags",    used: usage.tags,   limit: tagLimit });
+  if (usage.images > imgLimit)                       violations.push({ label: "Photos",         used: usage.images, limit: imgLimit });
+  if (usage.food > foodLimit)                        violations.push({ label: "Food Specials",  used: usage.food,   limit: foodLimit });
+  if (usage.drinks > drinkLimit)                     violations.push({ label: "Drink Specials", used: usage.drinks, limit: drinkLimit });
+  if (usage.tags > tagLimit)                         violations.push({ label: "Search Tags",    used: usage.tags,   limit: tagLimit });
+  if (userLimit !== Infinity && usage.users > userLimit) violations.push({ label: "Team Members",  used: usage.users,  limit: userLimit });
 
   return violations;
 }
@@ -283,11 +285,12 @@ type ModalStep =
 
 export type ChangePlanModalProps = {
   currentPlan: OperatorPlan;
-  operatorId: string | null;
-  imageCount: number;
-  foodCount: number;
-  drinkCount: number;
-  tagCount: number;
+  operatorId:  string | null;
+  imageCount:  number;
+  foodCount:   number;
+  drinkCount:  number;
+  tagCount:    number;
+  userCount:   number;
 };
 
 // ── Small shared icon ─────────────────────────────────────────────────────────
@@ -713,6 +716,7 @@ export default function ChangePlanModal({
   foodCount,
   drinkCount,
   tagCount,
+  userCount,
 }: ChangePlanModalProps) {
   const router            = useRouter();
   const [isOpen,          setIsOpen]       = useState(false);
@@ -761,6 +765,7 @@ export default function ChangePlanModal({
         food:   foodCount,
         drinks: drinkCount,
         tags:   tagCount,
+        users:  userCount,
       });
       setViolations(v);
       setStep(v.length > 0 ? "downgrade-blocked" : "downgrade-confirm");

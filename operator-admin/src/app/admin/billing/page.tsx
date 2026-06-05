@@ -11,12 +11,14 @@ import {
   maxFoodSpecials,
   maxDrinkSpecials,
   maxSearchTags,
+  maxUsers,
   canUseRecurringEvents,
   canUseAdvancedSearchTags,
   type OperatorPlan,
 } from "@/lib/plans";
 import { getOperatorSubscription, type SubscriptionStatus } from "@/lib/subscriptions";
 import { parseSpecialItemCount } from "@/lib/venueReadiness";
+import { countOperatorMembers } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
 
 // ── Plan metadata ─────────────────────────────────────────────────────────────
@@ -253,8 +255,12 @@ export default async function AdminBillingPage() {
   const foodLimit    = maxFoodSpecials(plan);
   const drinkLimit   = maxDrinkSpecials(plan);
   const tagLimit     = maxSearchTags(plan);
+  const userLimit    = maxUsers(plan);
   const hasRecurring = canUseRecurringEvents(plan);
   const hasTagAccess = canUseAdvancedSearchTags(plan);
+
+  // User count (active + pending invites)
+  const userCount = operator ? await countOperatorMembers(operator.id) : 0;
 
   // ── Recommendations ───────────────────────────────────────────────────────
 
@@ -346,6 +352,7 @@ export default async function AdminBillingPage() {
               foodCount={foodCount}
               drinkCount={drinkCount}
               tagCount={tagCount}
+              userCount={userCount}
             />
           </div>
         </div>
@@ -394,6 +401,13 @@ export default async function AdminBillingPage() {
           ) : (
             <UtilRow kind="locked" label="Search Tags" requiredPlan="pro" />
           )}
+          <UtilRow
+            kind="numeric"
+            label="Users"
+            used={userCount}
+            limit={userLimit}
+            hasVenue={true}
+          />
           <UtilRow kind="info" label="Active Events" note={eventNote} />
         </div>
       </div>

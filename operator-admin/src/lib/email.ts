@@ -1496,6 +1496,97 @@ Happy Hour Compass`;
   });
 }
 
+// ── Member invite email ───────────────────────────────────────────────────────
+
+/**
+ * Sends an invitation email to a new team member.
+ *
+ * The invite link routes to /operator/invite/[token] where the invitee
+ * creates their password and accepts access to the venue's operator account.
+ *
+ * Criticality: "important" — the DB row is already created; email failure
+ * rolls back the membership row in the calling action.
+ */
+export async function sendMemberInviteEmail({
+  to,
+  firstName,
+  venueName,
+  inviterName,
+  inviteUrl,
+}: {
+  to: string;
+  firstName: string;
+  venueName: string;
+  inviterName: string;
+  inviteUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">You&rsquo;ve been invited to manage ${venueName}</h1>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            <strong style="color:#0f172a;">${inviterName}</strong> has invited you to help manage
+            <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
+          </p>
+
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            Click the button below to create your password and join the venue&rsquo;s operator account.
+          </p>
+
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${inviteUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Accept invitation &rarr;
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This invitation link expires in 7 days. If it expires, ask ${inviterName} to send a new invitation.</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because ${inviterName} invited you to manage a venue on Happy Hour Compass.
+            If you didn&rsquo;t expect this, you can safely ignore it.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi ${firstName},
+
+${inviterName} has invited you to help manage ${venueName} on Happy Hour Compass.
+
+Click the link below to create your password and accept the invitation:
+${inviteUrl}
+
+This link expires in 7 days. If it expires, ask ${inviterName} to send a new invitation.
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "member_invite",
+    to,
+    subject:     `You've been invited to manage ${venueName} on Happy Hour Compass`,
+    html,
+    text,
+    criticality: "important",
+  });
+}
+
 // ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
 
 export async function sendApprovalEmail({
