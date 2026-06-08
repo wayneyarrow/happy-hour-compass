@@ -487,3 +487,119 @@ export async function getPublishedEventsForConsumer(): Promise<
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Control Panel — Featured Events rail candidates
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full event shape needed by the CP Discover Management Featured Events rail.
+ * Includes venue context (for display and eligibility checks) and event-level
+ * discover controls added in migration 038.
+ */
+export type CPFeaturedEventItem = {
+  /** events.id — UUID primary key */
+  eventUuid: string;
+  title: string;
+  nextOccurrenceLabel: string;
+  /** ISO "YYYY-MM-DD" or null. Used for upcoming-only filtering. */
+  firstDate: string | null;
+  /** Recurrence pattern. Recurring events are always treated as upcoming. */
+  recurrence: string | null;
+  /** Event-level ranking boost (0–100). From events.internal_boost. */
+  internalBoost: number;
+  /** When true, this event is hidden from all discover rails. */
+  excludeFromDiscover: boolean;
+  /** venues.id — UUID used for DB mutations (not the slug). */
+  venueUuid: string;
+  /** venues.slug — used for CP venue detail links (/control-panel/venues/:slug). */
+  venueSlug: string;
+  venueName: string;
+  /** venues.exclude_from_discover — venue-wide suppress flag. */
+  venueExcludeFromDiscover: boolean;
+  venueLat: number | null;
+  venueLng: number | null;
+  operatorPlan: "free" | "pro" | "premium" | "enterprise";
+};
+
+/**
+ * Fetches all published events with venue context for the CP Featured Events
+ * Discover Management rail.  Includes upcoming-only filtering (past one-off
+ * events are excluded; recurring events are always included).
+ *
+ * Uses the admin client (service-role) to bypass RLS.
+ * Returns an empty array on any error.
+ */
+export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventItem[]> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        "id, venue_id, title, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, " +
+          "internal_boost, exclude_from_discover, " +
+          "venues!venue_id(" +
+            "id, slug, name, lat, lng, exclude_from_discover, " +
+            "operators!created_by_operator_id(plan)" +
+          ")"
+      )
+      .eq("is_published", true)
+      .order("title", { ascending: true });
+
+    if (error) {
+      console.error("[getCPFeaturedEventCandidates] Supabase error:", error);
+      return [];
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).flatMap((row: Record<string, any>) => {
+      const firstDate  = (row.first_date as string | null) ?? null;
+      const recurrence = (row.recurrence as string | null) ?? null;
+
+      // Filter out past one-off events (same logic as upcomingBucket)
+      if (upcomingBucket(firstDate, recurrence, today) === 1) return [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const venue = (row.venues as Record<string, any> | null) ?? {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const operator = (venue.operators as Record<string, any> | null) ?? null;
+      const rawPlan = operator?.plan as string | undefined;
+      const plan: CPFeaturedEventItem["operatorPlan"] =
+        rawPlan === "pro" || rawPlan === "premium" || rawPlan === "enterprise"
+          ? rawPlan
+          : "free";
+
+      return [{
+        eventUuid:              row.id as string,
+        title:                  (row.title as string) ?? "",
+        nextOccurrenceLabel:    buildOccurrenceLabel({
+          first_date:      firstDate,
+          start_time:      (row.start_time as string | null) ?? null,
+          end_time:        (row.end_time as string | null) ?? null,
+          recurrence,
+          event_time:      (row.event_time as string | null) ?? null,
+          event_frequency: (row.event_frequency as string | null) ?? null,
+        }),
+        firstDate,
+        recurrence,
+        internalBoost:          typeof row.internal_boost === "number" ? row.internal_boost : 0,
+        excludeFromDiscover:    row.exclude_from_discover === true,
+        venueUuid:              (venue.id as string) ?? "",
+        venueSlug:              (venue.slug as string) ?? "",
+        venueName:              (venue.name as string) ?? "",
+        venueExcludeFromDiscover: venue.exclude_from_discover === true,
+        venueLat:               typeof venue.lat === "number" ? venue.lat : null,
+        venueLng:               typeof venue.lng === "number" ? venue.lng : null,
+        operatorPlan:           plan,
+      }];
+    });
+  } catch (err) {
+    console.error("[getCPFeaturedEventCandidates] Unexpected error:", err);
+    return [];
+  }
+}

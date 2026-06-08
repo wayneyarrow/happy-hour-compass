@@ -315,3 +315,196 @@ export async function restoreToAlgorithmAction(
     return { success: false, error: "Unexpected error." };
   }
 }
+
+// ─── Event-level discover controls (Featured Events rail) ─────────────────────
+
+/**
+ * Updates events.internal_boost for a single event.
+ * Bound action — eventUuid is never read from FormData.
+ */
+export async function updateEventBoostAction(
+  eventUuid: string,
+  boost: number
+): Promise<ActionResult> {
+  const clampedBoost = Math.max(0, Math.min(100, Math.round(boost)));
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("events")
+      .update({ internal_boost: clampedBoost })
+      .eq("id", eventUuid);
+
+    if (error) {
+      console.error("[updateEventBoostAction] Supabase error:", error);
+      return { success: false, error: "Failed to save event boost." };
+    }
+
+    revalidatePath("/control-panel/discover");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("[updateEventBoostAction] Unexpected error:", err);
+    return { success: false, error: "Unexpected error." };
+  }
+}
+
+/**
+ * Toggles events.exclude_from_discover for a single event.
+ * When true the event is hidden from all discover rails.
+ */
+export async function updateEventExcludeFromDiscoverAction(
+  eventUuid: string,
+  value: boolean
+): Promise<ActionResult> {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("events")
+      .update({ exclude_from_discover: value })
+      .eq("id", eventUuid);
+
+    if (error) {
+      console.error("[updateEventExcludeFromDiscoverAction] Supabase error:", error);
+      return { success: false, error: "Failed to update Exclude From Discover." };
+    }
+
+    revalidatePath("/control-panel/discover");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("[updateEventExcludeFromDiscoverAction] Unexpected error:", err);
+    return { success: false, error: "Unexpected error." };
+  }
+}
+
+/**
+ * Adds a specific event to a rail (include override).
+ * Uses upsert so clicking "Add" twice is idempotent.
+ */
+export async function addEventToRailAction(
+  railKey: RailKey,
+  eventUuid: string,
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!RAIL_KEYS.includes(railKey)) {
+    return { success: false, error: "Invalid rail." };
+  }
+
+  const reasonType = (formData.get("reason_type") as string | null) || null;
+  const note       = (formData.get("note") as string | null)?.trim() || null;
+  const admin      = await getAdmin();
+  const now        = new Date().toISOString();
+
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("discover_event_overrides")
+      .upsert(
+        {
+          rail_key:    railKey,
+          event_id:    eventUuid,
+          action:      "include",
+          reason_type: reasonType,
+          note,
+          updated_at:  now,
+          updated_by:  admin?.email ?? null,
+          created_by:  admin?.email ?? null,
+        },
+        { onConflict: "rail_key,event_id" }
+      );
+
+    if (error) {
+      console.error("[addEventToRailAction] Supabase error:", error);
+      return { success: false, error: "Failed to add event to rail." };
+    }
+
+    revalidatePath("/control-panel/discover");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("[addEventToRailAction] Unexpected error:", err);
+    return { success: false, error: "Unexpected error." };
+  }
+}
+
+/**
+ * Removes a specific event from a rail (exclude override / nix).
+ * Uses upsert so it's idempotent and handles switching a prior 'include' to 'exclude'.
+ */
+export async function removeEventFromRailAction(
+  railKey: RailKey,
+  eventUuid: string,
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!RAIL_KEYS.includes(railKey)) {
+    return { success: false, error: "Invalid rail." };
+  }
+
+  const reasonType = (formData.get("reason_type") as string | null) || null;
+  const note       = (formData.get("note") as string | null)?.trim() || null;
+  const admin      = await getAdmin();
+  const now        = new Date().toISOString();
+
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("discover_event_overrides")
+      .upsert(
+        {
+          rail_key:    railKey,
+          event_id:    eventUuid,
+          action:      "exclude",
+          reason_type: reasonType,
+          note,
+          updated_at:  now,
+          updated_by:  admin?.email ?? null,
+          created_by:  admin?.email ?? null,
+        },
+        { onConflict: "rail_key,event_id" }
+      );
+
+    if (error) {
+      console.error("[removeEventFromRailAction] Supabase error:", error);
+      return { success: false, error: "Failed to nix event from rail." };
+    }
+
+    revalidatePath("/control-panel/discover");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("[removeEventFromRailAction] Unexpected error:", err);
+    return { success: false, error: "Unexpected error." };
+  }
+}
+
+/**
+ * Restores a nixed event to the algorithm (deletes its event-level override).
+ * After deletion the engine's normal logic determines whether the event appears.
+ */
+export async function restoreEventToAlgorithmAction(
+  railKey: RailKey,
+  eventUuid: string
+): Promise<ActionResult> {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("discover_event_overrides")
+      .delete()
+      .eq("rail_key", railKey)
+      .eq("event_id", eventUuid);
+
+    if (error) {
+      console.error("[restoreEventToAlgorithmAction] Supabase error:", error);
+      return { success: false, error: "Failed to restore event." };
+    }
+
+    revalidatePath("/control-panel/discover");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    console.error("[restoreEventToAlgorithmAction] Unexpected error:", err);
+    return { success: false, error: "Unexpected error." };
+  }
+}

@@ -2,16 +2,18 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { getCPFeaturedEventCandidates } from "@/lib/data/events";
 import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
+import { getEventOverridesForRail } from "@/lib/data/discoverEventOverrides";
 import {
   getSpotlightVenues,
   getPatioPicks,
   getHighlyRated,
   getFeaturedNearby,
   getNewThisWeek,
-  getFeaturedEvents,
   getTaggedVenues,
 } from "@/lib/discover/discoverEngine";
+import { computeFeaturedEventRail } from "@/lib/discover/featuredEventsEngine";
 import { CollectionVenueView } from "./CollectionVenueView";
 import { CollectionEventView } from "./CollectionEventView";
 
@@ -90,32 +92,33 @@ export default async function CollectionPage({ params }: Props) {
   const meta = COLLECTIONS[collection as CollectionSlug];
   if (!meta) notFound();
 
-  // Fetch venues + overrides once for all collection types.
-  // Events collection uses getFeaturedEvents (same engine source as homepage rail)
-  // so it also needs the full venue set and overrides.
-  const [venues, allOverrides] = await Promise.all([
-    getPublishedVenuesForConsumer(),
-    getAllRailOverrides(),
-  ]);
-
-  // ── Events collection ───────────────────────────────────────────────────────
-  // Uses getFeaturedEvents so market filtering, eligibility, and overrides all
-  // match the homepage Featured Events rail (same source of truth).
+  // ── Events collection — fast path ──────────────────────────────────────────
+  // Fetch event-specific data only when showing the Featured Events collection,
+  // avoiding the full venue load for this case.
   if (meta.type === "event") {
-    const engineEvents = getFeaturedEvents(venues, allOverrides["featured-events"]);
-    // Map DiscoverEventItem → ConsumerEventListItem shape expected by EventCard.
-    // EventCard only renders id, title, venueName, nextOccurrenceLabel — the
-    // remaining fields are present on ConsumerEventListItem but unused here.
+    const [allOverrides, eventCandidates, eventOverrides] = await Promise.all([
+      getAllRailOverrides(),
+      getCPFeaturedEventCandidates(),
+      getEventOverridesForRail("featured-events"),
+    ]);
+    // computeFeaturedEventRail applies all event-level controls and matches the
+    // homepage Featured Events rail (same source of truth).
+    const engineEvents = computeFeaturedEventRail(
+      eventCandidates,
+      eventOverrides,
+      allOverrides["featured-events"]
+    );
+    // Map CPFeaturedEventItem → ConsumerEventListItem shape expected by EventCard.
     const events = engineEvents.map((e) => ({
-      id: e.id,
-      title: e.title,
-      venueName: e.venueName,
+      id:                  e.eventUuid,
+      title:               e.title,
+      venueName:           e.venueName,
       nextOccurrenceLabel: e.nextOccurrenceLabel,
-      description: null,
-      imageUrl: null,
-      venueId: e.venueSlug,
-      firstDate: null,
-      recurrence: null,
+      description:         null,
+      imageUrl:            null,
+      venueId:             e.venueSlug,
+      firstDate:           e.firstDate,
+      recurrence:          e.recurrence,
     }));
     return (
       <main className="bg-gray-50 min-h-full">
@@ -123,6 +126,12 @@ export default async function CollectionPage({ params }: Props) {
       </main>
     );
   }
+
+  // Fetch venues + overrides for all venue collection types.
+  const [venues, allOverrides] = await Promise.all([
+    getPublishedVenuesForConsumer(),
+    getAllRailOverrides(),
+  ]);
 
   // ── Venue collections ───────────────────────────────────────────────────────
   // Collections show the full filtered set (no RAIL_MAX slice).

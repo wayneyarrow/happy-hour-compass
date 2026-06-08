@@ -44,6 +44,15 @@ export const EXCLUDE_REASON_TYPES = [
   { value: "other",                label: "Other" },
 ] as const;
 
+// ─── Event-level override type ────────────────────────────────────────────────
+// Minimal shape consumed by the Discover Engine.  The full row type (with
+// reason_type, note, created_by, etc.) lives in discoverEventOverrides.ts.
+
+export type EventRailOverride = {
+  eventUuid: string;
+  action: "include" | "exclude";
+};
+
 // ─── Shared row type ─────────────────────────────────────────────────────────
 
 export type RailOverrideRow = {
