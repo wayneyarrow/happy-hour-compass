@@ -458,7 +458,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             &ldquo;One-time&rdquo; to save other changes.{" "}
             {isOwner ? (
               <Link
-                href="/admin/billing"
+                href="/admin/subscription"
                 className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
               >
                 Change your plan →
@@ -519,7 +519,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
               Available on Pro and Premium plans.{" "}
               {isOwner ? (
                 <Link
-                  href="/admin/billing"
+                  href="/admin/subscription"
                   className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
                 >
                   Change your plan →

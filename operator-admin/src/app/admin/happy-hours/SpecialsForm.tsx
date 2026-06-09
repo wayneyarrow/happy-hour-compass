@@ -465,7 +465,7 @@ export default function SpecialsForm({ venueId, type, initialItems, itemLimit, p
                 {" "}
                 {isOwner ? (
                   <Link
-                    href="/admin/billing"
+                    href="/admin/subscription"
                     className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
                   >
                     Change your plan →

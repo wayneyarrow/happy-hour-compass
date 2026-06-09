@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Plan" };
+export const metadata = { title: "Subscription" };
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -179,7 +179,7 @@ function UtilRow(props: UtilRowProps) {
 
 // ── Venue row (only fields this page needs) ───────────────────────────────────
 
-type BillingVenueRow = {
+type SubscriptionVenueRow = {
   id: string;
   hh_food_details: string | null;
   hh_drink_details: string | null;
@@ -188,7 +188,7 @@ type BillingVenueRow = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function AdminBillingPage() {
+export default async function AdminSubscriptionPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -206,7 +206,7 @@ export default async function AdminBillingPage() {
 
   // ── Venue usage data ──────────────────────────────────────────────────────
 
-  let venue: BillingVenueRow | null = null;
+  let venue: SubscriptionVenueRow | null = null;
 
   if (operator) {
     const { data } = await ctx.supabase
@@ -214,14 +214,14 @@ export default async function AdminBillingPage() {
       .select("id, hh_food_details, hh_drink_details, search_tags")
       .eq("created_by_operator_id", operator.id)
       .maybeSingle();
-    venue = data as BillingVenueRow | null;
+    venue = data as SubscriptionVenueRow | null;
   } else if (isImpersonating && impersonatingVenueId) {
     const { data } = await ctx.supabase
       .from("venues")
       .select("id, hh_food_details, hh_drink_details, search_tags")
       .eq("id", impersonatingVenueId)
       .maybeSingle();
-    venue = data as BillingVenueRow | null;
+    venue = data as SubscriptionVenueRow | null;
   }
 
   let imageCount = 0;

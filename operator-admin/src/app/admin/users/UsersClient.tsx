@@ -378,7 +378,7 @@ export default function UsersClient({
               {nudge.upgradeSuggestion}{" "}
               {isOwner ? (
                 <a
-                  href="/admin/billing"
+                  href="/admin/subscription"
                   className="font-semibold underline underline-offset-1 hover:text-amber-700 transition-colors"
                 >
                   Change your plan →

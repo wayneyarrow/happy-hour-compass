@@ -92,7 +92,7 @@ export default function SearchTagsForm({
           </p>
           {isOwner ? (
             <Link
-              href="/admin/billing"
+              href="/admin/subscription"
               className="text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900 transition-colors"
             >
               Change your plan →
@@ -211,7 +211,7 @@ export default function SearchTagsForm({
             {upgradeSuggestion && (
               isOwner ? (
                 <Link
-                  href="/admin/billing"
+                  href="/admin/subscription"
                   className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
                 >
                   Change your plan →

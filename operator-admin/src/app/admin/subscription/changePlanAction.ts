@@ -38,7 +38,7 @@ export async function changePlanAction(
   const result  = await updateOperatorPlan(operatorId, parseOperatorPlan(newPlan));
 
   if (result.ok) {
-    revalidatePath("/admin/billing");
+    revalidatePath("/admin/subscription");
     const actorEmail = ctx.user?.email ?? ctx.operator?.email ?? null;
     await addSystemVenueNote(
       operatorId,
