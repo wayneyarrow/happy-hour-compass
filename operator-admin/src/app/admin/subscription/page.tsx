@@ -20,6 +20,7 @@ import { getOperatorSubscription, type SubscriptionStatus } from "@/lib/subscrip
 import { parseSpecialItemCount } from "@/lib/venueReadiness";
 import { countOperatorMembers, getMembershipRole } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
+import ManageBillingButton from "./ManageBillingButton";
 
 // ── Plan metadata ─────────────────────────────────────────────────────────────
 
@@ -188,7 +189,13 @@ type SubscriptionVenueRow = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function AdminSubscriptionPage() {
+export default async function AdminSubscriptionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const params         = await searchParams;
+  const checkoutSuccess = params.checkout === "success";
   const supabase = await createClient();
   const {
     data: { user },
@@ -198,11 +205,14 @@ export default async function AdminSubscriptionPage() {
   const ctx = await resolveOperatorContext();
   const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
 
-  // ── Subscription (plan + status) ──────────────────────────────────────────
+  // ── Subscription (plan + status + billing) ───────────────────────────────
   const subscription = operator ? await getOperatorSubscription(operator.id) : null;
   const plan: OperatorPlan =
     subscription?.plan_code ?? parseOperatorPlan(operator?.plan);
   const status: SubscriptionStatus = subscription?.status ?? "active";
+  const billingProvider   = subscription?.billing_provider ?? null;
+  const stripeCustomerId  = subscription?.billing_provider_customer_id ?? null;
+  const isStripeBilled    = billingProvider === "stripe" && stripeCustomerId !== null;
 
   // ── Venue usage data ──────────────────────────────────────────────────────
 
@@ -328,6 +338,13 @@ export default async function AdminSubscriptionPage() {
         </p>
       </div>
 
+      {/* ── Checkout success banner ───────────────────────────────────────── */}
+      {checkoutSuccess && (
+        <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-4 mb-6">
+          <strong>Payment received.</strong> Your plan upgrade is being activated — this page will reflect it shortly.
+        </div>
+      )}
+
       {/* ── Error state ───────────────────────────────────────────────────── */}
       {operatorError && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-4 mb-6">
@@ -352,7 +369,8 @@ export default async function AdminSubscriptionPage() {
               {PLAN_DESCRIPTIONS[plan]}
             </p>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col items-end gap-2">
+            {isStripeBilled && <ManageBillingButton />}
             <ChangePlanModal
               currentPlan={plan}
               operatorId={operator?.id ?? null}
@@ -362,6 +380,8 @@ export default async function AdminSubscriptionPage() {
               tagCount={tagCount}
               userCount={userCount}
               isOwner={isOwner}
+              billingProvider={billingProvider}
+              stripeCustomerId={stripeCustomerId}
             />
           </div>
         </div>

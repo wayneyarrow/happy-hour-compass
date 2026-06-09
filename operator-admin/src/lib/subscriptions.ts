@@ -190,3 +190,72 @@ export async function updateOperatorPlan(
 
   return { ok: true };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stripe sync
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type StripeSync = {
+  customerId:     string;
+  subscriptionId: string;
+  planCode?:      string;  // omit to leave plan_code unchanged
+  status:         SubscriptionStatus;
+  periodStart:    string | null;
+  periodEnd:      string | null;
+};
+
+/**
+ * Upserts operator_subscriptions from a Stripe webhook event.
+ *
+ * Always sets billing_provider = 'stripe' and updates billing IDs.
+ * When planCode is provided, also syncs operators.plan for feature gating.
+ * Upserts rather than updates to handle first-checkout races safely.
+ */
+export async function syncStripeSubscription(
+  operatorId: string,
+  sync: StripeSync
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createAdminClient();
+
+  const patch: Record<string, unknown> = {
+    billing_provider:                 "stripe",
+    billing_provider_customer_id:     sync.customerId,
+    billing_provider_subscription_id: sync.subscriptionId,
+    status:                           sync.status,
+    current_period_start:             sync.periodStart,
+    current_period_end:               sync.periodEnd,
+    updated_at:                       new Date().toISOString(),
+  };
+
+  if (sync.planCode !== undefined) {
+    patch.plan_code = parseOperatorPlan(sync.planCode);
+  }
+
+  const { error: subError } = await supabase
+    .from("operator_subscriptions")
+    .upsert(
+      { operator_id: operatorId, ...patch },
+      { onConflict: "operator_id" }
+    );
+
+  if (subError) {
+    console.error("[syncStripeSubscription] upsert failed:", subError.message);
+    return { ok: false, error: subError.message };
+  }
+
+  if (sync.planCode !== undefined) {
+    const plan = parseOperatorPlan(sync.planCode);
+    const { error: opError } = await supabase
+      .from("operators")
+      .update({ plan })
+      .eq("id", operatorId);
+
+    if (opError) {
+      // Subscription is already updated — log but don't surface as an error.
+      console.error("[syncStripeSubscription] operators.plan sync failed:", opError.message);
+    }
+  }
+
+  return { ok: true };
+}

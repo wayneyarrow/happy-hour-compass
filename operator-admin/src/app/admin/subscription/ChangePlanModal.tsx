@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { changePlanAction } from "./changePlanAction";
+import { createCheckoutSessionAction } from "./stripeActions";
 import {
   PLAN_LABELS,
   maxImages,
@@ -284,14 +285,16 @@ type ModalStep =
   | "downgrade-confirm";
 
 export type ChangePlanModalProps = {
-  currentPlan: OperatorPlan;
-  operatorId:  string | null;
-  imageCount:  number;
-  foodCount:   number;
-  drinkCount:  number;
-  tagCount:    number;
-  userCount:   number;
-  isOwner:     boolean;
+  currentPlan:      OperatorPlan;
+  operatorId:       string | null;
+  imageCount:       number;
+  foodCount:        number;
+  drinkCount:       number;
+  tagCount:         number;
+  userCount:        number;
+  isOwner:          boolean;
+  billingProvider:  string | null;
+  stripeCustomerId: string | null;
 };
 
 // ── Small shared icon ─────────────────────────────────────────────────────────
@@ -536,6 +539,7 @@ function SelectorView({
 
 function ConfirmView({
   isUpgrade,
+  isStripeCheckout,
   toPlan,
   content,
   isPending,
@@ -544,6 +548,7 @@ function ConfirmView({
   onBack,
 }: {
   isUpgrade: boolean;
+  isStripeCheckout: boolean;
   toPlan: VisiblePlan;
   content: TransitionContent;
   isPending: boolean;
@@ -558,7 +563,11 @@ function ConfirmView({
       <h2 className="text-xl font-bold text-gray-900 mb-1">
         Confirm {isUpgrade ? "upgrade" : "downgrade"} to {PLAN_LABELS[toPlan]}
       </h2>
-      <p className="text-sm text-gray-500 mb-6">Your plan will change immediately.</p>
+      <p className="text-sm text-gray-500 mb-6">
+        {isStripeCheckout
+          ? "You'll be taken to Stripe to complete payment securely."
+          : "Your plan will change immediately."}
+      </p>
 
       {/* Upgrade: what you'll unlock */}
       {isUpgrade && content.gains && content.gains.length > 0 && (
@@ -636,9 +645,9 @@ function ConfirmView({
           }`}
         >
           {isPending
-            ? "Updating…"
+            ? isStripeCheckout ? "Redirecting…" : "Updating…"
             : isUpgrade
-            ? "Confirm Upgrade"
+            ? isStripeCheckout ? "Continue" : "Confirm Upgrade"
             : "Confirm Downgrade"}
         </button>
       </div>
@@ -719,6 +728,9 @@ export default function ChangePlanModal({
   tagCount,
   userCount,
   isOwner,
+  // billingProvider and stripeCustomerId are passed from page.tsx but
+  // not needed inside the modal — plan changes route through Stripe Checkout
+  // for upgrades based solely on the target plan, not the current provider.
 }: ChangePlanModalProps) {
   const router            = useRouter();
   const [isOpen,          setIsOpen]       = useState(false);
@@ -778,18 +790,33 @@ export default function ChangePlanModal({
     if (!selectedPlan || !operatorId) return;
     setActionError(null);
 
+    const isStripeUpgrade =
+      PLAN_RANK[selectedPlan] > PLAN_RANK[visibleCurrentPlan] &&
+      (selectedPlan === "pro" || selectedPlan === "premium");
+
     startTransition(async () => {
-      const result = await changePlanAction(operatorId, selectedPlan);
-      if (result.ok) {
-        const msg = `You're now on the ${PLAN_LABELS[selectedPlan]} plan.`;
-        // Close before setting success so toast doesn't appear inside modal.
-        setIsOpen(false);
-        setSuccessMsg(msg);
-        if (successTimerRef.current) clearTimeout(successTimerRef.current);
-        successTimerRef.current = setTimeout(() => setSuccessMsg(null), 5000);
-        router.refresh();
+      if (isStripeUpgrade) {
+        // Route paid upgrades through Stripe Checkout.
+        // plan_code is activated by the webhook — NOT this redirect.
+        const result = await createCheckoutSessionAction(selectedPlan as "pro" | "premium");
+        if (result.ok && result.url) {
+          window.location.href = result.url;
+        } else {
+          setActionError(result.error ?? "Billing is temporarily unavailable. Please try again later.");
+        }
       } else {
-        setActionError(result.error ?? "Something went wrong. Please try again.");
+        const result = await changePlanAction(operatorId, selectedPlan);
+        if (result.ok) {
+          const msg = `You're now on the ${PLAN_LABELS[selectedPlan]} plan.`;
+          // Close before setting success so toast doesn't appear inside modal.
+          setIsOpen(false);
+          setSuccessMsg(msg);
+          if (successTimerRef.current) clearTimeout(successTimerRef.current);
+          successTimerRef.current = setTimeout(() => setSuccessMsg(null), 5000);
+          router.refresh();
+        } else {
+          setActionError(result.error ?? "Something went wrong. Please try again.");
+        }
       }
     });
   }
@@ -906,6 +933,7 @@ export default function ChangePlanModal({
                     transitionContent && (
                       <ConfirmView
                         isUpgrade={isUpgrade}
+                        isStripeCheckout={isUpgrade && (selectedPlan === "pro" || selectedPlan === "premium")}
                         toPlan={selectedPlan}
                         content={transitionContent}
                         isPending={isPending}

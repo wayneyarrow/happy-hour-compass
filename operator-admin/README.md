@@ -35,11 +35,53 @@ cp .env.local.example .env.local
 # Then open .env.local and replace the placeholder values
 ```
 
-| Variable | Where to find it | Used where |
+**Supabase**
+
+| Variable | Source | Exposure |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Settings → API → Project URL | Browser + Server |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase dashboard → Settings → API → publishable key (`sb_publishable_...`) | Browser + Server |
-| `SUPABASE_SECRET_KEY` | Supabase dashboard → Settings → API → secret key (`sb_secret_...`) | Server only — **never expose to browser** |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Settings → API → Project URL | Browser + Server |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Settings → API → API Keys → publishable (`sb_publishable_...`) | Browser + Server |
+| `SUPABASE_SECRET_KEY` | Settings → API → API Keys → secret (`sb_secret_...`) | Server only |
+
+**Stripe — Billing & Payments**
+
+Use test keys (`sk_test_` / `pk_test_`) for development and beta. See `.env.local.example` for notes on `STRIPE_WEBHOOK_SECRET` and `APP_URL`.
+
+| Variable | Source | Exposure |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API Keys → Secret key | Server only |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API Keys → Publishable key | Browser + Server |
+| `STRIPE_PRO_PRICE_ID` | Stripe Dashboard → Product catalogue → Pro plan → price ID | Server only |
+| `STRIPE_PREMIUM_PRICE_ID` | Stripe Dashboard → Product catalogue → Premium plan → price ID | Server only |
+| `STRIPE_WEBHOOK_SECRET` | Stripe CLI (`stripe listen`) locally; Stripe Dashboard → Webhooks → endpoint → Signing secret in Vercel | Server only |
+| `APP_URL` | Your canonical app URL — e.g. `https://admin.happyhourcompass.com` | Server only |
+
+**Email (Resend)**
+
+| Variable | Source | Exposure |
+|---|---|---|
+| `RESEND_API_KEY` | resend.com → API Keys | Server only |
+| `FOUNDER_NOTIFICATION_EMAIL` | An inbox you monitor for ops notifications | Server only |
+
+**Google APIs**
+
+| Variable | Source | Exposure |
+|---|---|---|
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Cloud Console → APIs & Services → Credentials | Browser only |
+| `GOOGLE_PLACES_API_KEY` | Google Cloud Console → APIs & Services → Credentials | Server only |
+
+**Slack (Ops Alerts)**
+
+| Variable | Source | Exposure |
+|---|---|---|
+| `SLACK_OPS_CRITICAL_WEBHOOK_URL` | api.slack.com → your app → Incoming Webhooks | Server only |
+| `SLACK_OPS_ALERTS_WEBHOOK_URL` | api.slack.com → your app → Incoming Webhooks | Server only |
+
+**Admin & Control Panel**
+
+| Variable | Value | Exposure |
+|---|---|---|
+| `CONTROL_PANEL_ADMIN_EMAILS` | Comma-separated email allowlist for `/control-panel/*` | Server only |
 
 > **Security note:** `.env.local` is listed in `.gitignore` and will never be committed.
 > Only `.env.local.example` (with placeholder values) is tracked in git.
