@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import type { RailKey } from "@/lib/data/discoverOverridesShared";
 import { RAIL_KEYS } from "@/lib/data/discoverOverridesShared";
+import { logAuditEvent } from "@/lib/auditLog";
 
 // ─── Shared auth helper ───────────────────────────────────────────────────────
 // Returns null if the caller is unauthenticated OR is not a CP admin.
@@ -81,6 +82,16 @@ export async function updateBoostAction(
 
     await appendVenueNote(venueUuid, `Internal boost set to ${clampedBoost}.`, admin);
 
+    const { data: vRow } = await supabase.from("venues").select("name").eq("id", venueUuid).maybeSingle();
+    await logAuditEvent({
+      actorEmail: admin.email ?? "unknown",
+      action:     "discover_boost_changed",
+      entityType: "venue",
+      entityId:   venueUuid,
+      entityName: (vRow as { name?: string } | null)?.name ?? null,
+      details:    { boost: clampedBoost },
+    });
+
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
     return { success: true };
@@ -117,6 +128,15 @@ export async function updateSpotlightEligibleAction(
       `Spotlight eligible ${value ? "enabled" : "disabled"}.`,
       admin
     );
+
+    const { data: vRow } = await supabase.from("venues").select("name").eq("id", venueUuid).maybeSingle();
+    await logAuditEvent({
+      actorEmail: admin.email ?? "unknown",
+      action:     value ? "discover_spotlight_enabled" : "discover_spotlight_disabled",
+      entityType: "venue",
+      entityId:   venueUuid,
+      entityName: (vRow as { name?: string } | null)?.name ?? null,
+    });
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");
@@ -157,6 +177,15 @@ export async function updateExcludeFromDiscoverAction(
         : "Venue restored to discover eligibility.",
       admin
     );
+
+    const { data: vRow } = await supabase.from("venues").select("name").eq("id", venueUuid).maybeSingle();
+    await logAuditEvent({
+      actorEmail: admin.email ?? "unknown",
+      action:     value ? "discover_venue_excluded" : "discover_venue_included",
+      entityType: "venue",
+      entityId:   venueUuid,
+      entityName: (vRow as { name?: string } | null)?.name ?? null,
+    });
 
     revalidatePath("/control-panel/discover");
     revalidatePath("/");

@@ -11,6 +11,7 @@ import {
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
+import { logAuditEvent } from "@/lib/auditLog";
 
 function getAppUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
@@ -171,6 +172,14 @@ export async function reviewSubmissionAction(
       };
     }
 
+    await logAuditEvent({
+      actorEmail: user.email ?? "unknown",
+      action:     "submission_more_info_requested",
+      entityType: "operator_submission",
+      entityId:   submissionId,
+      entityName: venueName,
+    });
+
     console.log("[reviewSubmissionAction] needs_more_info — complete.", {
       submissionId,
       submitterEmail,
@@ -215,6 +224,14 @@ export async function reviewSubmissionAction(
       { submissionId, submitterEmail, error: emailResult.error }
     );
   }
+
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "submission_closed",
+    entityType: "operator_submission",
+    entityId:   submissionId,
+    entityName: venueName,
+  });
 
   console.log("[reviewSubmissionAction] close — complete.", {
     submissionId,
@@ -442,6 +459,14 @@ export async function approveAndCreateVenueAction(
     created_by_email: user.email ?? null,
   });
 
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "submission_approved",
+    entityType: "operator_submission",
+    entityId:   submissionId,
+    entityName: venueName,
+  });
+
   console.log("[approveAndCreateVenueAction] Complete.", {
     submissionId,
     venueId,
@@ -611,6 +636,21 @@ export async function addSubmissionNoteAction(
     console.error("[addSubmissionNoteAction] Insert failed:", error.message);
     return { error: "Failed to save note. Please try again." };
   }
+
+  // Fetch venue name for audit log (best-effort)
+  const { data: subForLog } = await supabase
+    .from("operator_submissions")
+    .select("venue_name")
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "submission_note_added",
+    entityType: "operator_submission",
+    entityId:   submissionId,
+    entityName: (subForLog as { venue_name?: string } | null)?.venue_name ?? null,
+  });
 
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
   return { success: true };

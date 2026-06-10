@@ -8,6 +8,7 @@ import { maxUsers, parseOperatorPlan } from "@/lib/plans";
 import { sendMemberInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
+import { logAuditEvent } from "@/lib/auditLog";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,6 +181,14 @@ export async function inviteUserAction(
     ownerEmail
   );
 
+  await logAuditEvent({
+    actorEmail: ownerEmail ?? "unknown",
+    action:     "operator_member_invited",
+    entityType: "operator_membership",
+    entityId:   null,
+    entityName: normalizedEmail,
+  });
+
   return { ok: true };
 }
 
@@ -226,6 +235,14 @@ export async function removeMemberAction(
     `Team member ${t.email} removed by ${ownerEmail ?? "unknown"}.`,
     ownerEmail
   );
+
+  await logAuditEvent({
+    actorEmail: ownerEmail ?? "unknown",
+    action:     "operator_member_removed",
+    entityType: "operator_membership",
+    entityId:   membershipId,
+    entityName: t.email,
+  });
 
   return { ok: true };
 }

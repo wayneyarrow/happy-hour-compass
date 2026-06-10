@@ -6,6 +6,7 @@ import { updateOperatorPlan, getOperatorPlanCode } from "@/lib/subscriptions";
 import { parseOperatorPlan, PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
+import { logAuditEvent } from "@/lib/auditLog";
 
 export async function changePlanAction(
   operatorId: string,
@@ -45,6 +46,17 @@ export async function changePlanAction(
       `Subscription changed from ${PLAN_LABELS[oldPlan]} to ${PLAN_LABELS[parseOperatorPlan(newPlan)]} by ${actorEmail ?? "unknown"}.`,
       actorEmail
     );
+    await logAuditEvent({
+      actorEmail: actorEmail ?? "unknown",
+      action:     "plan_changed",
+      entityType: "operator",
+      entityId:   operatorId,
+      entityName: ctx.operator?.email ?? ctx.user?.email ?? null,
+      details: {
+        from: PLAN_LABELS[oldPlan]                    ?? oldPlan,
+        to:   PLAN_LABELS[parseOperatorPlan(newPlan)] ?? newPlan,
+      },
+    });
   }
 
   return result;

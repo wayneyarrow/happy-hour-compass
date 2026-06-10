@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPlatformAdminByToken } from "@/lib/platformAdmins";
+import { logAuditEvent } from "@/lib/auditLog";
 
 export type AcceptCpInviteState = {
   error?:        string;
@@ -66,6 +67,13 @@ export async function acceptCpInviteAction(
         .eq("id", admin.id)
         .eq("status", "invited");
 
+      await logAuditEvent({
+        actorEmail: admin.email,
+        action:     "platform_admin_activated",
+        entityType: "platform_admin",
+        entityId:   admin.id,
+        entityName: admin.email,
+      });
       return { existingUser: true, email: admin.email };
     }
 
@@ -93,5 +101,12 @@ export async function acceptCpInviteAction(
     return { error: "Failed to activate your account. Please try again." };
   }
 
+  await logAuditEvent({
+    actorEmail: admin.email,
+    action:     "platform_admin_activated",
+    entityType: "platform_admin",
+    entityId:   admin.id,
+    entityName: admin.email,
+  });
   return { success: true, email: admin.email };
 }

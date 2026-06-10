@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getMembershipByToken } from "@/lib/memberships";
 import { sendSlackAlert } from "@/lib/slack";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
+import { logAuditEvent } from "@/lib/auditLog";
 
 export type AcceptInviteState = {
   error?:        string;
@@ -89,6 +90,14 @@ export async function acceptInviteAction(
         membership.email
       );
 
+      await logAuditEvent({
+        actorEmail: membership.email,
+        action:     "operator_member_invite_accepted",
+        entityType: "operator_membership",
+        entityId:   membership.id,
+        entityName: membership.email,
+      });
+
       return { existingUser: true };
     }
 
@@ -159,6 +168,14 @@ export async function acceptInviteAction(
     `${membership.email} accepted their team member invite.`,
     membership.email
   );
+
+  await logAuditEvent({
+    actorEmail: membership.email,
+    action:     "operator_member_invite_accepted",
+    entityType: "operator_membership",
+    entityId:   membership.id,
+    entityName: membership.email,
+  });
 
   return { success: true };
 }

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { getPlatformAdminByEmail, hasOtherActivePlatformAdmin } from "@/lib/platformAdmins";
 import { sendPlatformAdminInviteEmail } from "@/lib/email";
+import { logAuditEvent } from "@/lib/auditLog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -150,6 +151,14 @@ export async function invitePlatformAdminAction(
     return { error: `Invitation created but email failed to send. Please try again. (${emailResult.error})` };
   }
 
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action:     "platform_admin_invited",
+    entityType: "platform_admin",
+    entityId:   rowId,
+    entityName: rawEmail,
+  });
+
   revalidatePath("/control-panel/platform-admins");
   return { success: true };
 }
@@ -214,6 +223,14 @@ export async function revokePlatformAdminAction(
     console.error("[revokePlatformAdminAction] Update error:", updateError.message);
     return { error: "Failed to revoke access. Please try again." };
   }
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action:     "platform_admin_revoked",
+    entityType: "platform_admin",
+    entityId:   adminId,
+    entityName: targetRow.email,
+  });
 
   revalidatePath("/control-panel/platform-admins");
   return { success: true };

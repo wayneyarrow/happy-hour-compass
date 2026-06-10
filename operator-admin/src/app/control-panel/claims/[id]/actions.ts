@@ -6,6 +6,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordSetupEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
+import { logAuditEvent } from "@/lib/auditLog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,13 @@ export async function reviewClaimAction(
       return { error: "Failed to save review decision. Please try again." };
     }
 
+    await logAuditEvent({
+      actorEmail: user.email ?? "unknown",
+      action:     "claim_rejected",
+      entityType: "venue_claim",
+      entityId:   claimId,
+    });
+
     revalidatePath("/control-panel/claims");
     revalidatePath(`/control-panel/claims/${claimId}`);
     return { success: true, successAction: ACTION_LABELS.reject };
@@ -200,6 +208,14 @@ export async function reviewClaimAction(
       note:             `More info requested — structured verification form emailed to ${claimantEmail}. Token expires in 72 h.`,
       created_by:       user.id,
       created_by_email: user.email ?? null,
+    });
+
+    await logAuditEvent({
+      actorEmail: user.email ?? "unknown",
+      action:     "claim_more_info_requested",
+      entityType: "venue_claim",
+      entityId:   claimId,
+      entityName: (venueRow?.name as string | null) ?? null,
     });
 
     console.log("[reviewClaimAction] needs_more_info — complete.", { claimId, claimantEmail });
@@ -306,6 +322,21 @@ export async function reviewClaimAction(
     note:             `Claim approved — operator account provisioned and setup email sent to ${claimEmail}.`,
     created_by:       user.id,
     created_by_email: user.email ?? null,
+  });
+
+  // Fetch venue name for audit log (best-effort — all critical work is done)
+  const { data: venueNameRow } = await supabase
+    .from("venues")
+    .select("name")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "claim_approved",
+    entityType: "venue_claim",
+    entityId:   claimId,
+    entityName: (venueNameRow?.name as string | null) ?? null,
   });
 
   revalidatePath("/control-panel/claims");

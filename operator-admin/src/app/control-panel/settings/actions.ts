@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { sendSlackAlert, type SlackChannel, type SlackResult } from "@/lib/slack";
+import { logAuditEvent } from "@/lib/auditLog";
 
 export type QaPublishState = {
   /** Number of venues published (present on success, including 0-match). */
@@ -83,10 +84,18 @@ export async function qaPublishImportedVenuesAction(
     return { error: `Update failed: ${updateError.message}` };
   }
 
-  // Audit log — visible in Vercel/server logs for traceability.
   console.log(
     `[qaPublishImportedVenuesAction] Published ${ids.length} venue(s) in "${city}" — triggered by ${user.email}`
   );
+
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "venue_bulk_published",
+    entityType: "venue_batch",
+    entityId:   null,
+    entityName: city,
+    details:    { count: ids.length, city },
+  });
 
   revalidatePath("/control-panel/venues");
   revalidatePath("/control-panel/settings");
