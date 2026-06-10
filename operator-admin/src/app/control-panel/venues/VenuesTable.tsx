@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
+import { buildCsv, downloadCsv } from "@/lib/csvExport";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -186,6 +187,22 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
     syncUrl(q, pub, claimed, sortCol, sortDir, p);
   };
 
+  const handleExport = () => {
+    const headers = ["Venue", "City", "Published", "Claimed", "Operator", "Updated"];
+    const csvRows = sorted.map((v) => [
+      v.name,
+      v.city,
+      v.is_published ? "Yes" : "No",
+      v.claimed_at  ? "Yes" : "No",
+      v.operatorEmail,
+      fmtDate(v.updated_at),
+    ]);
+    downloadCsv(
+      `venues-${new Date().toISOString().slice(0, 10)}.csv`,
+      buildCsv(headers, csvRows)
+    );
+  };
+
   // ── Shared styles ─────────────────────────────────────────────────────────
 
   const selectCls =
@@ -233,6 +250,14 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
         </span>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={sorted.length === 0}
+          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+        >
+          Export CSV
+        </button>
       </div>
 
       {/* ── Table ── */}

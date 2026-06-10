@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
+import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { OperatorSubmissionRow } from "@/lib/data/operatorSubmissions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -180,6 +181,22 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
     syncUrl(q, sortCol, sortDir, p);
   };
 
+  const handleExport = () => {
+    const headers = ["Venue", "Submitter", "Email", "Status", "Submitted", "Updated"];
+    const csvRows = sorted.map((r) => [
+      r.venue_name,
+      [r.first_name, r.last_name].filter(Boolean).join(" ") || null,
+      r.email,
+      STATUS_CONFIG[r.status]?.label ?? r.status,
+      r.submitted,
+      r.updated,
+    ]);
+    downloadCsv(
+      `submissions-${new Date().toISOString().slice(0, 10)}.csv`,
+      buildCsv(headers, csvRows)
+    );
+  };
+
   // ── Shared styles ─────────────────────────────────────────────────────────
 
   const thBtnCls =
@@ -205,6 +222,14 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
         </span>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={sorted.length === 0}
+          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+        >
+          Export CSV
+        </button>
       </div>
 
       {/* ── Table ── */}

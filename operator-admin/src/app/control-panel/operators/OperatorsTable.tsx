@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { SortIcon, Pagination } from "@/components/TableControls";
+import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -168,6 +169,21 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
     syncUrl(q, vq, sortCol, sortDir, p);
   };
 
+  const handleExport = () => {
+    const headers = ["Email", "Venue", "Plan", "Joined", "Updated"];
+    const csvRows = sorted.map((op) => [
+      op.email,
+      op.venueName,
+      PLAN_LABELS[op.plan as OperatorPlan] ?? op.plan,
+      fmtDate(op.created_at),
+      fmtDate(op.updated_at),
+    ]);
+    downloadCsv(
+      `operators-${new Date().toISOString().slice(0, 10)}.csv`,
+      buildCsv(headers, csvRows)
+    );
+  };
+
   // ── Shared styles ─────────────────────────────────────────────────────────
 
   const thBtnCls =
@@ -200,6 +216,14 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
         </span>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={sorted.length === 0}
+          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+        >
+          Export CSV
+        </button>
       </div>
 
       {/* ── Table ── */}
