@@ -3,7 +3,6 @@ import Link from "next/link";
 /**
  * Add a Happy Hour — chooser screen.
  * First step: user selects whether they are a customer or a business owner.
- * In Phase 2 only the customer path is fully implemented.
  */
 export default function SuggestChooserPage() {
   return (
@@ -43,7 +42,6 @@ export default function SuggestChooserPage() {
           </svg>
         </Link>
 
-        {/* Business owner path — stub only in Phase 2 */}
         <Link
           href="/suggest/owner"
           className="flex items-center gap-4 p-5 rounded-xl border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
