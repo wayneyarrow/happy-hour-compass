@@ -602,9 +602,12 @@ export async function saveOperatorSubmissionAction(
       venueId = newVenue.id;
       routedStatus = "confirmed_auto";
     } else if (existingVenue.claimed_by == null && existingVenue.created_by_operator_id == null) {
-      // ── Case B: Venue exists and is unclaimed → link it ─────────────────
+      // ── Case B: Venue exists and is unclaimed → route to human review ───
+      // Do NOT auto-provision — an existing venue may have existing data or
+      // a pending claim that requires human verification before ownership is
+      // granted. The submission lands in CP review queue as pending_review.
       venueId = existingVenue.id;
-      routedStatus = "confirmed_auto";
+      routedStatus = "pending_review";
     } else {
       // ── Case C: Venue exists and is claimed/owned → flag double_claim ───
       venueId = existingVenue.id;

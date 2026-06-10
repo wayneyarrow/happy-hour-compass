@@ -3,6 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import {
   sendOperatorSubmissionMoreInfoEmail,
   sendOperatorSubmissionClosedEmail,
@@ -94,8 +95,8 @@ export async function reviewSubmissionAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user) {
-    return { error: "Session expired. Please sign in again." };
+  if (!user || !isControlPanelAdmin(user.email)) {
+    return { error: "Unauthorized." };
   }
 
   const supabase = createAdminClient();
@@ -260,8 +261,8 @@ export async function approveAndCreateVenueAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user) {
-    return { error: "Session expired. Please sign in again." };
+  if (!user || !isControlPanelAdmin(user.email)) {
+    return { error: "Unauthorized." };
   }
 
   const supabase = createAdminClient();
@@ -483,7 +484,7 @@ export async function resendSubmissionSetupEmailAction(
   // ── Auth ──────────────────────────────────────────────────────────────────
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user) return { error: "Session expired. Please sign in again." };
+  if (!user || !isControlPanelAdmin(user.email)) return { error: "Unauthorized." };
 
   const supabase = createAdminClient();
 
@@ -591,8 +592,8 @@ export async function addSubmissionNoteAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user) {
-    return { error: "Session expired. Please sign in again." };
+  if (!user || !isControlPanelAdmin(user.email)) {
+    return { error: "Unauthorized." };
   }
 
   const supabase = createAdminClient();

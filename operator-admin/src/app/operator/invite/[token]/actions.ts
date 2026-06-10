@@ -38,7 +38,7 @@ export async function acceptInviteAction(
 
   if (!token || !password) return { error: "Missing required fields." };
   if (password !== confirmPassword) return { error: "Passwords do not match." };
-  if (password.length < 6)         return { error: "Password must be at least 6 characters." };
+  if (password.length < 8)         return { error: "Password must be at least 8 characters." };
 
   // ── Step 1: Re-validate token ──────────────────────────────────────────────
 

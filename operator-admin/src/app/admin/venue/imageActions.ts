@@ -21,6 +21,11 @@ export async function uploadVenueImageAction(
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
 
+  const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    return { error: "Unsupported file type. Please upload a JPEG, PNG, WebP, or GIF image." };
+  }
+
   // Count existing images before uploading — used for both the plan limit check
   // and deriving sort_order so we don't pay two round-trips.
   const { data: existing } = await ctx.supabase

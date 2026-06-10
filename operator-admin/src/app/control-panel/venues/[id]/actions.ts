@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ async function getAdmin(): Promise<{ id: string; email: string | null } | null> 
   try {
     const client = await createClient();
     const { data: { user } } = await client.auth.getUser();
-    if (!user) return null;
+    if (!user || !isControlPanelAdmin(user.email)) return null;
     return { id: user.id, email: user.email ?? null };
   } catch {
     return null;

@@ -3,16 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import type { RailKey } from "@/lib/data/discoverOverridesShared";
 import { RAIL_KEYS } from "@/lib/data/discoverOverridesShared";
 
 // ─── Shared auth helper ───────────────────────────────────────────────────────
+// Returns null if the caller is unauthenticated OR is not a CP admin.
+// Every action must gate on a non-null return before touching the DB.
 
 async function getAdmin(): Promise<{ id: string; email: string | null } | null> {
   try {
     const client = await createClient();
     const { data: { user } } = await client.auth.getUser();
-    if (!user) return null;
+    if (!user || !isControlPanelAdmin(user.email)) return null;
     return { id: user.id, email: user.email ?? null };
   } catch {
     return null;
@@ -60,8 +63,10 @@ export async function updateBoostAction(
   venueUuid: string,
   boost: number
 ): Promise<ActionResult> {
-  const clampedBoost = Math.max(0, Math.min(100, Math.round(boost)));
   const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
+  const clampedBoost = Math.max(0, Math.min(100, Math.round(boost)));
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -93,6 +98,8 @@ export async function updateSpotlightEligibleAction(
   value: boolean
 ): Promise<ActionResult> {
   const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -129,6 +136,8 @@ export async function updateExcludeFromDiscoverAction(
   value: boolean
 ): Promise<ActionResult> {
   const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -175,9 +184,11 @@ export async function addToRailAction(
     return { success: false, error: "Invalid rail." };
   }
 
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -192,8 +203,8 @@ export async function addToRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  admin?.email ?? null,
-          created_by:  admin?.email ?? null,
+          updated_by:  admin.email,
+          created_by:  admin.email,
         },
         { onConflict: "rail_key,venue_id" }
       );
@@ -234,9 +245,11 @@ export async function removeFromRailAction(
     return { success: false, error: "Invalid rail." };
   }
 
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -251,8 +264,8 @@ export async function removeFromRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  admin?.email ?? null,
-          created_by:  admin?.email ?? null,
+          updated_by:  admin.email,
+          created_by:  admin.email,
         },
         { onConflict: "rail_key,venue_id" }
       );
@@ -288,6 +301,8 @@ export async function restoreToAlgorithmAction(
   venueUuid: string
 ): Promise<ActionResult> {
   const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -326,6 +341,9 @@ export async function updateEventBoostAction(
   eventUuid: string,
   boost: number
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   const clampedBoost = Math.max(0, Math.min(100, Math.round(boost)));
   try {
     const supabase = createAdminClient();
@@ -356,6 +374,9 @@ export async function updateEventExcludeFromDiscoverAction(
   eventUuid: string,
   value: boolean
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
@@ -391,9 +412,11 @@ export async function addEventToRailAction(
     return { success: false, error: "Invalid rail." };
   }
 
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -408,8 +431,8 @@ export async function addEventToRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  admin?.email ?? null,
-          created_by:  admin?.email ?? null,
+          updated_by:  admin.email,
+          created_by:  admin.email,
         },
         { onConflict: "rail_key,event_id" }
       );
@@ -442,9 +465,11 @@ export async function removeEventFromRailAction(
     return { success: false, error: "Invalid rail." };
   }
 
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   const reasonType = (formData.get("reason_type") as string | null) || null;
   const note       = (formData.get("note") as string | null)?.trim() || null;
-  const admin      = await getAdmin();
   const now        = new Date().toISOString();
 
   try {
@@ -459,8 +484,8 @@ export async function removeEventFromRailAction(
           reason_type: reasonType,
           note,
           updated_at:  now,
-          updated_by:  admin?.email ?? null,
-          created_by:  admin?.email ?? null,
+          updated_by:  admin.email,
+          created_by:  admin.email,
         },
         { onConflict: "rail_key,event_id" }
       );
@@ -487,6 +512,9 @@ export async function restoreEventToAlgorithmAction(
   railKey: RailKey,
   eventUuid: string
 ): Promise<ActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Unauthorized." };
+
   try {
     const supabase = createAdminClient();
     const { error } = await supabase

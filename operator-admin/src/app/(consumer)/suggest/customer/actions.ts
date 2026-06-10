@@ -14,7 +14,7 @@ export type SuggestionFormState = {
 /**
  * Submits a consumer venue suggestion to venue_suggestions.
  *
- * Writes the row first; email notification is fire-and-forget.
+ * Writes the row first; email notification is awaited with try/catch.
  * Email failure is logged server-side but does not block the success state.
  * This matches the same pattern used by submitClaimAction.
  */
@@ -71,24 +71,27 @@ export async function submitSuggestionAction(
     { timeZone: "America/Vancouver", dateStyle: "medium", timeStyle: "short" }
   );
 
-  console.log("[EMAIL] submitSuggestionAction — initiating fire-and-forget founder notification", {
+  console.log("[EMAIL] submitSuggestionAction — sending founder notification", {
     suggestionId: inserted.id,
     venueName: name,
     city,
     flow: "suggestion-notification",
   });
 
-  sendSuggestionNotificationEmail({
-    suggestionId: inserted.id as string,
-    venueName:    name,
-    city,
-    notes:        notes ?? undefined,
-    submittedAt,
-  }).then(({ ok, error: emailErr }) => {
-    if (!ok) {
-      console.error("[submitSuggestionAction] Notification email failed:", emailErr);
+  try {
+    const emailResult = await sendSuggestionNotificationEmail({
+      suggestionId: inserted.id as string,
+      venueName:    name,
+      city,
+      notes:        notes ?? undefined,
+      submittedAt,
+    });
+    if (!emailResult.ok) {
+      console.error("[submitSuggestionAction] Notification email failed:", emailResult.error);
     }
-  });
+  } catch (emailErr) {
+    console.error("[submitSuggestionAction] Notification email threw unexpected exception:", emailErr);
+  }
 
   return { success: true };
 }
