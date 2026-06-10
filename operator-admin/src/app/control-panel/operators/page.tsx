@@ -4,16 +4,6 @@ export const metadata = { title: "Operators" };
 import { createAdminClient } from "@/lib/supabase/server";
 import OperatorsTable, { type OperatorRow } from "./OperatorsTable";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default async function ControlPanelOperatorsPage() {
@@ -22,7 +12,7 @@ export default async function ControlPanelOperatorsPage() {
   // Fetch all operators ordered by most recently created
   const { data: opsData, error: opsError } = await supabase
     .from("operators")
-    .select("id, name, email, is_approved, plan, created_at")
+    .select("id, name, email, is_approved, plan, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   // Fetch venues so we can map operator → venue
@@ -52,7 +42,8 @@ export default async function ControlPanelOperatorsPage() {
         plan:        (op.plan as string) ?? "free",
         venueName:   venue?.name ?? null,
         venueSlug:   venue?.slug ?? null,
-        created_at:  formatDate(op.created_at as string),
+        created_at:  op.created_at as string,
+        updated_at:  op.updated_at as string,
       };
     }
   );

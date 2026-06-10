@@ -123,6 +123,7 @@ export default async function OperatorSubmissionsPage({
           rows={submissions.map((s) => ({
             ...s,
             submitted: formatDate(s.submitted_at),
+            updated:   formatDate(s.updated_at),
           }))}
         />
       )}

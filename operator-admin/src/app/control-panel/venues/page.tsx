@@ -4,16 +4,6 @@ export const metadata = { title: "Venues" };
 import { createAdminClient } from "@/lib/supabase/server";
 import VenuesTable, { type VenueRow } from "./VenuesTable";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default async function ControlPanelVenuesPage() {
@@ -47,7 +37,7 @@ export default async function ControlPanelVenuesPage() {
       city:          (v.city as string | null) ?? null,
       is_published:  v.is_published as boolean,
       claimed_at:    (v.claimed_at as string | null) ?? null,
-      updated_at:    formatDate(v.updated_at as string),
+      updated_at:    v.updated_at as string,
       operatorEmail: v.created_by_operator_id
         ? (opMap.get(v.created_by_operator_id as string) ?? null)
         : null,

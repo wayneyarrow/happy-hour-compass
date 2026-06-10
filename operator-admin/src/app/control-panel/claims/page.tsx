@@ -67,7 +67,11 @@ export default async function ClaimsPage() {
       {/* Claims table */}
       {!error && claims.length > 0 && (
         <ClaimsTable
-          rows={claims.map((c) => ({ ...c, submitted: formatDate(c.created_at) }))}
+          rows={claims.map((c) => ({
+            ...c,
+            submitted: formatDate(c.created_at),
+            updated:   formatDate(c.updated_at),
+          }))}
         />
       )}
     </div>

@@ -22,6 +22,7 @@ export type ClaimWithVenue = {
   email: string;
   status: string;
   created_at: string;
+  updated_at: string;
   venue_name: string | null;
 };
 
@@ -89,7 +90,7 @@ export async function getClaimsForReview(): Promise<{
   const { data, error } = await supabase
     .from("venue_claims")
     .select(
-      `id, venue_id, first_name, last_name, position, phone, email, status, created_at,
+      `id, venue_id, first_name, last_name, position, phone, email, status, created_at, updated_at,
        venues ( name )`
     )
     .order("created_at", { ascending: false });
@@ -109,6 +110,7 @@ export async function getClaimsForReview(): Promise<{
     email: row.email as string,
     status: row.status as string,
     created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
     venue_name: firstOrObject<{ name: string }>(row.venues)?.name ?? null,
   }));
 

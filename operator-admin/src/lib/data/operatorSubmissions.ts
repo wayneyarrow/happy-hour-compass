@@ -16,6 +16,7 @@ export type SubmissionNote = {
 export type OperatorSubmissionRow = {
   id: string;
   submitted_at: string;
+  updated_at: string;
   venue_name: string;
   city: string | null;
   province: string | null;
@@ -117,7 +118,7 @@ export async function getOperatorSubmissions(tab: string): Promise<{
   let query: any = supabase
     .from("operator_submissions")
     .select(
-      `id, submitted_at, venue_name, city, province,
+      `id, submitted_at, updated_at, venue_name, city, province,
        first_name, last_name, email, position,
        status, match_status, venue_id,
        email_domain_matches_website, is_public_email_domain, role_trust_level`
@@ -143,6 +144,7 @@ export async function getOperatorSubmissions(tab: string): Promise<{
     (row: Record<string, any>) => ({
       id:                          row.id as string,
       submitted_at:                row.submitted_at as string,
+      updated_at:                  row.updated_at as string,
       venue_name:                  row.venue_name as string,
       city:                        row.city as string | null,
       province:                    row.province as string | null,
