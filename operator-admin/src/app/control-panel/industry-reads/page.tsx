@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Industry Reads" };
 
-import { getIndustryReads } from "@/lib/industryReads";
-import { createClient } from "@/lib/supabase/server";
+import { getIndustryReads, IndustryArticle } from "@/lib/industryReads";
+import { createAdminClient } from "@/lib/supabase/server";
 import ArticleReviewCard from "./ArticleReviewCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -50,7 +50,9 @@ function buildFeedbackMap(rows: FeedbackRow[]): Map<string, FeedbackSummary> {
 
 export default async function IndustryReadsPage() {
   // Fetch articles and feedback history in parallel.
-  const supabase = await createClient();
+  // Uses service-role (createAdminClient) — RLS policies on this table were
+  // dropped in migration 039; access is internal-only via the CP admin gate.
+  const supabase = createAdminClient();
 
   const [articles, feedbackResult] = await Promise.all([
     getIndustryReads(),
@@ -110,7 +112,7 @@ export default async function IndustryReadsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {articles.map((article) => {
+          {articles.map((article: IndustryArticle) => {
             const fb = feedbackMap.get(article.url);
             return (
               <ArticleReviewCard
