@@ -17,5 +17,5 @@ export async function checkIsControlPanelAdmin(): Promise<boolean> {
   } = await supabase.auth.getUser();
 
   if (!user?.email) return false;
-  return isControlPanelAdmin(user.email);
+  return await isControlPanelAdmin(user.email);
 }

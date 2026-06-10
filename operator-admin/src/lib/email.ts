@@ -1656,3 +1656,90 @@ Happy Hour Compass`;
     criticality: "standard",
   });
 }
+
+// ── Platform admin invite email ───────────────────────────────────────────────
+
+/**
+ * Sends an invitation email to a new platform admin (Control Panel access).
+ *
+ * The invite link routes to /cp-invite/[token] where the invitee creates their
+ * password (if new) and their platform_admins row is set to 'active'.
+ *
+ * Criticality: "critical" — the DB row already exists in 'invited' state.
+ * If email fails, the invite record is rolled back in the calling action.
+ */
+export async function sendPlatformAdminInviteEmail({
+  to,
+  inviterEmail,
+  inviteUrl,
+}: {
+  to: string;
+  inviterEmail: string;
+  inviteUrl: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">You&rsquo;ve been invited to the Admin Control Panel</h1>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi,</p>
+
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            <strong style="color:#0f172a;">${inviterEmail}</strong> has invited you to access the
+            Happy Hour Compass Admin Control Panel.
+          </p>
+
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            Click the button below to set up your password and activate your account.
+          </p>
+
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="background:#d97706;border-radius:8px;">
+              <a href="${inviteUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Accept invitation &rarr;
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This invitation link expires in 7 days.</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>
+
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
+            You received this email because ${inviterEmail} granted you access to the Happy Hour Compass Admin Control Panel.
+            If you didn&rsquo;t expect this, you can safely ignore it.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi,
+
+${inviterEmail} has invited you to access the Happy Hour Compass Admin Control Panel.
+
+Click the link below to set up your password and activate your account:
+${inviteUrl}
+
+This link expires in 7 days.
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "platform_admin_invite",
+    to,
+    subject:     "You've been invited to the Happy Hour Compass Admin Control Panel",
+    html,
+    text,
+    criticality: "critical",
+  });
+}

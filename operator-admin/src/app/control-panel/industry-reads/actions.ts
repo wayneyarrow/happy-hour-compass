@@ -28,7 +28,7 @@ export async function submitArticleFeedback(
     data: { user },
   } = await sessionClient.auth.getUser();
 
-  if (!user?.email || !isControlPanelAdmin(user.email)) return;
+  if (!user?.email || !await isControlPanelAdmin(user.email)) return;
 
   const supabase = createAdminClient();
   await supabase.from("industry_reads_feedback").insert({

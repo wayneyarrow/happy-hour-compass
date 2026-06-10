@@ -21,7 +21,7 @@ export async function exitImpersonationAction(): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     redirect("/");
   }
 

@@ -20,7 +20,7 @@ async function getAdmin(): Promise<{ id: string; email: string | null } | null> 
   try {
     const client = await createClient();
     const { data: { user } } = await client.auth.getUser();
-    if (!user || !isControlPanelAdmin(user.email)) return null;
+    if (!user || !await isControlPanelAdmin(user.email)) return null;
     return { id: user.id, email: user.email ?? null };
   } catch {
     return null;

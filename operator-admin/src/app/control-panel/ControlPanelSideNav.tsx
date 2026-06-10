@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: "Discover Page",   href: "/control-panel/discover" },
   { label: "Industry Reads",  href: "/control-panel/industry-reads" },
   { label: "Settings",        href: "/control-panel/settings" },
+  { label: "Platform Admins", href: "/control-panel/platform-admins" },
 ] as const;
 
 export default function ControlPanelSideNav() {

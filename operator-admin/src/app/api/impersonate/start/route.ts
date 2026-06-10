@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 2. Verify CP allowlist ──────────────────────────────────────────────────
-  if (!isControlPanelAdmin(user.email)) {
+  if (!await isControlPanelAdmin(user.email)) {
     console.error(
       "[impersonate/start] Access denied — not a CP admin:",
       user.email

@@ -95,7 +95,7 @@ export async function reviewSubmissionAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { error: "Unauthorized." };
   }
 
@@ -261,7 +261,7 @@ export async function approveAndCreateVenueAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { error: "Unauthorized." };
   }
 
@@ -484,7 +484,7 @@ export async function resendSubmissionSetupEmailAction(
   // ── Auth ──────────────────────────────────────────────────────────────────
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
-  if (!user || !isControlPanelAdmin(user.email)) return { error: "Unauthorized." };
+  if (!user || !await isControlPanelAdmin(user.email)) return { error: "Unauthorized." };
 
   const supabase = createAdminClient();
 
@@ -592,7 +592,7 @@ export async function addSubmissionNoteAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { error: "Unauthorized." };
   }
 

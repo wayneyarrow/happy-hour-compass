@@ -44,7 +44,7 @@ export default async function ControlPanelLayout({
   }
 
   // Authenticated but not in the CP-admin allowlist — bounce to consumer home.
-  if (!isControlPanelAdmin(user.email)) {
+  if (!await isControlPanelAdmin(user.email)) {
     console.error("[ControlPanel] Authenticated user is not a CP admin — redirecting to /.");
     redirect("/");
   }

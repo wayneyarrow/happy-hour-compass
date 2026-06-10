@@ -38,7 +38,7 @@ export async function qaPublishImportedVenuesAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { error: "Unauthorized." };
   }
 
@@ -128,7 +128,7 @@ export async function cpFixHhTimesAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { errors: { form: "Unauthorized." } };
   }
 
@@ -211,7 +211,7 @@ export async function slackTestAction(
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || !isControlPanelAdmin(user.email)) {
+  if (!user || !await isControlPanelAdmin(user.email)) {
     return { error: "Unauthorized." };
   }
 
