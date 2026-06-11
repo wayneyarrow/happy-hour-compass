@@ -45,12 +45,9 @@ Without `SENTRY_AUTH_TOKEN`, Sentry still captures every error — stack traces 
 
 ### Verifying Sentry after deployment
 
-1. Set `SENTRY_TEST_ROUTE_ENABLED=true` in Vercel environment variables (Production only, temporarily).
-2. Redeploy.
-3. Hit: `https://happy-hour-compass.vercel.app/api/sentry-example-api`
-4. Wait ~30 seconds, then check Sentry → Issues for an event titled `[HHC] Sentry integration test`.
-5. If the event appears: Sentry is working. Remove `SENTRY_TEST_ROUTE_ENABLED`, redeploy, and delete `src/app/api/sentry-example-api/route.ts`.
-6. If no event: verify `NEXT_PUBLIC_SENTRY_DSN` is set correctly in Vercel.
+After setting `NEXT_PUBLIC_SENTRY_DSN` in Vercel and redeploying, trigger a real error in your app (e.g., temporarily break a Server Action or throw from a Route Handler). Check Sentry → Issues within 30–60 seconds. If the event appears, the integration is working.
+
+If no events arrive, verify that `NEXT_PUBLIC_SENTRY_DSN` matches the DSN shown in Sentry → Settings → Projects → javascript-nextjs → Client Keys.
 
 ### Connecting Sentry alerts to Slack
 
