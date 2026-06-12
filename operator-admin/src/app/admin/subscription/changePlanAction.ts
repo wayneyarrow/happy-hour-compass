@@ -7,6 +7,7 @@ import { parseOperatorPlan, PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
 import { logAuditEvent } from "@/lib/auditLog";
+import { logPlanChangeEvent } from "@/lib/planChangeEvents";
 
 export async function changePlanAction(
   operatorId: string,
@@ -56,6 +57,13 @@ export async function changePlanAction(
         from: PLAN_LABELS[oldPlan]                    ?? oldPlan,
         to:   PLAN_LABELS[parseOperatorPlan(newPlan)] ?? newPlan,
       },
+    });
+    await logPlanChangeEvent({
+      operatorId,
+      fromPlan:       oldPlan,
+      toPlan:         parseOperatorPlan(newPlan),
+      changedByEmail: actorEmail,
+      trigger:        ctx.isImpersonating ? "impersonation" : "manual_admin",
     });
   }
 

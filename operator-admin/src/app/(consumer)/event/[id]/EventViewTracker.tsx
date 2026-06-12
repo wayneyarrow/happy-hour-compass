@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import { trackEvent } from "@/lib/analytics";
 
 type Props = {
-  venueId: string;
-  city: string;
+  eventId: string;
 };
 
 function getSessionId(): string {
@@ -21,24 +20,24 @@ function getSessionId(): string {
   }
 }
 
-/** Fires venue_viewed once when the venue detail page mounts. Renders nothing. */
-export function VenueViewTracker({ venueId, city }: Props) {
+/** Fires event_viewed once when the event detail page mounts. Renders nothing. */
+export function EventViewTracker({ eventId }: Props) {
   const hasTracked = useRef(false);
 
   useEffect(() => {
     if (hasTracked.current) return;
     hasTracked.current = true;
 
-    trackEvent("venue_viewed", { venue_id: venueId, city });
+    trackEvent("event_viewed", { event_id: eventId });
 
     // Persist to Supabase — non-blocking, errors silently swallowed.
     const sessionId = getSessionId();
-    fetch("/api/track/venue-view", {
+    fetch("/api/track/event-view", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ venueId, sessionId, city }),
+      body: JSON.stringify({ eventId, sessionId }),
     }).catch(() => {});
-  }, [venueId, city]);
+  }, [eventId]);
 
   return null;
 }

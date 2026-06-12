@@ -5,6 +5,7 @@ import { ShareButton } from "./ShareButton";
 import { JumpChips } from "./JumpChips";
 import { BusinessHoursRow } from "./BusinessHoursRow";
 import { EventBackButton } from "./EventBackButton";
+import { EventViewTracker } from "./EventViewTracker";
 
 // Never serve a stale version — preview mode must always read live DB data.
 export const dynamic = "force-dynamic";
@@ -58,6 +59,7 @@ export default async function EventPage({ params, searchParams }: PageProps) {
 
   return (
     <main className="bg-white">
+      <EventViewTracker eventId={event.id} />
 
       {/* ── Header ─────────────────────────────────────────────────────────────
           Matches original .detail-page-header:

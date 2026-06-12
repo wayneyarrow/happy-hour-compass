@@ -7,6 +7,7 @@ import AdminSideNav from "./AdminSideNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
 import ImpersonationBanner from "./ImpersonationBanner";
 import { IMP_COOKIE_NAME, getValidImpersonationSession } from "@/lib/impersonation";
+import { updateOperatorLastSeen } from "@/lib/activityTracking";
 
 export const metadata: Metadata = {
   title: {
@@ -33,6 +34,10 @@ export default async function AdminLayout({
   if (!user) {
     redirect("/login");
   }
+
+  // Fire-and-forget — conditionally updates last_seen_at at most once per hour.
+  // The DB update is a no-op when called within the throttle window.
+  void updateOperatorLastSeen(user.email!).catch(() => {});
 
   // Check for an active impersonation session to show the banner.
   const cookieStore = await cookies();

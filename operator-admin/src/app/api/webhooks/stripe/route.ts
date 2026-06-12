@@ -26,9 +26,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripeClient } from "@/lib/stripe";
-import { syncStripeSubscription } from "@/lib/subscriptions";
+import { syncStripeSubscription, getOperatorPlanCode } from "@/lib/subscriptions";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
+import { logPlanChangeEvent } from "@/lib/planChangeEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -198,6 +199,8 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
         period,
       });
 
+      const oldPlanForCheckout = await getOperatorPlanCode(operatorId);
+
       const result = await syncStripeSubscription(operatorId, {
         customerId,
         subscriptionId,
@@ -220,6 +223,14 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
         console.error("[webhook/stripe] checkout.session.completed: DB sync failed:", result.error);
       } else {
         console.log("[webhook/stripe] checkout.session.completed: plan activated successfully →", targetPlan);
+        await logPlanChangeEvent({
+          operatorId,
+          fromPlan:                       oldPlanForCheckout,
+          toPlan:                         targetPlan,
+          changedByEmail:                 null,
+          trigger:                        "stripe_checkout",
+          billingProviderSubscriptionId:  subscriptionId,
+        });
       }
       break;
     }
@@ -254,6 +265,9 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
         period,
       });
 
+      // Capture old plan before sync if a plan change is included.
+      const oldPlanForUpdate = planCode ? await getOperatorPlanCode(operatorId) : null;
+
       const result = await syncStripeSubscription(operatorId, {
         customerId,
         subscriptionId: sub.id,
@@ -267,6 +281,15 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] customer.subscription.updated: DB sync failed:", result.error);
+      } else if (planCode && oldPlanForUpdate && planCode !== oldPlanForUpdate) {
+        await logPlanChangeEvent({
+          operatorId,
+          fromPlan:                       oldPlanForUpdate,
+          toPlan:                         planCode,
+          changedByEmail:                 null,
+          trigger:                        "stripe_subscription_updated",
+          billingProviderSubscriptionId:  sub.id,
+        });
       }
       break;
     }
@@ -287,6 +310,8 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
         break;
       }
 
+      const oldPlanForDelete = await getOperatorPlanCode(operatorId);
+
       const result = await syncStripeSubscription(operatorId, {
         customerId,
         subscriptionId: sub.id,
@@ -300,6 +325,15 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] customer.subscription.deleted: DB sync failed:", result.error);
+      } else {
+        await logPlanChangeEvent({
+          operatorId,
+          fromPlan:                       oldPlanForDelete,
+          toPlan:                         "free",
+          changedByEmail:                 null,
+          trigger:                        "stripe_subscription_deleted",
+          billingProviderSubscriptionId:  sub.id,
+        });
       }
       break;
     }

@@ -86,7 +86,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
 
   return (
     <main className="bg-white">
-      <VenueViewTracker venueId={id} city={venue.city} />
+      <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
 
       {/* ── Header ─────────────────────────────────────────────────────────────
           Matches original .detail-page-header:
