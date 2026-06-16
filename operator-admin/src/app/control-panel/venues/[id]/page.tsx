@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getVenueNotes } from "@/lib/data/venueNotes";
+import { getVenueHealthData } from "@/lib/data/venueHealth";
 import ImpersonateButton from "./ImpersonateButton";
 import { ExcludeDiscoverControl } from "./ExcludeDiscoverControl";
 import VenueNotesSection from "./VenueNotesSection";
+import VenueHealthPanel from "./VenueHealthPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -35,8 +37,17 @@ type VenueDetail = {
   internal_boost: number;
   spotlight_eligible: boolean;
   exclude_from_discover: boolean;
-  // Operator plan (via FK — may be null for unclaimed venues)
+  // Operator plan / activity (via FK — may be null for unclaimed venues)
   operator_plan: string | null;
+  operator_name: string | null;
+  operator_email: string | null;
+  operator_last_seen_at: string | null;
+  // Setup/health inputs (used by the Health Panel — see venueHealth.ts)
+  source: string | null;
+  hh_times: string | null;
+  business_hours: Record<string, unknown> | null;
+  hh_food_details: string | null;
+  hh_drink_details: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -104,7 +115,8 @@ export default async function ControlPanelVenueDetailPage({
          address_line1, city, region, postal_code, country, phone, website_url,
          place_id, created_by_operator_id, claimed_by, claimed_at, is_verified,
          internal_boost, spotlight_eligible, exclude_from_discover,
-         operators!created_by_operator_id(plan)`
+         source, hh_times, business_hours, hh_food_details, hh_drink_details,
+         operators!created_by_operator_id(plan, name, email, last_seen_at)`
       )
       .eq("id", id)
       .maybeSingle(),
@@ -136,9 +148,13 @@ export default async function ControlPanelVenueDetailPage({
 
   // Supabase returns embedded relations as arrays when there are no generated types.
   const operatorRaw = v.operators;
-  const operatorPlan: string | null = Array.isArray(operatorRaw)
-    ? (operatorRaw[0]?.plan as string | null) ?? null
-    : (operatorRaw?.plan as string | null) ?? null;
+  const operatorEmbed: Record<string, unknown> | null = Array.isArray(operatorRaw)
+    ? (operatorRaw[0] ?? null)
+    : (operatorRaw ?? null);
+  const operatorPlan: string | null = (operatorEmbed?.plan as string | null) ?? null;
+  const operatorName: string | null = (operatorEmbed?.name as string | null) ?? null;
+  const operatorEmail: string | null = (operatorEmbed?.email as string | null) ?? null;
+  const operatorLastSeenAt: string | null = (operatorEmbed?.last_seen_at as string | null) ?? null;
 
   const venue: VenueDetail = {
     id:                     v.id as string,
@@ -162,13 +178,36 @@ export default async function ControlPanelVenueDetailPage({
     spotlight_eligible:     v.spotlight_eligible === true,
     exclude_from_discover:  v.exclude_from_discover === true,
     operator_plan:          operatorPlan,
+    operator_name:          operatorName,
+    operator_email:         operatorEmail,
+    operator_last_seen_at:  operatorLastSeenAt,
+    source:                 v.source as string | null,
+    hh_times:               v.hh_times as string | null,
+    business_hours:         v.business_hours as Record<string, unknown> | null,
+    hh_food_details:        v.hh_food_details as string | null,
+    hh_drink_details:       v.hh_drink_details as string | null,
   };
+
+  const health = await getVenueHealthData({
+    venueId: venue.id,
+    operatorId: venue.created_by_operator_id,
+    isPublished: venue.is_published,
+    isVerified: venue.is_verified,
+    source: venue.source,
+    hhTimes: venue.hh_times,
+    businessHours: venue.business_hours,
+    hhFoodDetails: venue.hh_food_details,
+    hhDrinkDetails: venue.hh_drink_details,
+    operatorName: venue.operator_name,
+    operatorEmail: venue.operator_email,
+    operatorLastSeenAt: venue.operator_last_seen_at,
+  });
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
   const discoverStatus = venue.exclude_from_discover ? "Excluded" : "Active";
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-6xl">
       {/* Back nav */}
       <Link
         href="/control-panel/venues"
@@ -220,7 +259,10 @@ export default async function ControlPanelVenueDetailPage({
         <ImpersonateButton venueId={venue.id} />
       </div>
 
-      <div className="space-y-5">
+      {/* Two-column layout: existing detail cards (left) + Health Panel (right) */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+
+      <div className="space-y-5 min-w-0">
         {/* A. Core venue info */}
         <Section title="Core Info">
           <dl className="space-y-2.5">
@@ -378,6 +420,11 @@ export default async function ControlPanelVenueDetailPage({
 
         {/* E. Internal notes */}
         <VenueNotesSection venueId={venue.id} initialNotes={notes} />
+      </div>
+
+        {/* Right column: Health Panel */}
+        <VenueHealthPanel data={health} />
+
       </div>
     </div>
   );
