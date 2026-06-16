@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Founder Dashboard" };
+export const metadata = { title: "Platform Analytics" };
 
-import Link from "next/link";
 import {
   getFounderDashboardData,
   type TopItem,
@@ -170,46 +169,6 @@ function LeaderboardTable({
   );
 }
 
-function SignalCard({
-  label,
-  value,
-  href,
-  comingSoon,
-}: {
-  label: string;
-  value: number;
-  href?: string;
-  comingSoon?: boolean;
-}) {
-  const inner = (
-    <div
-      className={`bg-white rounded-xl border p-4 h-full transition-colors ${
-        href && !comingSoon
-          ? "border-gray-200 hover:border-amber-300 hover:shadow-sm cursor-pointer"
-          : "border-gray-200"
-      }`}
-    >
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
-        {label}
-      </p>
-      <p className="text-2xl font-bold text-slate-900 leading-none">
-        {value.toLocaleString()}
-      </p>
-      {comingSoon && (
-        <p className="mt-2 text-[11px] text-gray-400">Report coming soon</p>
-      )}
-      {href && !comingSoon && (
-        <p className="mt-2 text-[11px] font-medium text-amber-600">View list →</p>
-      )}
-    </div>
-  );
-
-  if (href && !comingSoon) {
-    return <Link href={href}>{inner}</Link>;
-  }
-  return inner;
-}
-
 function MissingItemsList({ items }: { items: SetupItemCount[] }) {
   if (items.length === 0) return null;
   return (
@@ -245,9 +204,9 @@ function formatTimestamp(iso: string): string {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-export default async function FounderDashboardPage() {
+export default async function PlatformAnalyticsPage() {
   const d = await getFounderDashboardData();
-  const { acquisition: acq, activation: act, monetization: mon, consumerDemand: cd, operationalSignals: os } = d;
+  const { acquisition: acq, activation: act, monetization: mon, consumerDemand: cd } = d;
 
   const monetizationRatePct =
     mon.monetizationRate.denominator > 0
@@ -260,8 +219,8 @@ export default async function FounderDashboardPage() {
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Founder Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-500">How is Happy Hour Compass doing?</p>
+          <h1 className="text-2xl font-bold text-slate-900">Platform Analytics</h1>
+          <p className="mt-1 text-sm text-gray-500">Platform-wide metrics — acquisition, activation, monetization, and consumer demand.</p>
         </div>
         <p className="text-xs text-gray-400 pt-1 shrink-0 ml-6">
           Fetched {formatTimestamp(d.fetchedAt)}
@@ -524,58 +483,6 @@ export default async function FounderDashboardPage() {
             />
           </div>
         )}
-      </div>
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          E — OPERATIONAL SIGNALS
-         ══════════════════════════════════════════════════════════════════════ */}
-      <div className="mb-10 pt-8 border-t border-gray-200">
-        <SectionHeader
-          title="E — Operational Signals"
-          description="What needs attention? Full report pages are coming soon."
-        />
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <SignalCard
-            label="Active Venues Still Onboarding"
-            value={os.activeVenuesStillOnboarding}
-            href="/control-panel/venues"
-          />
-          <SignalCard
-            label="Missing Setup Items"
-            value={os.missingSetupItemInstances}
-            comingSoon
-          />
-          <SignalCard
-            label="Upgrade Opportunities"
-            value={os.upgradeOpportunities}
-            href="/control-panel/operators"
-          />
-          <SignalCard
-            label="Inactive Operators (30d+)"
-            value={os.inactiveOperators}
-            href="/control-panel/operators"
-          />
-          <SignalCard
-            label="High Demand Venues"
-            value={os.highDemandVenues}
-            comingSoon
-          />
-          <SignalCard
-            label="High Demand Events"
-            value={os.highDemandEvents}
-            comingSoon
-          />
-        </div>
-
-        <p className="mt-4 text-xs text-gray-400">
-          Verified Venues = claim or submission approved (is_verified = true).{" "}
-          Active Venues = operator attached (created_by_operator_id is not null).{" "}
-          Missing Setup Items = total unmet setup criteria across active venues still onboarding (not a venue count).{" "}
-          Upgrade Opportunities = Free or Pro venues (Premium excluded).{" "}
-          Inactive Operators (30d+) = last_seen_at older than 30 days (excludes operators who have never logged in — see Activation).{" "}
-          High Demand = {">"}10 venue views or {">"}5 event views in last 30 days.
-        </p>
       </div>
 
     </div>
