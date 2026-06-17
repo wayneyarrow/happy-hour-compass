@@ -192,10 +192,11 @@ type SubscriptionVenueRow = {
 export default async function AdminSubscriptionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string }>;
+  searchParams: Promise<{ checkout?: string; open?: string }>;
 }) {
-  const params         = await searchParams;
+  const params          = await searchParams;
   const checkoutSuccess = params.checkout === "success";
+  const openPlansModal  = params.open === "plans";
   const supabase = await createClient();
   const {
     data: { user },
@@ -382,6 +383,7 @@ export default async function AdminSubscriptionPage({
               isOwner={isOwner}
               billingProvider={billingProvider}
               stripeCustomerId={stripeCustomerId}
+              initialOpen={openPlansModal && isOwner}
             />
           </div>
         </div>

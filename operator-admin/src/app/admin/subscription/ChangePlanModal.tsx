@@ -295,6 +295,8 @@ export type ChangePlanModalProps = {
   isOwner:          boolean;
   billingProvider:  string | null;
   stripeCustomerId: string | null;
+  /** When true, opens the plan selector on first mount (e.g. from an upgrade link). */
+  initialOpen?:     boolean;
 };
 
 // ── Small shared icon ─────────────────────────────────────────────────────────
@@ -728,6 +730,7 @@ export default function ChangePlanModal({
   tagCount,
   userCount,
   isOwner,
+  initialOpen,
   // billingProvider and stripeCustomerId are passed from page.tsx but
   // not needed inside the modal — plan changes route through Stripe Checkout
   // for upgrades based solely on the target plan, not the current provider.
@@ -820,6 +823,19 @@ export default function ChangePlanModal({
       }
     });
   }
+
+  // Auto-open on mount when linked from an upgrade prompt (e.g. Analytics page).
+  // Runs once — deps intentionally empty.
+  useEffect(() => {
+    if (initialOpen && operatorId && isOwner) {
+      setStep("selector");
+      setSelectedPlan(null);
+      setActionError(null);
+      setViolations([]);
+      setIsOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Escape key → close (unless action is in-flight)
   useEffect(() => {
