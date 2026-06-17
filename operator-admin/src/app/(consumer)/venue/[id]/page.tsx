@@ -206,6 +206,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           {/* Blue info card with HH times + schedule toggle + specials.
               Mirrors renderHappyHourSection() from original index.html. */}
           <HappyHourTimesCard
+            venueId={id}
             happyHourWeekly={venue.happyHourWeekly}
             specialsFood={venue.specialsFood}
             specialsDrinks={venue.specialsDrinks}
@@ -234,7 +235,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           <div className="flex flex-col">
 
             {openDays.length > 0 && (
-              <BusinessHoursRow hoursWeekly={venue.hoursWeekly} />
+              <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={id} />
             )}
 
             <VenueInfoRows

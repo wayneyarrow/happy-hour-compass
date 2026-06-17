@@ -7,6 +7,7 @@ import { MARKET_LABEL } from "@/lib/discover/discoverEngine";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
 import { VenueMapView } from "./VenueMapView";
 import { trackEvent } from "@/lib/analytics";
+import { getSessionId } from "@/lib/trackingSession";
 
 type View = "list" | "map";
 
@@ -80,6 +81,16 @@ export function VenueDiscovery({ venues }: Props) {
 
   function toggleTagFilter(tag: string) {
     trackEvent("tag_filter_used", { tag });
+    const isAdding = !activeTagFilters.has(tag);
+    if (isAdding) {
+      // Approximate result count: venues in the current filtered set that have this tag.
+      const approxCount = filteredVenues.filter((v) => v.searchTags.includes(tag)).length;
+      fetch("/api/track/search-tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag, resultCount: approxCount, sessionId: getSessionId() }),
+      }).catch(() => {});
+    }
     setActiveTagFilters((prev) => {
       const next = new Set(prev);
       if (next.has(tag)) next.delete(tag);

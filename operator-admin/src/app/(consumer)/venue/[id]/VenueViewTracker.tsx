@@ -2,24 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { getSessionId } from "@/lib/trackingSession";
 
 type Props = {
   venueId: string;
   city: string;
 };
-
-function getSessionId(): string {
-  try {
-    const key = "hhc_session_id";
-    const existing = sessionStorage.getItem(key);
-    if (existing) return existing;
-    const id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 /** Fires venue_viewed once when the venue detail page mounts. Renders nothing. */
 export function VenueViewTracker({ venueId, city }: Props) {

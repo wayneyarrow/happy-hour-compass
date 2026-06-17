@@ -2,23 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { getSessionId } from "@/lib/trackingSession";
 
 type Props = {
   eventId: string;
 };
-
-function getSessionId(): string {
-  try {
-    const key = "hhc_session_id";
-    const existing = sessionStorage.getItem(key);
-    if (existing) return existing;
-    const id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 /** Fires event_viewed once when the event detail page mounts. Renders nothing. */
 export function EventViewTracker({ eventId }: Props) {

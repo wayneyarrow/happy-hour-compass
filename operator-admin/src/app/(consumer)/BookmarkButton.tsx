@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { getSessionId } from "@/lib/trackingSession";
 
 const STORAGE_KEY = "savedVenues";
 
@@ -63,6 +64,15 @@ export function BookmarkButton({ venueId, className = "", variant = "list" }: Pr
     persistSavedVenues(ids);
     setSaved(willSave);
     trackEvent("saved_venue_toggled", { venue_id: venueId, saved: willSave });
+    fetch("/api/track/venue-save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        venueId,
+        action: willSave ? "save" : "unsave",
+        sessionId: getSessionId(),
+      }),
+    }).catch(() => {});
   }
 
   const isHeader = variant === "header";

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BookmarkButton } from "../BookmarkButton";
+import { getSessionId } from "@/lib/trackingSession";
 import type { ConsumerVenue } from "@/lib/data/venues";
 
 // ─── status helpers ───────────────────────────────────────────────────────────
@@ -78,7 +79,6 @@ function computeCardStatus(venue: ConsumerVenue): CardStatus {
   }
 
   // ── Business open/closed status ───────────────────────────────────────────
-  // Return null (hide) when no hours have been configured for any day.
   const hasAnyHours = DAYS.some(
     (d) => venue.hoursWeekly[d] && venue.hoursWeekly[d] !== "CLOSED"
   );
@@ -116,7 +116,11 @@ function getVenueImageSrc(establishmentType: string): string {
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-type Props = { venue: ConsumerVenue };
+type Props = {
+  venue: ConsumerVenue;
+  railName: string;
+  position: number;
+};
 
 /**
  * Portrait venue card for horizontal rails — OpenTable-inspired.
@@ -135,8 +139,7 @@ type Props = { venue: ConsumerVenue };
  * Sizing: 240 px wide → ~1.4 cards visible on the 375 px phone frame.
  * Image: 148 px high (8:5 ratio).
  */
-export function VenueRailCard({ venue }: Props) {
-  // Initialise neutral — avoids SSR/hydration mismatch (all derived values are time-dependent)
+export function VenueRailCard({ venue, railName, position }: Props) {
   const [status, setStatus] = useState<CardStatus>(NEUTRAL);
 
   useEffect(() => {
@@ -145,9 +148,6 @@ export function VenueRailCard({ venue }: Props) {
 
   const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
 
-  // HH status pill in the card content area.
-  // When hhStatus === "now" the green image badge (bottom-left of photo) already
-  // shows "Happy Hour Now" — suppress the pill here to avoid double-showing.
   const hhPill: { label: string; bg: string; color: string } | null =
     status.hhStatus === "today"
       ? { label: "Happy Hour Today",     bg: "#fef3c7", color: "#b45309" }
@@ -155,9 +155,24 @@ export function VenueRailCard({ venue }: Props) {
       ? { label: "Happy Hour Available", bg: "#f3f4f6", color: "#6b7280" }
       : null;
 
+  function handleClick() {
+    fetch("/api/track/venue-discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        venueId: venue.id,
+        eventType: "click",
+        railName,
+        position,
+        sessionId: getSessionId(),
+      }),
+    }).catch(() => {});
+  }
+
   return (
     <Link
       href={`/venue/${venue.id}`}
+      onClick={handleClick}
       style={{ display: "block", width: 240, flexShrink: 0, textDecoration: "none" }}
     >
       <div
@@ -200,7 +215,6 @@ export function VenueRailCard({ venue }: Props) {
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
 
-          {/* Subtle bottom scrim — grounds the content panel */}
           <div
             style={{
               position: "absolute",
@@ -262,7 +276,6 @@ export function VenueRailCard({ venue }: Props) {
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <div style={{ padding: 12 }}>
 
-          {/* Venue name — primary hierarchy */}
           <p
             style={{
               fontSize: 15,
@@ -279,9 +292,6 @@ export function VenueRailCard({ venue }: Props) {
             {venue.name}
           </p>
 
-          {/* Venue type + Rating row
-               Type truncates left; rating right-aligns via marginLeft:auto.
-               Row is skipped when neither field has data. */}
           {(venue.establishmentType || venue.googleRating !== null) && (
             <div
               style={{
@@ -324,13 +334,8 @@ export function VenueRailCard({ venue }: Props) {
             </div>
           )}
 
-          {/* ── Status row ─────────────────────────────────────────────────────
-               Business status · HH status.
-               No times, no schedules, no day references.
-               Rating lives on the type row above. */}
           <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
 
-            {/* Business status — hidden when hours data is unavailable */}
             {status.businessStatus === "open" && (
               <span
                 style={{
@@ -364,7 +369,6 @@ export function VenueRailCard({ venue }: Props) {
               </span>
             )}
 
-            {/* HH status pill — no times, no day refs */}
             {hhPill && (
               <span
                 style={{

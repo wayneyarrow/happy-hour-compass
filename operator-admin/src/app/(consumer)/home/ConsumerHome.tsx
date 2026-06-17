@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { haversineKm, MARKET_LABEL } from "@/lib/discover/discoverEngine";
+import { getSessionId } from "@/lib/trackingSession";
 import { RailSection } from "./RailSection";
 import { VenueRailCard } from "./VenueRailCard";
 import { EventRailCard, type HomeEventItem } from "./EventRailCard";
@@ -77,6 +78,38 @@ export function ConsumerHome({
   const [sortedNearby, setSortedNearby] = useState<ConsumerVenue[]>(
     () => nearbyVenues.slice(0, NEARBY_COUNT)
   );
+
+  // Capture initial rail data at render time so the impression effect can
+  // reference it with a stable ref (avoids exhaustive-deps lint issue).
+  const initialRailsRef = useRef({
+    spotlight:       spotlightVenues,
+    patio_picks:     patioPicksVenues,
+    highly_rated:    highlyRatedVenues,
+    featured_nearby: nearbyVenues.slice(0, NEARBY_COUNT),
+    new_this_week:   newThisWeekVenues,
+  });
+
+  // Fire one batch POST per rail on mount — rail-level impressions (V2).
+  // Using a ref instead of state deps so the effect intentionally runs once.
+  useEffect(() => {
+    const sid = getSessionId();
+    for (const [railName, venues] of Object.entries(initialRailsRef.current)) {
+      if (venues.length === 0) continue;
+      fetch("/api/track/venue-discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          events: venues.map((v, i) => ({
+            venueId: v.id,
+            eventType: "impression",
+            railName,
+            position: i,
+            sessionId: sid,
+          })),
+        }),
+      }).catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!navigator.geolocation || nearbyVenues.length === 0) return;
@@ -203,8 +236,8 @@ export function ConsumerHome({
             viewAllHref="/home/collections/spotlight"
             onViewAll={saveScroll}
           >
-            {spotlightVenues.map((v) => (
-              <VenueRailCard key={v.id} venue={v} />
+            {spotlightVenues.map((v, i) => (
+              <VenueRailCard key={v.id} venue={v} railName="spotlight" position={i} />
             ))}
           </RailSection>
         )}
@@ -216,8 +249,8 @@ export function ConsumerHome({
             viewAllHref="/home/collections/patio-picks"
             onViewAll={saveScroll}
           >
-            {patioPicksVenues.map((v) => (
-              <VenueRailCard key={v.id} venue={v} />
+            {patioPicksVenues.map((v, i) => (
+              <VenueRailCard key={v.id} venue={v} railName="patio_picks" position={i} />
             ))}
           </RailSection>
         )}
@@ -229,8 +262,8 @@ export function ConsumerHome({
             viewAllHref="/home/collections/highly-rated"
             onViewAll={saveScroll}
           >
-            {highlyRatedVenues.map((v) => (
-              <VenueRailCard key={v.id} venue={v} />
+            {highlyRatedVenues.map((v, i) => (
+              <VenueRailCard key={v.id} venue={v} railName="highly_rated" position={i} />
             ))}
           </RailSection>
         )}
@@ -242,8 +275,8 @@ export function ConsumerHome({
             viewAllHref="/home/collections/featured-nearby"
             onViewAll={saveScroll}
           >
-            {sortedNearby.map((v) => (
-              <VenueRailCard key={v.id} venue={v} />
+            {sortedNearby.map((v, i) => (
+              <VenueRailCard key={v.id} venue={v} railName="featured_nearby" position={i} />
             ))}
           </RailSection>
         )}
@@ -255,8 +288,8 @@ export function ConsumerHome({
             viewAllHref="/home/collections/new-this-week"
             onViewAll={saveScroll}
           >
-            {newThisWeekVenues.map((v) => (
-              <VenueRailCard key={v.id} venue={v} />
+            {newThisWeekVenues.map((v, i) => (
+              <VenueRailCard key={v.id} venue={v} railName="new_this_week" position={i} />
             ))}
           </RailSection>
         )}

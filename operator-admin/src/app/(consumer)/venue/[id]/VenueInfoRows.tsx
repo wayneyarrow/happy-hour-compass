@@ -1,6 +1,7 @@
 "use client";
 
 import { trackEvent } from "@/lib/analytics";
+import { getSessionId } from "@/lib/trackingSession";
 
 type Props = {
   venueId: string;
@@ -38,6 +39,14 @@ function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length !== 10) return phone;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function trackClick(clickType: "website" | "menu", venueId: string) {
+  fetch("/api/track/venue-click", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ venueId, clickType, sessionId: getSessionId() }),
+  }).catch(() => {});
 }
 
 export function VenueInfoRows({
@@ -79,6 +88,10 @@ export function VenueInfoRows({
           target="_blank"
           rel="noopener noreferrer"
           className={ROW_CLASS}
+          onClick={() => {
+            trackEvent("venue_menu_clicked", { venue_id: venueId, city });
+            trackClick("menu", venueId);
+          }}
         >
           <div className="flex-1 min-w-0">
             <p className={LABEL_CLASS}>Menu</p>
@@ -121,7 +134,10 @@ export function VenueInfoRows({
           target="_blank"
           rel="noopener noreferrer"
           className={ROW_CLASS}
-          onClick={() => trackEvent("venue_website_clicked", { venue_id: venueId, city })}
+          onClick={() => {
+            trackEvent("venue_website_clicked", { venue_id: venueId, city });
+            trackClick("website", venueId);
+          }}
         >
           <div className="flex-1 min-w-0">
             <p className={LABEL_CLASS}>Website</p>

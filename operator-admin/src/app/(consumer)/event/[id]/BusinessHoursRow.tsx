@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getSessionId } from "@/lib/trackingSession";
 
 const DAY_ORDER = [
   "Sunday",
@@ -143,6 +144,7 @@ function calculateBusinessHoursStatus(
 
 type Props = {
   hoursWeekly: Record<string, string>;
+  venueId?: string;
 };
 
 /**
@@ -154,7 +156,7 @@ type Props = {
  *  - "▾ Show full hours" toggle that expands/collapses the weekly schedule
  *  - Weekly schedule shows all 7 days (.hours-day-row)
  */
-export function BusinessHoursRow({ hoursWeekly }: Props) {
+export function BusinessHoursRow({ hoursWeekly, venueId }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<HoursStatus | null>(null);
 
@@ -193,7 +195,21 @@ export function BusinessHoursRow({ hoursWeekly }: Props) {
           {/* .hours-toggle — blue, 13px medium, ml-auto */}
           {hasWeekly && (
             <button
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => {
+                const opening = !expanded;
+                setExpanded((v) => !v);
+                if (opening && venueId) {
+                  fetch("/api/track/venue-click", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      venueId,
+                      clickType: "business_hours_expand",
+                      sessionId: getSessionId(),
+                    }),
+                  }).catch(() => {});
+                }
+              }}
               className="inline-flex items-center gap-1 text-[13px] text-blue-500 font-medium ml-auto flex-shrink-0 whitespace-nowrap hover:text-blue-600"
             >
               {/* .hours-disclosure — triangle rotates when expanded */}

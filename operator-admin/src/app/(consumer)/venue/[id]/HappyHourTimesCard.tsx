@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getSessionId } from "@/lib/trackingSession";
 
 const DAY_NAMES = [
   "Sunday",
@@ -99,6 +100,7 @@ function calculateHappyHourStatus(
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
+  venueId: string;
   happyHourWeekly: Record<string, HHSlot[]>;
   specialsFood: string[];
   specialsDrinks: string[];
@@ -117,7 +119,7 @@ type Props = {
  *   "Happy Hour Specials"           ← .hh-section-heading (outside box)
  *   Food / Drinks lists
  */
-export function HappyHourTimesCard({ happyHourWeekly, specialsFood, specialsDrinks }: Props) {
+export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, specialsDrinks }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<HHStatus | null>(null);
 
@@ -173,7 +175,21 @@ export function HappyHourTimesCard({ happyHourWeekly, specialsFood, specialsDrin
             {/* .hh-schedule-link inside info-box: 13px blue-800 */}
             <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => {
+                const opening = !expanded;
+                setExpanded((v) => !v);
+                if (opening) {
+                  fetch("/api/track/venue-click", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      venueId,
+                      clickType: "hh_schedule_expand",
+                      sessionId: getSessionId(),
+                    }),
+                  }).catch(() => {});
+                }
+              }}
               className="inline-flex items-center gap-1 text-[13px] font-medium whitespace-nowrap flex-shrink-0 hover:underline"
               style={{ color: "#1e40af" }}
             >
