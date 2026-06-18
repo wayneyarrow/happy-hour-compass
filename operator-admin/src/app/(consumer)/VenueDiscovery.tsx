@@ -5,7 +5,7 @@ import type { ConsumerVenue } from "@/lib/data/venues";
 import { SEARCH_TAG_GROUPS } from "@/lib/searchTags";
 import { MARKET_LABEL } from "@/lib/discover/discoverEngine";
 import { VenueList, getOpenStatus, isHappeningNow, haversineKm } from "./VenueList";
-import { VenueMapView } from "./VenueMapView";
+import { VenueMapView, type MapBounds } from "./VenueMapView";
 import { trackEvent } from "@/lib/analytics";
 import { getSessionId } from "@/lib/trackingSession";
 
@@ -76,6 +76,7 @@ export function VenueDiscovery({ venues }: Props) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeTagFilters, setActiveTagFilters] = useState<Set<string>>(new Set());
   const [isTagPanelOpen, setIsTagPanelOpen] = useState(false);
+  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const searchTracked = useRef(false);
   const isMap = view === "map";
 
@@ -204,6 +205,20 @@ export function VenueDiscovery({ venues }: Props) {
       // OR logic: venue matches if it has ANY of the selected tags
       return [...activeTagFilters].some((tag) => v.searchTags.includes(tag));
     });
+
+  // Venues visible within the current map viewport — applied only in map view once
+  // the map has fired its first idle event. Falls back to filteredVenues until then.
+  const viewportVenues = isMap && mapBounds
+    ? filteredVenues.filter((v) => {
+        if (v.latitude === null || v.longitude === null) return false;
+        return (
+          v.latitude >= mapBounds.south &&
+          v.latitude <= mapBounds.north &&
+          v.longitude >= mapBounds.west &&
+          v.longitude <= mapBounds.east
+        );
+      })
+    : filteredVenues;
 
   function handleNearMeClick() {
     if (nearMeActive) {
@@ -557,20 +572,17 @@ export function VenueDiscovery({ venues }: Props) {
       <div style={{ padding: "20px 20px 140px" }}>
         {isMap && (
           <div className="mb-5">
-            <VenueMapView venues={filteredVenues} />
+            <VenueMapView venues={filteredVenues} onBoundsChange={setMapBounds} />
           </div>
         )}
 
-        {/* Venue count in map mode */}
+        {/* Venue count in map mode — reflects venues visible in the current viewport */}
         {isMap && (
           <p className="text-sm text-gray-500 mb-5">
-            {filteredVenues.length} venue{filteredVenues.length !== 1 ? "s" : ""} found nearby
+            Showing {viewportVenues.length} venue{viewportVenues.length !== 1 ? "s" : ""} in this area
           </p>
         )}
 
-        {/* Venue list or empty state — list is hidden in map mode to prevent
-            the scroll container from accumulating scrollTop, which would
-            shift Google Maps marker overlays relative to the tile layer. */}
         {filteredVenues.length === 0 ? (
           (searchTerm || activeTagFilters.size > 0) ? (
             /* Empty state — shown when keyword search or tag filters produce no results */
@@ -603,8 +615,14 @@ export function VenueDiscovery({ venues }: Props) {
           ) : (
             <p className="text-gray-500 text-sm">No venues available right now.</p>
           )
+        ) : isMap ? (
+          viewportVenues.length > 0 ? (
+            <VenueList venues={viewportVenues} />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-8">Pan or zoom out to find venues nearby.</p>
+          )
         ) : (
-          !isMap && <VenueList venues={filteredVenues} />
+          <VenueList venues={filteredVenues} />
         )}
       </div>
     </>

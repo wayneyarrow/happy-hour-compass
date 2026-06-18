@@ -16,8 +16,11 @@ type LatLng = { lat: number; lng: number };
 /** ConsumerVenue narrowed to have confirmed non-null coordinates. */
 type MappedVenue = ConsumerVenue & { latitude: number; longitude: number };
 
+export type MapBounds = { north: number; south: number; east: number; west: number };
+
 type Props = {
   venues: ConsumerVenue[];
+  onBoundsChange?: (bounds: MapBounds) => void;
 };
 
 /** Filters to venues with valid lat/lng coordinates. */
@@ -60,7 +63,7 @@ function MapCenterManager({ userLocation }: { userLocation: LatLng | null }) {
   return null;
 }
 
-export function VenueMapView({ venues }: Props) {
+export function VenueMapView({ venues, onBoundsChange }: Props) {
   const router = useRouter();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const mapped = venuesWithCoords(venues);
@@ -121,6 +124,11 @@ export function VenueMapView({ venues }: Props) {
           style={{ width: "100%", height: "100%" }}
           // Close the InfoWindow when tapping the map background.
           onClick={() => setSelectedVenue(null)}
+          // Fire bounds update after pan/zoom ends (not during drag).
+          onIdle={(e) => {
+            const b = e.map.getBounds();
+            if (b) onBoundsChange?.(b.toJSON());
+          }}
         >
           <MapCenterManager userLocation={userLocation} />
 
