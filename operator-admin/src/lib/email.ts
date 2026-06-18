@@ -117,6 +117,106 @@ async function escalateEmailFailure({
   });
 }
 
+// ── Shared email layout helpers ───────────────────────────────────────────────
+//
+// All HHC transactional emails share one layout produced by emailLayout().
+// Supporting helpers — emailCta(), emailSpamCallout(), emailWhatHappensNext() —
+// are composed into the content string passed to emailLayout().
+//
+// Logo URL is derived from APP_URL → VERCEL_URL → localhost. The logo renders
+// in production/preview; it will not render in local email clients (expected).
+
+/**
+ * Full email shell: HHC logo header → content cell → branded footer.
+ * Every email function calls this and passes its inner HTML + a footer note.
+ */
+function emailLayout(content: string, footerNote: string): string {
+  const logoUrl = `${getAppUrl()}/logo.png`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:28px 40px 24px;text-align:center;border-bottom:1px solid #e2e8f0;">
+            <img src="${logoUrl}" alt="Happy Hour Compass" width="110" style="display:block;margin:0 auto;width:110px;height:auto;border:0;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px;">
+            ${content}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 40px 32px;">
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="text-align:center;">
+                <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#0f172a;">Happy Hour Compass</p>
+                <p style="margin:0 0 10px;font-size:12px;color:#64748b;line-height:1.5;">Helping guests discover happy hours, specials, and events.</p>
+                <p style="margin:0 0 14px;font-size:12px;">
+                  <a href="https://happyhourcompass.com" style="color:#d97706;text-decoration:none;">happyhourcompass.com</a>
+                  &nbsp;&middot;&nbsp;
+                  <a href="mailto:hello@happyhourcompass.com" style="color:#94a3b8;text-decoration:none;">hello@happyhourcompass.com</a>
+                </p>
+                <p style="margin:0;font-size:11px;color:#cbd5e1;">${footerNote}</p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/** Amber CTA button. Use for all primary email actions. */
+function emailCta(href: string, label: string): string {
+  return `<table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
+    <tr><td style="background:#d97706;border-radius:8px;">
+      <a href="${href}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">${label}</a>
+    </td></tr>
+  </table>`;
+}
+
+/**
+ * Prominent spam/junk callout. Add to emails where the recipient is waiting
+ * for a future HHC response. Beta feedback confirmed some HHC emails land in spam.
+ * Do NOT add to password resets, invitations, or activation emails.
+ */
+function emailSpamCallout(): string {
+  return `<table cellpadding="0" cellspacing="0" style="width:100%;margin:20px 0 0;">
+    <tr><td style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#92400e;">Keep an eye on your inbox</p>
+      <p style="margin:0;font-size:13px;color:#78350f;line-height:1.5;">Our reply may land in your spam or junk folder. Please add <strong>hello@happyhourcompass.com</strong> to your contacts to make sure you don&rsquo;t miss it.</p>
+    </td></tr>
+  </table>`;
+}
+
+/**
+ * "What happens next?" numbered steps panel. Add to review/verification
+ * workflows where the recipient submitted something and is waiting for HHC.
+ * Do NOT add to password resets, invitations, or activation emails.
+ */
+function emailWhatHappensNext(steps: string[]): string {
+  const rows = steps.map((step, i) => `
+        <tr>
+          <td style="padding:5px 10px 5px 0;font-size:13px;font-weight:700;color:#d97706;vertical-align:top;white-space:nowrap;">${i + 1}.</td>
+          <td style="padding:5px 0;font-size:14px;color:#475569;line-height:1.5;">${step}</td>
+        </tr>`).join("");
+  return `<table cellpadding="0" cellspacing="0" style="width:100%;margin:24px 0 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+    <tr><td style="padding:16px 20px;">
+      <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.06em;">What happens next?</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;">
+        ${rows}
+      </table>
+    </td></tr>
+  </table>`;
+}
+
 // ── Password setup email ───────────────────────────────────────────────────────
 
 /**
@@ -139,40 +239,18 @@ export async function sendPasswordSetupEmail({
   firstName: string;
   setupLink: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue claim was approved</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             Great news — your venue ownership claim has been reviewed and approved.
             Click the button below to set your password and access your operator account.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${setupLink}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Set up my password →
-              </a>
-            </td></tr>
-          </table>
+          ${emailCta(setupLink, "Set up my password &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires within 24 hours. If it expires, contact us and we can send a new one.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue claim on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>`,
+    "You received this email because you submitted a venue claim on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -229,15 +307,8 @@ export async function sendClaimNotificationEmail({
     process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New venue claim submitted</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -261,22 +332,10 @@ export async function sendClaimNotificationEmail({
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
             </tr>
           </table>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Review claim →
-              </a>
-            </td></tr>
-          </table>
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Control Panel notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(reviewUrl, "Review claim &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>`,
+    "Happy Hour Compass &middot; Control Panel notification"
+  );
 
   const text = `New venue claim submitted — Happy Hour Compass
 
@@ -319,47 +378,39 @@ export async function sendClaimSubmissionConfirmationEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">We received your claim</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for submitting your ownership claim for <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
           </p>
-
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+          <p style="margin:0 0 0;font-size:15px;color:#475569;line-height:1.6;">
             We&rsquo;ll review your claim shortly. If we need any additional information, we&rsquo;ll reach out to you at this email address.
           </p>
-
-          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Cheers,</p>
+          ${emailWhatHappensNext([
+            "We review your ownership claim (usually within 1&ndash;2 business days).",
+            "If we need anything else, we&rsquo;ll reach out to you at this email address.",
+            "Once approved, you&rsquo;ll receive a link to set up your operator account.",
+          ])}
+          ${emailSpamCallout()}
+          <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
-          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue claim on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
+    "You received this email because you submitted a venue claim on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
 Thanks for submitting your ownership claim for ${venueName} on Happy Hour Compass.
 
 We'll review your claim shortly. If we need any additional information, we'll reach out to you at this email address.
+
+What happens next?
+1. We review your ownership claim (usually within 1–2 business days).
+2. If we need anything else, we'll reach out to you at this email address.
+3. Once approved, you'll receive a link to set up your operator account.
+
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Cheers,
 Wayne
@@ -390,65 +441,39 @@ export async function sendRequestMoreInfoEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">More information needed</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hello ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for submitting a request to claim <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
           </p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Before we can approve the request, we just need a bit of information to confirm that you&rsquo;re authorized to manage this venue listing.
           </p>
-
           <p style="margin:0 0 12px;font-size:15px;color:#475569;line-height:1.6;">
             Please reply to this email with one of the following:
           </p>
-
-          <ul style="margin:0 0 24px;padding-left:20px;font-size:15px;color:#475569;line-height:2;">
+          <ul style="margin:0 0 16px;padding-left:20px;font-size:15px;color:#475569;line-height:2;">
             <li>a photo of the venue&rsquo;s business licence</li>
             <li>a photo of the venue&rsquo;s liquor licence</li>
             <li>a utility bill showing the business name and address</li>
             <li>an email sent from the venue&rsquo;s official business domain</li>
             <li>confirmation from the venue&rsquo;s website or social media account</li>
           </ul>
-
-          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+          <p style="margin:0 0 0;font-size:15px;color:#475569;line-height:1.6;">
             These documents are used only to verify the claim request and are not stored or shared.
           </p>
-
-          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
-            Once we receive the information, we&rsquo;ll review the request and get your venue set up as quickly as possible.
-          </p>
-
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-            If you have any questions, feel free to reply directly to this email.
-          </p>
-
-          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Thanks again,</p>
+          ${emailWhatHappensNext([
+            "Reply to this email with one of the verification documents listed above.",
+            "We&rsquo;ll review what you send and verify your ownership.",
+            "Once verified, you&rsquo;ll receive a link to set up your operator account.",
+          ])}
+          ${emailSpamCallout()}
+          <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Thanks again,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
-          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue claim on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
+    "You received this email because you submitted a venue claim on Happy Hour Compass."
+  );
 
   const text = `Hello ${firstName},
 
@@ -466,9 +491,12 @@ Please reply to this email with one of the following:
 
 These documents are used only to verify the claim request and are not stored or shared.
 
-Once we receive the information, we'll review the request and get your venue set up as quickly as possible.
+What happens next?
+1. Reply to this email with one of the verification documents listed above.
+2. We'll review what you send and verify your ownership.
+3. Once verified, you'll receive a link to set up your operator account.
 
-If you have any questions, feel free to reply directly to this email.
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Thanks again,
 
@@ -520,15 +548,7 @@ export async function sendSuggestionNotificationEmail({
 
   const notesText = notes ? `Notes:     ${notes}\n` : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New happy hour suggestion</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -545,15 +565,9 @@ export async function sendSuggestionNotificationEmail({
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
             </tr>
           </table>
-          <p style="margin:0 0 8px;font-size:12px;color:#94a3b8;">Suggestion ID: ${suggestionId}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Consumer suggestion notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Suggestion ID: ${suggestionId}</p>`,
+    "Happy Hour Compass &middot; Consumer suggestion notification"
+  );
 
   const text = `New happy hour suggestion — Happy Hour Compass
 
@@ -608,7 +622,8 @@ export async function sendOperatorSubmissionNotificationEmail({
   routedStatus: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";  const appUrl = getAppUrl();
+  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
 
   const matchBadgeColor =
@@ -616,15 +631,7 @@ export async function sendOperatorSubmissionNotificationEmail({
     : matchStatus === "rejected" ? "#dc2626"
     : "#d97706"; // no_match = amber
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New operator submission</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -658,22 +665,10 @@ export async function sendOperatorSubmissionNotificationEmail({
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
             </tr>
           </table>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Review submission →
-              </a>
-            </td></tr>
-          </table>
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Operator submission notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(reviewUrl, "Review submission &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>`,
+    "Happy Hour Compass &middot; Operator submission notification"
+  );
 
   const text = `New operator submission — Happy Hour Compass
 
@@ -734,15 +729,7 @@ export async function sendContactFounderNotificationEmail({
     : "";
   const nameText = name ? `Name:      ${name}\n` : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New contact message</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -757,15 +744,9 @@ export async function sendContactFounderNotificationEmail({
           </table>
           <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#0f172a;">Message:</p>
           <div style="padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;color:#0f172a;line-height:1.6;white-space:pre-wrap;margin-bottom:24px;">${message}</div>
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Message ID: ${messageId}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Contact form notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Message ID: ${messageId}</p>`,
+    "Happy Hour Compass &middot; Contact form notification"
+  );
 
   const text = `New contact message — Happy Hour Compass
 
@@ -805,44 +786,35 @@ export async function sendContactSubmitterConfirmationEmail({
 }: {
   to: string;
   name: string | null;
-}): Promise<{ ok: boolean; error?: string }> {  const greeting = name ? `Hi ${name},` : "Hi there,";
+}): Promise<{ ok: boolean; error?: string }> {
+  const greeting = name ? `Hi ${name},` : "Hi there,";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">We got your message</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">${greeting}</p>
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+          <p style="margin:0 0 0;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for reaching out to Happy Hour Compass. We&rsquo;ve received your message and will take a look shortly.
           </p>
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-            If you have anything to add, feel free to reply directly to this email.
-          </p>
-          <p style="margin:0 0 4px;font-size:15px;color:#475569;">Cheers,</p>
+          ${emailWhatHappensNext([
+            "We&rsquo;ll read your message and get back to you as soon as we can.",
+            "You&rsquo;ll receive our reply at this email address.",
+          ])}
+          ${emailSpamCallout()}
+          <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
-          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a message on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
+    "You received this email because you submitted a message on Happy Hour Compass."
+  );
 
   const text = `${greeting}
 
 Thanks for reaching out to Happy Hour Compass. We've received your message and will take a look shortly.
 
-If you have anything to add, feel free to reply directly to this email.
+What happens next?
+1. We'll read your message and get back to you as soon as we can.
+2. You'll receive our reply at this email address.
+
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Cheers,
 Wayne
@@ -880,49 +852,26 @@ export async function sendOperatorSubmissionMoreInfoEmail({
   /** Secure link to the structured more-info form. Expires in 72 hours. */
   moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for submitting <strong style="color:#0f172a;">${venueName}</strong> to Happy Hour Compass.
           </p>
-
           <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.6;">
             We weren&rsquo;t able to automatically verify your venue, so we need a few additional details before we can create your operator account. Please click the button below to complete a short verification form — it only takes a couple of minutes.
           </p>
-
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${moreInfoUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Complete verification →
-              </a>
-            </td></tr>
-          </table>
-
-          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
-
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(moreInfoUrl, "Complete verification &rarr;")}
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
+          <p style="margin:0 0 0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
+          ${emailWhatHappensNext([
+            "Complete the short verification form using the link above.",
+            "We&rsquo;ll review the details you provide.",
+            "Once verified, you&rsquo;ll receive a link to set up your operator account.",
+          ])}
+          ${emailSpamCallout()}`,
+    "You received this email because you submitted a venue on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -932,6 +881,13 @@ We weren't able to automatically verify your venue, so we need a few additional 
 ${moreInfoUrl}
 
 This link expires in 72 hours. If it expires, reply to this email and we'll send a new one.
+
+What happens next?
+1. Complete the short verification form using the link above.
+2. We'll review the details you provide.
+3. Once verified, you'll receive a link to set up your operator account.
+
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 —
 Happy Hour Compass`;
@@ -964,45 +920,23 @@ export async function sendOperatorSubmissionClosedEmail({
   firstName: string;
   venueName: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">About your submission</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for taking the time to submit <strong style="color:#0f172a;">${venueName}</strong> to Happy Hour Compass.
           </p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             After reviewing your submission, we weren&rsquo;t able to add the venue to our platform at this time. We appreciate your interest and apologise for any inconvenience.
           </p>
-
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             If you have additional information that might help, or if you think this decision was made in error, please don&rsquo;t hesitate to reply to this email — we&rsquo;re happy to take another look.
           </p>
-
           <p style="margin:0 0 4px;font-size:15px;color:#475569;">Thanks again,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
-          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
+    "You received this email because you submitted a venue on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -1055,20 +989,11 @@ export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
-  const from    = DEFAULT_FROM;
   const appUrl  = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
   const fullName  = [submitterFirstName, submitterLastName].filter(Boolean).join(" ") || submitterEmail;
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Additional information submitted</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -1097,22 +1022,10 @@ export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
             The submitter has completed the additional verification form. Open the submission to review their details.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Review submission →
-              </a>
-            </td></tr>
-          </table>
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Operator submission notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(reviewUrl, "Review submission &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>`,
+    "Happy Hour Compass &middot; Operator submission notification"
+  );
 
   const text = `Additional information submitted — Happy Hour Compass
 
@@ -1161,39 +1074,17 @@ export async function sendOperatorActivationEmail({
   firstName: string;
   setupLink: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue is on Happy Hour Compass</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             Your venue has been added to Happy Hour Compass. Click the button below to set up your Operator Admin account and start managing your listing.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${setupLink}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Set up my account →
-              </a>
-            </td></tr>
-          </table>
+          ${emailCta(setupLink, "Set up my account &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires within 24 hours. If it expires, contact us and we&rsquo;ll send a new one.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>`,
+    "You received this email because you submitted a venue on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -1238,49 +1129,26 @@ export async function sendClaimMoreInfoEmail({
   venueName: string;
   moreInfoUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             Thanks for submitting your ownership claim for <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
           </p>
-
           <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.6;">
             We need a few additional details to verify your ownership before we can grant you access to manage this listing. Please click the button below — it only takes a couple of minutes.
           </p>
-
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${moreInfoUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Complete verification →
-              </a>
-            </td></tr>
-          </table>
-
-          <p style="margin:0 0 24px;font-size:12px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
-
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 20px;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue claim on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(moreInfoUrl, "Complete verification &rarr;")}
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires in 72 hours. If it expires, reply to this email and we&rsquo;ll send a new one.</p>
+          <p style="margin:0 0 0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${moreInfoUrl}</p>
+          ${emailWhatHappensNext([
+            "Complete the short verification form using the link above.",
+            "We&rsquo;ll review the details you provide.",
+            "Once verified, you&rsquo;ll receive a link to set up your operator account.",
+          ])}
+          ${emailSpamCallout()}`,
+    "You received this email because you submitted a venue claim on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -1290,6 +1158,13 @@ We need a few additional details to verify your ownership before we can grant yo
 ${moreInfoUrl}
 
 This link expires in 72 hours. If it expires, reply to this email and we'll send a new one.
+
+What happens next?
+1. Complete the short verification form using the link above.
+2. We'll review the details you provide.
+3. Once verified, you'll receive a link to set up your operator account.
+
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 —
 Happy Hour Compass`;
@@ -1328,20 +1203,11 @@ export async function sendClaimInfoSubmittedNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to       = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
-  const from     = DEFAULT_FROM;
   const appUrl   = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
   const fullName  = [claimantFirstName, claimantLastName].filter(Boolean).join(" ") || claimantEmail;
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Claim verification submitted</h1>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
@@ -1370,22 +1236,10 @@ export async function sendClaimInfoSubmittedNotificationEmail({
           <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
             The claimant has completed the verification form. Open the claim to review their details.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${reviewUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Review claim →
-              </a>
-            </td></tr>
-          </table>
-          <p style="margin:0 0 8px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Happy Hour Compass · Venue claim notification</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          ${emailCta(reviewUrl, "Review claim &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>`,
+    "Happy Hour Compass &middot; Venue claim notification"
+  );
 
   const text = `Claim verification submitted — Happy Hour Compass
 
@@ -1434,43 +1288,21 @@ export async function sendPasswordResetEmail({
   to: string;
   firstName?: string;
   resetLink: string;
-}): Promise<{ ok: boolean; error?: string }> {  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
+}): Promise<{ ok: boolean; error?: string }> {
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Reset your password</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">${greeting}</p>
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             You requested a password reset for your Happy Hour Compass operator account.
             Click the button below to set a new password.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${resetLink}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Reset my password →
-              </a>
-            </td></tr>
-          </table>
+          ${emailCta(resetLink, "Reset my password &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires within 24 hours.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${resetLink}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            If you didn&rsquo;t request a password reset, you can safely ignore this email.
-            Your password will not be changed until you click the link above.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${resetLink}</p>`,
+    "If you didn&rsquo;t request a password reset, you can safely ignore this email. Your password will not be changed until you click the link above."
+  );
 
   const text = `${greeting}
 
@@ -1520,50 +1352,21 @@ export async function sendMemberInviteEmail({
   inviterName: string;
   inviteUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">You&rsquo;ve been invited to manage ${venueName}</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             <strong style="color:#0f172a;">${inviterName}</strong> has invited you to help manage
             <strong style="color:#0f172a;">${venueName}</strong> on Happy Hour Compass.
           </p>
-
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             Click the button below to create your password and join the venue&rsquo;s operator account.
           </p>
-
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${inviteUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Accept invitation &rarr;
-              </a>
-            </td></tr>
-          </table>
-
+          ${emailCta(inviteUrl, "Accept invitation &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This invitation link expires in 7 days. If it expires, ask ${inviterName} to send a new invitation.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because ${inviterName} invited you to manage a venue on Happy Hour Compass.
-            If you didn&rsquo;t expect this, you can safely ignore it.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>`,
+    `You received this email because ${inviterName} invited you to manage a venue on Happy Hour Compass. If you didn&rsquo;t expect this, you can safely ignore it.`
+  );
 
   const text = `Hi ${firstName},
 
@@ -1600,40 +1403,19 @@ export async function sendApprovalEmail({
 }): Promise<{ ok: boolean; error?: string }> {
   const appUrl = getAppUrl();
   const activateUrl = `${appUrl}/activate-account?token=${token}`;
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue claim was approved</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             Great news — your venue ownership claim has been reviewed and approved.
             Click the button below to create your operator account and take control of your listing.
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${activateUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Create my account →
-              </a>
-            </td></tr>
-          </table>
+          ${emailCta(activateUrl, "Create my account &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires in 7 days. If it expires, contact us and we can send a new one.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${activateUrl}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because you submitted a venue claim on Happy Hour Compass.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${activateUrl}</p>`,
+    "You received this email because you submitted a venue claim on Happy Hour Compass."
+  );
 
   const text = `Hi ${firstName},
 
@@ -1677,50 +1459,21 @@ export async function sendPlatformAdminInviteEmail({
   inviterEmail: string;
   inviteUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:40px;" cellpadding="0" cellspacing="0">
-        <tr><td>
-          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;">Happy Hour Compass</p>
+  const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">You&rsquo;ve been invited to the Admin Control Panel</h1>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi,</p>
-
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
             <strong style="color:#0f172a;">${inviterEmail}</strong> has invited you to access the
             Happy Hour Compass Admin Control Panel.
           </p>
-
           <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
             Click the button below to set up your password and activate your account.
           </p>
-
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr><td style="background:#d97706;border-radius:8px;">
-              <a href="${inviteUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                Accept invitation &rarr;
-              </a>
-            </td></tr>
-          </table>
-
+          ${emailCta(inviteUrl, "Accept invitation &rarr;")}
           <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This invitation link expires in 7 days.</p>
-          <p style="margin:0 0 24px;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>
-
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">
-            You received this email because ${inviterEmail} granted you access to the Happy Hour Compass Admin Control Panel.
-            If you didn&rsquo;t expect this, you can safely ignore it.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>`,
+    `You received this email because ${inviterEmail} granted you access to the Happy Hour Compass Admin Control Panel. If you didn&rsquo;t expect this, you can safely ignore it.`
+  );
 
   const text = `Hi,
 
