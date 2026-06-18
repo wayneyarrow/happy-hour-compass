@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { submitSuggestionAction, type SuggestionFormState } from "./actions";
 import { trackEvent } from "@/lib/analytics";
@@ -18,6 +18,7 @@ export function SuggestionForm() {
     submitSuggestionAction,
     {}
   );
+  const [emailValue, setEmailValue] = useState("");
 
   useEffect(() => {
     trackEvent("suggest_venue_started");
@@ -45,9 +46,17 @@ export function SuggestionForm() {
         <h2 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
           Thanks for the tip!
         </h2>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-10 max-w-[280px]">
-          Thanks &mdash; we&rsquo;ll review this happy hour suggestion soon.
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-6 max-w-[280px]">
+          We&rsquo;ll review the suggestion and may add it to the directory if
+          it looks like a good fit.
         </p>
+
+        {emailValue && (
+          <p className="text-[13px] text-gray-500 leading-relaxed mb-8 max-w-[280px]">
+            Check your inbox for a confirmation email. If you don&rsquo;t see
+            it, check your spam or junk folder.
+          </p>
+        )}
 
         <Link
           href="/"
@@ -150,12 +159,34 @@ export function SuggestionForm() {
             type="email"
             autoComplete="email"
             inputMode="email"
+            value={emailValue}
+            onChange={(e) => setEmailValue(e.target.value)}
             className={INPUT_CLASS}
           />
           {state.fieldErrors?.customer_email && (
             <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.customer_email}</p>
           )}
         </div>
+
+        {/* Marketing opt-in — only shown when an email is entered */}
+        {emailValue && (
+          <div className="flex items-start gap-3 pt-1">
+            <input
+              id="email_marketing_opt_in"
+              name="email_marketing_opt_in"
+              type="checkbox"
+              value="true"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 shrink-0"
+            />
+            <label
+              htmlFor="email_marketing_opt_in"
+              className="text-[13px] text-gray-600 leading-snug cursor-pointer"
+            >
+              Email me with updates about this suggestion and occasional Happy
+              Hour Compass news.
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Submit */}

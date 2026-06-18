@@ -529,12 +529,18 @@ export async function sendSuggestionNotificationEmail({
   venueName,
   city,
   notes,
+  customerName,
+  customerEmail,
+  marketingOptIn,
   submittedAt,
 }: {
   suggestionId: string;
   venueName: string;
   city: string;
   notes?: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  marketingOptIn?: boolean;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to =
@@ -545,8 +551,30 @@ export async function sendSuggestionNotificationEmail({
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${notes}</td>
             </tr>`
     : "";
+  const customerNameRow = customerName
+    ? `<tr${notes ? ' style="background:#f8fafc;"' : ""}>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Name</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${customerName}</td>
+            </tr>`
+    : "";
+  const customerEmailRow = customerEmail
+    ? `<tr${(notes || customerName) ? "" : ' style="background:#f8fafc;"'}>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${customerEmail}</td>
+            </tr>`
+    : "";
+  const marketingBadge = customerEmail
+    ? `<tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Marketing opt-in</td>
+              <td style="padding:10px 14px;border-top:1px solid #e2e8f0;">
+                <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#ffffff;background:${marketingOptIn ? "#16a34a" : "#64748b"};">${marketingOptIn ? "Yes" : "No"}</span>
+              </td>
+            </tr>`
+    : "";
 
-  const notesText = notes ? `Notes:     ${notes}\n` : "";
+  const notesText = notes ? `Notes:          ${notes}\n` : "";
+  const customerNameText = customerName ? `Name:           ${customerName}\n` : "";
+  const customerEmailText = customerEmail ? `Email:          ${customerEmail}\nMarketing opt-in: ${marketingOptIn ? "Yes" : "No"}\n` : "";
 
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New happy hour suggestion</h1>
@@ -560,7 +588,10 @@ export async function sendSuggestionNotificationEmail({
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${city}</td>
             </tr>
             ${notesRow}
-            <tr${notes ? "" : ' style="background:#f8fafc;"'}>
+            ${customerNameRow}
+            ${customerEmailRow}
+            ${marketingBadge}
+            <tr>
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
             </tr>
@@ -573,7 +604,7 @@ export async function sendSuggestionNotificationEmail({
 
 Venue:     ${venueName}
 City:      ${city}
-${notesText}Submitted: ${submittedAt}
+${notesText}${customerNameText}${customerEmailText}Submitted: ${submittedAt}
 ID:        ${suggestionId}
 
 —
@@ -583,6 +614,78 @@ Happy Hour Compass`;
     type:        "suggestion_notification",
     to,
     subject:     `New happy hour suggestion: ${venueName} (${city})`,
+    html,
+    text,
+    criticality: "standard",
+  });
+}
+
+// ── Venue suggestion confirmation email (to submitter) ───────────────────────
+
+/**
+ * Sends a thank-you confirmation email to the consumer who submitted a venue
+ * suggestion, if they provided an email address.
+ *
+ * Copy adapts based on whether the consumer opted in to marketing emails:
+ *   - opted in  → acknowledge the opt-in and mention occasional HHC news
+ *   - not opted in → purely transactional thank-you, no marketing language
+ *
+ * Failure is non-blocking: the suggestion record already exists in the DB.
+ * Caller should log the error and return success to the consumer regardless.
+ */
+export async function sendSuggestionConfirmationEmail({
+  to,
+  venueName,
+  customerName,
+  marketingOptIn,
+}: {
+  to: string;
+  venueName: string;
+  customerName?: string | null;
+  marketingOptIn: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  const greeting = customerName ? `Hi ${customerName},` : "Hi there,";
+
+  const marketingPara = marketingOptIn
+    ? `<p style="margin:16px 0 0;font-size:15px;color:#475569;line-height:1.6;">
+            Since you opted in, we may also send you occasional updates about your suggestion and Happy Hour Compass news. You can reply to any of our emails to opt out at any time.
+          </p>`
+    : "";
+
+  const marketingText = marketingOptIn
+    ? "\nSince you opted in, we may also send you occasional updates about your suggestion and Happy Hour Compass news. You can reply to any of our emails to opt out at any time."
+    : "";
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">Thanks for the suggestion!</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">${greeting}</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for suggesting <strong style="color:#0f172a;">${venueName}</strong>. We appreciate you helping us make Happy Hour Compass better.
+          </p>
+          <p style="margin:0 0 0;font-size:15px;color:#475569;line-height:1.6;">
+            We&rsquo;ll review the suggestion and may add it to the directory if it looks like a good fit.
+          </p>
+          ${marketingPara}
+          ${emailSpamCallout()}`,
+    "You received this email because you suggested a venue on Happy Hour Compass."
+  );
+
+  const text = `${greeting}
+
+Thanks for suggesting ${venueName}. We appreciate you helping us make Happy Hour Compass better.
+
+We'll review the suggestion and may add it to the directory if it looks like a good fit.
+${marketingText}
+
+Keep an eye on your inbox: Our emails may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss anything.
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "suggestion_confirmation",
+    to,
+    subject:     "Thanks for your Happy Hour Compass suggestion",
     html,
     text,
     criticality: "standard",

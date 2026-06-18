@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendSuggestionNotificationEmail } from "@/lib/email";
+import { sendSuggestionNotificationEmail, sendSuggestionConfirmationEmail } from "@/lib/email";
 
 export type SuggestionFormState = {
   success?: boolean;
@@ -23,11 +23,13 @@ export async function submitSuggestionAction(
   formData: FormData
 ): Promise<SuggestionFormState> {
   // ── Extract + sanitize fields ─────────────────────────────────────────────
-  const name          = (formData.get("name")           as string | null)?.trim() ?? "";
-  const city          = (formData.get("city")           as string | null)?.trim() ?? "";
-  const notes         = (formData.get("notes")          as string | null)?.trim() || null;
-  const customerName  = (formData.get("customer_name")  as string | null)?.trim() || null;
-  const customerEmail = (formData.get("customer_email") as string | null)?.trim().toLowerCase() || null;
+  const name              = (formData.get("name")                   as string | null)?.trim() ?? "";
+  const city              = (formData.get("city")                   as string | null)?.trim() ?? "";
+  const notes             = (formData.get("notes")                  as string | null)?.trim() || null;
+  const customerName      = (formData.get("customer_name")          as string | null)?.trim() || null;
+  const customerEmail     = (formData.get("customer_email")         as string | null)?.trim().toLowerCase() || null;
+  const marketingOptIn    = formData.get("email_marketing_opt_in") === "true";
+  const marketingOptedInAt = (marketingOptIn && customerEmail) ? new Date().toISOString() : null;
 
   // ── Server-side validation ────────────────────────────────────────────────
   const fieldErrors: Record<string, string> = {};
@@ -52,8 +54,10 @@ export async function submitSuggestionAction(
       name,
       city,
       notes,
-      customer_name:  customerName,
-      customer_email: customerEmail,
+      customer_name:               customerName,
+      customer_email:              customerEmail,
+      email_marketing_opt_in:      marketingOptIn,
+      email_marketing_opted_in_at: marketingOptedInAt,
     })
     .select("id, submitted_at")
     .single();
@@ -80,10 +84,13 @@ export async function submitSuggestionAction(
 
   try {
     const emailResult = await sendSuggestionNotificationEmail({
-      suggestionId: inserted.id as string,
-      venueName:    name,
+      suggestionId:  inserted.id as string,
+      venueName:     name,
       city,
-      notes:        notes ?? undefined,
+      notes:         notes ?? undefined,
+      customerName,
+      customerEmail,
+      marketingOptIn,
       submittedAt,
     });
     if (!emailResult.ok) {
@@ -91,6 +98,29 @@ export async function submitSuggestionAction(
     }
   } catch (emailErr) {
     console.error("[submitSuggestionAction] Notification email threw unexpected exception:", emailErr);
+  }
+
+  // ── Confirmation email to submitter (if email provided) ───────────────────
+  if (customerEmail) {
+    console.log("[EMAIL] submitSuggestionAction — sending submitter confirmation", {
+      suggestionId: inserted.id,
+      venueName: name,
+      marketingOptIn,
+      flow: "suggestion-confirmation",
+    });
+    try {
+      const confirmResult = await sendSuggestionConfirmationEmail({
+        to:            customerEmail,
+        venueName:     name,
+        customerName,
+        marketingOptIn,
+      });
+      if (!confirmResult.ok) {
+        console.error("[submitSuggestionAction] Confirmation email failed:", confirmResult.error);
+      }
+    } catch (confirmErr) {
+      console.error("[submitSuggestionAction] Confirmation email threw unexpected exception:", confirmErr);
+    }
   }
 
   return { success: true };
