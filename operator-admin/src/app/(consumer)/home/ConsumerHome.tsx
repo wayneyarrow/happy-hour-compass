@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
-import { haversineKm, MARKET_LABEL } from "@/lib/discover/discoverEngine";
+import { haversineKm } from "@/lib/discover/discoverEngine";
+import type { Market } from "@/lib/markets";
+import { MarketChip } from "../MarketChip";
 import { getSessionId } from "@/lib/trackingSession";
 import { RailSection } from "./RailSection";
 import { VenueRailCard } from "./VenueRailCard";
@@ -43,6 +45,8 @@ function computeGreeting(): string {
 //   3. Add a <RailSection> block in ConsumerHome
 
 export type HomepageData = {
+  market: Market;
+  isPersisted: boolean;
   spotlightVenues: ConsumerVenue[];
   patioPicksVenues: ConsumerVenue[];
   highlyRatedVenues: ConsumerVenue[];
@@ -59,6 +63,8 @@ export type HomepageData = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ConsumerHome({
+  market,
+  isPersisted,
   spotlightVenues,
   patioPicksVenues,
   highlyRatedVenues,
@@ -197,30 +203,8 @@ export function ConsumerHome({
           {greeting} 👋
         </p>
 
-        {/* Location chip */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#9ca3af"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ width: 13, height: 13, flexShrink: 0 }}
-          >
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-          <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>
-            {MARKET_LABEL}
-          </span>
-        </div>
+        {/* Market chip — tappable; opens market selection modal */}
+        <MarketChip market={market} isPersisted={isPersisted} />
 
       </div>
 

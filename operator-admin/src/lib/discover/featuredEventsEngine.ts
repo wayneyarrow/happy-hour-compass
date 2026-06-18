@@ -35,8 +35,8 @@
 
 import type { CPFeaturedEventItem } from "@/lib/data/events";
 import type { EventRailOverride } from "@/lib/data/discoverOverridesShared";
-import type { RailOverride } from "@/lib/discover/discoverEngine";
-import { isNearMarket } from "@/lib/discover/discoverEngine";
+import type { RailOverride, MarketConfig } from "@/lib/discover/discoverEngine";
+import { isNearMarket, MARKET_CONFIG } from "@/lib/discover/discoverEngine";
 
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,8 @@ function scoreEvent(event: CPFeaturedEventItem): number {
 export function computeFeaturedEventRail(
   candidates: CPFeaturedEventItem[],
   eventOverrides: EventRailOverride[],
-  venueOverrides: RailOverride[]
+  venueOverrides: RailOverride[],
+  market: MarketConfig = MARKET_CONFIG
 ): CPFeaturedEventItem[] {
   // Build O(1) lookup sets
   const nixedEventUuids = new Set(
@@ -104,7 +105,7 @@ export function computeFeaturedEventRail(
   // no active nix override at either the venue or event level.
   const algorithm = candidates.filter(
     (e) =>
-      isNearMarket(e.venueLat, e.venueLng) &&
+      isNearMarket(e.venueLat, e.venueLng, market) &&
       !e.venueExcludeFromDiscover &&
       !e.excludeFromDiscover &&
       !nixedVenueUuids.has(e.venueUuid) &&
@@ -121,7 +122,7 @@ export function computeFeaturedEventRail(
       includedEventUuids.has(e.eventUuid) &&
       !nixedEventUuids.has(e.eventUuid) &&     // exclude wins
       !algorithmUuids.has(e.eventUuid) &&      // no duplicates
-      isNearMarket(e.venueLat, e.venueLng) &&  // geo gate (consumer-safe)
+      isNearMarket(e.venueLat, e.venueLng, market) &&  // geo gate (consumer-safe)
       !e.venueExcludeFromDiscover &&
       !e.excludeFromDiscover
   );

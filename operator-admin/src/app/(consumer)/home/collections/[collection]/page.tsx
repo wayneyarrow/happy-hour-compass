@@ -5,6 +5,8 @@ import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getCPFeaturedEventCandidates } from "@/lib/data/events";
 import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
 import { getEventOverridesForRail } from "@/lib/data/discoverEventOverrides";
+import { getActiveMarket } from "@/lib/activeMarket";
+import { toMarketConfig } from "@/lib/markets";
 import {
   getSpotlightVenues,
   getPatioPicks,
@@ -92,6 +94,9 @@ export default async function CollectionPage({ params }: Props) {
   const meta = COLLECTIONS[collection as CollectionSlug];
   if (!meta) notFound();
 
+  const { market } = await getActiveMarket();
+  const marketConfig = toMarketConfig(market);
+
   // ── Events collection — fast path ──────────────────────────────────────────
   // Fetch event-specific data only when showing the Featured Events collection,
   // avoiding the full venue load for this case.
@@ -106,7 +111,8 @@ export default async function CollectionPage({ params }: Props) {
     const engineEvents = computeFeaturedEventRail(
       eventCandidates,
       eventOverrides,
-      allOverrides["featured-events"]
+      allOverrides["featured-events"],
+      marketConfig
     );
     // Map CPFeaturedEventItem → ConsumerEventListItem shape expected by EventCard.
     const events = engineEvents.map((e) => ({
@@ -142,23 +148,23 @@ export default async function CollectionPage({ params }: Props) {
   if (meta.tag) {
     // Tag-based browse collections — market-capped via getTaggedVenues.
     // Tag collections don't have rail-level overrides in V1.
-    filtered = getTaggedVenues(venues, meta.tag);
+    filtered = getTaggedVenues(venues, meta.tag, marketConfig);
   } else {
     switch (collection as CollectionSlug) {
       case "spotlight":
-        filtered = getSpotlightVenues(venues, allOverrides["spotlight"]);
+        filtered = getSpotlightVenues(venues, allOverrides["spotlight"],      marketConfig);
         break;
       case "patio-picks":
-        filtered = getPatioPicks(venues, allOverrides["patio-picks"]);
+        filtered = getPatioPicks(venues,      allOverrides["patio-picks"],     marketConfig);
         break;
       case "highly-rated":
-        filtered = getHighlyRated(venues, allOverrides["highly-rated"]);
+        filtered = getHighlyRated(venues,     allOverrides["highly-rated"],    marketConfig);
         break;
       case "featured-nearby":
-        filtered = getFeaturedNearby(venues, allOverrides["featured-nearby"]);
+        filtered = getFeaturedNearby(venues,  allOverrides["featured-nearby"], marketConfig);
         break;
       case "new-this-week":
-        filtered = getNewThisWeek(venues, allOverrides["new-this-week"]);
+        filtered = getNewThisWeek(venues,     allOverrides["new-this-week"],   marketConfig);
         break;
       default:
         filtered = venues;

@@ -59,6 +59,9 @@ export const MARKET_CONFIG = {
   radiusKm: 50,
 } as const;
 
+/** Minimal market shape consumed by the engine — lat/lng center + radius. */
+export type MarketConfig = { lat: number; lng: number; radiusKm: number };
+
 export const MARKET_LABEL = "Central Okanagan";
 
 // ─── Rail display limits ──────────────────────────────────────────────────────
@@ -117,13 +120,16 @@ export function haversineKm(
 /**
  * Returns true when a venue is within the market radius.
  * Venues without coordinates are included permissively (assumed local).
+ * Accepts an optional market config; defaults to Central Okanagan for
+ * backward compatibility with existing callers that omit the argument.
  */
-export function isNearMarket(lat: number | null, lng: number | null): boolean {
+export function isNearMarket(
+  lat: number | null,
+  lng: number | null,
+  market: MarketConfig = MARKET_CONFIG
+): boolean {
   if (lat === null || lng === null) return true;
-  return (
-    haversineKm(MARKET_CONFIG.lat, MARKET_CONFIG.lng, lat, lng) <=
-    MARKET_CONFIG.radiusKm
-  );
+  return haversineKm(market.lat, market.lng, lat, lng) <= market.radiusKm;
 }
 
 // ─── Eligibility ──────────────────────────────────────────────────────────────
@@ -205,14 +211,15 @@ function buildIncludePool(
   venues: ConsumerVenue[],
   includedUuids: Set<string>,
   excludedUuids: Set<string>,
-  systemUuids: Set<string>
+  systemUuids: Set<string>,
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   return venues.filter(
     (v) =>
       includedUuids.has(v.venueUuid) &&
       !excludedUuids.has(v.venueUuid) &&   // exclude wins over include
       !systemUuids.has(v.venueUuid) &&     // don't duplicate what's already in pool
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v)
   );
 }
@@ -233,13 +240,14 @@ function buildIncludePool(
  */
 export function getSpotlightVenues(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   const { excludedUuids, includedUuids } = splitOverrides(overrides);
 
   const eligible = venues.filter(
     (v) =>
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v) &&
       !excludedUuids.has(v.venueUuid)
   );
@@ -260,7 +268,7 @@ export function getSpotlightVenues(
   );
 
   const systemUuids = new Set([...primaryUuids, ...fallback.map((v) => v.venueUuid)]);
-  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market);
 
   return dedupeById([...includePool, ...primary, ...fallback]).sort(
     (a, b) => scoreVenueForDiscover(b, "spotlight") - scoreVenueForDiscover(a, "spotlight")
@@ -276,20 +284,21 @@ export function getSpotlightVenues(
  */
 export function getPatioPicks(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   const { excludedUuids, includedUuids } = splitOverrides(overrides);
 
   const system = venues.filter(
     (v) =>
       !excludedUuids.has(v.venueUuid) &&
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v) &&
       (v.seededTags.includes("Patio") || v.searchTags.includes("Patio"))
   );
 
   const systemUuids  = new Set(system.map((v) => v.venueUuid));
-  const includePool  = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+  const includePool  = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market);
 
   return dedupeById([...includePool, ...system]).sort(
     (a, b) => scoreVenueForDiscover(b, "patio") - scoreVenueForDiscover(a, "patio")
@@ -305,19 +314,20 @@ export function getPatioPicks(
  */
 export function getFeaturedNearby(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   const { excludedUuids, includedUuids } = splitOverrides(overrides);
 
   const system = venues.filter(
     (v) =>
       !excludedUuids.has(v.venueUuid) &&
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v)
   );
 
   const systemUuids = new Set(system.map((v) => v.venueUuid));
-  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market);
 
   return dedupeById([...includePool, ...system]).sort(
     (a, b) => scoreVenueForDiscover(b, "nearby") - scoreVenueForDiscover(a, "nearby")
@@ -330,7 +340,8 @@ export function getFeaturedNearby(
  */
 export function getNewThisWeek(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   const { excludedUuids, includedUuids } = splitOverrides(overrides);
   const cutoff = new Date(Date.now() - NEW_WINDOW_MS).toISOString();
@@ -338,13 +349,13 @@ export function getNewThisWeek(
   const system = venues.filter(
     (v) =>
       !excludedUuids.has(v.venueUuid) &&
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v) &&
       v.createdAt >= cutoff
   );
 
   const systemUuids = new Set(system.map((v) => v.venueUuid));
-  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market);
 
   return dedupeById([...includePool, ...system]).sort((a, b) => {
     const dateDiff = b.createdAt.localeCompare(a.createdAt);
@@ -366,14 +377,15 @@ export function getNewThisWeek(
  */
 export function getHighlyRated(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   const { excludedUuids, includedUuids } = splitOverrides(overrides);
 
   const eligible = venues.filter(
     (v) =>
       !excludedUuids.has(v.venueUuid) &&
-      isNearMarket(v.latitude, v.longitude) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
       isDiscoverEligible(v) &&
       v.googleRating !== null
   );
@@ -393,7 +405,7 @@ export function getHighlyRated(
   );
 
   const systemUuids = new Set([...primaryUuids, ...fallback.map((v) => v.venueUuid)]);
-  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids);
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market);
 
   return dedupeById([...includePool, ...primary, ...fallback]).sort((a, b) => {
     const rA = a.googleRating ?? 0;
@@ -418,7 +430,8 @@ export function getHighlyRated(
  */
 export function getFeaturedEvents(
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): DiscoverEventItem[] {
   const { excludedUuids } = splitOverrides(overrides);
 
@@ -426,7 +439,7 @@ export function getFeaturedEvents(
     .filter(
       (v) =>
         !excludedUuids.has(v.venueUuid) &&
-        isNearMarket(v.latitude, v.longitude) &&
+        isNearMarket(v.latitude, v.longitude, market) &&
         isDiscoverEligible(v)
     )
     .sort((a, b) => scoreVenueForDiscover(b) - scoreVenueForDiscover(a))
@@ -447,13 +460,14 @@ export function getFeaturedEvents(
  */
 export function getTaggedVenues(
   venues: ConsumerVenue[],
-  tag: string
+  tag: string,
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   return venues
     .filter(
       (v) =>
         isDiscoverEligible(v) &&
-        isNearMarket(v.latitude, v.longitude) &&
+        isNearMarket(v.latitude, v.longitude, market) &&
         (v.seededTags.includes(tag) || v.searchTags.includes(tag))
     )
     .sort(
@@ -466,14 +480,15 @@ export function getTaggedVenues(
 export function filterBrowseCategories<T extends { tag: string }>(
   venues: ConsumerVenue[],
   categories: T[],
-  minLocalCount = BROWSE_MIN_LOCAL
+  minLocalCount = BROWSE_MIN_LOCAL,
+  market: MarketConfig = MARKET_CONFIG
 ): T[] {
   return categories.filter(
     (c) =>
       venues.filter(
         (v) =>
           isDiscoverEligible(v) &&
-          isNearMarket(v.latitude, v.longitude) &&
+          isNearMarket(v.latitude, v.longitude, market) &&
           (v.seededTags.includes(c.tag) || v.searchTags.includes(c.tag))
       ).length >= minLocalCount
   );
@@ -489,14 +504,15 @@ export function filterBrowseCategories<T extends { tag: string }>(
 export function getRailVenuesByKey(
   railKey: string,
   venues: ConsumerVenue[],
-  overrides: RailOverride[] = []
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
 ): ConsumerVenue[] {
   switch (railKey) {
-    case "spotlight":       return getSpotlightVenues(venues, overrides);
-    case "patio-picks":     return getPatioPicks(venues, overrides);
-    case "featured-nearby": return getFeaturedNearby(venues, overrides);
-    case "new-this-week":   return getNewThisWeek(venues, overrides);
-    case "highly-rated":    return getHighlyRated(venues, overrides);
+    case "spotlight":       return getSpotlightVenues(venues, overrides, market);
+    case "patio-picks":     return getPatioPicks(venues, overrides, market);
+    case "featured-nearby": return getFeaturedNearby(venues, overrides, market);
+    case "new-this-week":   return getNewThisWeek(venues, overrides, market);
+    case "highly-rated":    return getHighlyRated(venues, overrides, market);
     default:                return [];
   }
 }

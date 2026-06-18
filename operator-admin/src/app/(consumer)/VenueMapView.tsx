@@ -21,6 +21,10 @@ export type MapBounds = { north: number; south: number; east: number; west: numb
 type Props = {
   venues: ConsumerVenue[];
   onBoundsChange?: (bounds: MapBounds) => void;
+  /** Default map center — overrides the hardcoded Kelowna fallback. */
+  marketCenter?: LatLng;
+  /** Default map zoom level — overrides the hardcoded fallback. */
+  marketZoom?: number;
 };
 
 /** Filters to venues with valid lat/lng coordinates. */
@@ -63,7 +67,7 @@ function MapCenterManager({ userLocation }: { userLocation: LatLng | null }) {
   return null;
 }
 
-export function VenueMapView({ venues, onBoundsChange }: Props) {
+export function VenueMapView({ venues, onBoundsChange, marketCenter, marketZoom }: Props) {
   const router = useRouter();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const mapped = venuesWithCoords(venues);
@@ -111,8 +115,8 @@ export function VenueMapView({ venues, onBoundsChange }: Props) {
     <APIProvider apiKey={apiKey} version="quarterly">
       <div style={{ height: 300, borderRadius: 8, overflow: "hidden", border: "2px solid #e5e7eb" }}>
         <Map
-          defaultCenter={DEFAULT_CENTER}
-          defaultZoom={DEFAULT_ZOOM}
+          defaultCenter={marketCenter ?? DEFAULT_CENTER}
+          defaultZoom={marketZoom ?? DEFAULT_ZOOM}
           gestureHandling="greedy"
           mapTypeControl={false}
           streetViewControl={false}

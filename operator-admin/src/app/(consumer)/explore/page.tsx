@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { isNearMarket } from "@/lib/discover/discoverEngine";
+import { getActiveMarket } from "@/lib/activeMarket";
+import { toMarketConfig } from "@/lib/markets";
 import { VenueDiscovery } from "../VenueDiscovery";
 
 export const metadata: Metadata = {
@@ -10,9 +12,15 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ExplorePage() {
-  const allVenues = await getPublishedVenuesForConsumer();
+  const [{ market, isPersisted }, allVenues] = await Promise.all([
+    getActiveMarket(),
+    getPublishedVenuesForConsumer(),
+  ]);
+
+  const marketConfig = toMarketConfig(market);
   // Scope search results to the active market — same geography gate used by all discover rails.
-  const venues = allVenues.filter((v) => isNearMarket(v.latitude, v.longitude));
+  const venues = allVenues.filter((v) => isNearMarket(v.latitude, v.longitude, marketConfig));
+
   return (
     <main className="bg-gray-50">
       <style>{`
@@ -27,7 +35,7 @@ export default async function ExplorePage() {
         .chips-scroll::-webkit-scrollbar { display: none; }
         .chips-scroll { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
-      <VenueDiscovery venues={venues} />
+      <VenueDiscovery venues={venues} market={market} isPersisted={isPersisted} />
     </main>
   );
 }
