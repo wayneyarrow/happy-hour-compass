@@ -18,6 +18,8 @@
  *   Missing imported data falls back to standard "Add" tasks.
  */
 
+import type { OperatorPlan } from "@/lib/plans";
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export type ReadinessItem = {
@@ -72,6 +74,15 @@ export type VenueReadinessInput = {
    * can omit this; review items will simply show as not yet confirmed.
    */
   reviewConfirmations?: Record<string, boolean> | null;
+  /**
+   * Operator's subscription plan. When provided and not "free", a Search Tags
+   * readiness item is added to Tier 2 (Strong Recommendations).
+   * Optional — callers that don't need plan-conditional items (e.g. founder
+   * dashboard) can omit this; the search tags item will not appear.
+   */
+  plan?: OperatorPlan;
+  /** PostgreSQL TEXT[] — operator-selected search tags for the venue. */
+  search_tags?: string[] | null;
 };
 
 /** Boolean signals derived from the venue row. */
@@ -94,6 +105,8 @@ export type VenueReadinessSignals = {
   hasTagline: boolean;
   hasPaymentTypes: boolean;
   hasPostalCode: boolean;
+  /** True when the venue has at least one search tag configured. Always false for free plans. */
+  hasSearchTags: boolean;
 };
 
 /** Full readiness result returned by computeVenueReadiness(). */
@@ -189,12 +202,14 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   const hasTagline          = hasContent(input.hh_tagline);
   const hasPaymentTypes     = parsePaymentTypeCount(input.payment_types) > 0;
   const hasPostalCode       = hasContent(input.postal_code);
+  const hasSearchTags       = Array.isArray(input.search_tags) && input.search_tags.length > 0;
 
   const signals: VenueReadinessSignals = {
     hasVenueName, hasAddressLine1, hasCity, hasProvinceOrState, hasHappyHourTimes,
     hasAnyVenueImage, hasOperatorVenueImage, isUsingGenericSeededImage,
     hasConfirmedVenueType, hasFoodSpecials, hasDrinkSpecials, hasBusinessHours,
     hasMenuLink, hasPhone, hasWebsite, hasTagline, hasPaymentTypes, hasPostalCode,
+    hasSearchTags,
   };
 
   // ── Tier 1: Required — blocks publish if missing ───────────────────────────
@@ -264,6 +279,20 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   // Submitted venues: standard profile-completion items. No review tasks.
 
   const strongRecommendations: ReadinessItem[] = [
+    // Search tags first for paid plans — top discoverability action for Pro/Premium.
+    // Free operators don't have access; the block is omitted entirely for them.
+    ...(input.plan && input.plan !== "free"
+      ? [
+          {
+            key: "hasSearchTags",
+            label: "Add search tags",
+            description:
+              "Search tags put your venue in front of guests filtering by vibe, food, or drink style — and power your Top Search Tag analytics.",
+            completed: hasSearchTags,
+          },
+        ]
+      : []),
+
     ...(isClaimed
       ? [
           // ── Claimed: review items (only when imported data exists) ────────
@@ -475,6 +504,7 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
           },
         ]
       : []),
+
   ];
 
   // ── Tier 3: Recommendations — nice-to-have, do not block publish ───────────

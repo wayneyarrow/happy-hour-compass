@@ -9,6 +9,7 @@
  */
 
 import type { VenueReadinessSignals } from "./venueReadiness";
+import type { OperatorPlan } from "./plans";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -32,6 +33,11 @@ export type SuggestionsInput = {
   foodSpecialsCount: number;
   /** Count of valid drink special items (from parseSpecialItemCount). */
   drinkSpecialsCount: number;
+  /**
+   * Operator's subscription plan. When provided and not "free", the search tags
+   * suggestion card is eligible to appear when no tags are configured.
+   */
+  plan?: OperatorPlan;
 };
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -58,6 +64,23 @@ type Rule = {
 };
 
 const RULES: Rule[] = [
+  // ── Priority 0: Paid-plan discoverability ────────────────────────────────
+  // Search tags directly fuel guest discovery and Top Search Tag analytics.
+  // Shown first for paid operators who haven't configured any tags yet.
+  {
+    id: "add_search_tags",
+    applies: ({ signals, plan }) => !!plan && plan !== "free" && !signals.hasSearchTags,
+    card: {
+      id: "add_search_tags",
+      icon: "🏷️",
+      title: "Add your search tags",
+      description:
+        "Search tags put you in front of guests filtering for specific vibes, food, or drinks — and fuel your Top Search Tag analytics.",
+      ctaLabel: "Add tags",
+      href: "/admin/venue?section=search-tags#search-tags",
+    },
+  },
+
   // ── Priority 1: Profile completeness ─────────────────────────────────────
   {
     id: "add_website",

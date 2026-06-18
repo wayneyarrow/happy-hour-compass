@@ -14,6 +14,7 @@
  */
 
 import type { VenueReadinessSignals } from "./venueReadiness";
+import type { OperatorPlan } from "./plans";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -42,6 +43,11 @@ export type VenueCompletionInput = {
   foodSpecialsCount: number;
   /** Count of valid drink special items (from parseSpecialItemCount). */
   drinkSpecialsCount: number;
+  /**
+   * Operator's subscription plan. When provided and not "free", a Search Tags
+   * health indicator is added to the completion score.
+   */
+  plan?: OperatorPlan;
 };
 
 export type VenueCompletion = {
@@ -180,7 +186,24 @@ export function computeVenueCompletion(input: VenueCompletionInput): VenueComple
   let totalWeight = 0;
   let earnedWeight = 0;
 
-  const indicators: HealthIndicator[] = INDICATOR_DEFS.map((def) => {
+  // Build indicator list: base set + plan-conditional search tags indicator.
+  const allDefs: IndicatorDef[] =
+    input.plan && input.plan !== "free"
+      ? [
+          ...INDICATOR_DEFS,
+          {
+            key: "search_tags",
+            label: "Search Tags",
+            weight: 1,
+            href: "/admin/venue?section=search-tags#search-tags",
+            compute: ({ signals }) => ({
+              status: signals.hasSearchTags ? "complete" : "missing",
+            }),
+          },
+        ]
+      : INDICATOR_DEFS;
+
+  const indicators: HealthIndicator[] = allDefs.map((def) => {
     const result = def.compute(input);
     totalWeight += def.weight;
 

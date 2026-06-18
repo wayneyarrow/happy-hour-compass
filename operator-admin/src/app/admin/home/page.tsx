@@ -13,6 +13,7 @@ import {
   type ReadinessItem,
 } from "@/lib/venueReadiness";
 import { isOnboardingComplete } from "@/lib/homepagePhase";
+import { parseOperatorPlan } from "@/lib/plans";
 import { computeSuggestedSteps } from "@/lib/suggestedSteps";
 import { computeVenueCompletion } from "@/lib/venueCompletion";
 import { markReviewedAction } from "./actions";
@@ -48,6 +49,7 @@ const ITEM_HREF: Record<string, string> = {
   hasTagline:           "/admin/happy-hours?section=tagline#tagline",
   hasPaymentTypes:      "/admin/venue?section=payment-types#payment-types",
   hasPostalCode:        "/admin/venue?section=business-details#business-details",
+  hasSearchTags:        "/admin/venue?section=search-tags#search-tags",
 };
 
 // Action link labels for incomplete items.
@@ -79,6 +81,7 @@ const ITEM_ACTION: Record<string, string> = {
   hasTagline:           "Add tagline",
   hasPaymentTypes:      "Add payments",
   hasPostalCode:        "Add postal",
+  hasSearchTags:        "Add tags",
 };
 
 // ── Venue row type ─────────────────────────────────────────────────────────────
@@ -105,12 +108,14 @@ type HomeVenueRow = {
   business_hours: Record<string, unknown> | null;
   payment_types: string | null;
   review_confirmations: Record<string, boolean> | null;
+  /** PostgreSQL TEXT[] — returned as string[] by the Supabase client. */
+  search_tags: string[] | null;
 };
 
 const VENUE_SELECT =
   "id, slug, name, is_published, claimed_at, updated_at, address_line1, city, region, postal_code, " +
   "phone, website_url, menu_url, establishment_type, hh_times, hh_tagline, " +
-  "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations";
+  "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations, search_tags";
 
 // ── Keys for claimed-venue imported-data review tasks ─────────────────────────
 // Used to split strongRecommendations into review tasks vs standard improvements.
@@ -314,18 +319,20 @@ export default async function AdminHomePage() {
     );
   }
 
+  const isPublished   = !!venue?.is_published;
+  const isClaimed     = !!venue?.claimed_at;
+  const venueName     = venue?.name ?? "Your venue";
+  const operatorPlan  = parseOperatorPlan(operator?.plan);
+
   const readiness = venue
     ? computeVenueReadiness({
         ...venue,
         imageCount,
         operatorImageCount,
         reviewConfirmations: venue.review_confirmations ?? {},
+        plan: operatorPlan,
       })
     : null;
-
-  const isPublished = !!venue?.is_published;
-  const isClaimed   = !!venue?.claimed_at;
-  const venueName   = venue?.name ?? "Your venue";
 
   // Status card context message.
   // Claimed venues: reinforce "we imported your data — please review" framing.
@@ -400,6 +407,7 @@ export default async function AdminHomePage() {
       eventsCount,
       foodSpecialsCount,
       drinkSpecialsCount,
+      plan: operatorPlan,
     });
 
     const completion = computeVenueCompletion({
@@ -408,6 +416,7 @@ export default async function AdminHomePage() {
       eventsCount,
       foodSpecialsCount,
       drinkSpecialsCount,
+      plan: operatorPlan,
     });
 
     const introSeen = !operator || !!operator.homepage_v2_intro_seen_at;
