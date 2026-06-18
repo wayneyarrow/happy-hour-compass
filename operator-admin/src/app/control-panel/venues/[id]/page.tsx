@@ -19,6 +19,7 @@ type VenueDetail = {
   name: string;
   is_published: boolean;
   created_at: string;
+  updated_at: string;
   // Location / contact
   address_line1: string | null;
   city: string | null;
@@ -111,7 +112,7 @@ export default async function ControlPanelVenueDetailPage({
     supabase
       .from("venues")
       .select(
-        `id, slug, name, is_published, created_at,
+        `id, slug, name, is_published, created_at, updated_at,
          address_line1, city, region, postal_code, country, phone, website_url,
          place_id, created_by_operator_id, claimed_by, claimed_at, is_verified,
          internal_boost, spotlight_eligible, exclude_from_discover,
@@ -162,6 +163,7 @@ export default async function ControlPanelVenueDetailPage({
     name:                   v.name as string,
     is_published:           v.is_published as boolean,
     created_at:             v.created_at as string,
+    updated_at:             v.updated_at as string,
     address_line1:          v.address_line1 as string | null,
     city:                   v.city as string | null,
     region:                 v.region as string | null,
@@ -201,6 +203,7 @@ export default async function ControlPanelVenueDetailPage({
     operatorName: venue.operator_name,
     operatorEmail: venue.operator_email,
     operatorLastSeenAt: venue.operator_last_seen_at,
+    venueUpdatedAt: venue.updated_at,
   });
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;

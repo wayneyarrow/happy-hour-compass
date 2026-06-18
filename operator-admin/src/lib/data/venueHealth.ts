@@ -44,6 +44,7 @@ export type VenueHealthInput = {
   operatorName: string | null;
   operatorEmail: string | null;
   operatorLastSeenAt: string | null;
+  venueUpdatedAt: string | null;
 };
 
 export type VenueHealthData = {
@@ -81,6 +82,11 @@ export type VenueHealthData = {
   // 6. Monetization (revenue fields are intentionally placeholders — see TODO)
   paidStatus: PaidStatus;
   upgradeOpportunity: boolean | null; // null = not evaluated (no operator/plan)
+
+  // 7. Venue freshness
+  // venueUpdatedAt may eventually support stale-listing reports, Action Center
+  // work-queue entries, operator nudges, and venue health scoring improvements.
+  venueUpdatedAt: string | null;
 };
 
 // ── Setup checklist definition ─────────────────────────────────────────────
@@ -259,5 +265,7 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
 
     paidStatus,
     upgradeOpportunity,
+
+    venueUpdatedAt: input.venueUpdatedAt,
   };
 }

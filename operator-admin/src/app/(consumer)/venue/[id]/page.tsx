@@ -273,6 +273,22 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         </div>
       </div>
 
+      {/* ── Freshness indicator ───────────────────────────────────────────────
+          Informational only. Uses absolute date format so consumers don't feel
+          the information is stale — older dates don't mean inaccurate content. */}
+      {venue.updatedAt && (
+        <div className="px-5 pt-4 pb-2 border-t border-gray-100">
+          <p className="text-[12px] text-gray-400">
+            Last updated{" "}
+            {new Date(venue.updatedAt).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+        </div>
+      )}
+
       {/* ── Claim section ─────────────────────────────────────────────────────
           Only shown for unclaimed (seeded) venues. Hidden once claimed_at is set.
           Kept subtle — this is for operators discovering their venue, not consumers. */}
