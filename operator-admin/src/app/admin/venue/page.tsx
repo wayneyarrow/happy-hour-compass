@@ -13,6 +13,7 @@ import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
 import VenueImagesSection from "./VenueImagesSection";
 import VenuePublishSection from "./VenuePublishSection";
+import CancelVenueSection from "./CancelVenueSection";
 
 /**
  * Venue row as returned by Supabase select("*").
@@ -38,6 +39,7 @@ type AdminVenueRow = {
   establishment_type?: string | null;
   /** PostgreSQL TEXT[] — returned as string[] by the Supabase client */
   search_tags?: string[] | null;
+  cancelled_at?: string | null;
 };
 
 /**
@@ -199,6 +201,14 @@ export default async function AdminVenuePage({
         </div>
       )}
 
+      {/* ── Cancelled banner */}
+      {!operatorError && venue?.cancelled_at && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 mb-6">
+          <strong>Venue management cancelled.</strong> This venue is unpublished and no longer in the active funnel.
+          Historical data is preserved. Contact us if you want to reactivate this venue.
+        </div>
+      )}
+
       {/* ── Venue sections (normal mode, or Case A/B impersonation with venue) */}
       {!operatorError && (operator || isImpersonating) && venue && (
         <div className="space-y-3">
@@ -314,6 +324,15 @@ export default async function AdminVenuePage({
               initialIsPublished={venue.is_published ?? false}
             />
           </AccordionSection>
+
+          {/* Cancel venue account — only shown to the owning operator (not during impersonation) */}
+          {!isImpersonating && !venue.cancelled_at && operator && (
+            <CancelVenueSection
+              venueId={venue.id}
+              operatorId={operator.id}
+              currentPlan={operatorPlan}
+            />
+          )}
 
         </div>
       )}

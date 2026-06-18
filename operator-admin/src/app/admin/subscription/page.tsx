@@ -21,6 +21,7 @@ import { parseSpecialItemCount } from "@/lib/venueReadiness";
 import { countOperatorMembers, getMembershipRole } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
 import ManageBillingButton from "./ManageBillingButton";
+import CancelVenueSection from "@/app/admin/venue/CancelVenueSection";
 
 // ── Plan metadata ─────────────────────────────────────────────────────────────
 
@@ -185,6 +186,7 @@ type SubscriptionVenueRow = {
   hh_food_details: string | null;
   hh_drink_details: string | null;
   search_tags: string[] | null;
+  cancelled_at: string | null;
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -222,14 +224,14 @@ export default async function AdminSubscriptionPage({
   if (operator) {
     const { data } = await ctx.supabase
       .from("venues")
-      .select("id, hh_food_details, hh_drink_details, search_tags")
+      .select("id, hh_food_details, hh_drink_details, search_tags, cancelled_at")
       .eq("created_by_operator_id", operator.id)
       .maybeSingle();
     venue = data as SubscriptionVenueRow | null;
   } else if (isImpersonating && impersonatingVenueId) {
     const { data } = await ctx.supabase
       .from("venues")
-      .select("id, hh_food_details, hh_drink_details, search_tags")
+      .select("id, hh_food_details, hh_drink_details, search_tags, cancelled_at")
       .eq("id", impersonatingVenueId)
       .maybeSingle();
     venue = data as SubscriptionVenueRow | null;
@@ -472,6 +474,16 @@ export default async function AdminSubscriptionPage({
         )}
       </div>
 
+      {/* ── 4. Cancel venue account ───────────────────────────────────────── */}
+      {venue?.id && !venue.cancelled_at && operator && !isImpersonating && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 pb-6">
+          <CancelVenueSection
+            venueId={venue.id}
+            operatorId={operator.id}
+            currentPlan={plan}
+          />
+        </div>
+      )}
 
     </div>
   );

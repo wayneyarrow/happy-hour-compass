@@ -1599,3 +1599,88 @@ Happy Hour Compass`;
     criticality: "critical",
   });
 }
+
+// ── Venue cancellation founder notification ───────────────────────────────────
+
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  business_closed:   "Business closed",
+  not_interested:    "Not interested right now",
+  duplicate_listing: "Duplicate or incorrect listing",
+  not_enough_value:  "Not seeing enough value",
+  other:             "Other",
+};
+
+/**
+ * Notifies the founder when an operator cancels management of their venue.
+ *
+ * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com).
+ * Includes a direct link to the venue in the Control Panel.
+ */
+export async function sendVenueCancellationFounderEmail({
+  venueName,
+  operatorEmail,
+  reason,
+  venueId,
+}: {
+  venueName:     string;
+  operatorEmail: string;
+  reason:        string;
+  venueId:       string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const appUrl  = getAppUrl();
+  const venueUrl = `${appUrl}/control-panel/venues/${venueId}`;
+  const reasonLabel = CANCELLATION_REASON_LABELS[reason] ?? reason;
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Operator cancelled venue management</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Venue</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${venueName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Operator</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${operatorEmail}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Reason</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${reasonLabel}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Timestamp</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${new Date().toUTCString()}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
+            The venue has been automatically unpublished and removed from the active funnel. Historical data (claims, analytics, notes) is preserved. The venue remains eligible for future reclaiming.
+          </p>
+          ${emailCta(venueUrl, "View venue in Control Panel &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${venueUrl}</p>`,
+    "Happy Hour Compass &middot; Control Panel notification"
+  );
+
+  const text = `Operator cancelled venue management — Happy Hour Compass
+
+Venue:     ${venueName}
+Operator:  ${operatorEmail}
+Reason:    ${reasonLabel}
+Timestamp: ${new Date().toUTCString()}
+
+The venue has been automatically unpublished. Historical data is preserved.
+
+View venue in Control Panel:
+${venueUrl}
+
+—
+Happy Hour Compass Control Panel`;
+
+  return sendTransactionalEmail({
+    type:        "venue_cancellation_founder",
+    to,
+    subject:     `Operator cancelled venue — ${venueName}`,
+    html,
+    text,
+    criticality: "important",
+  });
+}

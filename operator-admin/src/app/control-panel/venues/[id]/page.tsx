@@ -7,6 +7,7 @@ import ImpersonateButton from "./ImpersonateButton";
 import { ExcludeDiscoverControl } from "./ExcludeDiscoverControl";
 import VenueNotesSection from "./VenueNotesSection";
 import VenueHealthPanel from "./VenueHealthPanel";
+import ReactivateVenuePanel from "./ReactivateVenuePanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -38,6 +39,10 @@ type VenueDetail = {
   internal_boost: number;
   spotlight_eligible: boolean;
   exclude_from_discover: boolean;
+  // Cancellation lifecycle
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  cancelled_by_operator_id: string | null;
   // Operator plan / activity (via FK — may be null for unclaimed venues)
   operator_plan: string | null;
   operator_name: string | null;
@@ -116,6 +121,7 @@ export default async function ControlPanelVenueDetailPage({
          address_line1, city, region, postal_code, country, phone, website_url,
          place_id, created_by_operator_id, claimed_by, claimed_at, is_verified,
          internal_boost, spotlight_eligible, exclude_from_discover,
+         cancelled_at, cancellation_reason, cancelled_by_operator_id,
          source, hh_times, business_hours, hh_food_details, hh_drink_details,
          operators!created_by_operator_id(plan, name, email, last_seen_at)`
       )
@@ -179,6 +185,9 @@ export default async function ControlPanelVenueDetailPage({
     internal_boost:         (v.internal_boost as number | null) ?? 0,
     spotlight_eligible:     v.spotlight_eligible === true,
     exclude_from_discover:  v.exclude_from_discover === true,
+    cancelled_at:             v.cancelled_at as string | null,
+    cancellation_reason:      v.cancellation_reason as string | null,
+    cancelled_by_operator_id: v.cancelled_by_operator_id as string | null,
     operator_plan:          operatorPlan,
     operator_name:          operatorName,
     operator_email:         operatorEmail,
@@ -255,6 +264,11 @@ export default async function ControlPanelVenueDetailPage({
                 Excl. from Discover
               </span>
             )}
+            {venue.cancelled_at && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 border border-rose-300">
+                Churned
+              </span>
+            )}
           </div>
         </div>
 
@@ -298,7 +312,31 @@ export default async function ControlPanelVenueDetailPage({
               )}
             </MetaRow>
             <MetaRow label="Created">{fmt(venue.created_at)}</MetaRow>
+            {venue.cancelled_at && (
+              <>
+                <MetaRow label="Cancelled">
+                  <span className="text-rose-700 font-medium">{fmt(venue.cancelled_at)}</span>
+                </MetaRow>
+                <MetaRow label="Cancellation reason">
+                  {venue.cancellation_reason ?? <span className="text-gray-400 italic">Not recorded</span>}
+                </MetaRow>
+              </>
+            )}
           </dl>
+
+          {venue.cancelled_at && (
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+                Founder Actions
+              </p>
+              <ReactivateVenuePanel
+                venueId={venue.id}
+                cancelledAt={venue.cancelled_at}
+                cancellationReason={venue.cancellation_reason}
+              />
+            </div>
+          )}
+
         </Section>
 
         {/* B. Location / contact */}

@@ -162,7 +162,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     r_inactiveOperators,
     r_neverLoggedInOperators,
     r_planChanges30d,
-    r_allTimeChurn,
+    r_cancelledVenues,
     r_venueViews,
     r_eventViews,
   ] = await Promise.all([
@@ -209,13 +209,12 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     supabase.from("plan_change_events")
       .select("from_plan, to_plan, operator_id")
       .gte("changed_at", t30),
-    // Operator-level churn proxy: operators who ever downgraded from a paid
-    // plan to free. TODO: replace with true venue-level churn once venue
-    // deactivation/closure is tracked — there is no such signal today.
-    supabase.from("plan_change_events")
-      .select("operator_id")
-      .in("from_plan", ["pro", "premium", "enterprise"])
-      .eq("to_plan", "free"),
+    // True venue-level churn: venues where an operator cancelled management.
+    // Fetch cancelled_at so we can compute both all-time and 30-day counts in JS
+    // without adding a second query (keeps Promise.all under TS's tuple limit).
+    supabase.from("venues")
+      .select("cancelled_at")
+      .not("cancelled_at", "is", null),
 
     // view events — fetch IDs only for JS aggregation
     // TODO: replace with a Postgres RPC (GROUP BY) once view volume justifies it
@@ -237,13 +236,10 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
   const planChanges = (r_planChanges30d.data ?? []) as PlanChangeRow[];
   const upgradesLast30d   = planChanges.filter(e => isUpgrade(e.from_plan, e.to_plan)).length;
   const downgradesLast30d = planChanges.filter(e => isDowngrade(e.from_plan, e.to_plan)).length;
-  const churnLast30d      = planChanges.filter(
-    e => ["pro", "premium", "enterprise"].includes(e.from_plan) && e.to_plan === "free"
-  ).length;
-
-  const churnedVenuesAllTime = new Set(
-    ((r_allTimeChurn.data ?? []) as { operator_id: string }[]).map(e => e.operator_id)
-  ).size;
+  // True venue-level churn from cancelled_at — replaces the plan-downgrade proxy.
+  const cancelledVenueRows   = (r_cancelledVenues.data ?? []) as unknown as { cancelled_at: string }[];
+  const churnedVenuesAllTime = cancelledVenueRows.length;
+  const churnLast30d         = cancelledVenueRows.filter(v => v.cancelled_at >= t30).length;
 
   // ── Aggregate view events for leaderboards ────────────────────────────────
   const venueViews = (r_venueViews.data ?? []) as { venue_id: string }[];
@@ -252,7 +248,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     venueViewCounts.set(venue_id, (venueViewCounts.get(venue_id) ?? 0) + 1);
   }
 
-  const eventViews = (r_eventViews.data ?? []) as { event_id: string }[];
+  const eventViews = (r_eventViews.data ?? []) as unknown as { event_id: string }[];
   const eventViewCounts = new Map<string, number>();
   for (const { event_id } of eventViews) {
     eventViewCounts.set(event_id, (eventViewCounts.get(event_id) ?? 0) + 1);
