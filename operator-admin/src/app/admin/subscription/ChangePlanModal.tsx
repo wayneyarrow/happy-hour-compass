@@ -334,7 +334,7 @@ function PlanCard({
 
   return (
     <div
-      className={`relative flex flex-col rounded-xl border bg-white shadow-sm overflow-hidden transition-all ${
+      className={`relative flex flex-col rounded-xl border bg-white shadow-resting overflow-hidden transition-all ${
         isCurrent
           ? `${theme.currentRingClass} ${theme.currentBgClass}`
           : "border-gray-200 hover:border-gray-300 hover:shadow-md"

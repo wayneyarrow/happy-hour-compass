@@ -62,7 +62,7 @@ export default async function AdminUsersPage() {
           <p className="text-sm text-gray-500 mb-6">
             Manage team members who can access your operator account.
           </p>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-10 text-center">
             <p className="text-sm text-gray-500">
               Your operator account is not yet set up.
             </p>

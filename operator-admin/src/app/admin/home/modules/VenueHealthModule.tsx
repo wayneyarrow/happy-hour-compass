@@ -101,7 +101,7 @@ export default function VenueHealthModule({ isPublished, isClaimed, completion, 
     percentage >= 80 ? "text-green-700" : percentage >= 60 ? "text-amber-600" : "text-red-600";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-resting">
       {/* ── Strength section ── title + meter + context, separated from details below */}
       <div className="mb-4 pb-4 border-b border-gray-100">
         {/* Title row with prominent percentage */}

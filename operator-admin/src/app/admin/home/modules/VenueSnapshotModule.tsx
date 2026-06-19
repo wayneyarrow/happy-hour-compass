@@ -24,7 +24,7 @@ export default function VenueSnapshotModule({ photosCount, specialsCount, events
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 md:col-span-2">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-5 md:col-span-2">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
@@ -52,7 +52,7 @@ export default function VenueSnapshotModule({ photosCount, specialsCount, events
           <Link
             key={label}
             href={href}
-            className="group flex flex-col items-center text-center p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
+            className="group flex flex-col items-center text-center p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-hover transition-all"
           >
             <div className="flex items-center gap-1.5 mb-2.5">
               <span className="text-base leading-none" aria-hidden="true">{icon}</span>

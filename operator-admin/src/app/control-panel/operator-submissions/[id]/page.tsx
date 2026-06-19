@@ -105,7 +105,7 @@ function StoredSignalRow({ signal }: { signal: StoredSignal }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
         {title}
       </h3>

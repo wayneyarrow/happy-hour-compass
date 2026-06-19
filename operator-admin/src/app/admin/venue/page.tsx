@@ -189,7 +189,7 @@ export default async function AdminVenuePage({
 
       {/* ── No venue yet: setup prompt (normal mode only, not during impersonation) */}
       {!operatorError && !venueError && operator && !venue && !isImpersonating && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
           <h3 className="text-base font-semibold text-gray-800 mb-1">
             Set up your venue
           </h3>

@@ -87,7 +87,7 @@ export function AddEventPanel({ candidates, railKey }: Props) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white"
           />
           {filtered.length > 0 && (
-            <ul className="mt-1 bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm max-h-52 overflow-y-auto">
+            <ul className="mt-1 bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-resting max-h-52 overflow-y-auto">
               {filtered.map((e) => (
                 <li key={e.eventUuid}>
                   <button

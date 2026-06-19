@@ -96,7 +96,7 @@ export default async function ActionCenterPage() {
           return (
             <div
               key={report.key}
-              className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col"
+              className="bg-white rounded-xl border border-gray-200 shadow-resting p-5 flex flex-col"
             >
               {/* Priority badge */}
               <div className="flex items-center justify-between mb-3">

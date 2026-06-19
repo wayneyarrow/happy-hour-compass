@@ -65,14 +65,14 @@ function KpiCard({
 }) {
   const display = typeof value === "number" ? value.toLocaleString() : value;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-raised p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
         {label}
       </p>
-      <p className="text-2xl font-bold text-slate-900 leading-none">{display}</p>
-      {subtext && <p className="mt-1 text-xs text-gray-400">{subtext}</p>}
+      <p className="text-3xl font-bold text-gray-900 leading-none">{display}</p>
+      {subtext && <p className="mt-1.5 text-xs text-gray-400">{subtext}</p>}
       {typeof trend === "number" && trend > 0 && (
-        <span className="mt-2 inline-block text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+        <span className="mt-2 inline-block text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
           +{trend.toLocaleString()} last 30d
         </span>
       )}
@@ -142,8 +142,8 @@ function LeaderboardTable({
   emptyText: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
         {title}
       </p>
       {items.length === 0 ? (
@@ -172,8 +172,8 @@ function LeaderboardTable({
 function MissingItemsList({ items }: { items: SetupItemCount[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">
+    <div className="mt-4 bg-white rounded-xl border border-gray-200 shadow-resting p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
         Top Missing Setup Items — Active Venues Still Onboarding
       </p>
       <ul className="space-y-1.5">
@@ -263,8 +263,8 @@ export default async function PlatformAnalyticsPage() {
           />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 px-5 py-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-5 py-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
             Conversion
           </p>
           <ConversionRow
@@ -310,8 +310,8 @@ export default async function PlatformAnalyticsPage() {
 
         <MissingItemsList items={act.topMissingSetupItems} />
 
-        <div className="bg-white rounded-xl border border-gray-200 px-5 py-1 mt-6">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-5 py-1 mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
             Conversion
           </p>
           <ConversionRow
@@ -371,11 +371,11 @@ export default async function PlatformAnalyticsPage() {
           <KpiCard label="Paid Venues"    value={mon.paidVenues}    subtext="Pro + Premium venues" />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-5 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
             Monetization Rate
           </p>
-          <p className="text-2xl font-bold text-slate-900 leading-none">
+          <p className="text-3xl font-bold text-gray-900 leading-none">
             {monetizationRatePct !== null ? `${monetizationRatePct.toFixed(1)}%` : "—"}
           </p>
           <p className="mt-1 text-xs text-gray-400">
@@ -416,8 +416,8 @@ export default async function PlatformAnalyticsPage() {
           </p>
         )}
 
-        <div className="bg-white rounded-xl border border-gray-200 px-5 py-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-5 py-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 pt-4 pb-2">
             Conversion
           </p>
           <ConversionRow
@@ -464,9 +464,10 @@ export default async function PlatformAnalyticsPage() {
         </div>
 
         {cd.venueViewsLast30d === 0 && cd.eventViewsLast30d === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-8 text-center">
-            <p className="text-sm text-gray-400">
-              No view events recorded yet. Data will appear once venue and event detail pages are visited.
+          <div className="bg-white rounded-xl border border-gray-200 shadow-resting flex flex-col items-center justify-center py-16 px-6 text-center">
+            <p className="text-base font-semibold text-gray-700 mb-1">No view data yet</p>
+            <p className="text-sm text-gray-400 max-w-xs">
+              Data will appear once venue and event detail pages are visited.
             </p>
           </div>
         ) : (

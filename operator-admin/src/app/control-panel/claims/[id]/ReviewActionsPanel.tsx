@@ -35,7 +35,7 @@ export default function ReviewActionsPanel({
   const isInfoSubmitted = currentStatus === "info_submitted";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
         Review actions
       </h3>

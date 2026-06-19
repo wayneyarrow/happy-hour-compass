@@ -17,7 +17,7 @@ import type {
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-5">
       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{title}</h3>
       {subtitle && <p className="text-xs text-gray-400 mt-0.5 mb-3">{subtitle}</p>}
       {!subtitle && <div className="mb-3" />}

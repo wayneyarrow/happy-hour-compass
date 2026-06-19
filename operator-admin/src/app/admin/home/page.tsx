@@ -460,7 +460,7 @@ export default async function AdminHomePage() {
 
         {/* ── No venue yet ────────────────────────────────────────────────── */}
         {!venue && !venueError && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
             <h3 className="text-base font-semibold text-gray-800 mb-1">Set up your venue</h3>
             <p className="text-sm text-gray-500 mb-4">{contextMessage}</p>
             <Link
@@ -474,7 +474,7 @@ export default async function AdminHomePage() {
 
         {/* ── Venue status card ──────────────────────────────────────────── */}
         {venue && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap mb-1">

@@ -4,6 +4,16 @@ import { useState, useEffect, useMemo } from "react";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
+import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
+import {
+  DataTable,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableBody,
+  DataTableRow,
+  DataTableCell,
+  DataTableEmpty,
+} from "@/components/DataTable";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -47,37 +57,14 @@ function syncUrl(q: string, vq: string, sort: string, dir: string, page: number)
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── Plan badge variant map ─────────────────────────────────────────────────────
 
-const PLAN_STYLES: Record<OperatorPlan, string> = {
-  free:       "bg-gray-100 text-gray-600",
-  pro:        "bg-amber-100 text-amber-700",
-  premium:    "bg-blue-100 text-blue-700",
-  enterprise: "bg-purple-100 text-purple-700",
+const PLAN_BADGE_VARIANT: Record<OperatorPlan, StatusVariant> = {
+  free:       "neutral",
+  pro:        "warning",
+  premium:    "info",
+  enterprise: "enterprise",
 };
-
-function PlanBadge({ plan }: { plan: string }) {
-  const key    = (plan ?? "free") as OperatorPlan;
-  const styles = PLAN_STYLES[key] ?? PLAN_STYLES.free;
-  const label  = PLAN_LABELS[key]  ?? "Free";
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles}`}>
-      {label}
-    </span>
-  );
-}
-
-function ApprovedBadge({ approved }: { approved: boolean }) {
-  return approved ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-      Approved
-    </span>
-  ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
-      Pending
-    </span>
-  );
-}
 
 // ── OperatorsTable ─────────────────────────────────────────────────────────────
 
@@ -228,99 +215,99 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
 
       {/* ── Table ── */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <p className="text-sm text-gray-400">No operators match the current filters.</p>
-        </div>
+        <DataTableEmpty message="No operators match the current filters." />
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-slate-50">
-                    <th className="text-left px-4 py-3">
-                      <span className={thStaticCls}>Operator</span>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("email")} className={thBtnCls}>
-                        Email <SortIcon active={sortCol === "email"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <span className={thStaticCls}>Status</span>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("plan")} className={thBtnCls}>
-                        Plan <SortIcon active={sortCol === "plan"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("venueName")} className={thBtnCls}>
-                        Venue <SortIcon active={sortCol === "venueName"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("created_at")} className={thBtnCls}>
-                        Joined <SortIcon active={sortCol === "created_at"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("updated_at")} className={thBtnCls}>
-                        Updated <SortIcon active={sortCol === "updated_at"} dir={sortDir} />
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {pageRows.map((op) => (
-                    <tr key={op.id} className="hover:bg-amber-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {op.name ?? <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{op.email}</td>
-                      <td className="px-4 py-3">
-                        <ApprovedBadge approved={op.is_approved} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <PlanBadge plan={op.plan} />
-                      </td>
-                      <td className="px-4 py-3">
-                        {op.venueName ? (
-                          <>
-                            {op.venueSlug ? (
-                              <a
-                                href={`/venue/${op.venueSlug}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium text-slate-900 hover:text-amber-700 transition-colors"
-                              >
-                                {op.venueName}
-                              </a>
-                            ) : (
-                              <span className="font-medium text-slate-900">{op.venueName}</span>
-                            )}
-                            {op.venueSlug && (
-                              <div className="text-xs text-gray-400 mt-0.5 font-mono">
-                                {op.venueSlug}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-gray-300">No venue</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                        {fmtDate(op.created_at)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                        {fmtDate(op.updated_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable>
+            <DataTableHead>
+              <DataTableHeadCell>
+                <span className={thStaticCls}>Operator</span>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("email")} className={thBtnCls}>
+                  Email <SortIcon active={sortCol === "email"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <span className={thStaticCls}>Status</span>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("plan")} className={thBtnCls}>
+                  Plan <SortIcon active={sortCol === "plan"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("venueName")} className={thBtnCls}>
+                  Venue <SortIcon active={sortCol === "venueName"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("created_at")} className={thBtnCls}>
+                  Joined <SortIcon active={sortCol === "created_at"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("updated_at")} className={thBtnCls}>
+                  Updated <SortIcon active={sortCol === "updated_at"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+            </DataTableHead>
+            <DataTableBody>
+              {pageRows.map((op) => {
+                const planKey = (op.plan ?? "free") as OperatorPlan;
+                const planVariant = PLAN_BADGE_VARIANT[planKey] ?? "neutral";
+                const planLabel  = PLAN_LABELS[planKey] ?? "Free";
+                return (
+                  <DataTableRow key={op.id}>
+                    <DataTableCell className="font-medium text-slate-900">
+                      {op.name ?? <span className="text-gray-300">—</span>}
+                    </DataTableCell>
+                    <DataTableCell className="text-gray-600">{op.email}</DataTableCell>
+                    <DataTableCell>
+                      <StatusBadge
+                        variant={op.is_approved ? "success" : "neutral"}
+                        label={op.is_approved ? "Approved" : "Pending"}
+                      />
+                    </DataTableCell>
+                    <DataTableCell>
+                      <StatusBadge variant={planVariant} label={planLabel} />
+                    </DataTableCell>
+                    <DataTableCell>
+                      {op.venueName ? (
+                        <>
+                          {op.venueSlug ? (
+                            <a
+                              href={`/venue/${op.venueSlug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-slate-900 hover:text-amber-600 transition-colors"
+                            >
+                              {op.venueName}
+                            </a>
+                          ) : (
+                            <span className="font-medium text-slate-900">{op.venueName}</span>
+                          )}
+                          {op.venueSlug && (
+                            <div className="text-xs text-gray-400 mt-0.5 font-mono">
+                              {op.venueSlug}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-300">No venue</span>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell className="text-gray-400 whitespace-nowrap">
+                      {fmtDate(op.created_at)}
+                    </DataTableCell>
+                    <DataTableCell className="text-gray-400 whitespace-nowrap">
+                      {fmtDate(op.updated_at)}
+                    </DataTableCell>
+                  </DataTableRow>
+                );
+              })}
+            </DataTableBody>
+          </DataTable>
           <Pagination page={safePage} totalPages={totalPages} onPage={applyPage} />
         </>
       )}

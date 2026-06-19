@@ -60,10 +60,10 @@ export default function ControlPanelDashboard() {
           <Link
             key={href}
             href={href}
-            className="bg-white rounded-xl border border-gray-200 p-6 hover:border-amber-300 hover:shadow-sm transition-all group"
+            className="bg-white rounded-xl border border-gray-200 shadow-resting p-6 hover:border-amber-300 hover:shadow-hover transition-all group"
           >
             <div className="flex items-start justify-between mb-2">
-              <h2 className="text-base font-semibold text-slate-900 group-hover:text-amber-700 transition-colors">
+              <h2 className="text-base font-semibold text-slate-900 group-hover:text-amber-600 transition-colors">
                 {title}
               </h2>
               {status === "soon" && (

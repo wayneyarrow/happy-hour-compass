@@ -28,8 +28,8 @@ function Card({ card, isPrimary = false }: { card: SuggestionCard; isPrimary?: b
     <div
       className={`flex flex-col gap-3 p-4 rounded-xl border transition-all ${
         isPrimary
-          ? "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 shadow-sm hover:shadow hover:border-amber-300"
-          : "border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm"
+          ? "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 shadow-resting hover:shadow-hover hover:border-amber-300"
+          : "border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-hover"
       }`}
     >
       {isPrimary && (

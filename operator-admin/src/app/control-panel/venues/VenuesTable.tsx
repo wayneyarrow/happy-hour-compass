@@ -4,6 +4,16 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
+import StatusBadge from "@/components/StatusBadge";
+import {
+  DataTable,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableBody,
+  DataTableRow,
+  DataTableCell,
+  DataTableEmpty,
+} from "@/components/DataTable";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -48,32 +58,6 @@ function syncUrl(q: string, pub: string, claimed: string, sort: string, dir: str
   if (page > 1)       p.set("page",    String(page));
   const qs = p.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-}
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function PublishedBadge({ published }: { published: boolean }) {
-  return published ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-      Published
-    </span>
-  ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
-      Draft
-    </span>
-  );
-}
-
-function ClaimedBadge({ claimedAt }: { claimedAt: string | null }) {
-  return claimedAt ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-      Claimed
-    </span>
-  ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
-      Unclaimed
-    </span>
-  );
 }
 
 // ── VenuesTable ────────────────────────────────────────────────────────────────
@@ -262,78 +246,75 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
 
       {/* ── Table ── */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <p className="text-sm text-gray-400">No venues match the current filters.</p>
-        </div>
+        <DataTableEmpty message="No venues match the current filters." />
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-slate-50">
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("name")} className={thBtnCls}>
-                        Venue <SortIcon active={sortCol === "name"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("city")} className={thBtnCls}>
-                        City <SortIcon active={sortCol === "city"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("is_published")} className={thBtnCls}>
-                        Published <SortIcon active={sortCol === "is_published"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("claimed_at")} className={thBtnCls}>
-                        Claimed <SortIcon active={sortCol === "claimed_at"} dir={sortDir} />
-                      </button>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <span className={thStaticCls}>Operator</span>
-                    </th>
-                    <th className="text-left px-4 py-3">
-                      <button onClick={() => applySort("updated_at")} className={thBtnCls}>
-                        Updated <SortIcon active={sortCol === "updated_at"} dir={sortDir} />
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {pageRows.map((v) => (
-                    <tr
-                      key={v.id}
-                      onClick={() => router.push(`/control-panel/venues/${v.id}`)}
-                      className="hover:bg-amber-50 transition-colors cursor-pointer"
-                    >
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-slate-900">{v.name}</span>
-                        <div className="text-xs text-gray-400 mt-0.5 font-mono">{v.slug}</div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {v.city ?? <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <PublishedBadge published={v.is_published} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <ClaimedBadge claimedAt={v.claimed_at} />
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {v.operatorEmail ?? <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                        {fmtDate(v.updated_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable>
+            <DataTableHead>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("name")} className={thBtnCls}>
+                  Venue <SortIcon active={sortCol === "name"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("city")} className={thBtnCls}>
+                  City <SortIcon active={sortCol === "city"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("is_published")} className={thBtnCls}>
+                  Published <SortIcon active={sortCol === "is_published"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("claimed_at")} className={thBtnCls}>
+                  Claimed <SortIcon active={sortCol === "claimed_at"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <span className={thStaticCls}>Operator</span>
+              </DataTableHeadCell>
+              <DataTableHeadCell>
+                <button onClick={() => applySort("updated_at")} className={thBtnCls}>
+                  Updated <SortIcon active={sortCol === "updated_at"} dir={sortDir} />
+                </button>
+              </DataTableHeadCell>
+            </DataTableHead>
+            <DataTableBody>
+              {pageRows.map((v) => (
+                <DataTableRow
+                  key={v.id}
+                  onClick={() => router.push(`/control-panel/venues/${v.id}`)}
+                >
+                  <DataTableCell>
+                    <span className="font-medium text-slate-900">{v.name}</span>
+                    <div className="text-xs text-gray-400 mt-0.5 font-mono">{v.slug}</div>
+                  </DataTableCell>
+                  <DataTableCell className="text-gray-600">
+                    {v.city ?? <span className="text-gray-300">—</span>}
+                  </DataTableCell>
+                  <DataTableCell>
+                    <StatusBadge
+                      variant={v.is_published ? "success" : "neutral"}
+                      label={v.is_published ? "Published" : "Draft"}
+                    />
+                  </DataTableCell>
+                  <DataTableCell>
+                    <StatusBadge
+                      variant={v.claimed_at ? "success" : "warning"}
+                      label={v.claimed_at ? "Claimed" : "Unclaimed"}
+                    />
+                  </DataTableCell>
+                  <DataTableCell className="text-gray-600">
+                    {v.operatorEmail ?? <span className="text-gray-300">—</span>}
+                  </DataTableCell>
+                  <DataTableCell className="text-gray-400 whitespace-nowrap">
+                    {fmtDate(v.updated_at)}
+                  </DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+          </DataTable>
           <Pagination page={safePage} totalPages={totalPages} onPage={applyPage} />
         </>
       )}

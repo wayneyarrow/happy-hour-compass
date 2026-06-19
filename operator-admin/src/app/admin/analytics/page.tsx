@@ -62,10 +62,10 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+        <p className="text-sm text-gray-500 mt-0.5">{description}</p>
       </div>
       {children}
     </div>
@@ -82,15 +82,15 @@ function StatCard({
   note?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 p-4 bg-gray-50 rounded-xl border border-gray-100">
-      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+    <div className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-raised">
+      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
         {label}
       </span>
-      <span className="text-2xl font-bold text-gray-900 tabular-nums leading-tight mt-1">
+      <span className="text-3xl font-bold text-gray-900 tabular-nums leading-tight mt-1">
         {value ?? "—"}
       </span>
       {note && (
-        <span className="text-[11px] text-gray-400 mt-0.5 leading-snug">
+        <span className="text-xs text-gray-400 mt-0.5 leading-snug">
           {note}
         </span>
       )}
@@ -111,7 +111,7 @@ function LockedStatCard({
   requiredPlan: "pro" | "premium";
 }) {
   return (
-    <div className="flex flex-col gap-1 p-4 bg-gray-50 rounded-xl border border-gray-100">
+    <div className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-raised opacity-60">
       <div className="flex items-center gap-1.5">
         <svg
           className="w-3 h-3 text-gray-300 shrink-0"
@@ -127,14 +127,14 @@ function LockedStatCard({
             d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
           />
         </svg>
-        <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide">
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
           {label}
         </span>
       </div>
-      <span className="text-2xl font-bold text-gray-200 tabular-nums leading-tight mt-1">
+      <span className="text-3xl font-bold text-gray-200 tabular-nums leading-tight mt-1">
         —
       </span>
-      <span className={`text-[11px] mt-0.5 font-medium ${LOCKED_BADGE_STYLES[requiredPlan]}`}>
+      <span className={`text-xs mt-0.5 font-medium ${LOCKED_BADGE_STYLES[requiredPlan]}`}>
         {PLAN_LABELS[requiredPlan]} feature
       </span>
     </div>
@@ -143,8 +143,8 @@ function LockedStatCard({
 
 function MostViewedEventCard({ event }: { event: MostViewedEvent | null }) {
   return (
-    <div className="flex flex-col gap-1 p-4 bg-gray-50 rounded-xl border border-gray-100">
-      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+    <div className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-raised">
+      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
         Most Viewed Event
       </span>
       {event ? (
@@ -152,16 +152,16 @@ function MostViewedEventCard({ event }: { event: MostViewedEvent | null }) {
           <span className="text-sm font-semibold text-gray-900 leading-snug mt-1 line-clamp-2">
             {event.title}
           </span>
-          <span className="text-[11px] text-gray-400 mt-0.5">
+          <span className="text-xs text-gray-400 mt-0.5">
             {event.views.toLocaleString()} view{event.views !== 1 ? "s" : ""} &middot; Last 30 days
           </span>
         </>
       ) : (
         <>
-          <span className="text-2xl font-bold text-gray-200 tabular-nums leading-tight mt-1">
+          <span className="text-3xl font-bold text-gray-200 tabular-nums leading-tight mt-1">
             —
           </span>
-          <span className="text-[11px] text-gray-400 mt-0.5">
+          <span className="text-xs text-gray-400 mt-0.5">
             No event views yet
           </span>
         </>
@@ -273,14 +273,14 @@ export default async function AdminAnalyticsPage() {
 
       {/* No venue yet */}
       {!venue && !operatorError && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
-          <p className="text-sm font-medium text-gray-600 mb-1">No venue yet</p>
-          <p className="text-xs text-gray-400 mt-1 mb-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-16 text-center flex flex-col items-center gap-3">
+          <p className="text-base font-semibold text-gray-700">No venue yet</p>
+          <p className="text-sm text-gray-400 max-w-xs">
             Set up your venue profile to start tracking performance.
           </p>
           <Link
             href="/admin/venue"
-            className="text-sm font-medium text-amber-700 hover:text-amber-800 transition-colors"
+            className="text-sm font-medium text-amber-600 hover:text-amber-500 transition-colors"
           >
             Create your venue &rarr;
           </Link>
@@ -344,8 +344,8 @@ export default async function AdminAnalyticsPage() {
               {/* Top Search Tag — Pro+ only */}
               {isProOrMore ? (
                 venueTags.length === 0 ? (
-                  <div className="flex flex-col gap-1 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-raised">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                       Top Search Tag
                     </span>
                     <span className="text-sm font-semibold text-gray-500 leading-tight mt-1">
@@ -353,7 +353,7 @@ export default async function AdminAnalyticsPage() {
                     </span>
                     <Link
                       href="/admin/venue?section=search-tags"
-                      className="text-[11px] text-amber-600 hover:text-amber-700 font-medium mt-0.5 transition-colors"
+                      className="text-xs text-amber-600 hover:text-amber-500 font-medium mt-0.5 transition-colors"
                     >
                       Add search tags &rarr;
                     </Link>

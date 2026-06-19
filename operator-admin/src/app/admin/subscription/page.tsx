@@ -356,7 +356,7 @@ export default async function AdminSubscriptionPage({
       )}
 
       {/* ── 1. Current Plan Card ──────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6 mb-6">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
           Current Plan
         </p>
@@ -392,7 +392,7 @@ export default async function AdminSubscriptionPage({
       </div>
 
       {/* ── 2. Plan Utilization ───────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-resting mb-6">
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900">Plan Usage</h3>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -446,7 +446,7 @@ export default async function AdminSubscriptionPage({
       </div>
 
       {/* ── 3. Getting More From Your Plan ────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6 mb-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-1">
           Getting More From Your Plan
         </h3>
@@ -476,7 +476,7 @@ export default async function AdminSubscriptionPage({
 
       {/* ── 4. Cancel venue account ───────────────────────────────────────── */}
       {venue?.id && !venue.cancelled_at && operator && !isImpersonating && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 pb-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 pb-6">
           <CancelVenueSection
             venueId={venue.id}
             operatorId={operator.id}

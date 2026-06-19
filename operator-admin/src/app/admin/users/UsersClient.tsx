@@ -367,7 +367,7 @@ export default function UsersClient({
       )}
 
       {/* ── Usage card ─────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6 flex items-center justify-between gap-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-4 mb-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">
             Plan Usage
@@ -397,7 +397,7 @@ export default function UsersClient({
       </div>
 
       {/* ── Active users ───────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-resting mb-6">
         <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">Active Users</h3>
           <span className="text-xs text-gray-400">{activeMembers.length}</span>
@@ -453,7 +453,7 @@ export default function UsersClient({
 
       {/* ── Pending invitations ────────────────────────────────────────────── */}
       {(pendingInvites.length > 0 || isOwner) && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting">
           <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">Pending Invitations</h3>

@@ -57,7 +57,7 @@ export default function QuickActionsModule({ venueSlug, venueId }: Props) {
     "flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50/60 border border-transparent hover:border-amber-100 transition-colors group";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-resting">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
           <svg

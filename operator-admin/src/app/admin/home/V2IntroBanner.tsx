@@ -22,7 +22,7 @@ export default function V2IntroBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm"
+      className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-resting"
     >
       <div className="flex items-start gap-3">
         <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">🏠</span>

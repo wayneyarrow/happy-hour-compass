@@ -63,7 +63,7 @@ export default function VenueNotesSection({
   }, [state.success, router]);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
           Internal Notes

@@ -7,8 +7,8 @@ import { redirect } from "next/navigation";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { parseOperatorPlan } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
-import Link from "next/link";
 import EventsManager from "./EventsManager";
+import EmptyState from "@/components/EmptyState";
 import type { EventRow } from "./EventForm";
 
 export default async function AdminEventsPage() {
@@ -89,25 +89,18 @@ export default async function AdminEventsPage() {
 
       {/* No venue yet (normal mode only) */}
       {!operatorError && !venueError && operator && !venue && !isImpersonating && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-10 text-center">
-          <p className="text-sm font-medium text-gray-700">
-            No venue set up yet
-          </p>
-          <p className="text-xs text-gray-400 mt-1 mb-4">
-            Set up your venue before adding events.
-          </p>
-          <Link
-            href="/admin/venue"
-            className="text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors"
-          >
-            Go to Venue →
-          </Link>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting">
+          <EmptyState
+            title="No venue set up yet"
+            description="Set up your venue before adding events."
+            cta={{ label: "Go to Venue →", href: "/admin/venue" }}
+          />
         </div>
       )}
 
       {/* Case B: venue found but no operator — event management unavailable */}
       {isImpersonating && !operator && venue && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-6 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-6 text-center">
           <p className="text-sm font-medium text-gray-700">
             Event management requires an operator to be assigned to this venue.
           </p>
