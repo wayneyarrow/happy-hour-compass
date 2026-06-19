@@ -77,7 +77,7 @@ export default async function ControlPanelLayout({
       {/* ── Sidebar + content ──────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         <ControlPanelSideNav />
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto bg-gray-100 p-6 md:p-8">
           {children}
         </main>
       </div>

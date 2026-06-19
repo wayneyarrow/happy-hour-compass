@@ -32,7 +32,7 @@ export default function ControlPanelSideNav() {
                 href={href}
                 className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-amber-50 text-amber-700"
+                    ? "bg-amber-50 text-amber-600"
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
               >

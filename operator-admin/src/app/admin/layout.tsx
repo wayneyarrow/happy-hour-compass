@@ -148,7 +148,7 @@ export default async function AdminLayout({
       {/* ── Sidebar + content ──────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         <AdminSideNav />
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-6 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-gray-100 p-6 md:p-8">{children}</main>
       </div>
     </div>
   );
