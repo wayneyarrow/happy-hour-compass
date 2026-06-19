@@ -73,126 +73,141 @@ export function SuggestionForm() {
     <form action={formAction} className="px-5 pt-6 pb-12">
       {/* General error banner */}
       {state.error && (
-        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
+        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700">
           {state.error}
         </div>
       )}
 
-      <div className="space-y-5">
-        {/* Place name */}
-        <div>
-          <label htmlFor="name" className={LABEL_CLASS}>
-            Business name <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            autoComplete="off"
-            placeholder="e.g. The Keg Steakhouse"
-            required
-            className={INPUT_CLASS}
-          />
-          {state.fieldErrors?.name && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.name}</p>
-          )}
-        </div>
-
-        {/* City */}
-        <div>
-          <label htmlFor="city" className={LABEL_CLASS}>
-            City <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="city"
-            name="city"
-            type="text"
-            autoComplete="address-level2"
-            placeholder="e.g. Vancouver"
-            required
-            className={INPUT_CLASS}
-          />
-          {state.fieldErrors?.city && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.city}</p>
-          )}
-        </div>
-
-        {/* Notes — optional */}
-        <div>
-          <label htmlFor="notes" className={LABEL_CLASS}>
-            Notes{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows={3}
-            placeholder="e.g. Great $5 beers on weekdays 4–6 PM"
-            className={INPUT_CLASS + " resize-none"}
-          />
-        </div>
-
-        {/* Your name — optional */}
-        <div>
-          <label htmlFor="customer_name" className={LABEL_CLASS}>
-            Your name{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="customer_name"
-            name="customer_name"
-            type="text"
-            autoComplete="name"
-            className={INPUT_CLASS}
-          />
-        </div>
-
-        {/* Your email — optional */}
-        <div>
-          <label htmlFor="customer_email" className={LABEL_CLASS}>
-            Your email{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="customer_email"
-            name="customer_email"
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            value={emailValue}
-            onChange={(e) => setEmailValue(e.target.value)}
-            className={INPUT_CLASS}
-          />
-          {state.fieldErrors?.customer_email && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.customer_email}</p>
-          )}
-        </div>
-
-        {/* Marketing opt-in — only shown when an email is entered */}
-        {emailValue && (
-          <div className="flex items-start gap-3 pt-1">
-            <input
-              id="email_marketing_opt_in"
-              name="email_marketing_opt_in"
-              type="checkbox"
-              value="true"
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 shrink-0"
-            />
-            <label
-              htmlFor="email_marketing_opt_in"
-              className="text-[13px] text-gray-600 leading-snug cursor-pointer"
-            >
-              Email me occasional updates from Happy Hour Compass.
+      {/* Section 1 — Venue details */}
+      <div className="mb-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.8px] text-gray-400 mb-4">
+          About the venue
+        </p>
+        <div className="space-y-4">
+          {/* Place name */}
+          <div>
+            <label htmlFor="name" className={LABEL_CLASS}>
+              Business name <span className="text-red-500">*</span>
             </label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              autoComplete="off"
+              placeholder="e.g. The Keg Steakhouse"
+              required
+              className={INPUT_CLASS}
+            />
+            {state.fieldErrors?.name && (
+              <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.name}</p>
+            )}
           </div>
-        )}
+
+          {/* City */}
+          <div>
+            <label htmlFor="city" className={LABEL_CLASS}>
+              City <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="city"
+              name="city"
+              type="text"
+              autoComplete="address-level2"
+              placeholder="e.g. Vancouver"
+              required
+              className={INPUT_CLASS}
+            />
+            {state.fieldErrors?.city && (
+              <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.city}</p>
+            )}
+          </div>
+
+          {/* Notes — optional */}
+          <div>
+            <label htmlFor="notes" className={LABEL_CLASS}>
+              Notes{" "}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              id="notes"
+              name="notes"
+              rows={3}
+              placeholder="e.g. Great $5 beers on weekdays 4–6 PM"
+              className={INPUT_CLASS + " resize-none"}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Section divider */}
+      <div className="border-t border-gray-100 mb-6" />
+
+      {/* Section 2 — Your info */}
+      <div className="mb-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.8px] text-gray-400 mb-4">
+          About you <span className="font-normal normal-case tracking-normal text-gray-300">— optional</span>
+        </p>
+        <div className="space-y-4">
+          {/* Your name — optional */}
+          <div>
+            <label htmlFor="customer_name" className={LABEL_CLASS}>
+              Your name
+            </label>
+            <input
+              id="customer_name"
+              name="customer_name"
+              type="text"
+              autoComplete="name"
+              className={INPUT_CLASS}
+            />
+          </div>
+
+          {/* Your email — optional */}
+          <div>
+            <label htmlFor="customer_email" className={LABEL_CLASS}>
+              Your email
+            </label>
+            <input
+              id="customer_email"
+              name="customer_email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              value={emailValue}
+              onChange={(e) => setEmailValue(e.target.value)}
+              className={INPUT_CLASS}
+            />
+            {state.fieldErrors?.customer_email && (
+              <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.customer_email}</p>
+            )}
+          </div>
+
+          {/* Marketing opt-in — only shown when an email is entered */}
+          {emailValue && (
+            <div className="flex items-start gap-3 pt-1">
+              <input
+                id="email_marketing_opt_in"
+                name="email_marketing_opt_in"
+                type="checkbox"
+                value="true"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 shrink-0"
+              />
+              <label
+                htmlFor="email_marketing_opt_in"
+                className="text-[13px] text-gray-600 leading-snug cursor-pointer"
+              >
+                Email me occasional updates from Happy Hour Compass.
+              </label>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Submit */}
       <button
         type="submit"
         disabled={isPending}
-        className="mt-8 w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-[15px] transition-colors"
+        className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Submitting…" : "Submit suggestion"}
       </button>

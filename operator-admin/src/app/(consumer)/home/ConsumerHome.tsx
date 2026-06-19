@@ -184,19 +184,19 @@ export function ConsumerHome({
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div
         style={{
-          padding: "22px 20px 18px",
-          background: "white",
-          borderBottom: "1px solid #f3f4f6",
+          padding: "24px 20px 18px",
+          background: "linear-gradient(180deg, #fffbf0 0%, #ffffff 100%)",
+          borderBottom: "1px solid #f3f0e8",
         }}
       >
         {/* Greeting */}
         <p
           style={{
-            fontSize: 22,
+            fontSize: 23,
             fontWeight: 800,
             color: "#111827",
-            marginBottom: 5,
-            letterSpacing: "-0.3px",
+            marginBottom: 6,
+            letterSpacing: "-0.4px",
             lineHeight: 1.2,
           }}
         >
@@ -349,25 +349,12 @@ export function ConsumerHome({
           />
         )}
 
-        {/* Browse all — bottom CTA when rails alone don't cover all venues */}
-        <div style={{ padding: "4px 20px 0" }}>
+        {/* Browse all — bottom CTA */}
+        <div style={{ padding: "8px 20px 0" }}>
           <Link
             href="/explore"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              background: "white",
-              border: "1.5px solid #e5e7eb",
-              borderRadius: 12,
-              padding: "13px 20px",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#374151",
-              textDecoration: "none",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-            }}
+            className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-[14px] py-3.5 px-5 text-[15px] transition-colors"
+            style={{ textDecoration: "none", letterSpacing: "-0.1px" }}
           >
             Browse all venues →
           </Link>

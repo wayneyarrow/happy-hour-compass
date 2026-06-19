@@ -34,11 +34,12 @@ export function RailSection({
         <div>
           <h2
             style={{
-              fontSize: 17,
-              fontWeight: 700,
+              fontSize: 19,
+              fontWeight: 800,
               color: "#111827",
               lineHeight: 1.2,
               margin: 0,
+              letterSpacing: "-0.2px",
             }}
           >
             {title}
@@ -62,8 +63,8 @@ export function RailSection({
             onClick={onViewAll}
             style={{
               fontSize: 13,
-              fontWeight: 500,
-              color: "#3b82f6",
+              fontWeight: 600,
+              color: "#d97706",
               whiteSpace: "nowrap",
               flexShrink: 0,
               marginLeft: 12,
@@ -82,7 +83,7 @@ export function RailSection({
           display: "flex",
           gap: 12,
           overflowX: "auto",
-          padding: "2px 20px 6px",
+          padding: "4px 20px 12px",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
           WebkitOverflowScrolling: "touch",

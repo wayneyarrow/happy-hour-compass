@@ -27,56 +27,76 @@ export function EventRailCard({ event }: Props) {
       <div
         style={{
           background: "white",
-          borderRadius: 14,
+          borderRadius: 16,
           overflow: "hidden",
-          border: "1px solid #e5e7eb",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.09)",
+          border: "1px solid #eeeeee",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
           transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
           height: "100%",
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.14)";
+          el.style.boxShadow = "0 12px 28px rgba(0,0,0,0.16)";
           el.style.borderColor = "#d1d5db";
-          el.style.transform = "translateY(-1px)";
+          el.style.transform = "translateY(-2px)";
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.09)";
-          el.style.borderColor = "#e5e7eb";
+          el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)";
+          el.style.borderColor = "#eeeeee";
           el.style.transform = "translateY(0)";
         }}
       >
-        {/* ── Accent header — amber gradient replaces image for events ───────── */}
+        {/* ── Accent header — rich amber gradient with overlay ────────────────── */}
         <div
           style={{
-            height: 72,
-            background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
+            position: "relative",
+            height: 116,
+            background: "linear-gradient(140deg, #78350f 0%, #92400e 50%, #b45309 100%)",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            gap: 6,
           }}
         >
+          {/* Texture overlay */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            background: "radial-gradient(ellipse at top right, rgba(255,255,255,0.12) 0%, transparent 60%)",
+            pointerEvents: "none",
+          }} />
           {/* Frosted circle with emoji */}
           <div
             style={{
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               borderRadius: "50%",
-              background: "rgba(255,255,255,0.22)",
+              background: "rgba(255,255,255,0.20)",
+              backdropFilter: "blur(4px)",
+              border: "1px solid rgba(255,255,255,0.30)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 22,
+              fontSize: 26,
               lineHeight: 1,
             }}
           >
             🎉
           </div>
+          {/* "Event" label */}
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.75)",
+            letterSpacing: "1.2px",
+            textTransform: "uppercase",
+          }}>Event</span>
         </div>
 
         {/* ── Content ─────────────────────────────────────────────────────────── */}
-        <div style={{ padding: 12 }}>
+        <div style={{ padding: "13px 13px 12px" }}>
 
           {/* Title — primary hierarchy */}
           <p
@@ -100,7 +120,7 @@ export function EventRailCard({ event }: Props) {
             <p
               style={{
                 fontSize: 12,
-                fontWeight: 500,
+                fontWeight: 600,
                 color: "#3b82f6",
                 marginBottom: 4,
                 overflow: "hidden",
@@ -116,8 +136,9 @@ export function EventRailCard({ event }: Props) {
           {event.nextOccurrenceLabel && (
             <p
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 color: "#9ca3af",
+                fontWeight: 500,
                 lineHeight: 1.35,
                 margin: 0,
               }}

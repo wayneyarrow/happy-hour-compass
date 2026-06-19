@@ -40,7 +40,7 @@ function formatSlot(slot: HHSlot): string {
   const sPeriod = sh >= 12 ? "PM" : "AM";
   const sDH = sh === 0 ? 12 : sh > 12 ? sh - 12 : sh;
   const startDisplay = `${sDH}${sm > 0 ? ":" + sm.toString().padStart(2, "0") : ""} ${sPeriod}`;
-  return `${startDisplay}\u2013${formatTime(slot.end)}`;
+  return `${startDisplay}–${formatTime(slot.end)}`;
 }
 
 type HHStatus = {
@@ -107,13 +107,13 @@ type Props = {
 };
 
 /**
- * Blue info card for the Happy Hour section — mirrors the original
+ * Warm amber info card for the Happy Hour section — mirrors the original
  * renderHappyHourSection() output from index.html.
  *
  * Layout:
- *   .info-box (bg #dbeafe)
+ *   .info-box (bg warm amber)
  *     "Happy Hour Times"            ← .hh-section-heading
- *     "Today: {status}"  | "▾ Show full schedule"   ← .hh-header-row
+ *     "Today: {status}"  | "Full schedule ▾"   ← .hh-header-row
  *     [expandable weekly schedule]  ← .hours-weekly
  *
  *   "Happy Hour Specials"           ← .hh-section-heading (outside box)
@@ -135,12 +135,16 @@ export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, spe
 
   const hasSpecials = specialsFood.length > 0 || specialsDrinks.length > 0;
 
-  // Nothing to render — show a minimal fallback rather than an empty blue box.
+  // Nothing to render — show a minimal fallback rather than an empty card.
   if (!hasAnySlotsInWeekly && !hasSpecials) {
     return (
       <div
-        className="rounded-[8px] p-4 mb-5 text-[14px] text-[#374151] leading-[1.5]"
-        style={{ background: "#dbeafe" }}
+        className="rounded-2xl p-4 mb-5 text-[14px] text-[#374151] leading-[1.5]"
+        style={{
+          background: "linear-gradient(160deg, #fef3c7 0%, #fffbf5 100%)",
+          border: "1px solid #fde68a",
+          boxShadow: "0 2px 8px rgba(180,83,9,0.06)",
+        }}
       >
         Happy hour information not available.
       </div>
@@ -149,30 +153,35 @@ export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, spe
 
   return (
     <>
-      {/* Blue info card — mirrors original .info-box */}
+      {/* Warm amber info card */}
       <div
-        className="rounded-[8px] p-4 mb-5 text-[14px] text-[#111827] leading-[1.5]"
-        style={{ background: "#dbeafe" }}
+        className="rounded-2xl p-4 mb-5 text-[14px] text-[#111827] leading-[1.5]"
+        style={{
+          background: "linear-gradient(160deg, #fef3c7 0%, #fffbf5 100%)",
+          border: "1px solid #fde68a",
+          boxShadow: "0 2px 8px rgba(180,83,9,0.06)",
+        }}
       >
-        {/* "Happy Hour Times" heading + today status + schedule toggle —
-            only rendered when there are actual parsed time slots. */}
+        {/* "Happy Hour Times" heading */}
         {hasAnySlotsInWeekly && (
-          <div className="text-[14px] font-bold text-[#111827] mb-3">
+          <div className="flex items-center gap-2 text-[14px] font-bold text-amber-800 mb-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
             Happy Hour Times
           </div>
         )}
 
-        {/* Today status row + Show full schedule toggle — .hh-header-row */}
+        {/* Today status row + schedule toggle */}
         {hasAnySlotsInWeekly && status && (
-          <div className="flex items-baseline justify-between gap-3 mb-1">
-            {/* .hh-status-left: flex, baseline, gap 6px */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            {/* Today status */}
             <div className="flex-1 flex items-baseline gap-1.5 flex-wrap">
-              {/* .hh-today-label: 15px medium #111827 */}
               <span className="text-[15px] font-medium text-[#111827]">Today:</span>
-              {/* .hours-status-text inside info-box: 14px medium #374151 */}
               <span className="text-[14px] font-medium text-[#374151]">{status.text}</span>
             </div>
-            {/* .hh-schedule-link inside info-box: 13px blue-800 */}
+            {/* Schedule toggle — improved spacing + SVG chevron */}
             <button
               type="button"
               onClick={() => {
@@ -190,17 +199,21 @@ export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, spe
                   }).catch(() => {});
                 }
               }}
-              className="inline-flex items-center gap-1 text-[13px] font-medium whitespace-nowrap flex-shrink-0 hover:underline"
-              style={{ color: "#1e40af" }}
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold whitespace-nowrap flex-shrink-0 py-1 text-amber-800 hover:text-amber-900"
             >
-              <span
-                className={`text-[10px] transition-transform duration-200 inline-block ${
-                  expanded ? "rotate-180" : ""
-                }`}
-              >
-                ▾
-              </span>
               <span>{expanded ? "Hide full schedule" : "Show full schedule"}</span>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform duration-200 ${expanded ? "-rotate-180" : ""}`}
+                style={{ width: 14, height: 14, flexShrink: 0 }}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
           </div>
         )}
@@ -216,9 +229,7 @@ export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, spe
                   : slots.map(formatSlot).join(", ");
               return (
                 <div key={day} className="flex justify-between text-[14px]">
-                  {/* .hours-day-name: 600 weight #374151 */}
                   <span className="font-semibold text-[#374151]">{day}</span>
-                  {/* .hours-day-time inside info-box: #374151 */}
                   <span className="text-[#374151]">{timeDisplay}</span>
                 </div>
               );
@@ -226,17 +237,22 @@ export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, spe
           </div>
         )}
 
-        {/* Happy Hour Specials — inside the blue card, same background as Times section */}
+        {/* Happy Hour Specials */}
         {hasSpecials && (
           <div className="text-[14px] text-[#111827]">
-            {/* .hh-section-heading: 14px bold #111827, margin-top 20px */}
-            <div className="text-[14px] font-bold text-[#111827] mt-5 mb-3">
+            {/* Divider between Times and Specials when both are shown */}
+            {hasAnySlotsInWeekly && (
+              <div style={{ height: 1, background: "rgba(180,83,9,0.15)", margin: "16px 0 16px" }} />
+            )}
+            <div className="flex items-center gap-2 text-[14px] font-bold text-amber-800 mb-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, flexShrink: 0 }}>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
               Happy Hour Specials
             </div>
 
             {specialsFood.length > 0 && (
               <div>
-                {/* "Food" sub-heading: 13px semibold #374151, mt-3 */}
                 <div className="mt-3 text-[13px] font-semibold text-[#374151]">Food</div>
                 {specialsFood.map((item, i) => (
                   <div key={i} className="mt-1 text-[14px] text-[#111827]">

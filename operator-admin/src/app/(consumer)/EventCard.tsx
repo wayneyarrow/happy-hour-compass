@@ -18,22 +18,25 @@ type Props = {
 export function EventCard({ event }: Props) {
   return (
     <Link href={`/event/${event.id}`} className="block">
-      <div className="bg-white rounded-lg p-[14px] mb-px border-b border-gray-100 hover:bg-[#fafbfc] transition-colors cursor-pointer">
+      <div
+        className="bg-white rounded-2xl p-4 cursor-pointer transition-all duration-150 hover:shadow-[0_4px_14px_rgba(0,0,0,0.11)]"
+        style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)", border: "1px solid #efefef" }}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {/* Title — matches .event-title: 700 weight, 17px, line-height 1.2 */}
+            {/* Title */}
             <p className="font-bold text-[17px] text-gray-900 leading-[1.2] mb-1">
               {event.title}
             </p>
-            {/* Venue — matches .event-venue: blue-500, 14px, medium */}
+            {/* Venue */}
             {event.venueName && (
-              <p className="text-sm font-medium text-blue-500 mb-0.5">
+              <p className="text-[13px] font-semibold text-blue-500 mb-1">
                 {event.venueName}
               </p>
             )}
-            {/* Schedule — matches .event-time: 13px, gray-500 */}
+            {/* Schedule */}
             {event.nextOccurrenceLabel && (
-              <p className="text-[13px] text-gray-500">{event.nextOccurrenceLabel}</p>
+              <p className="text-[12px] text-gray-400 font-medium">{event.nextOccurrenceLabel}</p>
             )}
           </div>
           <EventBookmarkButton eventId={event.id} />

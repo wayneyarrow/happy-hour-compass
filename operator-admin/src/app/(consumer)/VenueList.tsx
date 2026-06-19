@@ -207,14 +207,13 @@ export function VenueList({ venues, geoSort = true }: Props) {
   }, [venues, geoSort]);
 
   return (
-    <ul>
+    <ul className="flex flex-col gap-3">
       {sorted.map(({ venue, dist, openStatus }) => {
         const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
         const shortSpecials = getShortSpecials(venue);
 
         return (
           <li key={venue.id}>
-            {/* Card mirrors original .listing-item: white, 8px radius, 14px padding, border-bottom divider */}
             <Link
               href={`/venue/${venue.id}`}
               className="block"
@@ -223,10 +222,12 @@ export function VenueList({ venues, geoSort = true }: Props) {
                 if (el) sessionStorage.setItem("hhc_list_scroll", String(el.scrollTop));
               }}
             >
-              <div className="bg-white rounded-[8px] p-[14px] mb-px border-b border-[#f3f4f6] flex gap-3 cursor-pointer hover:bg-[#fafbfc] transition-colors">
-
-                {/* Venue image — mirrors original .listing-image: 72×72, 8px radius */}
-                <div className="w-[72px] h-[72px] rounded-[8px] flex-shrink-0 overflow-hidden bg-gray-100">
+              <div
+                className="bg-white rounded-2xl p-4 flex gap-3.5 cursor-pointer transition-all duration-150 hover:shadow-[0_4px_14px_rgba(0,0,0,0.11)]"
+                style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)", border: "1px solid #efefef" }}
+              >
+                {/* Venue image */}
+                <div className="w-[78px] h-[78px] rounded-xl flex-shrink-0 overflow-hidden bg-gray-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imageSrc}
@@ -235,11 +236,11 @@ export function VenueList({ venues, geoSort = true }: Props) {
                   />
                 </div>
 
-                {/* Content — mirrors original .listing-content: flex column, gap 4px */}
-                <div className="flex-1 flex flex-col gap-[4px] min-w-0">
+                {/* Content */}
+                <div className="flex-1 flex flex-col gap-[5px] min-w-0">
 
-                  {/* Header row: name + bookmark — mirrors .listing-header */}
-                  <div className="flex justify-between items-center mb-[2px]">
+                  {/* Header row: name + bookmark */}
+                  <div className="flex justify-between items-start gap-1">
                     <div
                       className="font-bold text-[17px] text-[#111827] leading-[1.2] flex-1 min-w-0 break-words"
                       style={{
@@ -254,9 +255,9 @@ export function VenueList({ venues, geoSort = true }: Props) {
                     <BookmarkButton venueId={venue.id} />
                   </div>
 
-                  {/* Offer text — mirrors .listing-offer: bold, dark #111827, line-clamp 2 */}
+                  {/* Offer text — secondary hierarchy */}
                   <div
-                    className="text-[#111827] font-bold text-[14px] leading-[1.3]"
+                    className="text-[#374151] font-medium text-[13px] leading-[1.4]"
                     style={{
                       display: "-webkit-box",
                       WebkitLineClamp: 2,
@@ -267,26 +268,27 @@ export function VenueList({ venues, geoSort = true }: Props) {
                     {shortSpecials}
                   </div>
 
-                  {/* Meta row — mirrors .listing-meta: status badge · distance · category */}
-                  <div className="flex items-center gap-[3px] text-[12px] text-[#9ca3af] flex-nowrap min-w-0">
+                  {/* Meta row */}
+                  <div className="flex items-center gap-[6px] text-[12px] text-[#9ca3af] flex-nowrap min-w-0 mt-0.5">
                     {venue.isVerified && (
-                      <span className="inline-block px-[6px] py-[2px] rounded bg-[#dbeafe] text-[#1e40af] text-[11px] font-medium flex-shrink-0">
-                        Verified ✓
+                      <span className="inline-flex items-center gap-1 px-[7px] py-[2px] rounded-full bg-[#dbeafe] text-[#1e40af] text-[11px] font-semibold flex-shrink-0">
+                        ✓ Verified
                       </span>
                     )}
                     {openStatus === "Open Now" && (
-                      <span className="inline-block px-[6px] py-[2px] rounded bg-[#dcfce7] text-[#166534] text-[11px] font-medium flex-shrink-0">
+                      <span className="inline-flex items-center gap-1 px-[7px] py-[2px] rounded-full bg-[#dcfce7] text-[#166534] text-[11px] font-semibold flex-shrink-0">
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#16a34a", display: "inline-block", flexShrink: 0 }} />
                         Open Now
                       </span>
                     )}
                     {dist !== null && (
-                      <span className="text-[#3b82f6] text-[12px] font-medium flex-shrink-0 whitespace-nowrap">
+                      <span className="text-[#6b7280] text-[11px] font-medium flex-shrink-0 whitespace-nowrap">
                         {dist.toFixed(1)} km
                       </span>
                     )}
                     {venue.establishmentType && (
-                      <span className="text-[#6b7280] text-[11px] overflow-hidden text-ellipsis whitespace-nowrap min-w-0 shrink">
-                        &bull; {venue.establishmentType}
+                      <span className="text-[#9ca3af] text-[11px] overflow-hidden text-ellipsis whitespace-nowrap min-w-0 shrink">
+                        · {venue.establishmentType}
                       </span>
                     )}
                   </div>

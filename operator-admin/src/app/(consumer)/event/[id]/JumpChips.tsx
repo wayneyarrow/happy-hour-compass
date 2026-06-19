@@ -181,7 +181,7 @@ export function JumpChips() {
             onClick={() => scrollToSection(id)}
             className={`flex-1 text-center border-[1.5px] rounded-[20px] px-5 py-2.5 text-[14px] transition-all ${
               isActive
-                ? "bg-blue-500 border-blue-500 text-white font-semibold"
+                ? "bg-amber-500 border-amber-500 text-white font-semibold"
                 : "bg-white border-gray-300 text-gray-500 font-medium hover:border-gray-400 hover:bg-gray-50"
             }`}
           >

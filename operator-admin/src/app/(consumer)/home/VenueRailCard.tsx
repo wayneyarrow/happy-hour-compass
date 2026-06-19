@@ -178,23 +178,23 @@ export function VenueRailCard({ venue, railName, position }: Props) {
       <div
         style={{
           background: "white",
-          borderRadius: 14,
+          borderRadius: 16,
           overflow: "hidden",
-          border: "1px solid #e5e7eb",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+          border: "1px solid #eeeeee",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
           transition: "box-shadow 0.18s, border-color 0.18s, transform 0.18s",
           height: "100%",
         }}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.15)";
+          el.style.boxShadow = "0 12px 28px rgba(0,0,0,0.16)";
           el.style.borderColor = "#d1d5db";
-          el.style.transform = "translateY(-1px)";
+          el.style.transform = "translateY(-2px)";
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)";
-          el.style.borderColor = "#e5e7eb";
+          el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)";
+          el.style.borderColor = "#eeeeee";
           el.style.transform = "translateY(0)";
         }}
       >
@@ -203,7 +203,7 @@ export function VenueRailCard({ venue, railName, position }: Props) {
           style={{
             position: "relative",
             width: "100%",
-            height: 148,
+            height: 164,
             background: "#f3f4f6",
             overflow: "hidden",
           }}
@@ -219,7 +219,7 @@ export function VenueRailCard({ venue, railName, position }: Props) {
             style={{
               position: "absolute",
               inset: 0,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.18) 100%)",
+              background: "linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.30) 100%)",
               pointerEvents: "none",
             }}
           />
@@ -274,15 +274,15 @@ export function VenueRailCard({ venue, railName, position }: Props) {
         </div>
 
         {/* ── Content ────────────────────────────────────────────────────────── */}
-        <div style={{ padding: 12 }}>
+        <div style={{ padding: "13px 13px 12px" }}>
 
           <p
             style={{
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: 700,
               color: "#111827",
               lineHeight: 1.2,
-              marginBottom: 3,
+              marginBottom: 4,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -298,7 +298,7 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                marginBottom: 8,
+                marginBottom: 9,
               }}
             >
               {venue.establishmentType && (
@@ -309,7 +309,6 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
-                    letterSpacing: "0.1px",
                     minWidth: 0,
                     flex: "1 1 0",
                   }}
@@ -321,14 +320,17 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                 <span
                   style={{
                     fontSize: 11,
-                    fontWeight: 500,
-                    color: "#6b7280",
+                    fontWeight: 600,
+                    color: "#92400e",
                     flexShrink: 0,
                     whiteSpace: "nowrap",
                     marginLeft: "auto",
+                    background: "#fef3c7",
+                    padding: "1px 6px",
+                    borderRadius: 10,
                   }}
                 >
-                  ⭐ {venue.googleRating.toFixed(1)}
+                  ★ {venue.googleRating.toFixed(1)}
                 </span>
               )}
             </div>
@@ -341,8 +343,8 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  padding: "2px 7px",
-                  borderRadius: 5,
+                  padding: "3px 8px",
+                  borderRadius: 20,
                   background: "#dcfce7",
                   color: "#166534",
                   flexShrink: 0,
@@ -357,10 +359,10 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                 style={{
                   fontSize: 11,
                   fontWeight: 500,
-                  padding: "2px 7px",
-                  borderRadius: 5,
+                  padding: "3px 8px",
+                  borderRadius: 20,
                   background: "#f3f4f6",
-                  color: "#6b7280",
+                  color: "#9ca3af",
                   flexShrink: 0,
                   whiteSpace: "nowrap",
                 }}
@@ -374,8 +376,8 @@ export function VenueRailCard({ venue, railName, position }: Props) {
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  padding: "2px 7px",
-                  borderRadius: 5,
+                  padding: "3px 8px",
+                  borderRadius: 20,
                   background: hhPill.bg,
                   color: hhPill.color,
                   flexShrink: 0,

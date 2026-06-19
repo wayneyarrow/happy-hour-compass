@@ -178,19 +178,22 @@ export function SavedVenueList({ allVenues, allEvents }: Props) {
 
       {/* Content */}
       <div className="px-5 py-5">
-        {/* Overall empty state — shown when nothing is saved at all */}
+        {/* Overall empty state */}
         {hydrated && !hasAnything && (
           <div className="flex flex-col items-center justify-center text-center py-16 px-10">
-            <div className="text-5xl opacity-50 mb-4">🔖</div>
-            <p className="text-lg font-semibold text-gray-700 mb-2">
+            <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mb-4 text-3xl">
+              🔖
+            </div>
+            <p className="text-[17px] font-bold text-gray-800 mb-2">
               No saved places yet
             </p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-[13px] text-gray-500 mb-6 leading-relaxed">
               Tap the bookmark on a venue or event to save it here.
             </p>
             <Link
               href="/"
-              className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
+              className="px-6 py-2.5 rounded-xl text-white text-[14px] font-bold transition-all"
+              style={{ background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)", boxShadow: "0 4px 12px rgba(234,88,12,0.28)" }}
             >
               Browse venues
             </Link>
@@ -200,11 +203,13 @@ export function SavedVenueList({ allVenues, allEvents }: Props) {
         {/* Search no-results state */}
         {hydrated && hasAnything && noResults && (
           <div className="flex flex-col items-center justify-center text-center py-16 px-10">
-            <div className="text-5xl opacity-50 mb-4">🔍</div>
-            <p className="text-lg font-semibold text-gray-700 mb-2">
+            <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4 text-3xl">
+              🔍
+            </div>
+            <p className="text-[17px] font-bold text-gray-800 mb-2">
               No results
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-[13px] text-gray-500">
               No saved items match &ldquo;{searchTerm}&rdquo;.
             </p>
           </div>
@@ -216,20 +221,20 @@ export function SavedVenueList({ allVenues, allEvents }: Props) {
             {/* Saved Venues section */}
             {filteredVenues.length > 0 && (
               <section>
-                <p className="text-sm font-semibold text-gray-700 mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.8px] text-gray-400 mb-3">
                   Saved Venues
                 </p>
                 <VenueList venues={filteredVenues} />
               </section>
             )}
 
-            {/* Saved Events section — only rendered when there are matching saved events */}
+            {/* Saved Events section */}
             {filteredEvents.length > 0 && (
               <section>
-                <p className="text-sm font-semibold text-gray-700 mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.8px] text-gray-400 mb-3">
                   Saved Events
                 </p>
-                <ul className="space-y-px">
+                <ul className="flex flex-col gap-3">
                   {filteredEvents.map((event) => (
                     <li key={event.id}>
                       <EventCard event={event} />

@@ -124,12 +124,11 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
         venueName={venue.name}
       />
 
-      {/* ── Name section ───────────────────────────────────────────────────────
-          Matches original .venue-name-section: padding: 20px 20px 12px */}
-      <div className="px-5 pt-5 pb-3">
-        {/* Venue name — .venue-name-large: 24px bold gray-900, line-height 1.2 */}
+      {/* ── Name section ─────────────────────────────────────────────────────── */}
+      <div className="px-5 pt-5 pb-4">
+        {/* Venue name */}
         <h2
-          className="text-2xl font-bold text-[#111827] leading-[1.2] break-words"
+          className="text-[26px] font-bold text-[#111827] leading-[1.2] break-words tracking-tight mb-1"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -140,10 +139,10 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           {venue.name}
         </h2>
 
-        {/* Verified badge — shown only for operator-claimed venues */}
+        {/* Verified badge */}
         {venue.isVerified && (
-          <span className="inline-block mt-2 mb-1 px-2 py-[3px] rounded-full bg-[#dbeafe] text-[#1e40af] text-[12px] font-medium">
-            Verified Venue ✓
+          <span className="inline-flex items-center gap-1 mt-2 mb-1 px-2.5 py-1 rounded-full bg-[#dbeafe] text-[#1e40af] text-[12px] font-semibold">
+            ✓ Verified Venue
           </span>
         )}
 
@@ -186,7 +185,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
             (total sticky height 141px + original 56px container-start buffer = 197px ≈ 196px). */}
         <div
           id="section-happyhour"
-          className="px-5 py-5 min-h-[300px]"
+          className="px-5 pt-6 pb-5 min-h-[300px]"
           style={{ scrollMarginTop: 150 }}
         >
           {/* eslint-disable-next-line jsx-a11y/aria-hidden-on-focusable */}
@@ -195,8 +194,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
             aria-hidden="true"
             style={{ position: "relative", top: -196, height: 1 }}
           />
-          {/* .section-title: 18px bold gray-900, margin-bottom 16px */}
-          <h3 className="text-[18px] font-bold text-gray-900 mb-4">Happy Hour</h3>
+          <h3 className="text-[19px] font-bold text-gray-900 mb-4 tracking-tight">Happy Hour</h3>
 
           {/* HH tagline — short summary like "Half-price apps & $5 beers 4–6 PM" */}
           {venue.happyHourTagline && (
@@ -213,12 +211,15 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           />
         </div>
 
+        {/* Section divider */}
+        <div className="mx-5 border-t border-gray-100" />
+
         {/* ── Info section ───────────────────────────────────────────────────
             Matches original #section-info .venue-section.
             Shows info rows matching original renderVenueInfo(). */}
         <div
           id="section-info"
-          className="px-5 py-5 min-h-[300px]"
+          className="px-5 pt-6 pb-5 min-h-[300px]"
           style={{ scrollMarginTop: 150 }}
         >
           {/* Scroll anchor — same pattern as #anchor-happyhour above */}
@@ -228,7 +229,7 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
             aria-hidden="true"
             style={{ position: "relative", top: -196, height: 1 }}
           />
-          <h3 className="text-[18px] font-bold text-gray-900 mb-4">Info</h3>
+          <h3 className="text-[19px] font-bold text-gray-900 mb-4 tracking-tight">Info</h3>
 
           {/* Info rows — BusinessHoursRow stays server-side; tappable link rows
               are extracted to VenueInfoRows (client) to enable click tracking. */}
@@ -290,17 +291,37 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
       )}
 
       {/* ── Claim section ─────────────────────────────────────────────────────
-          Only shown for unclaimed (seeded) venues. Hidden once claimed_at is set.
-          Kept subtle — this is for operators discovering their venue, not consumers. */}
+          Only shown for unclaimed (seeded) venues. Hidden once claimed_at is set. */}
       {venue.claimedAt === null && (
-        <div className="px-5 pt-4 pb-8 border-t border-gray-100">
-          <p className="text-[12px] text-gray-400 mb-2">Own this venue?</p>
-          <Link
-            href={`/venue/${id}/claim`}
-            className="text-[14px] font-medium text-blue-500 hover:text-blue-600 transition-colors"
-          >
-            Claim this venue
-          </Link>
+        <div className="mx-5 mb-8">
+          <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)", border: "1px solid #fde68a" }}>
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4.5 h-4.5 text-amber-700"
+                style={{ width: 18, height: 18 }}
+                aria-hidden="true"
+              >
+                <path d="M3 21h18" />
+                <path d="M5 21V7l7-4 7 4v14" />
+                <rect x="9" y="12" width="6" height="9" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-amber-900 mb-0.5">Own or manage this venue?</p>
+              <Link
+                href={`/venue/${id}/claim`}
+                className="text-[13px] font-medium text-amber-700 hover:text-amber-800 transition-colors"
+              >
+                Claim this venue →
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 

@@ -548,20 +548,22 @@ export function EventsDiscovery({ events }: Props) {
       {/* ── Content area — matches original .content { padding: 20px } ──── */}
       <div className="px-5 py-5">
         {filtered.length === 0 ? (
-          /* Empty state — matches original: 🎉 icon, "No events found" */
+          /* Empty state */
           <div className="flex flex-col items-center justify-center text-center py-16 px-10">
-            <div className="text-5xl opacity-50 mb-4">🎉</div>
-            <p className="text-lg font-semibold text-gray-700 mb-2">
+            <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mb-4 text-3xl">
+              🎉
+            </div>
+            <p className="text-[17px] font-bold text-gray-800 mb-2">
               No events found
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-[13px] text-gray-500 leading-relaxed">
               {anyFilterActive
                 ? "Try adjusting your filters or check back later for new events."
                 : "Check back soon — events will appear here."}
             </p>
           </div>
         ) : (
-          <ul className="[&>li]:block">
+          <ul className="flex flex-col gap-3">
             {filtered.map((event) => (
               <li key={event.id}>
                 <EventCard event={event} />
