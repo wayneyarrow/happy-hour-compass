@@ -4,18 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { label: "Dashboard",       href: "/control-panel/dashboard" },
-  { label: "Analytics",       href: "/control-panel/analytics" },
-  { label: "Action Center",   href: "/control-panel/action-center" },
-  { label: "Claims",          href: "/control-panel/claims" },
-  { label: "Submissions",     href: "/control-panel/operator-submissions" },
-  { label: "Venues",          href: "/control-panel/venues" },
-  { label: "Operators",       href: "/control-panel/operators" },
-  { label: "Discover Page",   href: "/control-panel/discover" },
-  { label: "Industry Reads",  href: "/control-panel/industry-reads" },
-  { label: "Settings",        href: "/control-panel/settings" },
-  { label: "Platform Admins", href: "/control-panel/platform-admins" },
-  { label: "Audit Logs",      href: "/control-panel/audit-logs" },
+  { label: "Dashboard",          href: "/control-panel/dashboard" },
+  { label: "Analytics",          href: "/control-panel/analytics" },
+  { label: "Action Center",      href: "/control-panel/action-center" },
+  { label: "Claims",             href: "/control-panel/claims" },
+  { label: "Submissions",        href: "/control-panel/operator-submissions" },
+  { label: "Venues",             href: "/control-panel/venues" },
+  { label: "Operators",          href: "/control-panel/operators" },
+  { label: "Discover Management",href: "/control-panel/discover" },
+  { label: "Venue QA",           href: "/control-panel/settings" },
+  { label: "Integrations",       href: "/control-panel/integrations" },
+  { label: "Platform Admins",    href: "/control-panel/platform-admins" },
+  { label: "Audit Logs",         href: "/control-panel/audit-logs" },
 ] as const;
 
 export default function ControlPanelSideNav() {
