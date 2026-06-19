@@ -124,7 +124,7 @@ export default function SearchTagsForm({
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-4">
       {/* Hidden field carries the serialised tag array to the server action */}
       <input
         type="hidden"
@@ -162,7 +162,7 @@ export default function SearchTagsForm({
       </div>
 
       {/* Tag groups */}
-      <div className="space-y-5">
+      <div className="space-y-4">
         {SEARCH_TAG_GROUPS.map((group) => (
           <div key={group.label}>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">

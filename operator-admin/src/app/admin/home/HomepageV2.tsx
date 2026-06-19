@@ -5,8 +5,6 @@ import V2IntroBanner from "./V2IntroBanner";
 import VenueHealthModule from "./modules/VenueHealthModule";
 import SuggestedNextStepsModule from "./modules/SuggestedNextStepsModule";
 import QuickActionsModule from "./modules/QuickActionsModule";
-import IndustryReadsModule from "./modules/IndustryReadsModule";
-import HelpModule from "./modules/HelpModule";
 
 type Props = {
   venueName: string;
@@ -85,8 +83,6 @@ export default function HomepageV2({
           updatedAt={updatedAt}
         />
         <QuickActionsModule venueSlug={venueSlug} venueId={venueId} />
-        <IndustryReadsModule />
-        <HelpModule />
       </div>
     </div>
   );

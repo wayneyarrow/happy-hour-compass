@@ -52,7 +52,7 @@ export default function AccordionSection({
       </button>
 
       {open && (
-        <div className="px-6 pb-6 pt-3 border-t border-gray-100">
+        <div className="px-6 pb-5 pt-3 border-t border-gray-100">
           {children}
         </div>
       )}

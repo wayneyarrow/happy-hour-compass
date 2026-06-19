@@ -345,7 +345,7 @@ export default function UsersClient({
             onClick={() => { setActionError(null); setIsInviteOpen(true); }}
             disabled={isAtLimit}
             title={isAtLimit ? `${nudge.atLimitMsg}${nudge.upgradeSuggestion ? ` ${nudge.upgradeSuggestion}` : ""}` : undefined}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed shrink-0"
+            className="px-5 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed shrink-0"
           >
             Invite User
           </button>

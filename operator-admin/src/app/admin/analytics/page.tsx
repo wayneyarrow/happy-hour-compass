@@ -181,19 +181,15 @@ function UpgradeNote({
 }) {
   if (!isOwner) return null;
   return (
-    <p className="mt-3 text-xs text-gray-400 leading-relaxed">
+    <div className="mt-4 flex items-start gap-3">
       <Link
         href="/admin/subscription?open=plans"
-        className={`font-semibold underline underline-offset-2 transition-colors ${
-          requiredPlan === "premium"
-            ? "text-blue-600 hover:text-blue-700"
-            : "text-amber-600 hover:text-amber-700"
-        }`}
+        className="inline-flex items-center px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
       >
         Upgrade to {PLAN_LABELS[requiredPlan]}
-      </Link>{" "}
-      {children}
-    </p>
+      </Link>
+      <p className="text-xs text-gray-400 leading-relaxed">{children}</p>
+    </div>
   );
 }
 

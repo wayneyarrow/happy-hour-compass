@@ -4,16 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { label: "Home",       href: "/admin/home" },
-  { label: "Venue",      href: "/admin/venue" },
-  { label: "Happy Hours",href: "/admin/happy-hours" },
-  { label: "Events",     href: "/admin/events" },
-  { label: "Images",     href: "/admin/images" },
-  { label: "Analytics",  href: "/admin/analytics" },
-  { label: "Marketing",  href: "/admin/marketing" },
+  { label: "Home",         href: "/admin/home" },
+  { label: "Venue",        href: "/admin/venue" },
+  { label: "Happy Hours",  href: "/admin/happy-hours" },
+  { label: "Events",       href: "/admin/events" },
+  { label: "Analytics",    href: "/admin/analytics" },
   { label: "Subscription", href: "/admin/subscription" },
-  { label: "Users",      href: "/admin/users" },
-  { label: "Account",    href: "/admin/account" },
+  { label: "Users",        href: "/admin/users" },
+  { label: "Help",         href: "/admin/help" },
 ] as const;
 
 export default function AdminSideNav() {
