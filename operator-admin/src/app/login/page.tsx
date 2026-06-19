@@ -236,6 +236,15 @@ export default function LoginPage() {
               ? "Sign In"
               : "Create Account"}
           </button>
+
+          {mode === "signup" && (
+            <p className="text-xs text-gray-400 text-center leading-relaxed">
+              By creating an account, you agree to our{" "}
+              <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
+              {" "}and{" "}
+              <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
+            </p>
+          )}
         </form>
         </div>{/* end card */}
       </div>{/* end max-w-md wrapper */}

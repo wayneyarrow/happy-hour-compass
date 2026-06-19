@@ -215,8 +215,12 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
         {isPending ? "Submitting…" : "Submit claim"}
       </button>
 
-      <p className="mt-4 text-center text-[12px] text-gray-400">
-        Your information is used only to verify ownership of this venue.
+      <p className="mt-4 text-center text-[12px] text-gray-400 leading-relaxed">
+        By submitting this claim, you agree to our{" "}
+        <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
+        {" "}and{" "}
+        <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
+        Your information is used only to verify your association with this venue.
       </p>
     </form>
   );

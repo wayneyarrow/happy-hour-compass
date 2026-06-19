@@ -23,8 +23,15 @@ export default function StandaloneLayout({
         </div>
       </main>
 
-      <footer className="py-6 text-center text-xs text-gray-400">
-        &copy; {new Date().getFullYear()} Happy Hour Compass
+      <footer className="py-6 text-center space-y-2">
+        <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
+          <a href="/terms" className="hover:text-gray-600 transition-colors">Terms of Service</a>
+          <span className="text-gray-300">·</span>
+          <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
+        </div>
+        <p className="text-xs text-gray-400">
+          &copy; {new Date().getFullYear()} Happy Hour Compass
+        </p>
       </footer>
     </div>
   );

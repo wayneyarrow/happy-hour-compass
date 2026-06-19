@@ -739,9 +739,12 @@ export function OwnerSubmissionFlow() {
           Find my business
         </button>
 
-        <p className="mt-4 text-center text-[12px] text-gray-400">
+        <p className="mt-4 text-center text-[12px] text-gray-400 leading-relaxed">
           All fields required. We&rsquo;ll use your details to look up your
-          business and get in touch.
+          business and get in touch. By continuing, you agree to our{" "}
+          <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
+          {" "}and{" "}
+          <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
         </p>
       </form>
     </div>

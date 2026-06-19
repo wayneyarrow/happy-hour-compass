@@ -196,6 +196,13 @@ export default function AcceptCpInviteForm({ token, email }: Props) {
         >
           {isPending ? "Activating account…" : "Accept invitation"}
         </button>
+
+        <p className="text-xs text-gray-400 text-center leading-relaxed">
+          By accepting this invitation, you agree to the{" "}
+          <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
+          {" "}and{" "}
+          <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
+        </p>
       </form>
     </div>
   );

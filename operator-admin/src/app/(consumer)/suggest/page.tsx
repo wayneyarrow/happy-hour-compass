@@ -94,6 +94,17 @@ export default function SuggestChooserPage() {
           </svg>
         </Link>
       </div>
+
+      {/* Legal links */}
+      <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-center gap-5">
+        <a href="/terms" className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors">
+          Terms of Service
+        </a>
+        <span className="text-gray-300 text-[12px]">·</span>
+        <a href="/privacy" className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors">
+          Privacy Policy
+        </a>
+      </div>
     </main>
   );
 }

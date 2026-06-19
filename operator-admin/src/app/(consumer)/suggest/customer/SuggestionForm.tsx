@@ -182,8 +182,7 @@ export function SuggestionForm() {
               htmlFor="email_marketing_opt_in"
               className="text-[13px] text-gray-600 leading-snug cursor-pointer"
             >
-              Email me with updates about this suggestion and occasional Happy
-              Hour Compass news.
+              Email me occasional updates from Happy Hour Compass.
             </label>
           </div>
         )}
@@ -198,7 +197,13 @@ export function SuggestionForm() {
         {isPending ? "Submitting…" : "Submit suggestion"}
       </button>
 
-      <p className="mt-4 text-center text-[12px] text-gray-400">
+      <p className="mt-4 text-center text-[12px] text-gray-400 leading-relaxed">
+        By submitting, you agree to our{" "}
+        <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
+        {" "}and{" "}
+        <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
+      </p>
+      <p className="mt-2 text-center text-[12px] text-gray-400">
         We review all suggestions before adding them to the directory.
       </p>
     </form>
