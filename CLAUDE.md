@@ -86,21 +86,24 @@ When removing: revert the two changes made to `app/(consumer)/layout.tsx`:
 
 ---
 
-## Website Vision
+## Website Vision & Playbook
 
-Before implementing any public website UI, UX, layout, navigation, homepage, SEO, or content decisions, review:
+Before any significant public website work — UI, UX, layout, navigation, homepage, SEO, content, or architecture decisions — review both documents:
 
-**[`docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md`](docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md)**
+1. **[`docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md`](docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md)** — the approved foundational philosophy. Takes precedence over implementation convenience.
+2. **[`docs/website/WEBSITE_PRODUCT_PLAYBOOK.md`](docs/website/WEBSITE_PRODUCT_PLAYBOOK.md)** — the living build guide. Defines how to apply the philosophy during real implementation.
 
-This is the approved foundational design document for the public website. The philosophy it defines takes precedence over implementation convenience. When implementation decisions conflict with its principles, the principles should be considered first and only changed through deliberate discussion.
+If a requested implementation conflicts with either document, stop and explain the conflict before writing code.
 
-Key things to carry into every website task:
+Key principles from both documents to carry into every website task:
 - The website is the product, not a marketing website. Discovery always comes before explanation.
-- Every homepage section must earn its place by improving discovery.
-- The product should feel closer to Airbnb, Apple, OpenTable, Resy, or Spotify — never like SaaS or admin software.
+- Reveal and elevate the existing product engine — never rebuild what already exists.
+- Every homepage section must earn its place by improving discovery; it should feel like the beginning of the product, not an introduction to it.
 - Show the product instead of describing it. Real venues, real events, real content.
-- Premium consumer experience takes precedence over SaaS conventions.
+- The product should feel closer to Airbnb, Apple, OpenTable, Resy, or Spotify — never like SaaS or admin software.
 - Desktop must feel immersive; mobile must feel native. Neither is an afterthought.
+- Do not create UI backed by immature or inconsistently populated data.
+- Preserve separation between Public Website, Consumer App, Operator Admin, and Founder Control Panel.
 
 ---
 
