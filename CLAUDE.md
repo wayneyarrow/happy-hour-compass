@@ -86,6 +86,24 @@ When removing: revert the two changes made to `app/(consumer)/layout.tsx`:
 
 ---
 
+## Website Vision
+
+Before implementing any public website UI, UX, layout, navigation, homepage, SEO, or content decisions, review:
+
+**[`docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md`](docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md)**
+
+This is the approved foundational design document for the public website. The philosophy it defines takes precedence over implementation convenience. When implementation decisions conflict with its principles, the principles should be considered first and only changed through deliberate discussion.
+
+Key things to carry into every website task:
+- The website is the product, not a marketing website. Discovery always comes before explanation.
+- Every homepage section must earn its place by improving discovery.
+- The product should feel closer to Airbnb, Apple, OpenTable, Resy, or Spotify — never like SaaS or admin software.
+- Show the product instead of describing it. Real venues, real events, real content.
+- Premium consumer experience takes precedence over SaaS conventions.
+- Desktop must feel immersive; mobile must feel native. Neither is an afterthought.
+
+---
+
 ## Supabase migrations
 
 ### Every new public-schema table must have explicit GRANTs
