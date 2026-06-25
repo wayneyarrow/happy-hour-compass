@@ -5,13 +5,13 @@ import { getAllRailOverrides } from "@/lib/data/discoverOverrides";
 import { getEventOverridesForRail } from "@/lib/data/discoverEventOverrides";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { toMarketConfig } from "@/lib/markets";
-import { WelcomeGate } from "./WelcomeGate";
-import { ConsumerHome } from "./home/ConsumerHome";
+import { WelcomeGate } from "../WelcomeGate";
+import { ConsumerHome } from "../home/ConsumerHome";
 import {
   EXPERIENCE_CATEGORIES,
   FOOD_CATEGORIES,
   DRINKS_CATEGORIES,
-} from "./home/browseCategories";
+} from "../home/browseCategories";
 import {
   RAIL_MAX,
   NEARBY_POOL,
