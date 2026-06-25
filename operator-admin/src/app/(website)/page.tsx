@@ -1,72 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import HeroSection from "./HeroSection";
 
 export const metadata: Metadata = {
   title: { absolute: "Happy Hour Compass — Find the best happy hours near you" },
   description:
     "Discover curated happy hour deals at bars and restaurants near you. Real menus, real prices, real hours — updated by the venues themselves.",
 };
-
-// ─── Section components ──────────────────────────────────────────────────────
-
-function HeroSection() {
-  return (
-    <section className="relative overflow-hidden bg-white">
-      {/* Subtle warm gradient wash */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(251,191,36,0.12) 0%, transparent 70%)",
-        }}
-      />
-
-      <div className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-24 pb-28 md:pt-32 md:pb-36 text-center">
-        {/* Eyebrow */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 mb-8">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-          <span className="text-xs font-semibold text-amber-700 tracking-wide uppercase">
-            Now in beta · Vancouver
-          </span>
-        </div>
-
-        {/* Headline */}
-        <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 tracking-tight leading-[1.05] max-w-4xl mx-auto">
-          Happy hour,{" "}
-          <span className="text-amber-500">every night.</span>
-        </h1>
-
-        {/* Sub-headline */}
-        <p className="mt-6 text-lg md:text-xl text-gray-500 max-w-xl mx-auto leading-relaxed">
-          Curated deals at bars and restaurants near you — real menus, real
-          prices, updated by the venues themselves.
-        </p>
-
-        {/* CTAs */}
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/app"
-            className="w-full sm:w-auto px-7 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-base shadow-sm transition-colors"
-          >
-            Explore happy hours
-          </Link>
-          <Link
-            href="/suggest/owner"
-            className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-gray-50 text-gray-800 font-semibold rounded-full text-base border border-gray-200 shadow-sm transition-colors"
-          >
-            Add your venue
-          </Link>
-        </div>
-
-        {/* Social proof nudge */}
-        <p className="mt-8 text-sm text-gray-400">
-          Free for diners · Free to list · No reservations needed
-        </p>
-      </div>
-    </section>
-  );
-}
 
 function HowItWorksSection() {
   const steps = [
