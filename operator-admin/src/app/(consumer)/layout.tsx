@@ -20,7 +20,11 @@ export default function ConsumerLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-white md:bg-[#f5f5f5] md:flex md:items-center md:justify-center md:p-5">
+    <div className="min-h-screen bg-white md:bg-[#f5f5f5] md:flex md:flex-col md:items-center md:justify-center md:p-5">
+      {/* TEMP: website branch staging marker — remove after first Vercel preview confirms */}
+      <p className="hidden md:block text-xs font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded mb-3">
+        Website staging branch active
+      </p>
       {/* Phone frame */}
       <div className="flex flex-col h-dvh w-full md:w-[375px] md:h-[812px] bg-white md:rounded-[30px] md:shadow-[0_10px_30px_rgba(0,0,0,0.3)] overflow-hidden">
         {/* Scrollable content area */}
