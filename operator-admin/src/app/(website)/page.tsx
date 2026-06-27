@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HeroSection from "./HeroSection";
+import { getActiveMarket } from "@/lib/activeMarket";
 
 export const metadata: Metadata = {
   title: { absolute: "Happy Hour Compass — Find the best happy hours near you" },
@@ -147,10 +148,12 @@ function CtaSection() {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function WebsiteHomePage() {
+export default async function WebsiteHomePage() {
+  const { market, isPersisted } = await getActiveMarket();
+
   return (
     <>
-      <HeroSection />
+      <HeroSection market={market} isPersisted={isPersisted} />
       <HowItWorksSection />
       <ForOwnersSection />
       <CtaSection />
