@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getActiveMarket } from "@/lib/activeMarket";
 import SearchContextHeader from "./SearchContextHeader";
+import { SearchResultCard } from "./SearchResultCard";
+import type { SearchResultCardData } from "./SearchResultCard";
 
 export const metadata: Metadata = {
   title: "Happy Hours — Happy Hour Compass",
@@ -9,24 +11,72 @@ export const metadata: Metadata = {
 
 const FILTER_CHIPS = ["Near Me", "On Now", "Time", "Top Rated", "Type", "Sort"];
 
-function SkeletonCard() {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
-      <div className="flex gap-4">
-        <div className="w-20 h-20 rounded-lg bg-gray-200 flex-shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="h-4 bg-gray-200 rounded-md w-3/4" />
-          <div className="h-3 bg-gray-200 rounded-md w-1/2" />
-          <div className="h-3 bg-gray-200 rounded-md w-2/3" />
-          <div className="flex gap-2 pt-1">
-            <div className="h-5 w-16 bg-gray-200 rounded-full" />
-            <div className="h-5 w-20 bg-gray-200 rounded-full" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Sample cards — hard-coded for visual design validation ──────────────────
+// Replace with real venue data when wiring the Discover Engine.
+
+const SAMPLE_CARDS: SearchResultCardData[] = [
+  {
+    id: "king-taps",
+    name: "King Taps",
+    image: "/images/casual-dining-1.jpg",
+    isVerified: true,
+    googleRating: 4.6,
+    hhStatus: { type: "active", endsIn: "Ends in 1 hr 12 min" },
+    distanceKm: 0.8,
+    establishmentType: "Restaurant",
+    foodSpecial: "🍔 Half-price Burgers",
+    drinkSpecial: "🍺 $6 Local Pints",
+  },
+  {
+    id: "bna-brewing",
+    name: "BNA Brewing & Eatery",
+    image: "/images/sports-bar-1.jpg",
+    isVerified: false,
+    googleRating: 4.3,
+    hhStatus: { type: "upcoming", day: "Today", startsAt: "3:30 PM" },
+    distanceKm: 2.3,
+    establishmentType: "Brewery",
+    drinkSpecial: "🍺 $7 Craft Pints",
+  },
+  {
+    id: "blarney-stone",
+    name: "The Blarney Stone",
+    image: "/images/sports-bar-1.jpg",
+    isVerified: true,
+    googleRating: 4.1,
+    hhStatus: { type: "upcoming", day: "Tomorrow", startsAt: "4:00 PM" },
+    distanceKm: 4.1,
+    establishmentType: "Pub",
+    foodSpecial: "🍟 $9 Pub Appetizers",
+    drinkSpecial: "🥃 $8 Whiskey Cocktails",
+  },
+  {
+    id: "earls-kitchen",
+    name: "Earls Kitchen + Bar",
+    image: "/images/fine-dining-1.jpg",
+    isVerified: true,
+    googleRating: 4.5,
+    hhStatus: { type: "active", endsIn: "Ends in 45 min" },
+    distanceKm: 1.2,
+    establishmentType: "Restaurant",
+    foodSpecial: "🥙 50% Off Shareables",
+    drinkSpecial: "🍷 $10 House Wine",
+  },
+  {
+    id: "craft-beer-market",
+    name: "Craft Beer Market",
+    image: "/images/casual-dining-2.jpg",
+    isVerified: false,
+    googleRating: 4.8,
+    hhStatus: { type: "upcoming", day: "Monday", startsAt: "3:00 PM" },
+    distanceKm: 5.1,
+    establishmentType: "Bar",
+    foodSpecial: "🌮 $12 Loaded Nachos",
+    drinkSpecial: "🍺 $5 Rotating Taps",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default async function HappyHoursSearchPage() {
   const { market } = await getActiveMarket();
@@ -43,8 +93,9 @@ export default async function HappyHoursSearchPage() {
               className="
                 flex-shrink-0 px-4 py-2
                 bg-white border border-gray-200 rounded-full
-                text-sm font-medium text-gray-700
-                hover:border-gray-300 hover:shadow-sm
+                text-sm font-medium text-gray-800
+                shadow-[0_1px_2px_rgba(0,0,0,0.04)]
+                hover:border-gray-300 hover:bg-gray-50
                 transition-all whitespace-nowrap
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
               "
@@ -55,21 +106,21 @@ export default async function HappyHoursSearchPage() {
         </div>
       </div>
 
-      {/* Desktop: 55/45 split layout */}
+      {/* Desktop: 50/50 split layout */}
       <div className="hidden md:flex">
-        {/* Results column — 55%, scrolls with the page */}
-        <div className="w-[55%] min-h-[calc(100dvh-72px)] border-r border-gray-100 px-6 pt-8 pb-5">
+        {/* Results column — 50%, scrolls with the page */}
+        <div className="w-1/2 min-h-[calc(100dvh-72px)] border-r border-gray-100 px-5 pt-8 pb-10">
           <SearchContextHeader market={market} className="mb-7" />
 
-          <div className="space-y-3">
-            {Array.from({ length: 8 }, (_, i) => (
-              <SkeletonCard key={i} />
+          <div className="grid grid-cols-2 gap-4">
+            {SAMPLE_CARDS.map((card) => (
+              <SearchResultCard key={card.id} data={card} />
             ))}
           </div>
         </div>
 
-        {/* Map column — 45%, sticky within viewport */}
-        <div className="w-[45%]">
+        {/* Map column — 50%, sticky within viewport */}
+        <div className="w-1/2">
           <div
             className="sticky top-[132px] flex p-4"
             style={{ height: "calc(100dvh - 132px)" }}
@@ -122,10 +173,10 @@ export default async function HappyHoursSearchPage() {
           </div>
         </div>
 
-        {/* Results placeholder */}
-        <div className="px-4 pb-8 space-y-3">
-          {Array.from({ length: 5 }, (_, i) => (
-            <SkeletonCard key={i} />
+        {/* Results */}
+        <div className="px-4 pb-8 space-y-4">
+          {SAMPLE_CARDS.map((card) => (
+            <SearchResultCard key={card.id} data={card} />
           ))}
         </div>
       </div>

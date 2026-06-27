@@ -14,11 +14,11 @@ export default function SearchContextHeader({ market, className = "" }: Props) {
 
   return (
     <div className={className}>
-      <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+      <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">
         Happy Hours
       </h1>
 
-      <div className="mt-2">
+      <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
@@ -68,11 +68,9 @@ export default function SearchContextHeader({ market, className = "" }: Props) {
             />
           </svg>
         </button>
-      </div>
 
-      <p className="mt-2 text-sm font-medium text-gray-500">
-        127 Happy Hours
-      </p>
+        <span className="text-xs text-gray-400">127 results</span>
+      </div>
 
       {isModalOpen && (
         <MarketModal
