@@ -1,12 +1,17 @@
 /**
- * Server-side event data helper for the consumer app.
+ * Server-side event data helper for the consumer app and public website.
  *
  * getEventsForConsumerVenues() fetches published events for a set of venue
  * UUIDs and maps each row to a ConsumerEvent with a human-readable schedule
  * label that matches the tone of the static HTML consumer app.
+ *
+ * getPublishedEventsForWebsite() fetches market-scoped published events for
+ * the website Events Search Results page.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { haversineKm } from "@/lib/discover/discoverEngine";
+import { toMarketConfig, type Market } from "@/lib/markets";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -609,6 +614,124 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
     });
   } catch (err) {
     console.error("[getCPFeaturedEventCandidates] Unexpected error:", err);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Website Events Search
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Event shape for the public website Events Search Results page.
+ * Includes venue context needed to show venue name, type, and market filtering.
+ */
+export type WebsiteEventListItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  /** Event category key — matches EventTypeKey in src/lib/eventTypes.ts. */
+  eventType: string | null;
+  venueName: string;
+  venueEstablishmentType: string;
+  venueLat: number | null;
+  venueLng: number | null;
+  /** ISO "YYYY-MM-DD" — null for undated recurring events. */
+  firstDate: string | null;
+  /** Recurrence pattern — "none" | "daily" | "weekly" | "biweekly" | "monthly". */
+  recurrence: string | null;
+  /** 24-hour "HH:MM" start time — null if not specified. */
+  startTime: string | null;
+  /** Human-readable occurrence label, e.g. "Fridays 8:00–10:00 PM". */
+  nextOccurrenceLabel: string;
+};
+
+/**
+ * Fetches published events for the website Events Search Results page.
+ *
+ * Scoped to the active market via Haversine distance filtering on venue lat/lng.
+ * Venues without coordinates are included permissively (assumed local).
+ * Past one-off events are excluded; recurring events are always included.
+ * Uses the service-role admin client to bypass RLS.
+ */
+export async function getPublishedEventsForWebsite(
+  market: Market
+): Promise<WebsiteEventListItem[]> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        "id, venue_id, title, description, event_type, image_url, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, " +
+          "venues(name, lat, lng, establishment_type)"
+      )
+      .eq("is_published", true)
+      .order("first_date", { ascending: true, nullsFirst: false })
+      .order("title", { ascending: true });
+
+    if (error) {
+      console.error("[getPublishedEventsForWebsite] Supabase error:", error);
+      return [];
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).flatMap((row: Record<string, any>) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const venue = (row.venues as Record<string, any> | null) ?? {};
+      const vLat = typeof venue.lat === "number" ? venue.lat : null;
+      const vLng = typeof venue.lng === "number" ? venue.lng : null;
+
+      // Market filter — exclude venues that have real coordinates outside the market.
+      // (0, 0) is treated as "no coordinates": it lies in the Gulf of Guinea and is
+      // impossible for any HHC venue; treating it as null keeps permissive behaviour
+      // for venues whose lat/lng were never properly populated.
+      const hasRealCoordinates =
+        vLat !== null && vLng !== null && !(vLat === 0 && vLng === 0);
+      if (hasRealCoordinates && haversineKm(mLat, mLng, vLat!, vLng!) > radiusKm) {
+        return [];
+      }
+
+      const firstDate = (row.first_date as string | null) ?? null;
+      const recurrence = (row.recurrence as string | null) ?? null;
+
+      // Exclude past one-off events (same logic as upcomingBucket === 1)
+      const isRecurring = recurrence && recurrence !== "none";
+      if (!isRecurring && firstDate && firstDate < today) return [];
+
+      return [
+        {
+          id: row.id as string,
+          title: (row.title as string) ?? "",
+          description: (row.description as string | null) ?? null,
+          imageUrl: (row.image_url as string | null) ?? null,
+          eventType: (row.event_type as string | null) ?? null,
+          venueName: (venue.name as string) ?? "",
+          venueEstablishmentType: (venue.establishment_type as string) ?? "",
+          venueLat: vLat,
+          venueLng: vLng,
+          firstDate,
+          recurrence,
+          startTime: (row.start_time as string | null) ?? null,
+          nextOccurrenceLabel: buildOccurrenceLabel({
+            first_date: firstDate,
+            start_time: (row.start_time as string | null) ?? null,
+            end_time: (row.end_time as string | null) ?? null,
+            recurrence,
+            event_time: (row.event_time as string | null) ?? null,
+            event_frequency: (row.event_frequency as string | null) ?? null,
+          }),
+        },
+      ];
+    });
+  } catch (err) {
+    console.error("[getPublishedEventsForWebsite] Unexpected error:", err);
     return [];
   }
 }
