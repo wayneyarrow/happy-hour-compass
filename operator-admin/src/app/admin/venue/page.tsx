@@ -5,6 +5,7 @@ import { parseOperatorPlan, maxSearchTags, maxImages } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
+import AboutVenueForm from "./AboutVenueForm";
 import BusinessDetailsForm from "./BusinessDetailsForm";
 import PaymentTypesForm from "./PaymentTypesForm";
 import LinksForm from "./LinksForm";
@@ -40,6 +41,11 @@ type AdminVenueRow = {
   /** PostgreSQL TEXT[] — returned as string[] by the Supabase client */
   search_tags?: string[] | null;
   cancelled_at?: string | null;
+  /**
+   * Operator-authored editorial description (max 750 chars, enforced by form).
+   * NULL/blank → public Venue Detail page hides the About section entirely.
+   */
+  about_your_venue?: string | null;
 };
 
 /**
@@ -65,6 +71,7 @@ function parsePaymentTypes(raw: string | null | undefined): string[] {
 
 type VenueSection =
   | "business-details"
+  | "about-your-venue"
   | "business-hours"
   | "payment-types"
   | "links"
@@ -236,7 +243,21 @@ export default async function AdminVenuePage({
             />
           </AccordionSection>
 
-          {/* Section 2: Business hours */}
+          {/* Section 2: About your venue */}
+          <AccordionSection
+            id="about-your-venue"
+            title="About your venue"
+            description="Tell customers what makes your venue special — shown on your public Venue Detail page."
+            defaultOpen={isOpen(section, "about-your-venue")}
+          >
+            <AboutVenueForm
+              venueId={venue.id}
+              venueName={venue.name ?? ""}
+              initialAboutYourVenue={venue.about_your_venue ?? ""}
+            />
+          </AccordionSection>
+
+          {/* Section 3: Business hours */}
           <AccordionSection
             id="business-hours"
             title="Business hours"

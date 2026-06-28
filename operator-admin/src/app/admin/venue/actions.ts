@@ -4,8 +4,10 @@ import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
 import { redirect } from "next/navigation";
 import {
+  ABOUT_VENUE_MAX_CHARS,
   ESTABLISHMENT_TYPE_OPTIONS,
   PAYMENT_OPTIONS,
+  type AboutVenueState,
   type BusinessDetailsState,
   type CreateVenueAdminState,
   type LinksState,
@@ -223,6 +225,56 @@ export async function updateLinksAction(
 
   if (updateError) {
     console.error("[updateLinksAction] Update failed:", updateError);
+    return { errors: { form: `Failed to save: ${updateError.message}` }, values };
+  }
+
+  if (count === 0) {
+    return {
+      errors: { form: "Venue not found or you don't have permission to edit it." },
+      values,
+    };
+  }
+
+  return { success: true, values };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Update about your venue
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function updateAboutVenueAction(
+  venueId: string,
+  _prevState: AboutVenueState,
+  formData: FormData
+): Promise<AboutVenueState> {
+  const raw = (formData.get("about_your_venue") as string | null) ?? "";
+  const values = { about_your_venue: raw };
+
+  if (raw.length > ABOUT_VENUE_MAX_CHARS) {
+    return {
+      errors: { about_your_venue: `Must be ${ABOUT_VENUE_MAX_CHARS} characters or fewer.` },
+      values,
+    };
+  }
+
+  const ctx = await resolveOperatorContext();
+
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
+    return {
+      errors: { form: ctx.operatorError ?? "Could not resolve your operator account." },
+      values,
+    };
+  }
+
+  const updates = {
+    about_your_venue: raw.trim() || null,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+  };
+
+  const { error: updateError, count } = await buildVenueUpdate(ctx, venueId, updates);
+
+  if (updateError) {
+    console.error("[updateAboutVenueAction] Update failed:", updateError);
     return { errors: { form: `Failed to save: ${updateError.message}` }, values };
   }
 

@@ -98,6 +98,12 @@ export type ConsumerVenue = {
    * Empty array until the backfill script has been run.
    */
   seededTags: string[];
+  /**
+   * Operator-authored editorial description for the public Venue Detail page.
+   * NULL/blank → the public "About" section must be hidden entirely.
+   * Max 750 characters enforced by the operator admin form.
+   */
+  aboutYourVenue: string | null;
   /** ISO timestamp when the venue row was created in Supabase. */
   createdAt: string;
   /** ISO timestamp when the venue row was last updated in Supabase. */
@@ -554,6 +560,9 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     isVerified: row.is_verified === true,
     searchTags: Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
     seededTags: Array.isArray(row.seeded_tags) ? (row.seeded_tags as string[]) : [],
+    aboutYourVenue: typeof row.about_your_venue === "string" && row.about_your_venue.trim()
+      ? row.about_your_venue
+      : null,
     createdAt: (row.created_at as string) ?? "",
     updatedAt: (row.updated_at as string) ?? "",
     internalBoost: typeof row.internal_boost === "number" ? row.internal_boost : 0,
@@ -685,7 +694,7 @@ const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
   "establishment_type, claimed_at, google_rating, google_review_count, place_id, is_verified, " +
-  "search_tags, updated_at";
+  "search_tags, about_your_venue, updated_at";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.
