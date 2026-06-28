@@ -150,6 +150,7 @@ export function SearchResultCard({ data }: Props) {
           group-hover:-translate-y-[3px]
           transition-all duration-200
           cursor-pointer
+          flex flex-col
         "
       >
         {/* ── Hero Image ───────────────────────────────────────────────────── */}
@@ -211,7 +212,7 @@ export function SearchResultCard({ data }: Props) {
         </div>
 
         {/* ── Content ──────────────────────────────────────────────────────── */}
-        <div className="px-4 py-3 space-y-1.5">
+        <div className="px-4 py-3 flex flex-col flex-1 gap-1.5">
 
           {/* 1. Venue name — bold; first thing the eye finds */}
           <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
@@ -241,17 +242,19 @@ export function SearchResultCard({ data }: Props) {
             </p>
           )}
 
-          {/* 5. Featured specials — the "why should I go?" answer */}
-          {(data.foodSpecial || data.drinkSpecial) && (
-            <div className="pt-2 border-t border-gray-100 space-y-1">
-              {data.foodSpecial && (
-                <p className="text-sm font-medium text-gray-700">{data.foodSpecial}</p>
-              )}
-              {data.drinkSpecial && (
-                <p className="text-sm font-medium text-gray-700">{data.drinkSpecial}</p>
-              )}
-            </div>
-          )}
+          {/* 5. Featured specials — always rendered so all cards share the same bottom section.
+               mt-auto pins it to the card bottom regardless of how many items appear above. */}
+          <div className="mt-auto pt-2 border-t border-gray-100 space-y-1">
+            {data.foodSpecial && (
+              <p className="text-sm font-medium text-gray-700">{data.foodSpecial}</p>
+            )}
+            {data.drinkSpecial && (
+              <p className="text-sm font-medium text-gray-700">{data.drinkSpecial}</p>
+            )}
+            {!data.foodSpecial && !data.drinkSpecial && (
+              <p className="text-sm font-medium text-amber-600">View Happy Hour details →</p>
+            )}
+          </div>
 
         </div>
       </article>
