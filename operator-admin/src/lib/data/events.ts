@@ -32,6 +32,8 @@ export type ConsumerEvent = {
    *           "Jan 15 7:00–9:00 PM", "Every two Fridays 6:00–8:00 PM"
    */
   nextOccurrenceLabel: string;
+  /** Event category key — matches EventTypeKey in src/lib/eventTypes.ts. */
+  eventType: string | null;
 };
 
 /**
@@ -43,6 +45,8 @@ export type ConsumerEventDetail = {
   title: string;
   description: string | null;
   nextOccurrenceLabel: string;
+  /** Event category key — matches EventTypeKey in src/lib/eventTypes.ts. */
+  eventType: string | null;
   /** Hero image URL from events.image_url (nullable). */
   imageUrl: string | null;
   /** Venue UUID — matches venues.id; used for the /venue/[id] back-link. */
@@ -236,7 +240,7 @@ export async function getEventForConsumerById(
     let query = supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, image_url, " +
+        "id, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency"
       )
@@ -284,6 +288,7 @@ export async function getEventForConsumerById(
         event_time: row.event_time as string | null,
         event_frequency: row.event_frequency as string | null,
       }),
+      eventType: (row.event_type as string | null) ?? null,
       imageUrl: (row.image_url as string | null) ?? null,
       venueId,
       venueName: (vr.name as string) ?? "",
@@ -320,7 +325,7 @@ export async function getEventsForConsumerVenues(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, " +
+        "id, venue_id, title, description, event_type, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency"
       )
@@ -353,6 +358,7 @@ export async function getEventsForConsumerVenues(
         event_time: row.event_time as string | null,
         event_frequency: row.event_frequency as string | null,
       }),
+      eventType: (row.event_type as string | null) ?? null,
     }));
   } catch (err) {
     console.error("[getEventsForConsumerVenues] Unexpected error:", err);
@@ -370,6 +376,8 @@ export type ConsumerEventListItem = {
   title: string;
   description: string | null;
   nextOccurrenceLabel: string;
+  /** Event category key — matches EventTypeKey in src/lib/eventTypes.ts. */
+  eventType: string | null;
   imageUrl: string | null;
   /** Venue UUID — used for grouping and linking. */
   venueId: string;
@@ -416,7 +424,7 @@ export async function getPublishedEventsForConsumer(): Promise<
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, image_url, " +
+        "id, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
           "venues(name)"
@@ -474,6 +482,7 @@ export async function getPublishedEventsForConsumer(): Promise<
         event_time: row.event_time as string | null,
         event_frequency: row.event_frequency as string | null,
       }),
+      eventType: (row.event_type as string | null) ?? null,
       imageUrl: (row.image_url as string | null) ?? null,
       venueId: row.venue_id as string,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

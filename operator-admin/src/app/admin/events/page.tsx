@@ -55,7 +55,7 @@ export default async function AdminEventsPage() {
     canManageEvents
       ? await ctx.supabase
           .from("events")
-          .select("id, title, description, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, image_url, created_by_operator_id, updated_by_operator_id, updated_at")
+          .select("id, title, description, event_type, first_date, start_time, end_time, recurrence, event_time, event_frequency, is_published, venue_id, image_url, created_by_operator_id, updated_by_operator_id, updated_at")
           .eq("venue_id", venue!.id)
           .order("first_date", { ascending: false })
           .order("title", { ascending: true })

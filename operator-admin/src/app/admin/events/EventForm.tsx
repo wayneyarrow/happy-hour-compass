@@ -16,11 +16,13 @@ import {
   toRecurrence,
 } from "./recurrenceUtils";
 import { saveEventAction } from "./actions";
+import { EVENT_TYPE_OPTIONS } from "@/lib/eventTypes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type EventFormState = {
   title: string;
+  eventType: string;   // EventTypeKey or "" (not yet chosen)
   firstDate: string;   // ISO "YYYY-MM-DD" or ""
   startTime: string;   // e.g. "7:00 PM" or ""
   endTime: string;     // e.g. "9:00 PM" or ""
@@ -33,6 +35,7 @@ export type EventRow = {
   id: string;
   title: string | null;
   description: string | null;
+  event_type: string | null;
   first_date: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -83,6 +86,7 @@ const RECURRENCE_OPTIONS: { value: Recurrence; label: string }[] = [
 
 const EMPTY: EventFormState = {
   title: "",
+  eventType: "",
   firstDate: "",
   startTime: "",
   endTime: "",
@@ -186,6 +190,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
     if (!initialEvent) return;
     setFormState({
       title: initialEvent.title ?? "",
+      eventType: initialEvent.event_type ?? "",
       firstDate: initialEvent.first_date ?? "",
       startTime: initialEvent.start_time ?? "",
       endTime: initialEvent.end_time ?? "",
@@ -206,6 +211,10 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
     setError(null);
 
     // ── Validation ────────────────────────────────────────────────────────
+    if (formState.isPublished && !formState.eventType) {
+      setError("Please select an event type before publishing.");
+      return;
+    }
     if (!formState.firstDate) {
       setError("Please pick a date for the first occurrence.");
       return;
@@ -236,6 +245,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       {
         venueId,
         title: formState.title || null,
+        eventType: formState.eventType || null,
         description: formState.description || null,
         firstDate: formState.firstDate,
         startTime: formState.startTime,
@@ -391,7 +401,26 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
         />
       </div>
 
-      {/* 2. Date of first occurrence */}
+      {/* 2. Event type */}
+      <div>
+        <label htmlFor="event-type" className={labelCls}>
+          Event type
+        </label>
+        <select
+          id="event-type"
+          value={formState.eventType}
+          onChange={(e) => update("eventType", e.target.value)}
+          disabled={isSaving}
+          className={inputCls}
+        >
+          <option value="">Select event type</option>
+          {EVENT_TYPE_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 3. Date of first occurrence */}
       <div>
         <label htmlFor="event-first-date" className={labelCls}>
           Date of first occurrence
@@ -672,6 +701,10 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             role="switch"
             aria-checked={formState.isPublished}
             onClick={() => {
+              if (!formState.isPublished && !formState.eventType) {
+                setPublishError("Please select an event type before publishing.");
+                return;
+              }
               // Block turning on published when no image is present.
               if (!formState.isPublished && !imageUrl) {
                 setPublishError("You must add an event image before publishing.");

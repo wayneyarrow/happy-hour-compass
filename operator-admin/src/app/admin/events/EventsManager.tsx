@@ -8,12 +8,13 @@ import type { EventRow } from "./EventForm";
 import { deleteEventAction } from "./actions";
 import type { OperatorPlan } from "@/lib/plans";
 import { isRecurring } from "./recurrenceUtils";
+import { getEventTypeLabel } from "@/lib/eventTypes";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Columns fetched for both the initial server load and subsequent client re-fetches.
 export const EVENT_COLUMNS =
-  "id, title, description, first_date, start_time, end_time, recurrence, " +
+  "id, title, description, event_type, first_date, start_time, end_time, recurrence, " +
   "event_time, event_frequency, is_published, venue_id, image_url, " +
   "created_by_operator_id, updated_by_operator_id, updated_at";
 
@@ -278,8 +279,13 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
                               <span className="text-gray-400 italic">Untitled</span>
                             )}
                           </p>
+                          {event.event_type && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {getEventTypeLabel(event.event_type)}
+                            </p>
+                          )}
                           {preview && (
-                            <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            <p className="text-xs text-gray-400 truncate">
                               {preview}
                             </p>
                           )}

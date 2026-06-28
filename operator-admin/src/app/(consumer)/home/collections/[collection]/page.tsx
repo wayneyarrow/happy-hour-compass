@@ -121,6 +121,7 @@ export default async function CollectionPage({ params }: Props) {
       venueName:           e.venueName,
       nextOccurrenceLabel: e.nextOccurrenceLabel,
       description:         null,
+      eventType:           null,
       imageUrl:            null,
       venueId:             e.venueSlug,
       firstDate:           e.firstDate,

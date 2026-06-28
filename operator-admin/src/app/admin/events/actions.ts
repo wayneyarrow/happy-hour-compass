@@ -44,6 +44,7 @@ export async function deleteEventAction(eventId: string): Promise<void> {
 export type EventSavePayload = {
   venueId: string;
   title: string | null;
+  eventType: string | null;
   description: string | null;
   firstDate: string;
   startTime: string;
@@ -138,6 +139,7 @@ export async function saveEventAction(
 
   const fields = {
     title:                    payload.title,
+    event_type:               payload.eventType || "other",
     description:              payload.description,
     first_date:               payload.firstDate || null,
     start_time:               payload.startTime || null,
