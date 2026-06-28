@@ -1,24 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { BookmarkButton } from "@/app/(consumer)/BookmarkButton";
+import type { HhStatus } from "@/lib/happyHourStatus";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type HhStatus =
-  | { type: "active"; endsIn: string }
-  | { type: "upcoming"; day: string; startsAt: string }
-  | { type: "none" };
+export type { HhStatus };
 
 export type SearchResultCardData = {
+  /** Venue slug — used as the bookmark ID and card key. */
   id: string;
+  /** Destination URL for the future Venue Detail page, e.g. /venue/[slug]. */
+  href: string;
   name: string;
   image: string;
   isVerified: boolean;
   googleRating: number | null;
   hhStatus: HhStatus;
+  /** Distance from user in km. Null until client-side geolocation is available. */
   distanceKm: number | null;
   establishmentType: string;
+  /** First food special, if any. */
   foodSpecial?: string;
+  /** First drink special, if any. */
   drinkSpecial?: string;
 };
 
@@ -129,115 +134,127 @@ type Props = {
 
 export function SearchResultCard({ data }: Props) {
   return (
-    <article
-      className="
-        bg-white rounded-2xl overflow-hidden
-        border border-gray-100/80
-        shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
-        hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
-        hover:-translate-y-[3px]
-        transition-all duration-200
-        cursor-pointer
-      "
+    <Link
+      href={data.href}
+      className="block group"
+      // Scroll restoration is handled natively by the browser when using
+      // Next.js Link + browser back. Enhanced session-storage restoration
+      // can be added in a future pass once the Venue Detail page exists.
     >
-      {/* ── Hero Image ───────────────────────────────────────────────────── */}
-      <div className="relative h-[200px] overflow-hidden bg-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={data.image}
-          alt={data.name}
-          className="w-full h-full object-cover"
-        />
+      <article
+        className="
+          bg-white rounded-2xl overflow-hidden
+          border border-gray-100/80
+          shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
+          group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
+          group-hover:-translate-y-[3px]
+          transition-all duration-200
+          cursor-pointer
+        "
+      >
+        {/* ── Hero Image ───────────────────────────────────────────────────── */}
+        <div className="relative h-[200px] overflow-hidden bg-gray-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={data.image}
+            alt={data.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Hide broken images gracefully — bg-gray-100 shows as placeholder
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
 
-        {/* Gradient — darkens the top edge so pills remain legible */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0) 48%)",
-          }}
-          aria-hidden="true"
-        />
+          {/* Gradient — darkens the top edge so pills remain legible */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0) 48%)",
+            }}
+            aria-hidden="true"
+          />
 
-        {/* Verified pill — top-left */}
-        {data.isVerified && (
-          <div className="absolute top-3 left-3">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-[5px] rounded-full text-[11px] font-semibold bg-white/90 text-blue-700 backdrop-blur-[4px] shadow-sm leading-none">
-              <svg
-                className="w-3 h-3 flex-shrink-0"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Verified Venue
-            </span>
-          </div>
-        )}
-
-        {/* Save button — top-right, frosted circle */}
-        <div
-          className="absolute top-2.5 right-3"
-          style={{
-            background: "rgba(255,255,255,0.88)",
-            borderRadius: "50%",
-            backdropFilter: "blur(4px)",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <BookmarkButton venueId={data.id} variant="list" />
-        </div>
-      </div>
-
-      {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 space-y-1.5">
-
-        {/* 1. Venue name — bold; first thing the eye finds */}
-        <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
-          {data.name}
-        </h3>
-
-        {/* 2. Google rating — quality signal, immediately below name */}
-        {data.googleRating !== null && (
-          <StarRating rating={data.googleRating} />
-        )}
-
-        {/* 3. Happy Hour status — time-sensitive decision signal */}
-        <HhStatusDisplay status={data.hhStatus} />
-
-        {/* 4. Distance + establishment type — convenience signal */}
-        {(data.distanceKm !== null || data.establishmentType) && (
-          <p className="flex items-center gap-1.5 text-sm text-gray-500">
-            {data.distanceKm !== null && (
-              <span className="font-medium text-gray-600">
-                {data.distanceKm.toFixed(1)} km
+          {/* Verified pill — top-left */}
+          {data.isVerified && (
+            <div className="absolute top-3 left-3">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-[5px] rounded-full text-[11px] font-semibold bg-white/90 text-blue-700 backdrop-blur-[4px] shadow-sm leading-none">
+                <svg
+                  className="w-3 h-3 flex-shrink-0"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Verified Venue
               </span>
-            )}
-            {data.distanceKm !== null && data.establishmentType && (
-              <span className="text-gray-300" aria-hidden="true">•</span>
-            )}
-            {data.establishmentType && <span>{data.establishmentType}</span>}
-          </p>
-        )}
+            </div>
+          )}
 
-        {/* 5. Featured specials — the "why should I go?" answer */}
-        {(data.foodSpecial || data.drinkSpecial) && (
-          <div className="pt-2 border-t border-gray-100 space-y-1">
-            {data.foodSpecial && (
-              <p className="text-sm font-medium text-gray-700">{data.foodSpecial}</p>
-            )}
-            {data.drinkSpecial && (
-              <p className="text-sm font-medium text-gray-700">{data.drinkSpecial}</p>
-            )}
+          {/* Save button — top-right, frosted circle; stopPropagation prevents Link from firing */}
+          <div
+            className="absolute top-2.5 right-3"
+            style={{
+              background: "rgba(255,255,255,0.88)",
+              borderRadius: "50%",
+              backdropFilter: "blur(4px)",
+            }}
+            onClick={(e) => e.preventDefault()}
+          >
+            <BookmarkButton venueId={data.id} variant="list" />
           </div>
-        )}
+        </div>
 
-      </div>
-    </article>
+        {/* ── Content ──────────────────────────────────────────────────────── */}
+        <div className="px-4 py-3 space-y-1.5">
+
+          {/* 1. Venue name — bold; first thing the eye finds */}
+          <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
+            {data.name}
+          </h3>
+
+          {/* 2. Google rating — quality signal, immediately below name */}
+          {data.googleRating !== null && (
+            <StarRating rating={data.googleRating} />
+          )}
+
+          {/* 3. Happy Hour status — time-sensitive decision signal */}
+          <HhStatusDisplay status={data.hhStatus} />
+
+          {/* 4. Distance + establishment type — convenience signal */}
+          {(data.distanceKm !== null || data.establishmentType) && (
+            <p className="flex items-center gap-1.5 text-sm text-gray-500">
+              {data.distanceKm !== null && (
+                <span className="font-medium text-gray-600">
+                  {data.distanceKm.toFixed(1)} km
+                </span>
+              )}
+              {data.distanceKm !== null && data.establishmentType && (
+                <span className="text-gray-300" aria-hidden="true">•</span>
+              )}
+              {data.establishmentType && <span>{data.establishmentType}</span>}
+            </p>
+          )}
+
+          {/* 5. Featured specials — the "why should I go?" answer */}
+          {(data.foodSpecial || data.drinkSpecial) && (
+            <div className="pt-2 border-t border-gray-100 space-y-1">
+              {data.foodSpecial && (
+                <p className="text-sm font-medium text-gray-700">{data.foodSpecial}</p>
+              )}
+              {data.drinkSpecial && (
+                <p className="text-sm font-medium text-gray-700">{data.drinkSpecial}</p>
+              )}
+            </div>
+          )}
+
+        </div>
+      </article>
+    </Link>
   );
 }

@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { getActiveMarket } from "@/lib/activeMarket";
+import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
+import { isNearMarket } from "@/lib/discover/discoverEngine";
+import { toMarketConfig } from "@/lib/markets";
+import { computeHhStatus } from "@/lib/happyHourStatus";
 import SearchContextHeader from "./SearchContextHeader";
 import { SearchResultCard } from "./SearchResultCard";
 import type { SearchResultCardData } from "./SearchResultCard";
@@ -9,77 +13,54 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+// force-dynamic ensures the market cookie and venue data are always fresh.
+export const dynamic = "force-dynamic";
+
 const FILTER_CHIPS = ["Near Me", "On Now", "Time", "Top Rated", "Type", "Sort"];
 
-// ─── Sample cards — hard-coded for visual design validation ──────────────────
-// Replace with real venue data when wiring the Discover Engine.
-
-const SAMPLE_CARDS: SearchResultCardData[] = [
-  {
-    id: "king-taps",
-    name: "King Taps",
-    image: "/images/casual-dining-1.jpg",
-    isVerified: true,
-    googleRating: 4.6,
-    hhStatus: { type: "active", endsIn: "Ends in 1 hr 12 min" },
-    distanceKm: 0.8,
-    establishmentType: "Restaurant",
-    foodSpecial: "🍔 Half-price Burgers",
-    drinkSpecial: "🍺 $6 Local Pints",
-  },
-  {
-    id: "bna-brewing",
-    name: "BNA Brewing & Eatery",
-    image: "/images/sports-bar-1.jpg",
-    isVerified: false,
-    googleRating: 4.3,
-    hhStatus: { type: "upcoming", day: "Today", startsAt: "3:30 PM" },
-    distanceKm: 2.3,
-    establishmentType: "Brewery",
-    drinkSpecial: "🍺 $7 Craft Pints",
-  },
-  {
-    id: "blarney-stone",
-    name: "The Blarney Stone",
-    image: "/images/sports-bar-1.jpg",
-    isVerified: true,
-    googleRating: 4.1,
-    hhStatus: { type: "upcoming", day: "Tomorrow", startsAt: "4:00 PM" },
-    distanceKm: 4.1,
-    establishmentType: "Pub",
-    foodSpecial: "🍟 $9 Pub Appetizers",
-    drinkSpecial: "🥃 $8 Whiskey Cocktails",
-  },
-  {
-    id: "earls-kitchen",
-    name: "Earls Kitchen + Bar",
-    image: "/images/fine-dining-1.jpg",
-    isVerified: true,
-    googleRating: 4.5,
-    hhStatus: { type: "active", endsIn: "Ends in 45 min" },
-    distanceKm: 1.2,
-    establishmentType: "Restaurant",
-    foodSpecial: "🥙 50% Off Shareables",
-    drinkSpecial: "🍷 $10 House Wine",
-  },
-  {
-    id: "craft-beer-market",
-    name: "Craft Beer Market",
-    image: "/images/casual-dining-2.jpg",
-    isVerified: false,
-    googleRating: 4.8,
-    hhStatus: { type: "upcoming", day: "Monday", startsAt: "3:00 PM" },
-    distanceKm: 5.1,
-    establishmentType: "Bar",
-    foodSpecial: "🌮 $12 Loaded Nachos",
-    drinkSpecial: "🍺 $5 Rotating Taps",
-  },
-];
+/**
+ * Maps an establishment type string to a local fallback image path.
+ * Mirrors getVenueImageSrc() from app/(consumer)/VenueList.tsx.
+ * Used only when a venue has no uploaded images.
+ */
+function fallbackImage(establishmentType: string): string {
+  const t = establishmentType.toLowerCase();
+  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
+  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
+  if (t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
+  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
+  return "/images/casual-dining-1.jpg";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default async function HappyHoursSearchPage() {
   const { market } = await getActiveMarket();
+  const marketConfig = toMarketConfig(market);
+
+  // Fetch all published venues then gate to the active market.
+  // isNearMarket() is the canonical geo filter used by the Discover Engine;
+  // venues without coordinates are included permissively (assumed local).
+  const allVenues = await getPublishedVenuesForConsumer();
+  const venues = allVenues.filter((v) =>
+    isNearMarket(v.latitude, v.longitude, marketConfig)
+  );
+
+  // Map ConsumerVenue → SearchResultCardData
+  const cards: SearchResultCardData[] = venues.map((venue) => ({
+    id: venue.id,                                    // slug — used for bookmark key
+    href: `/venue/${venue.id}`,                      // future Venue Detail page route
+    name: venue.name,
+    image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+    isVerified: venue.isVerified,
+    googleRating: venue.googleRating,
+    hhStatus: computeHhStatus(venue.happyHourWeekly),
+    // Distance requires client-side geolocation; null until that layer is added.
+    distanceKm: null,
+    establishmentType: venue.establishmentType,
+    foodSpecial: venue.specialsFood[0] ?? undefined,
+    drinkSpecial: venue.specialsDrinks[0] ?? undefined,
+  }));
 
   return (
     <>
@@ -110,13 +91,26 @@ export default async function HappyHoursSearchPage() {
       <div className="hidden md:flex">
         {/* Results column — 50%, scrolls with the page */}
         <div className="w-1/2 min-h-[calc(100dvh-72px)] border-r border-gray-100 px-5 pt-8 pb-10">
-          <SearchContextHeader market={market} className="mb-7" />
+          <SearchContextHeader
+            market={market}
+            resultCount={cards.length}
+            className="mb-7"
+          />
 
-          <div className="grid grid-cols-2 gap-4">
-            {SAMPLE_CARDS.map((card) => (
-              <SearchResultCard key={card.id} data={card} />
-            ))}
-          </div>
+          {cards.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-sm font-semibold text-gray-500">No venues found</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Try switching to a different market.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {cards.map((card) => (
+                <SearchResultCard key={card.id} data={card} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Map column — 50%, sticky within viewport */}
@@ -160,6 +154,7 @@ export default async function HappyHoursSearchPage() {
       <div className="md:hidden">
         <SearchContextHeader
           market={market}
+          resultCount={cards.length}
           className="px-4 pt-6 pb-5 border-b border-gray-100"
         />
 
@@ -174,11 +169,20 @@ export default async function HappyHoursSearchPage() {
         </div>
 
         {/* Results */}
-        <div className="px-4 pb-8 space-y-4">
-          {SAMPLE_CARDS.map((card) => (
-            <SearchResultCard key={card.id} data={card} />
-          ))}
-        </div>
+        {cards.length === 0 ? (
+          <div className="px-4 pb-8 text-center py-16">
+            <p className="text-sm font-semibold text-gray-500">No venues found</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Try switching to a different market.
+            </p>
+          </div>
+        ) : (
+          <div className="px-4 pb-8 space-y-4">
+            {cards.map((card) => (
+              <SearchResultCard key={card.id} data={card} />
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

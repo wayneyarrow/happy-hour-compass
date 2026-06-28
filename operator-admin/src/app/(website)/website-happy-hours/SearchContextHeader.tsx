@@ -6,10 +6,12 @@ import { MarketModal } from "@/app/(consumer)/MarketModal";
 
 type Props = {
   market: Market;
+  /** Live venue count for the active market. Pass 0 during loading/error states. */
+  resultCount: number;
   className?: string;
 };
 
-export default function SearchContextHeader({ market, className = "" }: Props) {
+export default function SearchContextHeader({ market, resultCount, className = "" }: Props) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -69,7 +71,9 @@ export default function SearchContextHeader({ market, className = "" }: Props) {
           </svg>
         </button>
 
-        <span className="text-xs text-gray-400">127 results</span>
+        <span className="text-xs text-gray-400">
+          {resultCount.toLocaleString()} {resultCount === 1 ? "venue" : "venues"}
+        </span>
       </div>
 
       {isModalOpen && (
