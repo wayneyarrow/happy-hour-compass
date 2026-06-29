@@ -318,6 +318,192 @@ If the requested implementation conflicts with these principles, stop and explai
 
 ---
 
+## Geographic Information Architecture
+
+The guiding principle:
+
+> **Markets are for operations. Cities are for consumers. Location is for discovery.**
+
+These three concepts must remain independent. Mixing their responsibilities creates confusion in both the user experience and the codebase.
+
+---
+
+### Geographic Hierarchy
+
+```text
+Country
+    ↓
+Province / State
+    ↓
+Market
+    ↓
+City
+    ↓
+Neighbourhood (optional)
+    ↓
+Venue
+```
+
+Each level has a distinct purpose. Responsibilities should not overlap across levels.
+
+---
+
+### Markets
+
+Markets are an operational construct, not a consumer-facing one.
+
+Markets are responsible for:
+
+- Rollout and activation boundaries
+- Analytics and reporting scope
+- Search and discovery boundaries
+- Homepage context and market switching
+
+Most users think in cities, not markets. Market context should appear near search or as a lightweight location control — not as primary navigation.
+
+Examples: Central Okanagan, Greater Vancouver, Victoria, Calgary.
+
+---
+
+### Cities
+
+Cities are the primary consumer-facing geographic unit.
+
+Cities drive:
+
+- SEO landing pages and city guides
+- Homepage personalization
+- City browsing, collections, and editorial content
+- Search suggestions and filters
+- Internal linking and breadcrumbs
+
+Someone searching for "happy hour Burnaby" should land on the Burnaby city page, not the Greater Vancouver market page.
+
+Examples: Kelowna, Burnaby, Richmond, Vancouver, Surrey.
+
+---
+
+### Neighbourhoods
+
+Neighbourhood support is optional. It should be enabled per city only when venue density, consumer recognition, and search demand justify it.
+
+| City | Neighbourhood Pages |
+|---|---|
+| Vancouver | Yes |
+| Toronto | Yes |
+| Montreal | Yes |
+| Burnaby | Probably not |
+| Richmond | Probably not |
+| Kelowna | Not initially |
+
+Neighbourhood pages function as SEO assets — editorial landing pages for dense or well-recognized areas. They are not UI filters. Panning the map provides neighbourhood-level exploration for every city without requiring explicit neighbourhood data.
+
+Neighbourhood support must remain configurable per city.
+
+---
+
+### Venue Geography
+
+Every venue belongs to one Market, one City, and optionally one Neighbourhood. This canonical geographic assignment governs URLs, SEO, breadcrumbs, and internal linking.
+
+Search results may still include venues outside the user's current city when they are geographically closer than alternatives. Canonical geography and search relevance are separate concepts.
+
+---
+
+### Canonical URL Structure
+
+Canonical URLs include both market and city to prevent naming conflicts and to support long-term geographic expansion.
+
+```text
+/greater-vancouver/burnaby
+/greater-vancouver/burnaby/cactus-club-brentwood
+/central-okanagan/kelowna/earls-downtown
+```
+
+---
+
+### Search Philosophy
+
+Search answers one question: **What is nearby?**
+
+Results should not be bounded by municipal lines. A user near the Burnaby–Coquitlam border should naturally see venues in both cities when those venues are geographically closer. Results are ranked by distance and user-selected filters.
+
+An optional City filter allows users to intentionally restrict browsing to a specific city. The default experience remains proximity-based.
+
+---
+
+### Homepage Philosophy
+
+Homepage discovery content reflects what is near the user, not what is strictly inside their current municipal boundary.
+
+Discovery rails — Happy Hours Near You, Events Near You, Popular Nearby, Featured Venues Nearby — should use proximity as the primary signal.
+
+Markets remain useful as homepage context (the market being browsed). Cities drive the personalization of that content.
+
+---
+
+### Location Model
+
+Three geographic concepts operate simultaneously and independently.
+
+**Market** — Determines operational area, rollout status, analytics scope, and the available set of cities.
+
+**City** — Determines SEO pages, homepage personalization, browsing context, search filters, and editorial content.
+
+**User Location** — Determines nearby venues, nearby events, map centering, and search ranking by distance.
+
+These three concepts must remain decoupled in the data model, URL structure, and product logic.
+
+---
+
+### Search Origin Priority
+
+When determining where to center the map or search results:
+
+1. User-selected map position or explicitly searched location
+2. Selected city
+3. User GPS location (if permission granted)
+4. Selected market center
+5. Default market center
+
+This ordering allows users to browse any market or city regardless of their physical location.
+
+The product must function without GPS access. If location permission is denied, the selected city serves as the search origin. If no city is selected, fall back to the market center.
+
+---
+
+### Market Onboarding Checklist
+
+Whenever a new market is created, the following decisions must be made before launch:
+
+**Market record**
+- Name, Province / State, Country
+- Geographic boundary and market center
+- Active status and launch status
+
+**Cities** — for each city in the market:
+- Name, slug, and market assignment
+- Display order
+
+**Neighbourhoods** — for each city:
+- Does this city require neighbourhood support?
+- If yes: create neighbourhood records and define boundaries.
+- If no: neighbourhood support remains disabled.
+
+---
+
+### Guiding Principles
+
+- Markets exist for Happy Hour Compass operations.
+- Cities exist for consumers.
+- Location exists for discovery.
+- Search answers "What is nearby?" not "What is inside this municipality?"
+- Canonical geography and search relevance are separate concepts.
+- Neighbourhood pages should only exist when they improve both user experience and SEO.
+- Every geographic landing page must provide unique, substantive value.
+
+---
+
 ## Final Rule
 
 The website should not drift into a generic startup website.  

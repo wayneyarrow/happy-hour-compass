@@ -151,8 +151,8 @@ Panning and zooming replace the need for explicit neighbourhood filters.
 Neighbourhoods should not be implemented as primary search filters.
 
 Instead:
-- The map provides neighbourhood exploration.
-- Editorial content provides neighbourhood landing pages.
+- The map provides neighbourhood exploration through panning and zooming.
+- Editorial content provides neighbourhood landing pages where density and demand justify them.
 
 Examples:
 - Best Happy Hours in Kitsilano
@@ -160,6 +160,8 @@ Examples:
 - Best Happy Hours in Downtown Kelowna
 
 These become SEO assets rather than UI filters.
+
+Neighbourhood support is optional and enabled per city. A neighbourhood page should only be created when venue density, consumer recognition, and search demand justify it. Not every city requires neighbourhood pages. For the complete decision framework, see the Geographic Information Architecture section in the Website Product Playbook.
 
 ---
 
@@ -443,6 +445,14 @@ Sorting remains separate from filtering.
 
 The initial sort options will remain intentionally limited and will be refined as the search experience evolves.
 
+### City Filter
+
+An optional City filter allows users to restrict browsing to a specific city within the active market. The default experience remains proximity-based; the City filter is an intentionally opt-in refinement.
+
+This filter is most useful in larger markets — a user browsing Greater Vancouver may want to focus specifically on Burnaby or Richmond rather than the full market area.
+
+Neighbourhood filters may follow in a later phase for cities where neighbourhood support exists.
+
 ### Future Filters
 
 Additional filters (Patio, Sports Bar, Search Tags, etc.) should only be introduced after confirming:
@@ -494,7 +504,9 @@ The application should not require a separate "Search this area" action. The cur
 ### Current Location
 
 - If location permission is granted, the map should initially center on the user's current location.
-- If location permission is unavailable or declined, the map should automatically fit the currently selected market.
+- If location permission is unavailable or declined, the map should center on the selected city. If no city is selected, fall back to the selected market center.
+
+The product must function fully without GPS access. For the full search origin priority order, see the Geographic Information Architecture section in the Website Product Playbook.
 
 ### Map Controls
 
@@ -555,10 +567,12 @@ Search remains available as an alternate path for users who already know what th
 
 The homepage should help users answer only two questions:
 
-1. Which market am I exploring?
+1. Where am I exploring? (market context, with city-level personalization)
 2. Am I looking for Happy Hours or Events?
 
 Once those choices have been made, the homepage should encourage users to immediately begin exploring rather than requiring them to perform a search.
+
+Homepage discovery content — rails, featured venues, and nearby highlights — should reflect proximity rather than rigid municipal boundaries. Cities drive homepage personalization; user location drives what appears as nearby.
 
 ### Primary Call-to-Action
 
@@ -613,6 +627,7 @@ The homepage should guide users into the product experience as quickly as possib
 - Search is a precision tool, not the default workflow.
 - The interface should minimize friction before users begin exploring.
 - The homepage should present one clear primary action and one clear secondary action.
+- Homepage content is proximity-based, not bounded by municipal lines.
 - Happy Hour Compass is a decision engine, not a directory.
 
 ---
@@ -643,6 +658,7 @@ The initial search experience should focus on structured, reliable data.
 
 **Supported search types:**
 - Venue name
+- City
 - Neighbourhood
 - Market
 - Partial address
@@ -662,16 +678,22 @@ Venues
   King Taps
   BNA Brewing
 -------------------
+Cities
+  Kelowna
+  Burnaby
+-------------------
 Neighbourhoods
   Downtown Kelowna
   Pandosy
 -------------------
 Markets
-  Kelowna
-  Vancouver
+  Central Okanagan
+  Greater Vancouver
 ```
 
 Grouping helps users immediately understand what they are selecting and allows new searchable content types to be added in the future without redesigning the interface.
+
+Cities should appear before Markets in suggestion results. Most users think in cities rather than market regions.
 
 ### Search Interaction
 
