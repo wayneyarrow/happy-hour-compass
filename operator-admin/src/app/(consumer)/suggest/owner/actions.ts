@@ -14,6 +14,7 @@ import {
   sendOperatorActivationEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
+import { slugify } from "@/lib/slugify";
 import type {
   GoogleMatch,
   LookupResult,
@@ -571,7 +572,21 @@ export async function saveOperatorSubmissionAction(
 
     if (!existingVenue) {
       // ── Case A: No venue found → create unpublished venue ───────────────
-      const slug = `submission-${placeId.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+      const venueName = match.name ?? formValues.businessName;
+      const venueCity = match.city ?? formValues.city ?? "";
+      const nameSlug = slugify(venueName);
+      const citySlug = venueCity ? slugify(venueCity) : "";
+      const baseSlug = (citySlug ? `${citySlug}-${nameSlug}` : nameSlug).slice(0, 90);
+
+      // Check for slug collision; add a short random suffix if needed.
+      const { data: existingSlug } = await supabase
+        .from("venues")
+        .select("id")
+        .eq("slug", baseSlug)
+        .maybeSingle();
+      const slug = existingSlug
+        ? `${baseSlug.slice(0, 86)}-${Math.random().toString(36).slice(2, 6)}`
+        : baseSlug;
 
       const { data: newVenue, error: createError } = await supabase
         .from("venues")
