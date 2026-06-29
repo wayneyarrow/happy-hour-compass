@@ -17,7 +17,9 @@
     "enrich:kelowna-geo": "tsx scripts/enrichMissingGeoKelowna.ts",
     "backfill:business-hours": "tsx scripts/backfillMissingBusinessHours.ts",
     "backfill:seeded-tags": "tsx scripts/backfillSeededTags.ts",
-    "test:emails": "tsx scripts/sendTestEmails.ts"
+    "test:emails": "tsx scripts/sendTestEmails.ts",
+    "seed:geography": "tsx scripts/seedGeography.ts",
+    "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.57.0",

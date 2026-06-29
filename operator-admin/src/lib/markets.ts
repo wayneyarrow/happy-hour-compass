@@ -1,9 +1,20 @@
 /**
- * Market configuration — the single source of truth for all HHC markets.
+ * Market configuration — the current source of truth for live market
+ * selection (MarketChip, MarketModal, marketActions, hhc_market cookie).
  *
- * Add a new market here when launching in a new city. No changes needed
- * elsewhere as long as the market is active; status: "coming_soon" markets
- * are surfaced in the market selection UI but cannot be selected.
+ * A DB-backed `markets` table now exists (migration 048_geography_foundation_v1.sql)
+ * as the foundation for the upcoming Header & Navigation V1 (Region & Location
+ * Switcher). The two sources coexist intentionally: this config still drives
+ * all live behavior; the DB table drives future website geography features.
+ *
+ * When wiring the DB table as the source of truth:
+ *   • MARKETS[].id values match markets.slug 1:1 — a straight slug lookup works.
+ *   • MARKETS[].center.lat/lng match markets.center_lat/center_lng.
+ *   • MARKETS[].radiusKm matches markets.radius_km.
+ *   • Retire this file and update getActiveMarket(), setMarketAction(),
+ *     findNearestActiveMarket(), and toMarketConfig() in that migration.
+ *
+ * Until that wiring is done, add new markets here AND in seedGeography.ts.
  *
  * center     — geographic center used for isNearMarket() distance gating.
  * mapCenter  — default map viewport center (may differ from geo center).
