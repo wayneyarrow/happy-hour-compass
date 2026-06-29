@@ -86,16 +86,17 @@ function hhStatusLabel(weekly: Record<string, HHSlot[]>): {
   line1: string;
   line2?: string;
   isActive: boolean;
+  isNone: boolean;
 } {
   const status = computeHhStatus(weekly);
   if (status.type === "active") {
-    return { line1: "Happy Hour On Now", line2: status.endsIn, isActive: true };
+    return { line1: "Happy Hour On Now", line2: status.endsIn, isActive: true, isNone: false };
   }
   if (status.type === "upcoming") {
     const prefix = status.day === "Today" ? "Happy Hour Today" : `Happy Hour ${status.day}`;
-    return { line1: prefix, line2: `Starts at ${status.startsAt}`, isActive: false };
+    return { line1: prefix, line2: `Starts at ${status.startsAt}`, isActive: false, isNone: false };
   }
-  return { line1: "No happy hour this week", isActive: false };
+  return { line1: "No happy hour scheduled", isActive: false, isNone: true };
 }
 
 // ─── Action button ────────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ function ActionBtn({
       href={href}
       target={href.startsWith("http") ? "_blank" : undefined}
       rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-      className={`flex items-center gap-2.5 w-full px-4 rounded-xl text-sm font-semibold transition-colors ${
+      className={`flex items-center gap-2.5 w-full px-4 rounded-xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 ${
         subtle
           ? "py-2.5 text-gray-700 bg-gray-50 hover:bg-gray-100"
           : "py-3.5 text-white bg-amber-500 hover:bg-amber-600"
@@ -183,8 +184,12 @@ export function VenueActionCard({
               <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
             )}
             <p
-              className={`text-sm font-bold leading-snug ${
-                hh.isActive ? "text-amber-800" : "text-gray-900"
+              className={`text-sm leading-snug ${
+                hh.isActive
+                  ? "font-bold text-amber-800"
+                  : hh.isNone
+                  ? "font-normal text-gray-400"
+                  : "font-bold text-gray-900"
               }`}
             >
               {hh.line1}

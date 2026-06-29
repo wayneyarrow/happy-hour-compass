@@ -74,7 +74,7 @@ export function StickyNav({ sections }: Props) {
             href={`#${section.id}`}
             onClick={(e) => handleClick(e, section.id)}
             className={[
-              "shrink-0 px-4 py-3.5 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
+              "shrink-0 px-4 py-3.5 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500",
               activeSection === section.id
                 ? "text-gray-900 border-amber-500"
                 : "text-gray-500 border-transparent hover:text-gray-800 hover:border-gray-200",

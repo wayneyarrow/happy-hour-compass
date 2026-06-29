@@ -75,7 +75,7 @@ function InfoRow({
     <div className="py-4 flex items-start gap-4">
       <span className="shrink-0 mt-0.5 text-gray-400 w-5 h-5">{icon}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.6px] text-gray-400 mb-1">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.8px] text-gray-500 mb-1">
           {label}
         </p>
         <div className="text-sm font-medium text-gray-800">{children}</div>
@@ -171,7 +171,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
 
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
-          <Link href="/" className="hover:text-gray-900 transition-colors shrink-0">
+          <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
           </Link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">
@@ -179,7 +179,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
           </svg>
           <Link
             href="/website-happy-hours"
-            className="hover:text-gray-900 transition-colors shrink-0"
+            className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             {marketConfig.name}
           </Link>
@@ -392,12 +392,13 @@ export default async function VenueDetailPage({ params }: PageProps) {
             {/* ── Business Info ───────────────────────────────────────────────── */}
             <section id="info" style={{ scrollMarginTop: SCROLL_MARGIN }}>
               <SectionHeading>Business Info</SectionHeading>
-              <div className="divide-y divide-gray-100">
-                {/* Business hours (client component — needs live open/closed status) */}
-                {hasBusinessHours && (
-                  <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={venue.id} />
-                )}
+              {/* Business hours — rendered outside divide-y because BusinessHoursRow
+                  manages its own border-b internally (consumer component, can't modify). */}
+              {hasBusinessHours && (
+                <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={venue.id} />
+              )}
 
+              <div className="divide-y divide-gray-100">
                 {venue.address && (
                   <InfoRow
                     label="Address"

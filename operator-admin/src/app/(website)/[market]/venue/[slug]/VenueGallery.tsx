@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type VenueImage = { url: string };
 
@@ -20,8 +20,22 @@ function AllPhotosOverlay({
   venueName: string;
   onClose: () => void;
 }) {
+  // Close on ESC key.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 bg-black/95 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`All photos of ${venueName}`}
+    >
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-white font-semibold text-lg">{venueName}</h2>
@@ -29,7 +43,7 @@ function AllPhotosOverlay({
             type="button"
             onClick={onClose}
             aria-label="Close photos"
-            className="flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-medium"
+            className="flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-md px-1"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -44,6 +58,7 @@ function AllPhotosOverlay({
               key={i}
               src={img.url}
               alt={i === 0 ? venueName : ""}
+              loading="lazy"
               className="w-full aspect-square object-cover rounded-xl"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -79,12 +94,13 @@ function DesktopGallery({
       }`}
     >
       {/* Primary image */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden group">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={images[0].url}
           alt={venueName}
-          className="w-full h-full object-cover object-center"
+          loading="eager"
+          className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.backgroundColor = "#f3f4f6";
             (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -95,7 +111,7 @@ function DesktopGallery({
           <button
             type="button"
             onClick={onShowAll}
-            className="absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-900 hover:bg-white transition-colors shadow-sm border border-white/50"
+            className="absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-900 hover:bg-white transition-colors shadow-sm border border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -115,23 +131,24 @@ function DesktopGallery({
           }`}
         >
           {rightImages.map((img, i) => (
-            <div key={i} className="relative overflow-hidden">
+            <div key={i} className="relative overflow-hidden group">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={img.url}
                 alt=""
-                className="w-full h-full object-cover object-center"
+                loading="lazy"
+                className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.backgroundColor = "#f3f4f6";
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
               {/* "Show all photos" button over the last visible right image */}
-              {(showAllBtn || images.length > 5) && i === rightImages.length - 1 && (
+              {showAllBtn && i === rightImages.length - 1 && (
                 <button
                   type="button"
                   onClick={onShowAll}
-                  className="absolute inset-0 flex items-end justify-end p-3 bg-black/20 hover:bg-black/30 transition-colors"
+                  className="absolute inset-0 flex items-end justify-end p-3 bg-black/20 hover:bg-black/30 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-amber-400"
                   aria-label={`Show all ${images.length} photos`}
                 >
                   <span className="flex items-center gap-1.5 px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold text-gray-900 shadow-sm">
@@ -168,11 +185,12 @@ function MobileGallery({
   return (
     <div className="md:hidden">
       {/* Hero */}
-      <div className="relative h-[260px] bg-gray-100">
+      <div className="relative h-[280px] bg-gray-100">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={images[activeIndex]?.url ?? ""}
           alt={venueName}
+          loading="eager"
           className="w-full h-full object-cover object-center"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -183,7 +201,8 @@ function MobileGallery({
           <button
             type="button"
             onClick={onShowAll}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 backdrop-blur-sm rounded-lg text-xs font-medium text-white"
+            aria-label={`View all ${images.length} photos`}
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 backdrop-blur-sm rounded-lg text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -204,13 +223,13 @@ function MobileGallery({
               type="button"
               onClick={() => setActiveIndex(i)}
               aria-label={`View image ${i + 1}`}
-              className="shrink-0 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="shrink-0 rounded-md overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               style={{
                 width: 56,
                 height: 42,
                 border:
                   i === activeIndex
-                    ? "2px solid #f97316"
+                    ? "2px solid #f59e0b"
                     : "2px solid transparent",
                 opacity: i === activeIndex ? 1 : 0.6,
                 transition: "border-color 0.15s, opacity 0.15s",
@@ -220,6 +239,7 @@ function MobileGallery({
               <img
                 src={img.url}
                 alt=""
+                loading="lazy"
                 className="w-full h-full object-cover object-center"
               />
             </button>
@@ -234,6 +254,14 @@ function MobileGallery({
 
 export function VenueGallery({ images, venueName }: Props) {
   const [showAll, setShowAll] = useState(false);
+
+  // Prevent page scroll while the all-photos overlay is open.
+  useEffect(() => {
+    document.body.style.overflow = showAll ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showAll]);
 
   if (images.length === 0) return null;
 
