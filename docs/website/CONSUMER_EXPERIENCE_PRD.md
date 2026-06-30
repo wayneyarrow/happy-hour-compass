@@ -819,4 +819,74 @@ The Events experience will reuse the same Search Results framework wherever poss
 
 Reuse the shared Search Results framework whenever possible.
 
+---
+
+## Decision: Consumer Accounts & Saved Items Architecture
+
+**Status: Foundation built (migration 051, savedItems.ts)**
+
+### V1 Principle
+
+Users can save venues and events without creating an account.
+
+Saving works locally in the browser first. Consumer accounts are optional. Accounts enhance the experience by syncing saved items across devices. Accounts must never be required to browse, search, or use core HHC discovery.
+
+### Saved Items Abstraction Layer
+
+All save/unsave/read operations go through a shared module: `src/lib/consumer/savedItems.ts`.
+
+UI components must never directly read from or write to localStorage or future database saved tables. The abstraction layer is the only entry point.
+
+**V1 API:** `saveVenue`, `unsaveVenue`, `saveEvent`, `unsaveEvent`, `isVenueSaved`, `isEventSaved`, `getSavedVenueIds`, `getSavedEventIds`, `getSavedCounts`, `getLocalSavedItems`, `clearLocalSavedItems`.
+
+**localStorage key:** `hhc_saved_v1`  
+**localStorage structure:**
+```json
+{
+  "version": 1,
+  "savedVenues": [{ "id": "uuid", "savedAt": "ISO 8601" }],
+  "savedEvents":  [{ "id": "uuid", "savedAt": "ISO 8601" }]
+}
+```
+
+The module is SSR-safe (guards for `typeof window === "undefined"`), handles corrupt localStorage gracefully, and prevents duplicate saves.
+
+### Consumer Account Model
+
+- Authentication source of truth: Supabase `auth.users`
+- `public.consumer_profiles` — one row per authenticated consumer; linked via `auth.users(id)`
+- `public.consumer_saved_venues` — account-backed saved venues (unique per consumer+venue)
+- `public.consumer_saved_events` — account-backed saved events (unique per consumer+event)
+
+All three tables have RLS enabled. Every policy is scoped to `auth.uid()`. No anonymous access is granted.
+
+### Future Sync Model (not yet built)
+
+1. User saves locally while anonymous.
+2. User creates account.
+3. Local saves merge into `consumer_saved_venues` / `consumer_saved_events`.
+4. Local storage is cleared after successful sync.
+5. Future reads prefer account-backed saves when logged in.
+
+### Marketing Consent
+
+Marketing consent (`marketing_consent`, `marketing_consent_at` on `consumer_profiles`) is optional and fully separate from account creation. An account can be created without consent. Consent can be granted or revoked independently.
+
+### Consumer Auth vs Operator Login
+
+Consumer account auth (login/signup) belongs in the public website header — it is for consumers.
+
+Operator login currently lives in the header. It will later move to the website footer under a "For Businesses" section. This is a future navigation change and is not part of the consumer accounts foundation.
+
+### Out of Scope (deferred)
+
+- Header Saved button, Saved dropdown, heart save buttons
+- Saved page
+- Consumer login/signup pages
+- Account menu
+- Local-to-account sync implementation
+- Marketing email workflows
+- Notification preferences
+- Operator login footer relocation
+
 Only replace the pieces that are unique to Events (cards, filters, calendar/date logic, and event-specific content).
