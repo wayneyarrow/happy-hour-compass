@@ -54,6 +54,12 @@ export type EventSavePayload = {
   ticketingEnabled: boolean;
   ticketUrl: string | null;
   soldOut: boolean;
+  // Premium landing page fields (migration 050)
+  priceDisplay: string | null;
+  ageRestriction: string | null;
+  reservationRecommendation: string | null;
+  parkingNotes: string | null;
+  accessibilityNotes: string | null;
 };
 
 export type SaveEventResult = { savedId: string } | { error: string };
@@ -141,20 +147,25 @@ export async function saveEventAction(
   const event_frequency = deriveEventFrequency(payload.recurrence, payload.firstDate);
 
   const fields = {
-    title:                    payload.title,
-    event_type:               payload.eventType || "other",
-    description:              payload.description,
-    first_date:               payload.firstDate || null,
-    start_time:               payload.startTime || null,
-    end_time:                 payload.endTime   || null,
-    recurrence:               payload.recurrence,
+    title:                       payload.title,
+    event_type:                  payload.eventType || "other",
+    description:                 payload.description,
+    first_date:                  payload.firstDate || null,
+    start_time:                  payload.startTime || null,
+    end_time:                    payload.endTime   || null,
+    recurrence:                  payload.recurrence,
     event_time,
     event_frequency,
-    is_published:             payload.isPublished,
-    ticketing_enabled:        payload.ticketingEnabled,
-    ticket_url:               payload.ticketingEnabled ? (payload.ticketUrl || null) : null,
-    sold_out:                 payload.soldOut,
-    updated_by_operator_id:   ctx.operator.id,
+    is_published:                payload.isPublished,
+    ticketing_enabled:           payload.ticketingEnabled,
+    ticket_url:                  payload.ticketingEnabled ? (payload.ticketUrl || null) : null,
+    sold_out:                    payload.soldOut,
+    price_display:               payload.priceDisplay || null,
+    age_restriction:             payload.ageRestriction || null,
+    reservation_recommendation:  payload.reservationRecommendation || null,
+    parking_notes:               payload.parkingNotes || null,
+    accessibility_notes:         payload.accessibilityNotes || null,
+    updated_by_operator_id:      ctx.operator.id,
   };
 
   if (currentEventId) {

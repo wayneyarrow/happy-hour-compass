@@ -13,10 +13,14 @@ import { getEventTypeLabel } from "@/lib/eventTypes";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Columns fetched for both the initial server load and subsequent client re-fetches.
+// Must include all fields that EventForm reads from EventRow so the edit form
+// hydrates correctly (ticketing + premium landing page fields included).
 export const EVENT_COLUMNS =
   "id, title, description, event_type, first_date, start_time, end_time, recurrence, " +
   "event_time, event_frequency, is_published, venue_id, image_url, " +
-  "created_by_operator_id, updated_by_operator_id, updated_at";
+  "created_by_operator_id, updated_by_operator_id, updated_at, " +
+  "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
+  "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes";
 
 /**
  * Builds the short schedule string shown in each list row.

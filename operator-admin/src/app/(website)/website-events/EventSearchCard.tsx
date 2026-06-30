@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { EventBookmarkButton } from "@/app/(consumer)/EventBookmarkButton";
@@ -146,13 +147,14 @@ export function EventSearchCard({ event }: Props) {
   const showType = typeLabel && event.eventType !== "other";
 
   return (
+    <Link href={`/website-events/${event.id}`} className="block group/card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl">
     <article
       className="
         bg-white rounded-2xl overflow-hidden
         border border-gray-100/80
         shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
-        hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
-        hover:-translate-y-[3px]
+        group-hover/card:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
+        group-hover/card:-translate-y-[3px]
         transition-all duration-200
         cursor-pointer
       "
@@ -245,5 +247,6 @@ export function EventSearchCard({ event }: Props) {
 
       </div>
     </article>
+    </Link>
   );
 }

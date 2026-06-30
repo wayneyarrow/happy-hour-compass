@@ -73,6 +73,12 @@ export type ConsumerEventDetail = {
   soldOut: boolean;
   /** Platform-created content flag — true for all events seeded before migration 049. */
   isSeededEvent: boolean;
+  // Premium landing page fields (migration 050)
+  priceDisplay: string | null;
+  ageRestriction: string | null;
+  reservationRecommendation: string | null;
+  parkingNotes: string | null;
+  accessibilityNotes: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,7 +262,8 @@ export async function getEventForConsumerById(
         "id, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
-          "ticketing_enabled, ticket_url, sold_out, is_seeded_event"
+          "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
+          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
       )
       .eq("id", id);
 
@@ -318,6 +325,11 @@ export async function getEventForConsumerById(
       ticketUrl: (row.ticket_url as string | null) ?? null,
       soldOut: row.sold_out === true,
       isSeededEvent: row.is_seeded_event === true,
+      priceDisplay: (row.price_display as string | null) ?? null,
+      ageRestriction: (row.age_restriction as string | null) ?? null,
+      reservationRecommendation: (row.reservation_recommendation as string | null) ?? null,
+      parkingNotes: (row.parking_notes as string | null) ?? null,
+      accessibilityNotes: (row.accessibility_notes as string | null) ?? null,
     };
   } catch (err) {
     console.error("[getEventForConsumerById] Unexpected error:", err);
@@ -746,5 +758,222 @@ export async function getPublishedEventsForWebsite(
   } catch (err) {
     console.error("[getPublishedEventsForWebsite] Unexpected error:", err);
     return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Website Event Detail Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full event + venue shape for the public website Event Detail page.
+ * Fetched in a single data call; avoids circular dependency with venues.ts
+ * by querying the venue table directly.
+ */
+export type WebsiteEventDetail = {
+  // Event
+  id: string;
+  title: string;
+  description: string | null;
+  nextOccurrenceLabel: string;
+  eventType: string | null;
+  imageUrl: string | null;
+  firstDate: string | null;
+  recurrence: string | null;
+  startTime: string | null;
+  ticketingEnabled: boolean;
+  ticketUrl: string | null;
+  soldOut: boolean;
+  isSeededEvent: boolean;
+  /** True when this is a one-off event whose first_date is in the past. */
+  isExpired: boolean;
+  // Premium landing page fields (migration 050)
+  priceDisplay: string | null;
+  ageRestriction: string | null;
+  reservationRecommendation: string | null;
+  parkingNotes: string | null;
+  accessibilityNotes: string | null;
+  // Venue context
+  venueId: string;
+  venueSlug: string;
+  venueName: string;
+  venueAddress: string;
+  venuePhone: string;
+  venueWebsiteUrl: string;
+  venueMenuUrl: string;
+  venuePaymentMethods: string;
+  venueHoursWeekly: Record<string, string>;
+  venueLat: number | null;
+  venueLng: number | null;
+  venueEstablishmentType: string;
+  venueAbout: string | null;
+  venueGoogleRating: number | null;
+  venueGoogleReviewCount: number | null;
+  venueHhTagline: string;
+  venueImages: Array<{ url: string }>;
+  // Related events
+  otherEvents: Array<{
+    id: string;
+    title: string;
+    nextOccurrenceLabel: string;
+    eventType: string | null;
+  }>;
+};
+
+/**
+ * Fetches a published event plus extended venue context for the website
+ * Event Detail page.  Queries the venue table directly to avoid a circular
+ * import with venues.ts (which imports from events.ts).
+ *
+ * Returns null when the event is not found or is not published.
+ */
+export async function getEventForWebsite(
+  id: string
+): Promise<WebsiteEventDetail | null> {
+  try {
+    const supabase = createAdminClient();
+
+    // ── Event row ────────────────────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: eventData, error: eventError } = await (supabase
+      .from("events")
+      .select(
+        "id, venue_id, title, description, event_type, image_url, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, " +
+          "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
+          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
+      )
+      .eq("id", id)
+      .eq("is_published", true)
+      .maybeSingle() as unknown as Promise<{ data: unknown; error: unknown }>);
+
+    if (eventError) {
+      console.error("[getEventForWebsite] Event fetch error:", eventError);
+      return null;
+    }
+    if (!eventData) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = eventData as Record<string, any>;
+    const venueId = row.venue_id as string;
+
+    const firstDate = (row.first_date as string | null) ?? null;
+    const recurrence = (row.recurrence as string | null) ?? null;
+    const today = new Date().toISOString().slice(0, 10);
+    const isRecurring = recurrence && recurrence !== "none";
+    const isExpired = !isRecurring && firstDate !== null && firstDate < today;
+
+    // ── Venue, other events, and venue images — parallel ─────────────────────
+    const [venueResult, otherEventsResult, imagesResult] = await Promise.all([
+      supabase
+        .from("venues")
+        .select(
+          "id, slug, name, address_line1, phone, website_url, menu_url, " +
+            "payment_types, business_hours, lat, lng, establishment_type, " +
+            "about_your_venue, google_rating, google_review_count, hh_tagline"
+        )
+        .eq("id", venueId)
+        .maybeSingle(),
+      supabase
+        .from("events")
+        .select(
+          "id, title, event_type, " +
+            "first_date, start_time, end_time, recurrence, " +
+            "event_time, event_frequency"
+        )
+        .eq("venue_id", venueId)
+        .eq("is_published", true)
+        .neq("id", id)
+        .order("first_date", { ascending: true, nullsFirst: false })
+        .order("title", { ascending: true }),
+      supabase
+        .from("media")
+        .select("url")
+        .eq("venue_id", venueId)
+        .eq("type", "venue_image")
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vr = (venueResult.data as Record<string, any> | null) ?? {};
+
+    // Filter other events to upcoming only, limit for display.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawOther = ((otherEventsResult.data ?? []) as Record<string, any>[])
+      .filter((e) => {
+        const rec = e.recurrence as string | null;
+        const fd = e.first_date as string | null;
+        return (rec && rec !== "none") || !fd || fd >= today;
+      })
+      .slice(0, 6);
+
+    return {
+      id: row.id as string,
+      title: (row.title as string) ?? "",
+      description: (row.description as string | null) ?? null,
+      nextOccurrenceLabel: buildOccurrenceLabel({
+        first_date: firstDate,
+        start_time: (row.start_time as string | null) ?? null,
+        end_time: (row.end_time as string | null) ?? null,
+        recurrence,
+        event_time: (row.event_time as string | null) ?? null,
+        event_frequency: (row.event_frequency as string | null) ?? null,
+      }),
+      eventType: (row.event_type as string | null) ?? null,
+      imageUrl: (row.image_url as string | null) ?? null,
+      firstDate,
+      recurrence,
+      startTime: (row.start_time as string | null) ?? null,
+      ticketingEnabled: row.ticketing_enabled === true,
+      ticketUrl: (row.ticket_url as string | null) ?? null,
+      soldOut: row.sold_out === true,
+      isSeededEvent: row.is_seeded_event === true,
+      isExpired,
+      priceDisplay: (row.price_display as string | null) ?? null,
+      ageRestriction: (row.age_restriction as string | null) ?? null,
+      reservationRecommendation: (row.reservation_recommendation as string | null) ?? null,
+      parkingNotes: (row.parking_notes as string | null) ?? null,
+      accessibilityNotes: (row.accessibility_notes as string | null) ?? null,
+      venueId,
+      venueSlug: (vr.slug as string) ?? "",
+      venueName: (vr.name as string) ?? "",
+      venueAddress: (vr.address_line1 as string) ?? "",
+      venuePhone: (vr.phone as string) ?? "",
+      venueWebsiteUrl: (vr.website_url as string) ?? "",
+      venueMenuUrl: (vr.menu_url as string) ?? "",
+      venuePaymentMethods: parsePaymentTypesStr(vr.payment_types as string | null),
+      venueHoursWeekly: mapDbHours(
+        vr.business_hours as Record<string, { open: string; close: string } | null> | null
+      ),
+      venueLat: typeof vr.lat === "number" ? vr.lat : null,
+      venueLng: typeof vr.lng === "number" ? vr.lng : null,
+      venueEstablishmentType: (vr.establishment_type as string) ?? "",
+      venueAbout: (vr.about_your_venue as string | null) ?? null,
+      venueGoogleRating: typeof vr.google_rating === "number" ? vr.google_rating : null,
+      venueGoogleReviewCount:
+        typeof vr.google_review_count === "number" ? vr.google_review_count : null,
+      venueHhTagline: (vr.hh_tagline as string) ?? "",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      venueImages: (imagesResult.data ?? []).map((r: Record<string, any>) => ({
+        url: r.url as string,
+      })),
+      otherEvents: rawOther.map((e) => ({
+        id: e.id as string,
+        title: (e.title as string) ?? "",
+        nextOccurrenceLabel: buildOccurrenceLabel({
+          first_date: (e.first_date as string | null) ?? null,
+          start_time: (e.start_time as string | null) ?? null,
+          end_time: (e.end_time as string | null) ?? null,
+          recurrence: (e.recurrence as string | null) ?? null,
+          event_time: (e.event_time as string | null) ?? null,
+          event_frequency: (e.event_frequency as string | null) ?? null,
+        }),
+        eventType: (e.event_type as string | null) ?? null,
+      })),
+    };
+  } catch (err) {
+    console.error("[getEventForWebsite] Unexpected error:", err);
+    return null;
   }
 }

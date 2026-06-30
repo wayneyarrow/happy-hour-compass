@@ -32,6 +32,12 @@ type EventFormState = {
   ticketingEnabled: boolean;
   ticketUrl: string;
   soldOut: boolean;
+  // Premium landing page fields (migration 050)
+  priceDisplay: string;
+  ageRestriction: string;
+  reservationRecommendation: string;
+  parkingNotes: string;
+  accessibilityNotes: string;
 };
 
 export type EventRow = {
@@ -54,6 +60,12 @@ export type EventRow = {
   sold_out: boolean;
   is_seeded_event: boolean;
   updated_at?: string | null;
+  // Premium landing page fields (migration 050)
+  price_display: string | null;
+  age_restriction: string | null;
+  reservation_recommendation: string | null;
+  parking_notes: string | null;
+  accessibility_notes: string | null;
 };
 
 type Props = {
@@ -91,6 +103,20 @@ const RECURRENCE_OPTIONS: { value: Recurrence; label: string }[] = [
   { value: "monthly", label: "Monthly" },
 ];
 
+const AGE_RESTRICTION_OPTIONS = [
+  "All Ages",
+  "18+",
+  "19+",
+  "21+",
+  "Other",
+];
+
+const RESERVATION_OPTIONS = [
+  "No Reservation Needed",
+  "Reservations Recommended",
+  "Reservations Required",
+];
+
 const EMPTY: EventFormState = {
   title: "",
   eventType: "",
@@ -103,6 +129,11 @@ const EMPTY: EventFormState = {
   ticketingEnabled: false,
   ticketUrl: "",
   soldOut: false,
+  priceDisplay: "",
+  ageRestriction: "",
+  reservationRecommendation: "",
+  parkingNotes: "",
+  accessibilityNotes: "",
 };
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -172,6 +203,8 @@ const inputCls =
   "disabled:opacity-60";
 
 const labelCls = "block text-sm font-medium text-gray-700 mb-1";
+const labelOptCls = "block text-sm font-medium text-gray-500 mb-1";
+const sectionHeadingCls = "text-xs font-semibold text-gray-500 uppercase tracking-wider";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -210,6 +243,11 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       ticketingEnabled: initialEvent.ticketing_enabled ?? false,
       ticketUrl: initialEvent.ticket_url ?? "",
       soldOut: initialEvent.sold_out ?? false,
+      priceDisplay: initialEvent.price_display ?? "",
+      ageRestriction: initialEvent.age_restriction ?? "",
+      reservationRecommendation: initialEvent.reservation_recommendation ?? "",
+      parkingNotes: initialEvent.parking_notes ?? "",
+      accessibilityNotes: initialEvent.accessibility_notes ?? "",
     });
     setCurrentEventId(initialEvent.id);
     setImageUrl(initialEvent.image_url ?? null);
@@ -286,6 +324,11 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
         ticketingEnabled: formState.ticketingEnabled,
         ticketUrl: formState.ticketUrl || null,
         soldOut: formState.soldOut,
+        priceDisplay: formState.priceDisplay || null,
+        ageRestriction: formState.ageRestriction || null,
+        reservationRecommendation: formState.reservationRecommendation || null,
+        parkingNotes: formState.parkingNotes || null,
+        accessibilityNotes: formState.accessibilityNotes || null,
       },
       currentEventId
     );
@@ -412,151 +455,154 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
   const preview = getDateTimePreview(formState);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           <strong>Error:</strong> {error}
         </div>
       )}
 
-      {/* 1. Title */}
-      <div>
-        <label htmlFor="event-title" className={labelCls}>
-          Event name
-        </label>
-        <input
-          id="event-title"
-          type="text"
-          value={formState.title}
-          onChange={(e) => update("title", e.target.value)}
-          placeholder="e.g. Music Bingo"
-          disabled={isSaving}
-          className={inputCls}
-        />
-      </div>
+      {/* ── Section 1: Event Basics ──────────────────────────────────────── */}
+      <div className="space-y-4">
+        <h3 className={sectionHeadingCls}>Event Basics</h3>
 
-      {/* 2. Event type */}
-      <div>
-        <label htmlFor="event-type" className={labelCls}>
-          Event type
-        </label>
-        <select
-          id="event-type"
-          value={formState.eventType}
-          onChange={(e) => update("eventType", e.target.value)}
-          disabled={isSaving}
-          className={inputCls}
-        >
-          <option value="">Select event type</option>
-          {EVENT_TYPE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* 3. Date of first occurrence */}
-      <div>
-        <label htmlFor="event-first-date" className={labelCls}>
-          Date of first occurrence
-        </label>
-        <input
-          id="event-first-date"
-          type="date"
-          value={formState.firstDate}
-          onChange={(e) => update("firstDate", e.target.value)}
-          disabled={isSaving}
-          className={inputCls}
-        />
-      </div>
-
-      {/* 3. Start time / End time */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Event Name */}
         <div>
-          <label htmlFor="event-start-time" className={labelCls}>
-            Start time
+          <label htmlFor="event-title" className={labelCls}>
+            Event name
+          </label>
+          <input
+            id="event-title"
+            type="text"
+            value={formState.title}
+            onChange={(e) => update("title", e.target.value)}
+            placeholder="e.g. Music Bingo"
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Event Type */}
+        <div>
+          <label htmlFor="event-type" className={labelCls}>
+            Event type
           </label>
           <select
-            id="event-start-time"
-            value={formState.startTime}
-            onChange={(e) => update("startTime", e.target.value)}
+            id="event-type"
+            value={formState.eventType}
+            onChange={(e) => update("eventType", e.target.value)}
             disabled={isSaving}
             className={inputCls}
           >
-            <option value="">Select time</option>
-            {TIME_OPTIONS.map((t) => (
-              <option key={t} value={t}>{t}</option>
+            <option value="">Select event type</option>
+            {EVENT_TYPE_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </div>
+
+        {/* Description */}
         <div>
-          <label htmlFor="event-end-time" className={labelCls}>
-            End time{" "}
+          <label htmlFor="event-description" className={labelCls}>
+            Event details{" "}
             <span className="text-gray-400 font-normal">(optional)</span>
           </label>
-          <select
-            id="event-end-time"
-            value={formState.endTime}
-            onChange={(e) => update("endTime", e.target.value)}
-            disabled={isSaving}
-            className={inputCls}
-          >
-            <option value="">No end time</option>
-            {TIME_OPTIONS.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* 4. Recurrence */}
-      <div>
-        <label htmlFor="event-recurrence" className={labelCls}>
-          Repeats
-        </label>
-        {/* Downgrade notice: existing recurring event on free plan */}
-        {!canRecur && initialEvent && isRecurring(formState.recurrence) && (
-          <div className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-            This event has a recurring schedule from a previous plan. To edit the
-            schedule, upgrade to Pro or switch &ldquo;Repeats&rdquo; to{" "}
-            &ldquo;One-time&rdquo; to save other changes.{" "}
-            {isOwner ? (
-              <Link
-                href="/admin/subscription"
-                className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
-              >
-                Change your plan →
-              </Link>
-            ) : (
-              <span className="text-amber-700">Ask the account owner to change the plan.</span>
-            )}
-          </div>
-        )}
-        <select
-          id="event-recurrence"
-          value={formState.recurrence}
-          onChange={(e) => {
-            const val = e.target.value as Recurrence;
-            if (isRecurring(val) && !canRecur) {
-              setRecurrenceUpsellVisible(true);
-              return;
+          <textarea
+            id="event-description"
+            rows={4}
+            value={formState.description}
+            onChange={(e) =>
+              update("description", e.target.value.slice(0, DESCRIPTION_MAX))
             }
-            setRecurrenceUpsellVisible(false);
-            update("recurrence", val);
-          }}
-          disabled={isSaving}
-          className={inputCls}
-        >
-          {RECURRENCE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {isRecurring(value) && !canRecur ? `${label} (Pro+)` : label}
-            </option>
-          ))}
-        </select>
-        {recurrenceUpsellVisible && (
-          <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
-            <div className="flex items-center gap-1.5">
+            placeholder="Describe the event — what to expect, prizes, entry fee, etc."
+            disabled={isSaving}
+            className={inputCls + " resize-none"}
+          />
+          <p className="mt-1 text-xs text-gray-400 text-right tabular-nums">
+            {formState.description.length} / {DESCRIPTION_MAX} characters
+          </p>
+        </div>
+
+        {/* Event Image */}
+        <div>
+          {/* Shared hidden file input — triggered by both Upload and Replace */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={isUploadingImage || isSaving}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageUpload(file);
+            }}
+          />
+
+          <p className={labelCls}>
+            Event image{" "}
+            <span className="text-gray-400 font-normal">(required to publish)</span>
+          </p>
+          <p className="text-xs text-gray-400 mb-3">
+            Upload a single image for the event listing and detail page.
+          </p>
+
+          {imageError && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+              {imageError}
+            </div>
+          )}
+
+          {!currentEventId ? (
+            <div>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-sm font-medium cursor-not-allowed"
+              >
+                Save event to upload image
+              </button>
+              <p className="text-xs text-gray-400 mt-2">
+                Save the event details first, then you can upload an image.
+              </p>
+            </div>
+          ) : imageUrl ? (
+            <div className="flex items-start gap-4">
+              <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt="Event image"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isUploadingImage || isSaving}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUploadingImage ? "Uploading…" : "Replace image"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImageRemove}
+                  disabled={isUploadingImage || isSaving}
+                  className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Remove image
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={isUploadingImage || isSaving}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <svg
-                className="w-3.5 h-3.5 shrink-0 text-amber-600"
+                className="w-4 h-4 shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -566,20 +612,84 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4"
                 />
               </svg>
-              <p className="text-sm font-semibold text-amber-900">Recurring Events</p>
-            </div>
-            <p className="text-sm text-amber-800 leading-snug">
-              Create an event once and automatically repeat it — daily, weekly, or monthly.
-              No re-entering details each time.
-            </p>
-            <p className="text-xs text-amber-700">
-              Great for trivia nights, karaoke, live music, weekly specials, and regular promotions.
-            </p>
-            <p className="text-xs font-medium text-amber-800 pt-0.5">
-              Available on Pro and Premium plans.{" "}
+              {isUploadingImage ? "Uploading…" : "Upload image"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Section 2: Schedule ──────────────────────────────────────────── */}
+      <div className="pt-5 border-t border-gray-100 space-y-4">
+        <h3 className={sectionHeadingCls}>Schedule</h3>
+
+        {/* Date of first occurrence */}
+        <div>
+          <label htmlFor="event-first-date" className={labelCls}>
+            Date of first occurrence
+          </label>
+          <input
+            id="event-first-date"
+            type="date"
+            value={formState.firstDate}
+            onChange={(e) => update("firstDate", e.target.value)}
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Start time / End time */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="event-start-time" className={labelCls}>
+              Start time
+            </label>
+            <select
+              id="event-start-time"
+              value={formState.startTime}
+              onChange={(e) => update("startTime", e.target.value)}
+              disabled={isSaving}
+              className={inputCls}
+            >
+              <option value="">Select time</option>
+              {TIME_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="event-end-time" className={labelCls}>
+              End time{" "}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <select
+              id="event-end-time"
+              value={formState.endTime}
+              onChange={(e) => update("endTime", e.target.value)}
+              disabled={isSaving}
+              className={inputCls}
+            >
+              <option value="">No end time</option>
+              {TIME_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Recurrence */}
+        <div>
+          <label htmlFor="event-recurrence" className={labelCls}>
+            Repeats
+          </label>
+          {/* Downgrade notice: existing recurring event on free plan */}
+          {!canRecur && initialEvent && isRecurring(formState.recurrence) && (
+            <div className="mb-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+              This event has a recurring schedule from a previous plan. To edit the
+              schedule, upgrade to Pro or switch &ldquo;Repeats&rdquo; to{" "}
+              &ldquo;One-time&rdquo; to save other changes.{" "}
               {isOwner ? (
                 <Link
                   href="/admin/subscription"
@@ -590,146 +700,88 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
               ) : (
                 <span className="text-amber-700">Ask the account owner to change the plan.</span>
               )}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Date & Time preview — hidden until both date and start time are set */}
-      {preview && (
-        <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">
-            Date &amp; time preview
-          </p>
-          <p className="text-sm font-medium text-gray-700">{preview}</p>
-        </div>
-      )}
-
-      {/* 5. Description with character limit */}
-      <div>
-        <label htmlFor="event-description" className={labelCls}>
-          Event details{" "}
-          <span className="text-gray-400 font-normal">(optional)</span>
-        </label>
-        <textarea
-          id="event-description"
-          rows={4}
-          value={formState.description}
-          onChange={(e) =>
-            update("description", e.target.value.slice(0, DESCRIPTION_MAX))
-          }
-          placeholder="Describe the event — what to expect, prizes, entry fee, etc."
-          disabled={isSaving}
-          className={inputCls + " resize-none"}
-        />
-        <p className="mt-1 text-xs text-gray-400 text-right tabular-nums">
-          {formState.description.length} / {DESCRIPTION_MAX} characters
-        </p>
-      </div>
-
-      {/* 6. Event image */}
-      <div className="pt-2 border-t border-gray-100">
-        {/* Shared hidden file input — triggered by both Upload and Replace */}
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          disabled={isUploadingImage || isSaving}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleImageUpload(file);
-          }}
-        />
-
-        <p className={labelCls}>
-          Event image{" "}
-          <span className="text-gray-400 font-normal">(required to publish)</span>
-        </p>
-        <p className="text-xs text-gray-400 mb-3">
-          Upload a single image for the event listing and detail page.
-        </p>
-
-        {imageError && (
-          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-            {imageError}
-          </div>
-        )}
-
-        {!currentEventId ? (
-          /* New event — must save first */
-          <div>
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-sm font-medium cursor-not-allowed"
-            >
-              Save event to upload image
-            </button>
-            <p className="text-xs text-gray-400 mt-2">
-              Save the event details first, then you can upload an image.
-            </p>
-          </div>
-        ) : imageUrl ? (
-          /* Image exists — show thumbnail + Replace / Remove controls */
-          <div className="flex items-start gap-4">
-            <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={imageUrl}
-                alt="Event image"
-                className="w-full h-full object-cover"
-              />
             </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={isUploadingImage || isSaving}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploadingImage ? "Uploading…" : "Replace image"}
-              </button>
-              <button
-                type="button"
-                onClick={handleImageRemove}
-                disabled={isUploadingImage || isSaving}
-                className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Remove image
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* No image yet */
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            disabled={isUploadingImage || isSaving}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
+          <select
+            id="event-recurrence"
+            value={formState.recurrence}
+            onChange={(e) => {
+              const val = e.target.value as Recurrence;
+              if (isRecurring(val) && !canRecur) {
+                setRecurrenceUpsellVisible(true);
+                return;
+              }
+              setRecurrenceUpsellVisible(false);
+              update("recurrence", val);
+            }}
+            disabled={isSaving}
+            className={inputCls}
           >
-            <svg
-              className="w-4 h-4 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4"
-              />
-            </svg>
-            {isUploadingImage ? "Uploading…" : "Upload image"}
-          </button>
+            {RECURRENCE_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {isRecurring(value) && !canRecur ? `${label} (Pro+)` : label}
+              </option>
+            ))}
+          </select>
+          {recurrenceUpsellVisible && (
+            <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <svg
+                  className="w-3.5 h-3.5 shrink-0 text-amber-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                <p className="text-sm font-semibold text-amber-900">Recurring Events</p>
+              </div>
+              <p className="text-sm text-amber-800 leading-snug">
+                Create an event once and automatically repeat it — daily, weekly, or monthly.
+                No re-entering details each time.
+              </p>
+              <p className="text-xs text-amber-700">
+                Great for trivia nights, karaoke, live music, weekly specials, and regular promotions.
+              </p>
+              <p className="text-xs font-medium text-amber-800 pt-0.5">
+                Available on Pro and Premium plans.{" "}
+                {isOwner ? (
+                  <Link
+                    href="/admin/subscription"
+                    className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors"
+                  >
+                    Change your plan →
+                  </Link>
+                ) : (
+                  <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Date & Time preview — hidden until both date and start time are set */}
+        {preview && (
+          <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">
+              Date &amp; time preview
+            </p>
+            <p className="text-sm font-medium text-gray-700">{preview}</p>
+          </div>
         )}
       </div>
 
-      {/* 7. Ticketing */}
-      <div className="pt-2 border-t border-gray-100 space-y-3">
-        {/* Enable Ticket Sales checkbox */}
+      {/* ── Section 3: Tickets ───────────────────────────────────────────── */}
+      <div className="pt-5 border-t border-gray-100 space-y-3">
+        <h3 className={sectionHeadingCls}>Tickets</h3>
+
+        {/* Enable Ticket Sales */}
         <div className="flex items-center gap-3">
           <input
             id="ticketing-enabled"
@@ -770,7 +822,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
           </div>
         )}
 
-        {/* Sold Out checkbox — only shown when ticketing is enabled */}
+        {/* Sold Out — only shown when ticketing is enabled */}
         {formState.ticketingEnabled && (
           <div className="flex items-center gap-3">
             <input
@@ -791,73 +843,171 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             )}
           </div>
         )}
+
+        {/* Price Display */}
+        <div>
+          <label htmlFor="price-display" className={labelCls}>
+            Price{" "}
+            <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="price-display"
+            type="text"
+            value={formState.priceDisplay}
+            onChange={(e) => update("priceDisplay", e.target.value)}
+            placeholder="e.g. Free · $20 · $25–35 · By Donation"
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
       </div>
 
-      {/* Published toggle */}
-      <div className="space-y-2">
+      {/* ── Section 4: Know Before You Go ────────────────────────────────── */}
+      <div className="pt-5 border-t border-gray-100 space-y-4">
+        <div>
+          <h3 className={sectionHeadingCls}>Know Before You Go</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            Help guests prepare — all fields are optional.
+          </p>
+        </div>
+
+        {/* Age Restriction */}
+        <div>
+          <label htmlFor="age-restriction" className={labelOptCls}>
+            Age restriction
+          </label>
+          <select
+            id="age-restriction"
+            value={formState.ageRestriction}
+            onChange={(e) => update("ageRestriction", e.target.value)}
+            disabled={isSaving}
+            className={inputCls}
+          >
+            <option value="">Not specified</option>
+            {AGE_RESTRICTION_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reservation Recommendation */}
+        <div>
+          <label htmlFor="reservation-recommendation" className={labelOptCls}>
+            Reservations
+          </label>
+          <select
+            id="reservation-recommendation"
+            value={formState.reservationRecommendation}
+            onChange={(e) => update("reservationRecommendation", e.target.value)}
+            disabled={isSaving}
+            className={inputCls}
+          >
+            <option value="">Not specified</option>
+            {RESERVATION_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Parking Notes */}
+        <div>
+          <label htmlFor="parking-notes" className={labelOptCls}>
+            Parking notes
+          </label>
+          <input
+            id="parking-notes"
+            type="text"
+            value={formState.parkingNotes}
+            onChange={(e) => update("parkingNotes", e.target.value)}
+            placeholder="e.g. Free parking after 6 PM"
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Accessibility Notes */}
+        <div>
+          <label htmlFor="accessibility-notes" className={labelOptCls}>
+            Accessibility notes
+          </label>
+          <input
+            id="accessibility-notes"
+            type="text"
+            value={formState.accessibilityNotes}
+            onChange={(e) => update("accessibilityNotes", e.target.value)}
+            placeholder="e.g. Wheelchair accessible · Elevator available"
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
+      </div>
+
+      {/* ── Section 5: Publishing ────────────────────────────────────────── */}
+      <div className="pt-5 border-t border-gray-100 space-y-4">
+        <h3 className={sectionHeadingCls}>Publishing</h3>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formState.isPublished}
+              onClick={() => {
+                if (!formState.isPublished && !formState.eventType) {
+                  setPublishError("Please select an event type before publishing.");
+                  return;
+                }
+                if (!formState.isPublished && !imageUrl) {
+                  setPublishError("You must add an event image before publishing.");
+                  return;
+                }
+                setPublishError(null);
+                update("isPublished", !formState.isPublished);
+              }}
+              disabled={isSaving}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.isPublished ? "bg-amber-500" : "bg-gray-200"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  formState.isPublished ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className="text-sm font-medium text-gray-700">
+              {formState.isPublished ? "Published" : "Unpublished"}
+            </span>
+            {!formState.isPublished && (
+              <span className="text-xs text-gray-400">
+                Visible only to you until published.
+              </span>
+            )}
+          </div>
+          {publishError && (
+            <p className="text-sm text-red-600">{publishError}</p>
+          )}
+        </div>
+
+        {/* Save button + badge */}
         <div className="flex items-center gap-3">
           <button
-            type="button"
-            role="switch"
-            aria-checked={formState.isPublished}
-            onClick={() => {
-              if (!formState.isPublished && !formState.eventType) {
-                setPublishError("Please select an event type before publishing.");
-                return;
-              }
-              // Block turning on published when no image is present.
-              if (!formState.isPublished && !imageUrl) {
-                setPublishError("You must add an event image before publishing.");
-                return;
-              }
-              setPublishError(null);
-              update("isPublished", !formState.isPublished);
-            }}
+            type="submit"
             disabled={isSaving}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              formState.isPublished ? "bg-amber-500" : "bg-gray-200"
-            }`}
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                formState.isPublished ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
+            {isSaving ? "Saving…" : "Save event"}
           </button>
-          <span className="text-sm font-medium text-gray-700">
-            {formState.isPublished ? "Published" : "Unpublished"}
-          </span>
-          {!formState.isPublished && (
-            <span className="text-xs text-gray-400">
-              Visible only to you until published.
+          {saved && (
+            <span
+              className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
+              role="status"
+            >
+              Saved
             </span>
           )}
         </div>
-        {publishError && (
-          <p className="text-sm text-red-600">{publishError}</p>
-        )}
       </div>
-
-      {/* Save button + badge */}
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? "Saving…" : "Save event"}
-        </button>
-        {saved && (
-          <span
-            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"
-            role="status"
-          >
-            Saved
-          </span>
-        )}
-      </div>
-
-
     </form>
   );
 }
