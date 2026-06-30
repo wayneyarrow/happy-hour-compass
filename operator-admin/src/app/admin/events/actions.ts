@@ -51,6 +51,9 @@ export type EventSavePayload = {
   endTime: string | null;
   recurrence: string;
   isPublished: boolean;
+  ticketingEnabled: boolean;
+  ticketUrl: string | null;
+  soldOut: boolean;
 };
 
 export type SaveEventResult = { savedId: string } | { error: string };
@@ -148,6 +151,9 @@ export async function saveEventAction(
     event_time,
     event_frequency,
     is_published:             payload.isPublished,
+    ticketing_enabled:        payload.ticketingEnabled,
+    ticket_url:               payload.ticketingEnabled ? (payload.ticketUrl || null) : null,
+    sold_out:                 payload.soldOut,
     updated_by_operator_id:   ctx.operator.id,
   };
 
@@ -177,6 +183,7 @@ export async function saveEventAction(
       slug,
       venue_id:                payload.venueId,
       created_by_operator_id:  ctx.operator.id,
+      is_seeded_event:         false,
     }])
     .select("id")
     .single();

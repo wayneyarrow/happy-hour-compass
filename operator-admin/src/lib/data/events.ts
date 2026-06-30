@@ -65,6 +65,14 @@ export type ConsumerEventDetail = {
   venuePaymentMethods: string;
   /** Business hours keyed by day name — "H:MM AM – H:MM PM" or "CLOSED". */
   venueHoursWeekly: Record<string, string>;
+  /** When true, a ticket purchase link is active for this event. */
+  ticketingEnabled: boolean;
+  /** URL for purchasing tickets. Only meaningful when ticketingEnabled = true. */
+  ticketUrl: string | null;
+  /** When true (and ticketingEnabled), consumer UI shows "Sold Out" instead of a ticket link. */
+  soldOut: boolean;
+  /** Platform-created content flag — true for all events seeded before migration 049. */
+  isSeededEvent: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,7 +255,8 @@ export async function getEventForConsumerById(
       .select(
         "id, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency"
+          "event_time, event_frequency, " +
+          "ticketing_enabled, ticket_url, sold_out, is_seeded_event"
       )
       .eq("id", id);
 
@@ -305,6 +314,10 @@ export async function getEventForConsumerById(
       venueHoursWeekly: mapDbHours(
         vr.business_hours as Record<string, { open: string; close: string } | null> | null
       ),
+      ticketingEnabled: row.ticketing_enabled === true,
+      ticketUrl: (row.ticket_url as string | null) ?? null,
+      soldOut: row.sold_out === true,
+      isSeededEvent: row.is_seeded_event === true,
     };
   } catch (err) {
     console.error("[getEventForConsumerById] Unexpected error:", err);

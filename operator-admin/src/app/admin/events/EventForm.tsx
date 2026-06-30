@@ -29,6 +29,9 @@ type EventFormState = {
   recurrence: Recurrence;
   description: string;
   isPublished: boolean;
+  ticketingEnabled: boolean;
+  ticketUrl: string;
+  soldOut: boolean;
 };
 
 export type EventRow = {
@@ -46,6 +49,10 @@ export type EventRow = {
   venue_id: string | null;
   created_by_operator_id: string | null;
   image_url: string | null;
+  ticketing_enabled: boolean;
+  ticket_url: string | null;
+  sold_out: boolean;
+  is_seeded_event: boolean;
   updated_at?: string | null;
 };
 
@@ -93,6 +100,9 @@ const EMPTY: EventFormState = {
   recurrence: "none",
   description: "",
   isPublished: false,
+  ticketingEnabled: false,
+  ticketUrl: "",
+  soldOut: false,
 };
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -197,6 +207,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       recurrence: toRecurrence(initialEvent.recurrence),
       description: initialEvent.description ?? "",
       isPublished: initialEvent.is_published ?? false,
+      ticketingEnabled: initialEvent.ticketing_enabled ?? false,
+      ticketUrl: initialEvent.ticket_url ?? "",
+      soldOut: initialEvent.sold_out ?? false,
     });
     setCurrentEventId(initialEvent.id);
     setImageUrl(initialEvent.image_url ?? null);
@@ -232,6 +245,24 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       }
     }
 
+    // ── Ticket URL validation ─────────────────────────────────────────────
+    if (formState.ticketingEnabled && formState.ticketUrl) {
+      try {
+        const url = new URL(formState.ticketUrl);
+        if (url.protocol !== "https:" && url.protocol !== "http:") {
+          setError("Ticket URL must start with https:// or http://");
+          return;
+        }
+      } catch {
+        setError("Ticket URL is not a valid URL. It must start with https://");
+        return;
+      }
+    }
+    if (formState.ticketingEnabled && !formState.ticketUrl) {
+      setError("Please enter a Ticket URL, or uncheck \"Enable Ticket Sales\".");
+      return;
+    }
+
     // ── Image required to publish ─────────────────────────────────────────
     if (formState.isPublished && !imageUrl) {
       setError("An event image is required to publish. Upload an image first, or save as unpublished.");
@@ -252,6 +283,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
         endTime: formState.endTime || null,
         recurrence: formState.recurrence,
         isPublished: formState.isPublished,
+        ticketingEnabled: formState.ticketingEnabled,
+        ticketUrl: formState.ticketUrl || null,
+        soldOut: formState.soldOut,
       },
       currentEventId
     );
@@ -690,6 +724,72 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             </svg>
             {isUploadingImage ? "Uploading…" : "Upload image"}
           </button>
+        )}
+      </div>
+
+      {/* 7. Ticketing */}
+      <div className="pt-2 border-t border-gray-100 space-y-3">
+        {/* Enable Ticket Sales checkbox */}
+        <div className="flex items-center gap-3">
+          <input
+            id="ticketing-enabled"
+            type="checkbox"
+            checked={formState.ticketingEnabled}
+            onChange={(e) => {
+              update("ticketingEnabled", e.target.checked);
+              if (!e.target.checked) {
+                update("soldOut", false);
+              }
+            }}
+            disabled={isSaving}
+            className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 disabled:opacity-60 cursor-pointer"
+          />
+          <label htmlFor="ticketing-enabled" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+            Enable Ticket Sales
+          </label>
+        </div>
+
+        {/* Ticket URL — only shown when ticketing is enabled */}
+        {formState.ticketingEnabled && (
+          <div>
+            <label htmlFor="ticket-url" className={labelCls}>
+              Ticket URL
+            </label>
+            <input
+              id="ticket-url"
+              type="url"
+              value={formState.ticketUrl}
+              onChange={(e) => update("ticketUrl", e.target.value)}
+              placeholder="https://www.eventbrite.com/e/your-event"
+              disabled={isSaving}
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Where customers can buy tickets. Must start with https://
+            </p>
+          </div>
+        )}
+
+        {/* Sold Out checkbox — only shown when ticketing is enabled */}
+        {formState.ticketingEnabled && (
+          <div className="flex items-center gap-3">
+            <input
+              id="sold-out"
+              type="checkbox"
+              checked={formState.soldOut}
+              onChange={(e) => update("soldOut", e.target.checked)}
+              disabled={isSaving}
+              className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 disabled:opacity-60 cursor-pointer"
+            />
+            <label htmlFor="sold-out" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+              Sold Out
+            </label>
+            {formState.soldOut && (
+              <span className="text-xs text-gray-400">
+                Consumers will see &ldquo;Sold Out&rdquo; instead of a ticket link.
+              </span>
+            )}
+          </div>
         )}
       </div>
 
