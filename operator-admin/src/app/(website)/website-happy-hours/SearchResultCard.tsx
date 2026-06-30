@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookmarkButton } from "@/app/(consumer)/BookmarkButton";
+import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
 import type { HhStatus } from "@/lib/happyHourStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -9,9 +9,11 @@ import type { HhStatus } from "@/lib/happyHourStatus";
 export type { HhStatus };
 
 export type SearchResultCardData = {
-  /** Venue slug — used as the bookmark ID and card key. */
+  /** Venue slug — used for the card key and href routing. */
   id: string;
-  /** Destination URL for the future Venue Detail page, e.g. /venue/[slug]. */
+  /** Venue UUID — used as the durable saved identifier in localStorage. */
+  venueUuid: string;
+  /** Destination URL for the Venue Detail page, e.g. /[market]/venue/[slug]. */
   href: string;
   name: string;
   image: string;
@@ -205,9 +207,8 @@ export function SearchResultCard({ data }: Props) {
               borderRadius: "50%",
               backdropFilter: "blur(4px)",
             }}
-            onClick={(e) => e.preventDefault()}
           >
-            <BookmarkButton venueId={data.id} variant="list" />
+            <SaveVenueButton venueId={data.venueUuid} variant="list" />
           </div>
         </div>
 

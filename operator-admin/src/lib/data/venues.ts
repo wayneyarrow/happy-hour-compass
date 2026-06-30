@@ -773,3 +773,96 @@ export async function getVenueWithEventsForConsumerById(
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Saved items preview
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimal venue data needed to render a saved-items dropdown row. */
+export type VenuePreview = {
+  /** Venue UUID — matches the ID stored by savedItems.ts. */
+  id: string;
+  /** Venue slug — used to build the public URL /{market}/venue/{slug}. */
+  slug: string;
+  name: string;
+  city: string;
+  imageUrl: string | null;
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Fetches lightweight preview data for a list of venue identifiers.
+ *
+ * Accepts both UUIDs (current format) and slugs (legacy format from before the
+ * UUID migration). UUID-shaped IDs are fetched by `id`; anything else is tried
+ * by `slug`. This lets the Saved dropdown display and normalise saved items that
+ * were stored before the identifier migration without requiring a manual cache
+ * clear. Always returns `id` as the DB UUID so callers can normalise storage.
+ */
+export async function getVenuePreviewsByIds(
+  ids: string[]
+): Promise<VenuePreview[]> {
+  if (ids.length === 0) return [];
+  try {
+    const supabase = createAdminClient();
+
+    const uuidIds = ids.filter((id) => UUID_PATTERN.test(id));
+    const slugIds = ids.filter((id) => !UUID_PATTERN.test(id));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allRows: Record<string, any>[] = [];
+
+    if (uuidIds.length > 0) {
+      const { data } = await supabase
+        .from("venues")
+        .select("id, slug, name, city")
+        .in("id", uuidIds)
+        .eq("is_published", true);
+      if (data) allRows.push(...data);
+    }
+
+    if (slugIds.length > 0) {
+      const { data } = await supabase
+        .from("venues")
+        .select("id, slug, name, city")
+        .in("slug", slugIds)
+        .eq("is_published", true);
+      if (data) allRows.push(...data);
+    }
+
+    if (allRows.length === 0) return [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const uuids = allRows.map((r: Record<string, any>) => r.id as string);
+
+    // Fetch primary image per venue (first by sort_order).
+    const { data: mediaRows } = await supabase
+      .from("media")
+      .select("venue_id, url")
+      .in("venue_id", uuids)
+      .eq("type", "venue_image")
+      .order("sort_order", { ascending: true });
+
+    // Build UUID → first image URL map.
+    const imageByUuid: Record<string, string> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const m of (mediaRows ?? []) as Record<string, any>[]) {
+      const vid = m.venue_id as string;
+      if (!imageByUuid[vid]) imageByUuid[vid] = m.url as string;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return allRows.map((r: Record<string, any>): VenuePreview => ({
+      id: r.id as string,
+      slug: r.slug as string,
+      name: r.name as string,
+      city: r.city as string,
+      imageUrl: imageByUuid[r.id as string] ?? null,
+    }));
+  } catch (err) {
+    console.error("[getVenuePreviewsByIds] Unexpected error:", err);
+    return [];
+  }
+}

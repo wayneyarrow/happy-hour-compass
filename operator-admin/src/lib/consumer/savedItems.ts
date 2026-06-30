@@ -69,6 +69,7 @@ function writeStore(store: SavedItemsStore): void {
   if (isServer()) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    window.dispatchEvent(new CustomEvent("hhc:savedChanged"));
   } catch {
     // localStorage can be unavailable (private mode quota, etc.) — fail silently.
   }
@@ -156,6 +157,28 @@ export function unsaveEvent(eventId: string): boolean {
   const before = store.savedEvents.length;
   store.savedEvents = store.savedEvents.filter((e) => e.id !== eventId);
   if (store.savedEvents.length === before) return false;
+  writeStore(store);
+  return true;
+}
+
+/**
+ * Replaces a saved venue identifier (e.g. a legacy slug) with a new one (UUID).
+ * Preserves the original savedAt timestamp.
+ * No-op if oldId is not in the list or oldId === newId.
+ * If newId already exists, the oldId entry is simply removed (no duplicate).
+ * Returns true if the store was modified.
+ */
+export function migrateVenueId(oldId: string, newId: string): boolean {
+  if (oldId === newId) return false;
+  const store = readStore();
+  const idx = store.savedVenues.findIndex((v) => v.id === oldId);
+  if (idx === -1) return false;
+  const alreadyExists = store.savedVenues.some((v) => v.id === newId);
+  if (alreadyExists) {
+    store.savedVenues.splice(idx, 1);
+  } else {
+    store.savedVenues[idx] = { ...store.savedVenues[idx], id: newId };
+  }
   writeStore(store);
   return true;
 }

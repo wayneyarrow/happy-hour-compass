@@ -49,8 +49,8 @@ export default async function HappyHoursSearchPage() {
   // component can compute real distances and apply live filter logic.
   const cards: WebsiteVenueCard[] = venues.map((venue) => ({
     id: venue.id,
+    venueUuid: venue.venueUuid,
     // Website venue URL: /[market]/venue/[slug] — matches the agreed Phase 1D routing.
-    // Route will be at app/(website)/[market]/venue/[slug]/page.tsx (next build task).
     href: `/${market.id}/venue/${venue.id}`,
     name: venue.name,
     image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),

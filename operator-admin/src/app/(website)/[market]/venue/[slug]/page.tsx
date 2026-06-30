@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
 import { getMarketById } from "@/lib/markets";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
-import { BookmarkButton } from "@/app/(consumer)/BookmarkButton";
+import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
 import { ShareButton } from "@/app/(consumer)/event/[id]/ShareButton";
 import { HappyHourTimesCard } from "@/app/(consumer)/venue/[id]/HappyHourTimesCard";
 import { BusinessHoursRow } from "@/app/(consumer)/event/[id]/BusinessHoursRow";
@@ -198,7 +198,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
               {venue.name}
             </h1>
             <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
-              <BookmarkButton venueId={venue.id} variant="header" />
+              <SaveVenueButton venueId={venue.venueUuid} variant="detail" />
               <ShareButton />
             </div>
           </div>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import WebsiteLocationSwitcher from "./WebsiteLocationSwitcher";
+import { SavedDropdown } from "./SavedDropdown";
+import { getSavedCounts } from "@/lib/consumer/savedItems";
 import type { CityRecord } from "@/lib/geo/types";
 
 type Props = {
@@ -14,6 +16,9 @@ type Props = {
   cities: CityRecord[];
 };
 
+const HEART_PATH =
+  "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z";
+
 export default function WebsiteHeader({
   marketId,
   marketName,
@@ -22,7 +27,14 @@ export default function WebsiteHeader({
 }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [savedTotal, setSavedTotal] = useState(0);
   const pathname = usePathname();
+  // Refs covering every element that belongs to the saved feature so the
+  // single outside-click handler knows what counts as "inside".
+  const savedRef = useRef<HTMLDivElement>(null);          // desktop button + dropdown
+  const mobileSavedBtnRef = useRef<HTMLButtonElement>(null); // mobile heart button
+  const mobileDropdownRef = useRef<HTMLDivElement>(null);    // mobile dropdown wrapper
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -31,16 +43,50 @@ export default function WebsiteHeader({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Close menus on navigation.
   useEffect(() => {
     setMenuOpen(false);
+    setSavedOpen(false);
   }, [pathname]);
 
+  // Single outside-click handler for the saved dropdown.
+  // Checks all three areas so clicks on the trigger buttons don't double-fire.
+  useEffect(() => {
+    if (!savedOpen) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (savedRef.current?.contains(t)) return;
+      if (mobileSavedBtnRef.current?.contains(t)) return;
+      if (mobileDropdownRef.current?.contains(t)) return;
+      setSavedOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [savedOpen]);
+
+  // Lock body scroll when mobile menu is open.
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  // Sync saved count from localStorage, update on any save/unsave event.
+  useEffect(() => {
+    function refresh() {
+      const counts = getSavedCounts();
+      setSavedTotal(counts.venues + counts.events);
+    }
+    refresh();
+    window.addEventListener("hhc:savedChanged", refresh);
+    return () => window.removeEventListener("hhc:savedChanged", refresh);
+  }, []);
+
+  function toggleSaved() {
+    setSavedOpen((v) => !v);
+    if (menuOpen) setMenuOpen(false);
+  }
 
   return (
     <>
@@ -66,15 +112,13 @@ export default function WebsiteHeader({
               className="h-9 w-auto flex-shrink-0"
               priority
             />
-            {/* Wordmark hidden on mobile to prevent header overflow when
-                logo + location switcher + hamburger compete for narrow space. */}
             <span className="hidden sm:inline whitespace-nowrap text-[15px] font-bold tracking-tight text-gray-900">
               Happy Hour{" "}
               <span className="text-amber-500">Compass</span>
             </span>
           </Link>
 
-          {/* Region & Location Switcher — always visible on all breakpoints */}
+          {/* Region & Location Switcher */}
           <WebsiteLocationSwitcher
             marketId={marketId}
             marketName={marketName}
@@ -82,10 +126,9 @@ export default function WebsiteHeader({
             cities={cities}
           />
 
-          {/* Push right-side items to the end */}
           <div className="flex-1" />
 
-          {/* Desktop — secondary CTAs + Sign In */}
+          {/* Desktop nav */}
           <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
             <Link
               href="/suggest/customer"
@@ -99,6 +142,52 @@ export default function WebsiteHeader({
             >
               Claim / Add Your Venue
             </Link>
+
+            {/* Saved button + dropdown */}
+            <div className="relative" ref={savedRef}>
+              <button
+                type="button"
+                onClick={toggleSaved}
+                aria-expanded={savedOpen}
+                aria-haspopup="dialog"
+                aria-label={`Saved items${savedTotal > 0 ? `, ${savedTotal} saved` : ""}`}
+                className={`flex items-center gap-1.5 px-3 py-[7px] rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                  savedOpen
+                    ? "bg-gray-100 text-gray-900"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    fill: savedTotal > 0 ? "#ef4444" : "none",
+                    stroke: savedTotal > 0 ? "#ef4444" : "currentColor",
+                    strokeWidth: 2,
+                    strokeLinecap: "round",
+                    strokeLinejoin: "round",
+                    transition: "fill 0.15s, stroke 0.15s",
+                  }}
+                >
+                  <path d={HEART_PATH} />
+                </svg>
+                Saved
+                {savedTotal > 0 && (
+                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold bg-red-500 text-white leading-none">
+                    {savedTotal > 99 ? "99+" : savedTotal}
+                  </span>
+                )}
+              </button>
+
+              <SavedDropdown
+                marketId={marketId}
+                open={savedOpen}
+                onClose={() => setSavedOpen(false)}
+              />
+            </div>
+
             <Link
               href="/login"
               className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
@@ -107,26 +196,74 @@ export default function WebsiteHeader({
             </Link>
           </nav>
 
-          {/* Mobile — hamburger trigger */}
-          <button
-            type="button"
-            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={menuOpen}
-            aria-controls="website-mobile-menu"
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 -mr-1 text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            {menuOpen ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          {/* Mobile — saved icon + hamburger */}
+          <div className="md:hidden flex items-center gap-1">
+            {/* Compact saved icon for mobile header */}
+            <button
+              ref={mobileSavedBtnRef}
+              type="button"
+              onClick={toggleSaved}
+              aria-expanded={savedOpen}
+              aria-haspopup="dialog"
+              aria-label={`Saved items${savedTotal > 0 ? `, ${savedTotal} saved` : ""}`}
+              className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                style={{
+                  width: 20,
+                  height: 20,
+                  fill: savedTotal > 0 ? "#ef4444" : "none",
+                  stroke: savedTotal > 0 ? "#ef4444" : "currentColor",
+                  strokeWidth: 2,
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                }}
+              >
+                <path d={HEART_PATH} />
               </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            )}
-          </button>
+              {savedTotal > 0 && (
+                <span
+                  className="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold bg-red-500 text-white leading-none"
+                  aria-hidden="true"
+                >
+                  {savedTotal > 9 ? "9+" : savedTotal}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={menuOpen}
+              aria-controls="website-mobile-menu"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-2 -mr-1 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              {menuOpen ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile saved dropdown — anchored to header bottom, full-width */}
+        {savedOpen && (
+          <div ref={mobileDropdownRef} className="md:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
+            <SavedDropdown
+              marketId={marketId}
+              open={savedOpen}
+              onClose={() => setSavedOpen(false)}
+            />
+          </div>
+        )}
       </header>
 
       {/* Mobile menu overlay */}
@@ -138,14 +275,12 @@ export default function WebsiteHeader({
           aria-modal="true"
           className="fixed inset-0 z-40 md:hidden"
         >
-          {/* Tap-outside backdrop */}
           <div
             className="absolute inset-0 bg-black/10 backdrop-blur-[2px]"
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
 
-          {/* Dropdown panel — anchored below the 64px header */}
           <nav
             aria-label="Mobile navigation"
             className="absolute top-16 inset-x-0 bg-white border-b border-gray-100 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
@@ -167,6 +302,40 @@ export default function WebsiteHeader({
                   >
                     Claim / Add Your Venue
                   </Link>
+                </li>
+                <li className="border-b border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSavedOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        style={{
+                          width: 18,
+                          height: 18,
+                          fill: savedTotal > 0 ? "#ef4444" : "none",
+                          stroke: savedTotal > 0 ? "#ef4444" : "currentColor",
+                          strokeWidth: 2,
+                          strokeLinecap: "round",
+                          strokeLinejoin: "round",
+                        }}
+                      >
+                        <path d={HEART_PATH} />
+                      </svg>
+                      Saved
+                    </span>
+                    {savedTotal > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold bg-red-500 text-white leading-none">
+                        {savedTotal > 99 ? "99+" : savedTotal}
+                      </span>
+                    )}
+                  </button>
                 </li>
               </ul>
               <div className="py-5">

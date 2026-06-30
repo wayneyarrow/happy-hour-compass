@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
-import { EventBookmarkButton } from "@/app/(consumer)/EventBookmarkButton";
+import { SaveEventButton } from "@/app/(website)/SaveEventButton";
 
 // ─── Date badge helpers ───────────────────────────────────────────────────────
 
@@ -195,9 +195,8 @@ export function EventSearchCard({ event }: Props) {
             borderRadius: "50%",
             backdropFilter: "blur(4px)",
           }}
-          onClick={(e) => e.stopPropagation()}
         >
-          <EventBookmarkButton eventId={event.id} variant="list" />
+          <SaveEventButton eventId={event.id} variant="list" />
         </div>
       </div>
 

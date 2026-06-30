@@ -1123,3 +1123,68 @@ export async function getEventForWebsite(
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Saved items preview
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimal event data needed to render a saved-items dropdown row. */
+export type EventPreview = {
+  /** Event UUID — matches the ID stored by savedItems.ts. */
+  id: string;
+  title: string;
+  venueName: string;
+  imageUrl: string | null;
+  nextOccurrenceLabel: string;
+};
+
+/**
+ * Fetches lightweight preview data for a list of event UUIDs.
+ * Used by the Saved dropdown to display saved event rows.
+ * IDs that no longer resolve (deleted/unpublished) are omitted silently.
+ */
+export async function getEventPreviewsByIds(
+  eventIds: string[]
+): Promise<EventPreview[]> {
+  if (eventIds.length === 0) return [];
+  try {
+    const supabase = createAdminClient();
+
+    const { data: rows, error } = await supabase
+      .from("events")
+      .select(
+        "id, title, image_url, first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, venues(name)"
+      )
+      .in("id", eventIds)
+      .eq("is_published", true);
+
+    if (error || !rows || rows.length === 0) return [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return rows.map((r: Record<string, any>): EventPreview => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const venue = (r.venues as Record<string, any> | null) ?? {};
+
+      const nextOccurrenceLabel = buildOccurrenceLabel({
+        first_date: (r.first_date as string | null) ?? null,
+        recurrence: (r.recurrence as string | null) ?? null,
+        start_time: (r.start_time as string | null) ?? null,
+        end_time: (r.end_time as string | null) ?? null,
+        event_time: (r.event_time as string | null) ?? null,
+        event_frequency: (r.event_frequency as string | null) ?? null,
+      });
+
+      return {
+        id: r.id as string,
+        title: r.title as string,
+        venueName: (venue.name as string) ?? "",
+        imageUrl: (r.image_url as string | null) ?? null,
+        nextOccurrenceLabel,
+      };
+    });
+  } catch (err) {
+    console.error("[getEventPreviewsByIds] Unexpected error:", err);
+    return [];
+  }
+}

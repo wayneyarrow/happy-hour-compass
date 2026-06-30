@@ -8,6 +8,7 @@ import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge
 import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
 import { VenueDetailMap } from "@/app/(website)/[market]/venue/[slug]/VenueDetailMap";
 import { StickyNav } from "@/app/(website)/[market]/venue/[slug]/StickyNav";
+import { SaveEventButton } from "@/app/(website)/SaveEventButton";
 import { EventActionCard } from "./EventActionCard";
 import { EventMobileActionBar } from "./EventMobileActionBar";
 import { MakeANightOfIt } from "./MakeANightOfIt";
@@ -346,10 +347,13 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* Title */}
-              <h1 className="text-[1.75rem] md:text-[2rem] lg:text-[2.2rem] font-bold text-gray-900 leading-tight tracking-tight mb-3">
-                {event.title}
-              </h1>
+              {/* Title + save */}
+              <div className="flex items-start gap-2 mb-3">
+                <h1 className="flex-1 min-w-0 text-[1.75rem] md:text-[2rem] lg:text-[2.2rem] font-bold text-gray-900 leading-tight tracking-tight">
+                  {event.title}
+                </h1>
+                <SaveEventButton eventId={event.id} variant="detail" />
+              </div>
 
               {/* Venue link */}
               {event.venueName && (
