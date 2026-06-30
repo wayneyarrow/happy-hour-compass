@@ -253,6 +253,48 @@ export function deriveBrowsingLocation(params: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Cities with assigned venues
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns active cities in the market that have at least one venue assigned
+ * (venues.city_id IS NOT NULL and matches the city).
+ *
+ * Used by the Region & Location Switcher to show only useful "Also in this
+ * region" locations — not empty cities that exist in the DB but have no
+ * content yet.
+ *
+ * Two queries: (1) city list for the market, (2) distinct city_ids present in
+ * venues. Cities not represented in venues are filtered out before returning.
+ */
+export async function getCitiesWithVenues(marketId: string): Promise<CityRecord[]> {
+  const supabase = createAdminClient();
+
+  const { data: cities, error: citiesError } = await supabase
+    .from("cities")
+    .select("*")
+    .eq("market_id", marketId)
+    .eq("status", "active")
+    .order("display_order", { ascending: true });
+  if (citiesError) throw citiesError;
+  if (!cities?.length) return [];
+
+  const cityIds = cities.map((c) => c.id);
+
+  const { data: venueRows, error: venuesError } = await supabase
+    .from("venues")
+    .select("city_id")
+    .in("city_id", cityIds)
+    .not("city_id", "is", null)
+    .limit(500);
+  if (venuesError) throw venuesError;
+
+  const cityIdsWithVenues = new Set((venueRows ?? []).map((v) => v.city_id as string));
+
+  return cities.filter((c) => cityIdsWithVenues.has(c.id)).map(mapCity);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Nearby cities — STUB (deferred)
 // ─────────────────────────────────────────────────────────────────────────────
 

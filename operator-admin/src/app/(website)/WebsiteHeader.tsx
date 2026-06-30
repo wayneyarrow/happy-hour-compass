@@ -4,14 +4,22 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import WebsiteLocationSwitcher from "./WebsiteLocationSwitcher";
+import type { CityRecord } from "@/lib/geo/types";
 
-const NAV = [
-  { label: "Restaurants & Bars", href: "/restaurants" },
-  { label: "Guides", href: "/guides" },
-  { label: "For Businesses", href: "/for-businesses" },
-];
+type Props = {
+  marketId: string;
+  marketName: string;
+  currentCityName: string;
+  cities: CityRecord[];
+};
 
-export default function WebsiteHeader() {
+export default function WebsiteHeader({
+  marketId,
+  marketName,
+  currentCityName,
+  cities,
+}: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -23,12 +31,10 @@ export default function WebsiteHeader() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
-  // Prevent body scroll while mobile menu is open
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
@@ -45,14 +51,12 @@ export default function WebsiteHeader() {
             : "border-b border-gray-100"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 md:h-[72px] flex items-center">
-          {/* Logo — icon mark + HTML wordmark.
-              The stacked logo.png (1024×1024) renders its text at ~5 px at
-              standard header heights; a horizontal lockup is needed here. */}
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 md:h-[72px] flex items-center gap-3">
+          {/* Logo */}
           <Link
             href="/"
             aria-label="Happy Hour Compass — Home"
-            className="flex-shrink-0 mr-auto flex items-center gap-2.5"
+            className="flex-shrink-0 flex items-center gap-2.5 mr-1"
           >
             <Image
               src="/hhc-icon.png"
@@ -62,45 +66,48 @@ export default function WebsiteHeader() {
               className="h-9 w-auto flex-shrink-0"
               priority
             />
-            <span className="whitespace-nowrap text-[15px] font-bold tracking-tight text-gray-900">
+            {/* Wordmark hidden on mobile to prevent header overflow when
+                logo + location switcher + hamburger compete for narrow space. */}
+            <span className="hidden sm:inline whitespace-nowrap text-[15px] font-bold tracking-tight text-gray-900">
               Happy Hour{" "}
               <span className="text-amber-500">Compass</span>
             </span>
           </Link>
 
-          {/* Desktop nav — centered between logo and Sign In */}
-          <nav
-            aria-label="Main navigation"
-            className="hidden md:flex items-center gap-8 mx-auto"
-          >
-            {NAV.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-sm font-medium transition-colors whitespace-nowrap ${
-                    active
-                      ? "text-gray-900"
-                      : "text-gray-500 hover:text-gray-900"
-                  }`}
-                  aria-current={active ? "page" : undefined}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+          {/* Region & Location Switcher — always visible on all breakpoints */}
+          <WebsiteLocationSwitcher
+            marketId={marketId}
+            marketName={marketName}
+            currentCityName={currentCityName}
+            cities={cities}
+          />
+
+          {/* Push right-side items to the end */}
+          <div className="flex-1" />
+
+          {/* Desktop — secondary CTAs + Sign In */}
+          <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
+            <Link
+              href="/suggest/customer"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              Suggest a Venue
+            </Link>
+            <Link
+              href="/suggest/owner"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              Claim / Add Your Venue
+            </Link>
+            <Link
+              href="/login"
+              className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              Sign In
+            </Link>
           </nav>
 
-          {/* Desktop Sign In — pinned right */}
-          <Link
-            href="/login"
-            className="hidden md:inline-flex items-center ml-auto px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors"
-          >
-            Sign In
-          </Link>
-
-          {/* Mobile menu trigger */}
+          {/* Mobile — hamburger trigger */}
           <button
             type="button"
             aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -145,22 +152,22 @@ export default function WebsiteHeader() {
           >
             <div className="max-w-7xl mx-auto px-6">
               <ul role="list">
-                {NAV.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(item.href + "/");
-                  return (
-                    <li key={item.href} className="border-b border-gray-100 last:border-0">
-                      <Link
-                        href={item.href}
-                        aria-current={active ? "page" : undefined}
-                        className={`flex items-center py-4 text-base font-medium transition-colors ${
-                          active ? "text-amber-600" : "text-gray-800 hover:text-amber-600"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
+                <li className="border-b border-gray-100">
+                  <Link
+                    href="/suggest/customer"
+                    className="flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  >
+                    Suggest a Venue
+                  </Link>
+                </li>
+                <li className="border-b border-gray-100">
+                  <Link
+                    href="/suggest/owner"
+                    className="flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  >
+                    Claim / Add Your Venue
+                  </Link>
+                </li>
               </ul>
               <div className="py-5">
                 <Link
