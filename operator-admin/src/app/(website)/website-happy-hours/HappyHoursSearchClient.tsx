@@ -5,6 +5,7 @@ import { haversineKm } from "@/lib/geo";
 import { computeHhStatus } from "@/lib/happyHourStatus";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
+import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import type { Market } from "@/lib/markets";
 
 // ─── Extended card type ───────────────────────────────────────────────────────
@@ -136,33 +137,6 @@ function EmptyState({
           Try switching to a different market.
         </p>
       )}
-    </div>
-  );
-}
-
-// ─── Map placeholder ──────────────────────────────────────────────────────────
-
-function MapPlaceholder() {
-  return (
-    <div className="text-center px-8">
-      <div className="w-16 h-16 rounded-2xl bg-white mx-auto flex items-center justify-center mb-4 shadow-sm">
-        <svg
-          className="w-8 h-8 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-          />
-        </svg>
-      </div>
-      <p className="text-sm font-semibold text-gray-600">Interactive Map Placeholder</p>
-      <p className="text-xs text-gray-400 mt-1">Google Maps integration coming soon</p>
     </div>
   );
 }
@@ -341,6 +315,25 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
     setSelectedType(null);
     setFilterTime("");
   }
+
+  // ── map markers — only venues with valid coordinates ──
+  const mapMarkers = useMemo<MapMarker[]>(
+    () =>
+      sortedCards
+        .filter((c) => c.latitude !== null && c.longitude !== null)
+        .map((c) => ({
+          id: c.id,
+          lat: c.latitude!,
+          lng: c.longitude!,
+          name: c.name,
+          subtitle:
+            c.hhStatus.type === "active"
+              ? `On Now · Ends ${c.hhStatus.endsIn}`
+              : c.establishmentType,
+          href: c.href,
+        })),
+    [sortedCards]
+  );
 
   // ── chip labels ──
 
@@ -581,9 +574,12 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
             className="sticky top-[132px] flex p-4"
             style={{ height: "calc(100dvh - 132px)" }}
           >
-            <div className="flex-1 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden">
-              <MapPlaceholder />
-            </div>
+            <SearchResultsMap
+              markers={mapMarkers}
+              marketCenter={market.mapCenter}
+              marketZoom={market.mapZoom}
+              className="flex-1 rounded-2xl overflow-hidden"
+            />
           </div>
         </div>
       </div>
@@ -596,12 +592,12 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
           className="px-4 pt-6 pb-5 border-b border-gray-100"
         />
 
-        <div className="mx-4 my-4 h-52 rounded-2xl bg-gray-100 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-sm font-semibold text-gray-500">Interactive Map Placeholder</p>
-            <p className="text-xs text-gray-400 mt-1">Coming soon</p>
-          </div>
-        </div>
+        <SearchResultsMap
+          markers={mapMarkers}
+          marketCenter={market.mapCenter}
+          marketZoom={market.mapZoom}
+          className="mx-4 my-4 h-52 rounded-2xl overflow-hidden"
+        />
 
         {sortedCards.length === 0 ? (
           <div className="px-4 pb-8">

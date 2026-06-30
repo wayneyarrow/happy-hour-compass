@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, type ReactNode } from "react";
+import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import type { Market } from "@/lib/markets";
 import { EVENT_TYPE_OPTIONS } from "@/lib/eventTypes";
@@ -96,35 +97,6 @@ function eventOccursInRange(
     cur.setDate(cur.getDate() + 1);
   }
   return false;
-}
-
-// ─── Map placeholder ──────────────────────────────────────────────────────────
-
-function MapPlaceholder({ className = "" }: { className?: string }) {
-  return (
-    <div className={`rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden ${className}`}>
-      <div className="text-center px-8">
-        <div className="w-16 h-16 rounded-2xl bg-white mx-auto flex items-center justify-center mb-4 shadow-sm">
-          <svg
-            className="w-8 h-8 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-            />
-          </svg>
-        </div>
-        <p className="text-sm font-semibold text-gray-600">Interactive Map Placeholder</p>
-        <p className="text-xs text-gray-400 mt-1">Google Maps integration coming soon</p>
-      </div>
-    </div>
-  );
 }
 
 // ─── EmptyState ───────────────────────────────────────────────────────────────
@@ -603,6 +575,26 @@ export function EventSearchResults({ events, market }: Props) {
 
   const hasFilters = !!(dateFilter || hasAppliedRange || activeType);
 
+  // ── Event map markers — one marker per unique venue location ─────────────
+  const eventMapMarkers = useMemo<MapMarker[]>(() => {
+    const seen = new Set<string>();
+    const result: MapMarker[] = [];
+    for (const e of filtered) {
+      if (e.venueLat === null || e.venueLng === null) continue;
+      const key = `${e.venueLat},${e.venueLng}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({
+        id: key,
+        lat: e.venueLat,
+        lng: e.venueLng,
+        name: e.venueName,
+        subtitle: e.title,
+      });
+    }
+    return result;
+  }, [filtered]);
+
   // ── Calendar chip label ───────────────────────────────────────────────────
   const calChipLabel = hasAppliedRange && calAppliedStart && calAppliedEnd
     ? fmtRangeLabel(calAppliedStart, calAppliedEnd)
@@ -752,7 +744,12 @@ export function EventSearchResults({ events, market }: Props) {
             className={`sticky ${MAP_TOP} flex p-4`}
             style={{ height: MAP_HEIGHT }}
           >
-            <MapPlaceholder className="flex-1" />
+            <SearchResultsMap
+              markers={eventMapMarkers}
+              marketCenter={market.mapCenter}
+              marketZoom={market.mapZoom}
+              className="flex-1 rounded-2xl overflow-hidden"
+            />
           </div>
         </div>
       </div>
@@ -768,10 +765,12 @@ export function EventSearchResults({ events, market }: Props) {
           className="px-4 pt-6 pb-5 border-b border-gray-100"
         />
 
-        {/* Map placeholder */}
-        <div className="mx-4 my-4 h-52">
-          <MapPlaceholder className="w-full h-full" />
-        </div>
+        <SearchResultsMap
+          markers={eventMapMarkers}
+          marketCenter={market.mapCenter}
+          marketZoom={market.mapZoom}
+          className="mx-4 my-4 h-52 rounded-2xl overflow-hidden"
+        />
 
         {/* Results */}
         {filtered.length === 0 ? (
