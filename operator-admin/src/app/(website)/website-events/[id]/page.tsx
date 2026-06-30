@@ -5,12 +5,15 @@ import { getEventForWebsite } from "@/lib/data/events";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
-import { BusinessHoursRow } from "@/app/(consumer)/event/[id]/BusinessHoursRow";
 import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
 import { VenueDetailMap } from "@/app/(website)/[market]/venue/[slug]/VenueDetailMap";
 import { StickyNav } from "@/app/(website)/[market]/venue/[slug]/StickyNav";
 import { EventActionCard } from "./EventActionCard";
 import { EventMobileActionBar } from "./EventMobileActionBar";
+import { MakeANightOfIt } from "./MakeANightOfIt";
+import { KnowBeforeYouGo } from "./KnowBeforeYouGo";
+import { BusinessHoursPanel } from "./BusinessHoursPanel";
+import { formatPrice, buildDetailDateLabel } from "./eventFormatters";
 
 // Always read fresh DB data — event status and sold-out state are time-sensitive.
 export const dynamic = "force-dynamic";
@@ -98,7 +101,7 @@ function ChevronIcon() {
   );
 }
 
-// ─── Compact hero image (split layout — not a full-width gallery) ─────────────
+// ─── Compact hero image ───────────────────────────────────────────────────────
 
 function EventHeroImage({
   imageUrl,
@@ -109,7 +112,7 @@ function EventHeroImage({
 }) {
   if (imageUrl) {
     return (
-      <div className="relative h-[200px] lg:h-[300px] rounded-2xl overflow-hidden bg-gray-100 shadow-sm">
+      <div className="relative h-[200px] lg:h-[260px] rounded-2xl overflow-hidden bg-gray-100 shadow-sm">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
@@ -120,10 +123,9 @@ function EventHeroImage({
     );
   }
 
-  // Premium amber gradient fallback — no image case.
   return (
     <div
-      className="relative h-[200px] lg:h-[300px] rounded-2xl overflow-hidden shadow-sm"
+      className="relative h-[200px] lg:h-[260px] rounded-2xl overflow-hidden shadow-sm"
       style={{
         background:
           "linear-gradient(135deg, #78350f 0%, #92400e 40%, #b45309 70%, #d97706 100%)",
@@ -141,7 +143,7 @@ function EventHeroImage({
       />
       <div className="absolute inset-0 flex items-center justify-center">
         <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          className="w-14 h-14 rounded-2xl flex items-center justify-center"
           style={{
             background: "rgba(255,255,255,0.15)",
             backdropFilter: "blur(8px)",
@@ -155,7 +157,7 @@ function EventHeroImage({
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-8 h-8"
+            className="w-7 h-7"
             aria-hidden="true"
           >
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -183,7 +185,6 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
-  // Prefer event image; fall back to first venue image; null triggers gradient fallback.
   const heroImageUrl = event.imageUrl ?? event.venueImages[0]?.url ?? null;
 
   const mapsUrl = event.venueAddress
@@ -209,6 +210,16 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
   const hasDescription = Boolean(event.description?.trim());
   const hasOtherEvents = event.otherEvents.length > 0;
   const hasVenueAbout = Boolean(event.venueAbout?.trim());
+  const hasVenueHh = Object.values(event.venueHhWeekly).some((s) => s.length > 0);
+
+  const hasKnowBeforeYouGo = Boolean(
+    event.priceDisplay ||
+    event.ageRestriction ||
+    event.reservationRecommendation ||
+    event.parkingNotes ||
+    event.accessibilityNotes ||
+    (event.startTime && event.endTime)
+  );
 
   const showGetTickets =
     !event.isExpired &&
@@ -217,30 +228,51 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
     Boolean(event.ticketUrl);
   const showSoldOut = event.ticketingEnabled && event.soldOut;
 
-  const sections = [
-    ...(hasDescription ? [{ id: "about", label: "About" }] : []),
-    { id: "when-where", label: "When & Where" },
-    { id: "happy-hour", label: "Happy Hour" },
-    ...(hasOtherEvents ? [{ id: "more-events", label: "More Events" }] : []),
-    { id: "venue", label: "Venue" },
-  ];
+  // Detail-page date label — "Tuesday, Jun 30 • 8:00 PM" for one-off,
+  // "Tuesdays • 8:00 PM" for recurring, etc.
+  const detailDateLabel = buildDetailDateLabel(
+    event.firstDate,
+    event.recurrence,
+    event.startTime,
+    event.endTime
+  );
+
+  // Day-of-week of the event (derived from firstDate) — used to emphasise
+  // the correct row in the business hours panel.
+  const eventDayName: string | null = (() => {
+    if (!event.firstDate) return null;
+    const m = event.firstDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    return DAY_ORDER[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
+  })();
+
+  // Today's day name (UTC) — used to annotate the event day with "(Today)".
+  const todayDayName = DAY_ORDER[new Date().getUTCDay()];
 
   // Header (72px) + sticky section nav (48px) + 12px buffer.
   const SCROLL_MARGIN = 132;
+
+  const sections = [
+    ...(hasDescription ? [{ id: "about", label: "About" }] : []),
+    ...(hasVenueHh ? [{ id: "happy-hour", label: "Happy Hour" }] : []),
+    ...(hasKnowBeforeYouGo ? [{ id: "know-before", label: "Know Before You Go" }] : []),
+    { id: "when-where", label: "When & Where" },
+    { id: "venue", label: "Venue" },
+    ...(hasOtherEvents ? [{ id: "more-events", label: "More Events" }] : []),
+  ];
 
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <EventViewTracker eventId={event.id} />
 
-      {/* ── Split hero: event identity left + compact image right ─────────── */}
-      {/* On mobile: image stacks above identity. On desktop: side by side.   */}
+      {/* ── Hero: event identity + compact image ──────────────────────────── */}
       <div className="border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
 
           {/* Breadcrumb */}
           <nav
             aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-5 min-w-0"
+            className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0"
           >
             <Link
               href="/"
@@ -261,20 +293,20 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
             </span>
           </nav>
 
-          {/* Split grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 lg:gap-10 pb-8 lg:pb-10">
+          {/* Split grid — image right on desktop, above identity on mobile */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:gap-8 pb-8 lg:pb-10 items-start">
 
             {/* Image — above identity on mobile, right column on desktop */}
             <div className="order-first lg:order-last">
               <EventHeroImage imageUrl={heroImageUrl} title={event.title} />
             </div>
 
-            {/* Event identity — below image on mobile, left column on desktop */}
-            <div className="order-last lg:order-first flex flex-col justify-center">
+            {/* Event identity */}
+            <div className="order-last lg:order-first flex flex-col gap-0 pt-0 lg:pt-2">
 
               {/* Expired banner */}
               {event.isExpired && (
-                <div className="mb-5 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200">
+                <div className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -282,7 +314,7 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="w-4.5 h-4.5 text-gray-400 shrink-0 mt-0.5"
+                    className="shrink-0 mt-0.5 text-gray-400"
                     style={{ width: 18, height: 18 }}
                     aria-hidden="true"
                   >
@@ -296,21 +328,15 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                       <> See other upcoming events at {event.venueName} below.</>
                     )}
                     {venueUrl && (
-                      <>
-                        {" "}
-                        <Link
-                          href={venueUrl}
-                          className="font-medium text-amber-700 hover:text-amber-800 transition-colors underline underline-offset-2"
-                        >
-                          View happy hour at {event.venueName}
-                        </Link>
-                      </>
+                      <>{" "}<Link href={venueUrl} className="font-medium text-amber-700 hover:text-amber-800 transition-colors underline underline-offset-2">
+                        View happy hour at {event.venueName}
+                      </Link></>
                     )}
                   </p>
                 </div>
               )}
 
-              {/* Category pill — small, above title */}
+              {/* Category pill */}
               {showType && (
                 <div className="mb-3">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 border border-gray-200 text-[11px] font-semibold text-gray-600 uppercase tracking-[0.7px]">
@@ -320,8 +346,8 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* Event title */}
-              <h1 className="text-[1.75rem] md:text-3xl lg:text-[2.1rem] font-bold text-gray-900 leading-tight tracking-tight mb-3">
+              {/* Title */}
+              <h1 className="text-[1.75rem] md:text-[2rem] lg:text-[2.2rem] font-bold text-gray-900 leading-tight tracking-tight mb-3">
                 {event.title}
               </h1>
 
@@ -357,10 +383,10 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* Schedule pill */}
-              {event.nextOccurrenceLabel && (
-                <div className="mb-5">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-sm font-semibold text-amber-800">
+              {/* Schedule + price row */}
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                {detailDateLabel && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-sm font-semibold text-amber-800">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -376,17 +402,20 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                       <line x1="8" y1="2" x2="8" y2="6" />
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
-                    {event.nextOccurrenceLabel}
+                    {detailDateLabel}
                     {event.isExpired && (
-                      <span className="text-xs font-normal text-amber-600 ml-0.5">
-                        (Past)
-                      </span>
+                      <span className="text-xs font-normal text-amber-600 ml-0.5">(Past)</span>
                     )}
                   </span>
-                </div>
-              )}
+                )}
+                {event.priceDisplay && (
+                  <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-sm font-semibold text-gray-700">
+                    {formatPrice(event.priceDisplay)}
+                  </span>
+                )}
+              </div>
 
-              {/* Ticket CTA — primary action in hero */}
+              {/* Ticket CTA */}
               {showGetTickets && (
                 <div>
                   <a
@@ -395,29 +424,11 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold text-sm transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-4 h-4 shrink-0"
-                      aria-hidden="true"
-                    >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true">
                       <path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z" />
                     </svg>
                     Get Tickets
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-3.5 h-3.5 shrink-0 opacity-70"
-                      aria-hidden="true"
-                    >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 opacity-70" aria-hidden="true">
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                       <polyline points="15 3 21 3 21 9" />
                       <line x1="10" y1="14" x2="21" y2="3" />
@@ -426,24 +437,13 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* Sold out state */}
+              {/* Sold out */}
               {showSoldOut && (
-                <div>
-                  <div className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed select-none">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-4 h-4 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z" />
-                    </svg>
-                    Sold Out
-                  </div>
+                <div className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed select-none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0" aria-hidden="true">
+                    <path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z" />
+                  </svg>
+                  Sold Out
                 </div>
               )}
             </div>
@@ -454,16 +454,15 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
       {/* ── Page body ─────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
 
-        {/* Sticky section nav */}
         <StickyNav sections={sections} />
 
-        {/* ── Two-column content grid ──────────────────────────────────────── */}
+        {/* Two-column grid */}
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-10 xl:gap-16 pt-10">
 
           {/* ── Left: main content ──────────────────────────────────────── */}
           <div className="min-w-0 space-y-14">
 
-            {/* ── About This Event ──────────────────────────────────────── */}
+            {/* 1. About This Event */}
             {hasDescription && (
               <section id="about" style={{ scrollMarginTop: SCROLL_MARGIN }}>
                 <SectionHeading>About This Event</SectionHeading>
@@ -473,24 +472,50 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
               </section>
             )}
 
-            {/* ── When & Where ──────────────────────────────────────────── */}
-            {/* Desktop: logistics left, compact map right. Mobile: stacked. */}
+            {/* 2. Make a Night of It */}
+            {hasVenueHh && (
+              <section id="happy-hour" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>Make a Night of It</SectionHeading>
+                <MakeANightOfIt
+                  venueName={event.venueName}
+                  venueUrl={venueUrl}
+                  venueHhTagline={event.venueHhTagline}
+                  venueHhWeekly={event.venueHhWeekly}
+                  venueSpecialsFoodCount={event.venueSpecialsFoodCount}
+                  venueSpecialsDrinksCount={event.venueSpecialsDrinksCount}
+                  firstDate={event.firstDate}
+                  startTime={event.startTime}
+                  endTime={event.endTime}
+                />
+              </section>
+            )}
+
+            {/* 3. Know Before You Go */}
+            {hasKnowBeforeYouGo && (
+              <section id="know-before" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>Know Before You Go</SectionHeading>
+                <KnowBeforeYouGo
+                  priceDisplay={event.priceDisplay}
+                  ageRestriction={event.ageRestriction}
+                  reservationRecommendation={event.reservationRecommendation}
+                  parkingNotes={event.parkingNotes}
+                  accessibilityNotes={event.accessibilityNotes}
+                  startTime={event.startTime}
+                  endTime={event.endTime}
+                />
+              </section>
+            )}
+
+            {/* 4. When & Where */}
             <section id="when-where" style={{ scrollMarginTop: SCROLL_MARGIN }}>
               <SectionHeading>When & Where</SectionHeading>
 
               <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] gap-6 lg:gap-8 items-start">
 
-                {/* Left: business hours + info rows */}
+                {/* Left: info rows */}
                 <div>
-                  {hasBusinessHours && (
-                    <BusinessHoursRow
-                      hoursWeekly={event.venueHoursWeekly}
-                      venueId={event.venueId}
-                    />
-                  )}
-
                   <div className="divide-y divide-gray-100">
-                    {event.nextOccurrenceLabel && (
+                    {detailDateLabel && (
                       <InfoRow
                         label="Schedule"
                         icon={
@@ -502,11 +527,9 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                           </svg>
                         }
                       >
-                        <span className="text-gray-900">{event.nextOccurrenceLabel}</span>
+                        <span className="text-gray-900">{detailDateLabel}</span>
                         {event.isExpired && (
-                          <span className="ml-2 text-xs font-medium text-gray-400">
-                            (Past event)
-                          </span>
+                          <span className="ml-2 text-xs font-medium text-gray-400">(Past event)</span>
                         )}
                       </InfoRow>
                     )}
@@ -522,21 +545,14 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                         }
                       >
                         {mapsUrl ? (
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-blue-600 transition-colors"
-                          >
+                          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">
                             {event.venueAddress}
                           </a>
                         ) : (
                           event.venueAddress
                         )}
                         {event.venueName && (
-                          <p className="text-xs font-normal text-gray-500 mt-0.5">
-                            {event.venueName}
-                          </p>
+                          <p className="text-xs font-normal text-gray-500 mt-0.5">{event.venueName}</p>
                         )}
                       </InfoRow>
                     )}
@@ -550,10 +566,7 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                           </svg>
                         }
                       >
-                        <a
-                          href={`tel:${event.venuePhone}`}
-                          className="hover:text-blue-600 transition-colors"
-                        >
+                        <a href={`tel:${event.venuePhone}`} className="hover:text-blue-600 transition-colors">
                           {formatPhone(event.venuePhone)}
                         </a>
                       </InfoRow>
@@ -570,12 +583,7 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                           </svg>
                         }
                       >
-                        <a
-                          href={websiteUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 transition-colors break-all"
-                        >
+                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors break-all">
                           {websiteUrl.replace(/^https?:\/\//, "")}
                         </a>
                       </InfoRow>
@@ -593,20 +601,34 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                           </svg>
                         }
                       >
-                        <a
-                          href={menuUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 transition-colors"
-                        >
+                        <a href={menuUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors">
                           View menu
                         </a>
+                      </InfoRow>
+                    )}
+
+                    {/* Business hours — event day summary + expand/collapse */}
+                    {hasBusinessHours && (
+                      <InfoRow
+                        label="Hours"
+                        icon={
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        }
+                      >
+                        <BusinessHoursPanel
+                          hoursWeekly={event.venueHoursWeekly}
+                          eventDayName={eventDayName}
+                          todayDayName={todayDayName}
+                        />
                       </InfoRow>
                     )}
                   </div>
                 </div>
 
-                {/* Right: compact map — sits at top of its column, does not stretch */}
+                {/* Right: compact map */}
                 <div className="md:self-start">
                   <VenueDetailMap
                     lat={event.venueLat}
@@ -633,179 +655,20 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
               </div>
             </section>
 
-            {/* ── Make a Night of It ─────────────────────────────────────── */}
-            <section id="happy-hour" style={{ scrollMarginTop: SCROLL_MARGIN }}>
-              <SectionHeading>Make a Night of It</SectionHeading>
-
-              <div
-                className="rounded-2xl border border-amber-200/80 p-6"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(254,243,199,0.9) 0%, rgba(253,230,138,0.4) 50%, rgba(252,211,77,0.15) 100%)",
-                  boxShadow:
-                    "0 4px 20px rgba(180, 83, 9, 0.10), 0 1px 4px rgba(180, 83, 9, 0.06)",
-                }}
-              >
-                {/* Icon + headlinecopy */}
-                <div className="flex items-start gap-4 mb-5">
-                  <div
-                    className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
-                    style={{
-                      background: "rgba(180, 83, 9, 0.12)",
-                      border: "1px solid rgba(180, 83, 9, 0.20)",
-                    }}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#92400e"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ width: 22, height: 22 }}
-                      aria-hidden="true"
-                    >
-                      <path d="M8 22h8" />
-                      <path d="M7 10h10l-2 9H9Z" />
-                      <path d="m12 10-.5-8" />
-                      <path d="m7 2 1.5 2" />
-                      <path d="m17 2-1.5 2" />
-                      <path d="m9.5 2 1 2" />
-                      <path d="m14.5 2-1 2" />
-                    </svg>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-base font-bold text-amber-950 mb-1.5 leading-snug">
-                      Happy Hour at {event.venueName}
-                    </p>
-                    {event.venueHhTagline ? (
-                      <p className="text-sm text-amber-900 leading-relaxed">
-                        {event.venueHhTagline}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-amber-900 leading-relaxed">
-                        Grab happy hour before the show — or stick around after
-                        the event and keep the night going. Check the full
-                        schedule at {event.venueName}.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Strong CTA */}
-                {venueUrl && (
-                  <Link
-                    href={venueUrl}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white text-sm font-semibold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
-                  >
-                    View Happy Hour Schedule
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-3.5 h-3.5"
-                      aria-hidden="true"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </Link>
-                )}
-              </div>
-            </section>
-
-            {/* ── More Events at This Venue ─────────────────────────────── */}
-            {hasOtherEvents && (
-              <section id="more-events" style={{ scrollMarginTop: SCROLL_MARGIN }}>
-                <SectionHeading>More Events at {event.venueName}</SectionHeading>
-                <div className="space-y-3">
-                  {event.otherEvents.map((other) => {
-                    const otherTypeLabel = getEventTypeLabel(other.eventType);
-                    const otherTypeEmoji = getEventTypeEmoji(other.eventType);
-                    const showOtherType =
-                      Boolean(otherTypeLabel) && other.eventType !== "other";
-                    return (
-                      <Link
-                        key={other.id}
-                        href={`/website-events/${other.id}`}
-                        className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all group"
-                      >
-                        <div className="shrink-0 w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#d97706"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-5 h-5"
-                            aria-hidden="true"
-                          >
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 text-[15px] leading-snug group-hover:text-gray-700 transition-colors">
-                            {other.title}
-                          </p>
-                          {other.nextOccurrenceLabel && (
-                            <p className="text-sm text-amber-700 font-medium mt-0.5">
-                              {other.nextOccurrenceLabel}
-                            </p>
-                          )}
-                          {showOtherType && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              <span aria-hidden="true">{otherTypeEmoji}</span>{" "}
-                              {otherTypeLabel}
-                            </p>
-                          )}
-                        </div>
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-4 h-4 text-gray-300 shrink-0 mt-1 group-hover:text-gray-400 transition-colors"
-                          aria-hidden="true"
-                        >
-                          <path d="m9 18 6-6-6-6" />
-                        </svg>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {/* ── Venue Context ─────────────────────────────────────────── */}
+            {/* 5. About the Venue */}
             <section id="venue" style={{ scrollMarginTop: SCROLL_MARGIN }}>
               <SectionHeading>About {event.venueName}</SectionHeading>
               <div className="rounded-2xl border border-gray-100 bg-gray-50/40 p-6">
                 <div className="mb-4">
                   {venueUrl ? (
-                    <Link
-                      href={venueUrl}
-                      className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors leading-snug"
-                    >
+                    <Link href={venueUrl} className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors leading-snug">
                       {event.venueName}
                     </Link>
                   ) : (
-                    <p className="text-lg font-bold text-gray-900 leading-snug">
-                      {event.venueName}
-                    </p>
+                    <p className="text-lg font-bold text-gray-900 leading-snug">{event.venueName}</p>
                   )}
                   {event.venueEstablishmentType && (
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {event.venueEstablishmentType}
-                    </p>
+                    <p className="text-sm text-gray-500 mt-0.5">{event.venueEstablishmentType}</p>
                   )}
                   {event.venueGoogleRating !== null && (
                     <div className="mt-2">
@@ -829,22 +692,61 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                   >
                     View Venue Page
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-3.5 h-3.5"
-                      aria-hidden="true"
-                    >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5" aria-hidden="true">
                       <path d="m9 18 6-6-6-6" />
                     </svg>
                   </Link>
                 )}
               </div>
             </section>
+
+            {/* 6. More Events at This Venue */}
+            {hasOtherEvents && (
+              <section id="more-events" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>More Events at {event.venueName}</SectionHeading>
+                <div className="space-y-3">
+                  {event.otherEvents.map((other) => {
+                    const otherTypeLabel = getEventTypeLabel(other.eventType);
+                    const otherTypeEmoji = getEventTypeEmoji(other.eventType);
+                    const showOtherType = Boolean(otherTypeLabel) && other.eventType !== "other";
+                    return (
+                      <Link
+                        key={other.id}
+                        href={`/website-events/${other.id}`}
+                        className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all group"
+                      >
+                        <div className="shrink-0 w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 text-[15px] leading-snug group-hover:text-gray-700 transition-colors">
+                            {other.title}
+                          </p>
+                          {other.nextOccurrenceLabel && (
+                            <p className="text-sm text-amber-700 font-medium mt-0.5">
+                              {other.nextOccurrenceLabel}
+                            </p>
+                          )}
+                          {showOtherType && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              <span aria-hidden="true">{otherTypeEmoji}</span>{" "}{otherTypeLabel}
+                            </p>
+                          )}
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-gray-300 shrink-0 mt-1 group-hover:text-gray-400 transition-colors" aria-hidden="true">
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <div className="h-4" aria-hidden="true" />
           </div>
@@ -853,7 +755,8 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
           <div className="hidden lg:block">
             <div className="sticky top-36">
               <EventActionCard
-                nextOccurrenceLabel={event.nextOccurrenceLabel}
+                detailDateLabel={detailDateLabel}
+                priceDisplay={event.priceDisplay}
                 venueName={event.venueName}
                 venueUrl={venueUrl}
                 mapsUrl={mapsUrl}

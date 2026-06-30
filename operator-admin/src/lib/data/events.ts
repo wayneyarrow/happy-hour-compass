@@ -237,6 +237,143 @@ function parsePaymentTypesStr(raw: string | null): string {
   }
 }
 
+// ─── Happy Hour parsing helpers (private to this file) ───────────────────────
+// Mirrors the logic in venues.ts to avoid a circular import.
+
+type HhSlot = { start: string; end: string };
+
+const HH_DAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday",
+  "Thursday", "Friday", "Saturday",
+] as const;
+type HhDay = (typeof HH_DAYS)[number];
+
+function hhParse12hToHHMM(s: string): string | null {
+  const t = s.trim().toLowerCase();
+  if (t === "close" || t === "closing") return "23:00";
+  const m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  if (m[3] === "pm" && h !== 12) h += 12;
+  if (m[3] === "am" && h === 12) h = 0;
+  return `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+}
+
+function hhExpandDayRange(dayPart: string): HhDay[] {
+  const t = dayPart.trim();
+  if (/^(daily|everyday)$/i.test(t)) return [...HH_DAYS];
+  if (/^weekdays?$/i.test(t)) return HH_DAYS.filter((d) => d !== "Saturday" && d !== "Sunday");
+  const rangeMatch = t.match(/^(.+?)\s*[–\-]\s*(.+)$/);
+  if (!rangeMatch) {
+    const found = HH_DAYS.find((d) => d.toLowerCase().startsWith(t.toLowerCase().substring(0, 3)));
+    return found ? [found] : [];
+  }
+  const startAbbr = rangeMatch[1].trim().toLowerCase().substring(0, 3);
+  const endAbbr = rangeMatch[2].trim().toLowerCase().substring(0, 3);
+  const startIdx = HH_DAYS.findIndex((d) => d.toLowerCase().startsWith(startAbbr));
+  const endIdx = HH_DAYS.findIndex((d) => d.toLowerCase().startsWith(endAbbr));
+  if (startIdx === -1 || endIdx === -1) return [];
+  const result: HhDay[] = [];
+  let i = startIdx;
+  for (;;) {
+    result.push(HH_DAYS[i]);
+    if (i === endIdx) break;
+    i = (i + 1) % HH_DAYS.length;
+  }
+  return result;
+}
+
+function hhExpandScraperCompact(text: string): string {
+  const blocks = text.split("|").map((b) => b.trim());
+  const dayGroups: HhDay[][] = [
+    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
+    ["Friday", "Saturday"],
+  ];
+  const lines: string[] = [];
+  blocks.forEach((block, i) => {
+    if (i >= dayGroups.length) return;
+    const slots = block.split("&").map((s) => s.trim()).join(", ");
+    for (const day of dayGroups[i]) lines.push(`${day}: ${slots}`);
+  });
+  return lines.join("\n");
+}
+
+function hhExpandScraperGrouped(text: string): string {
+  const lines: string[] = [];
+  for (const block of text.split("|").map((b) => b.trim())) {
+    const colonIdx = block.indexOf(":");
+    if (colonIdx === -1) continue;
+    const daySpec = block.substring(0, colonIdx).trim();
+    const slots = block.substring(colonIdx + 1).trim().split("&").map((s) => s.trim()).join(", ");
+    for (const part of daySpec.split("&").map((s) => s.trim())) {
+      for (const day of hhExpandDayRange(part)) lines.push(`${day}: ${slots}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function parseHhTimesForWebsite(text: string | null): Record<string, HhSlot[]> {
+  const weekly: Record<string, HhSlot[]> = {};
+  HH_DAYS.forEach((d) => { weekly[d] = []; });
+  if (!text?.trim()) return weekly;
+
+  text = text.replace(/[    ]/g, " ").replace(/\r/g, "").trim();
+
+  if (!text.includes("\n") && text.includes("|")) {
+    const firstBlock = text.split("|")[0].trim();
+    if (/^(sun|mon|tue|wed|thu|fri|sat|daily|everyday|weekday)/i.test(firstBlock)) {
+      text = hhExpandScraperGrouped(text);
+    } else {
+      text = hhExpandScraperCompact(text);
+    }
+  }
+
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    let splitIdx = -1;
+    for (let j = 0; j < line.length; j++) {
+      if (line[j] === ":") {
+        const before = line.substring(0, j).trim();
+        const after = line.substring(j + 1).trim();
+        if (/\d$/.test(before) && /^\d/.test(after)) continue;
+        splitIdx = j;
+        break;
+      }
+    }
+    if (splitIdx === -1) continue;
+    const dayPart = line.substring(0, splitIdx).trim();
+    const timePart = line.substring(splitIdx + 1).trim();
+    if (!timePart || /^no\b/i.test(timePart)) continue;
+    const days = hhExpandDayRange(dayPart);
+    for (const slotStr of timePart.split(/[,&]/).map((s) => s.trim()).filter(Boolean)) {
+      const m = slotStr.match(/^(.+?)\s*[–\-]\s*(.+)$/);
+      if (!m) continue;
+      const rawStart = m[1].trim();
+      const rawEnd = m[2].trim();
+      const startForParse = /\s*(am|pm)\s*$/i.test(rawStart)
+        ? rawStart
+        : (() => { const p = rawEnd.match(/\s*(am|pm)\s*$/i)?.[1]; return p ? `${rawStart} ${p}` : rawStart; })();
+      const start = hhParse12hToHHMM(startForParse);
+      const end = hhParse12hToHHMM(rawEnd);
+      if (start && end) {
+        for (const day of days) weekly[day].push({ start, end });
+      }
+    }
+  }
+  return weekly;
+}
+
+/** Returns the count of items in hh_food_details / hh_drink_details raw columns. */
+function countSpecialsItems(raw: string | null): number {
+  if (!raw?.trim()) return 0;
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) return arr.filter((x) => x != null && x !== "").length;
+  } catch { /* fall through */ }
+  const delimiter = raw.includes("|") ? "|" : "\n";
+  return raw.split(delimiter).filter((s) => s.trim()).length;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -781,6 +918,7 @@ export type WebsiteEventDetail = {
   firstDate: string | null;
   recurrence: string | null;
   startTime: string | null;
+  endTime: string | null;
   ticketingEnabled: boolean;
   ticketUrl: string | null;
   soldOut: boolean;
@@ -810,6 +948,9 @@ export type WebsiteEventDetail = {
   venueGoogleRating: number | null;
   venueGoogleReviewCount: number | null;
   venueHhTagline: string;
+  venueHhWeekly: Record<string, Array<{ start: string; end: string }>>;
+  venueSpecialsFoodCount: number;
+  venueSpecialsDrinksCount: number;
   venueImages: Array<{ url: string }>;
   // Related events
   otherEvents: Array<{
@@ -871,7 +1012,8 @@ export async function getEventForWebsite(
         .select(
           "id, slug, name, address_line1, phone, website_url, menu_url, " +
             "payment_types, business_hours, lat, lng, establishment_type, " +
-            "about_your_venue, google_rating, google_review_count, hh_tagline"
+            "about_your_venue, google_rating, google_review_count, hh_tagline, " +
+            "hh_times, hh_food_details, hh_drink_details"
         )
         .eq("id", venueId)
         .maybeSingle(),
@@ -925,6 +1067,7 @@ export async function getEventForWebsite(
       firstDate,
       recurrence,
       startTime: (row.start_time as string | null) ?? null,
+      endTime: (row.end_time as string | null) ?? null,
       ticketingEnabled: row.ticketing_enabled === true,
       ticketUrl: (row.ticket_url as string | null) ?? null,
       soldOut: row.sold_out === true,
@@ -954,6 +1097,9 @@ export async function getEventForWebsite(
       venueGoogleReviewCount:
         typeof vr.google_review_count === "number" ? vr.google_review_count : null,
       venueHhTagline: (vr.hh_tagline as string) ?? "",
+      venueHhWeekly: parseHhTimesForWebsite(vr.hh_times as string | null),
+      venueSpecialsFoodCount: countSpecialsItems(vr.hh_food_details as string | null),
+      venueSpecialsDrinksCount: countSpecialsItems(vr.hh_drink_details as string | null),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       venueImages: (imagesResult.data ?? []).map((r: Record<string, any>) => ({
         url: r.url as string,

@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { formatPrice } from "./eventFormatters";
 
 type Props = {
-  nextOccurrenceLabel: string;
+  /** Pre-formatted label from buildDetailDateLabel, e.g. "Tuesdays • 8:00 PM" */
+  detailDateLabel: string;
+  priceDisplay: string | null;
   venueName: string;
   venueUrl: string | null;
   mapsUrl: string | null;
@@ -104,7 +107,8 @@ function SoldOutBtn() {
 // ─── EventActionCard ──────────────────────────────────────────────────────────
 
 export function EventActionCard({
-  nextOccurrenceLabel,
+  detailDateLabel,
+  priceDisplay,
   venueName,
   venueUrl,
   mapsUrl,
@@ -131,7 +135,7 @@ export function EventActionCard({
             <CalendarIcon />
           </span>
           <p className="text-sm font-bold text-amber-900 leading-snug">
-            {isExpired ? "This event has passed" : (nextOccurrenceLabel || "See venue for schedule")}
+            {isExpired ? "This event has passed" : (detailDateLabel || "See venue for schedule")}
           </p>
         </div>
         {venueUrl ? (
@@ -143,6 +147,9 @@ export function EventActionCard({
           </Link>
         ) : (
           <p className="text-xs text-gray-500">{venueName}</p>
+        )}
+        {priceDisplay && (
+          <p className="text-xs text-gray-500 mt-1.5 font-medium">{formatPrice(priceDisplay)}</p>
         )}
       </div>
 
