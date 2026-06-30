@@ -575,24 +575,41 @@ export function EventSearchResults({ events, market }: Props) {
 
   const hasFilters = !!(dateFilter || hasAppliedRange || activeType);
 
+  // ── Card hover → marker highlight ─────────────────────────────────────────
+  // Hover ID for events is the venue's lat,lng key (same as marker ID).
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+
   // ── Event map markers — one marker per unique venue location ─────────────
   const eventMapMarkers = useMemo<MapMarker[]>(() => {
-    const seen = new Set<string>();
-    const result: MapMarker[] = [];
+    // Count events per venue location and keep the first representative event.
+    const byKey = new Map<string, { event: WebsiteEventListItem; count: number }>();
     for (const e of filtered) {
       if (e.venueLat === null || e.venueLng === null) continue;
       const key = `${e.venueLat},${e.venueLng}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({
-        id: key,
-        lat: e.venueLat,
-        lng: e.venueLng,
-        name: e.venueName,
-        subtitle: e.title,
-      });
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        byKey.set(key, { event: e, count: 1 });
+      }
     }
-    return result;
+    return Array.from(byKey.entries()).map(([key, { event: e, count }]) => {
+      const subtitle = count > 1 ? `${count} events` : e.title;
+      const metaLine =
+        count > 1
+          ? e.venueEstablishmentType || undefined
+          : [e.nextOccurrenceLabel, e.venueEstablishmentType].filter(Boolean).join(" · ") || undefined;
+      return {
+        id: key,
+        lat: e.venueLat!,
+        lng: e.venueLng!,
+        name: e.venueName,
+        image: e.imageUrl ?? undefined,
+        subtitle,
+        subtitleColor: "amber" as const,
+        metaLine,
+      };
+    });
   }, [filtered]);
 
   // ── Calendar chip label ───────────────────────────────────────────────────
@@ -731,9 +748,21 @@ export function EventSearchResults({ events, market }: Props) {
             <EmptyState hasFilters={hasFilters} />
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {filtered.map((event) => (
-                <EventSearchCard key={event.id} event={event} />
-              ))}
+              {filtered.map((event) => {
+                const hoverKey =
+                  event.venueLat !== null && event.venueLng !== null
+                    ? `${event.venueLat},${event.venueLng}`
+                    : null;
+                return (
+                  <div
+                    key={event.id}
+                    onMouseEnter={() => hoverKey && setHoveredCardId(hoverKey)}
+                    onMouseLeave={() => setHoveredCardId(null)}
+                  >
+                    <EventSearchCard event={event} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -749,6 +778,7 @@ export function EventSearchResults({ events, market }: Props) {
               marketCenter={market.mapCenter}
               marketZoom={market.mapZoom}
               className="flex-1 rounded-2xl overflow-hidden"
+              hoveredMarkerId={hoveredCardId}
             />
           </div>
         </div>

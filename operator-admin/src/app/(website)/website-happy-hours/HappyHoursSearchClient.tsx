@@ -171,6 +171,12 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
     "idle" | "requesting" | "granted" | "denied"
   >("idle");
 
+  // ── map/card sync state ──
+  // hoveredCardId: set on card mouseenter → highlights matching marker
+  // activeCardId:  set on marker click   → rings the matching card + scrolls it into view
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
   // ── dropdown refs for click-outside ──
   const typeRef = useRef<HTMLDivElement>(null);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -321,19 +327,58 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
     () =>
       sortedCards
         .filter((c) => c.latitude !== null && c.longitude !== null)
-        .map((c) => ({
-          id: c.id,
-          lat: c.latitude!,
-          lng: c.longitude!,
-          name: c.name,
-          subtitle:
-            c.hhStatus.type === "active"
-              ? `On Now · Ends ${c.hhStatus.endsIn}`
-              : c.establishmentType,
-          href: c.href,
-        })),
+        .map((c) => {
+          let subtitle: string | undefined;
+          let subtitleColor: MapMarker["subtitleColor"] = "gray";
+
+          if (c.hhStatus.type === "active") {
+            subtitle = `On Now · ${c.hhStatus.endsIn}`;
+            subtitleColor = "green";
+          } else if (c.hhStatus.type === "upcoming") {
+            const day =
+              c.hhStatus.day === "Today"
+                ? "Today"
+                : c.hhStatus.day === "Tomorrow"
+                ? "Tomorrow"
+                : c.hhStatus.day;
+            subtitle = `${day} · Starts ${c.hhStatus.startsAt}`;
+            subtitleColor = "amber";
+          } else {
+            subtitle = c.establishmentType || undefined;
+            subtitleColor = "gray";
+          }
+
+          const metaParts: string[] = [];
+          if (c.googleRating !== null)
+            metaParts.push(`★ ${c.googleRating.toFixed(1)}`);
+          if (c.distanceKm !== null)
+            metaParts.push(`${c.distanceKm.toFixed(1)} km`);
+
+          return {
+            id: c.id,
+            lat: c.latitude!,
+            lng: c.longitude!,
+            name: c.name,
+            image: c.image,
+            subtitle,
+            subtitleColor,
+            metaLine: metaParts.length > 0 ? metaParts.join(" · ") : undefined,
+            href: c.href,
+          };
+        }),
     [sortedCards]
   );
+
+  // Scroll the matching card into view when a marker is clicked.
+  useEffect(() => {
+    if (!activeCardId) return;
+    const el = document.querySelector(`[data-card-id="${activeCardId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [activeCardId]);
+
+  function handleMarkerClick(id: string | null) {
+    setActiveCardId(id);
+  }
 
   // ── chip labels ──
 
@@ -562,7 +607,20 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {sortedCards.map((card) => (
-                <SearchResultCard key={card.id} data={card} />
+                <div
+                  key={card.id}
+                  data-card-id={card.id}
+                  onMouseEnter={() => setHoveredCardId(card.id)}
+                  onMouseLeave={() => setHoveredCardId(null)}
+                  className={[
+                    "rounded-2xl transition-shadow duration-150",
+                    activeCardId === card.id
+                      ? "ring-2 ring-amber-400 shadow-lg"
+                      : "",
+                  ].join(" ")}
+                >
+                  <SearchResultCard data={card} />
+                </div>
               ))}
             </div>
           )}
@@ -579,6 +637,8 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
               marketCenter={market.mapCenter}
               marketZoom={market.mapZoom}
               className="flex-1 rounded-2xl overflow-hidden"
+              hoveredMarkerId={hoveredCardId}
+              onMarkerClick={handleMarkerClick}
             />
           </div>
         </div>

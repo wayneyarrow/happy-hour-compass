@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   APIProvider,
   Map,
@@ -17,26 +17,201 @@ export type MapMarker = {
   lat: number;
   lng: number;
   name: string;
-  /** Shown below the venue name in the InfoWindow (e.g. "On Now", establishment type). */
+  /** Venue or event thumbnail shown in the InfoWindow. */
+  image?: string;
+  /** Line 2 of the InfoWindow — HH status, event title, establishment type, etc. */
   subtitle?: string;
-  /** Navigates on InfoWindow "View details" click. Omit if no detail page exists yet. */
+  /** Controls subtitle text colour. Defaults to "gray". */
+  subtitleColor?: "green" | "amber" | "gray";
+  /** Line 3 — rating · distance, date/time, etc. */
+  metaLine?: string;
+  /** InfoWindow "View Details" link. Omit when no destination page exists. */
   href?: string;
 };
 
-// ─── BoundsManager ────────────────────────────────────────────────────────────
+// ─── HHC pin icon builder ─────────────────────────────────────────────────────
+// Reproduces the hhc-icon.png design as an SVG data URL (transparent background,
+// scalable, no rectangular box artifact that the PNG would produce on the map).
+//
+// Default:  dark-teal pin (#1e3d5c) + white interior circle + orange glass (#f4722e)
+// Active:   orange pin (#f4722e) + white glass — color-inverted for clear distinction
 
-/**
- * Inner component — must live inside <APIProvider> to call useMap().
- * Fits the map to the initial marker set once on mount; does not re-fit
- * on subsequent filter changes so the user can pan/zoom freely.
- */
-function BoundsManager({ markers }: { markers: MapMarker[] }) {
+function buildHhcPinUrl(active: boolean): string {
+  const pinFill   = active ? "#f4722e" : "#1e3d5c";
+  const glassFill = active ? "#ffffff" : "#f4722e";
+  const accentFill = active ? "#ffffff" : "#1e3d5c";
+  // The white interior circle is only used for the default (teal) state;
+  // on the active (orange) state the glass sits directly on the orange body.
+  const interiorCircle = active
+    ? ""
+    : `<circle cx="16" cy="14" r="9.5" fill="#ffffff"/>`;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 42">` +
+    // Pin body — teardrop matching the HHC logo proportions
+    `<path d="M16,1C8.3,1,2,7.3,2,15C2,25.5,16,41,16,41C16,41,30,25.5,30,15C30,7.3,23.7,1,16,1Z" fill="${pinFill}"/>` +
+    interiorCircle +
+    // Cocktail bowl (inverted triangle)
+    `<path d="M9.5,9L22.5,9L17,17L15,17Z" fill="${glassFill}"/>` +
+    // Stem
+    `<rect x="15.5" y="17" width="1" height="3.5" fill="${accentFill}"/>` +
+    // Base
+    `<rect x="12.5" y="20.5" width="7" height="1.3" fill="${accentFill}"/>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+// ─── InfoWindow content ───────────────────────────────────────────────────────
+// Uses inline styles throughout — Google Maps InfoWindows render in a separate
+// DOM layer that may not inherit Tailwind utility classes.
+
+function MarkerInfoWindow({ marker }: { marker: MapMarker }) {
+  const subtitleColour =
+    marker.subtitleColor === "green"
+      ? "#15803d"
+      : marker.subtitleColor === "amber"
+      ? "#b45309"
+      : "#6b7280";
+
+  return (
+    <div style={{ maxWidth: 210, fontFamily: "system-ui,-apple-system,sans-serif" }}>
+      {/* Thumbnail */}
+      {marker.image && (
+        <div
+          style={{
+            marginBottom: 8,
+            height: 84,
+            borderRadius: 6,
+            overflow: "hidden",
+            background: "#f3f4f6",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={marker.image}
+            alt={marker.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </div>
+      )}
+
+      {/* Venue / venue name */}
+      <p
+        style={{
+          margin: "0 0 3px",
+          fontWeight: 700,
+          fontSize: 13,
+          color: "#111827",
+          lineHeight: 1.3,
+        }}
+      >
+        {marker.name}
+      </p>
+
+      {/* Subtitle — HH status, event title, establishment type */}
+      {marker.subtitle && (
+        <p
+          style={{
+            margin: "0 0 2px",
+            fontSize: 11.5,
+            lineHeight: 1.35,
+            color: subtitleColour,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {marker.subtitleColor === "green" && (
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#22c55e",
+                flexShrink: 0,
+              }}
+            />
+          )}
+          {marker.subtitle}
+        </p>
+      )}
+
+      {/* Meta line — rating, distance, date */}
+      {marker.metaLine && (
+        <p
+          style={{
+            margin: "0 0 6px",
+            fontSize: 11,
+            color: "#9ca3af",
+            lineHeight: 1.3,
+          }}
+        >
+          {marker.metaLine}
+        </p>
+      )}
+
+      {/* CTA */}
+      {marker.href && (
+        <a
+          href={marker.href}
+          style={{
+            display: "block",
+            marginTop: marker.metaLine || marker.subtitle ? 4 : 6,
+            padding: "5px 12px",
+            background: "#f59e0b",
+            color: "#fff",
+            borderRadius: 5,
+            fontSize: 11.5,
+            fontWeight: 600,
+            textDecoration: "none",
+            textAlign: "center",
+            letterSpacing: "0.01em",
+          }}
+        >
+          View Details →
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ─── MapInnards ───────────────────────────────────────────────────────────────
+// Lives inside <Map> so it can call useMap() and useMapsLibrary().
+// Handles bounds-fitting, custom icon construction, markers, and InfoWindow.
+
+type MapInnardsProps = {
+  markers: MapMarker[];
+  hoveredMarkerId: string | null;
+  selectedId: string | null;
+  onSelectId: (id: string | null) => void;
+};
+
+function MapInnards({
+  markers,
+  hoveredMarkerId,
+  selectedId,
+  onSelectId,
+}: MapInnardsProps) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
-  const hasFitted = useRef(false);
+  // Tracks the sorted ID set of the last fitted marker group so we only refit
+  // when the visible result set changes (filter changes), not on sort order changes.
+  const prevFitKeyRef = useRef("");
 
+  // Refit bounds when the coordinate set meaningfully changes.
   useEffect(() => {
-    if (!map || !coreLib || hasFitted.current || markers.length === 0) return;
+    if (!map || !coreLib || markers.length === 0) return;
+
+    const fitKey = markers
+      .map((m) => m.id)
+      .sort()
+      .join(",");
+    if (fitKey === prevFitKeyRef.current) return;
+    prevFitKeyRef.current = fitKey;
 
     if (markers.length === 1) {
       map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
@@ -46,11 +221,58 @@ function BoundsManager({ markers }: { markers: MapMarker[] }) {
       markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
       map.fitBounds(bounds, 60);
     }
-
-    hasFitted.current = true;
   }, [map, coreLib, markers]);
 
-  return null;
+  // Build HHC pin icons once the core library is ready (Size + Point constructors).
+  // Falls back to undefined (default Google red marker) while coreLib loads.
+  const icons = useMemo(() => {
+    if (!coreLib) return null;
+    return {
+      default: {
+        url: buildHhcPinUrl(false),
+        scaledSize: new coreLib.Size(28, 37),
+        anchor: new coreLib.Point(14, 37),
+      },
+      active: {
+        url: buildHhcPinUrl(true),
+        scaledSize: new coreLib.Size(36, 47),
+        anchor: new coreLib.Point(18, 47),
+      },
+    };
+  }, [coreLib]);
+
+  const selectedMarker = selectedId
+    ? (markers.find((m) => m.id === selectedId) ?? null)
+    : null;
+
+  return (
+    <>
+      {markers.map((m) => {
+        const isActive = m.id === hoveredMarkerId || m.id === selectedId;
+        return (
+          <Marker
+            key={m.id}
+            position={{ lat: m.lat, lng: m.lng }}
+            title={m.name}
+            // icons is null briefly while coreLib loads — undefined falls back to
+            // the default Google red marker, then swaps to the custom amber pin.
+            icon={icons ? (isActive ? icons.active : icons.default) : undefined}
+            zIndex={isActive ? 10 : 1}
+            onClick={() => onSelectId(selectedId === m.id ? null : m.id)}
+          />
+        );
+      })}
+
+      {selectedMarker && (
+        <InfoWindow
+          position={{ lat: selectedMarker.lat, lng: selectedMarker.lng }}
+          onCloseClick={() => onSelectId(null)}
+        >
+          <MarkerInfoWindow marker={selectedMarker} />
+        </InfoWindow>
+      )}
+    </>
+  );
 }
 
 // ─── Fallback ─────────────────────────────────────────────────────────────────
@@ -84,8 +306,18 @@ type Props = {
   markers: MapMarker[];
   marketCenter: { lat: number; lng: number };
   marketZoom: number;
-  /** Tailwind classes applied to the root container (controls size, rounded corners, etc.). */
+  /** Tailwind classes applied to the root container (size, rounded corners, etc.). */
   className?: string;
+  /**
+   * ID of the marker that corresponds to the card currently being hovered.
+   * Passed from the parent so card hover highlights the matching map pin.
+   */
+  hoveredMarkerId?: string | null;
+  /**
+   * Called when a marker is clicked (passes the marker id) or the InfoWindow
+   * is closed (passes null). Parent uses this to highlight the matching card.
+   */
+  onMarkerClick?: (id: string | null) => void;
 };
 
 export function SearchResultsMap({
@@ -93,16 +325,23 @@ export function SearchResultsMap({
   marketCenter,
   marketZoom,
   className = "",
+  hoveredMarkerId = null,
+  onMarkerClick,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
-  const [selected, setSelected] = useState<MapMarker | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  function handleSelectId(id: string | null) {
+    setSelectedId(id);
+    onMarkerClick?.(id);
+  }
 
   if (!apiKey) {
     return <MapFallback message="Map unavailable" className={className} />;
   }
 
   return (
-    <div className={`${className}`}>
+    <div className={className}>
       <APIProvider apiKey={apiKey} version="quarterly">
         <Map
           defaultCenter={marketCenter}
@@ -114,68 +353,14 @@ export function SearchResultsMap({
           cameraControl={false}
           zoomControl={true}
           style={{ width: "100%", height: "100%" }}
-          onClick={() => setSelected(null)}
+          onClick={() => handleSelectId(null)}
         >
-          <BoundsManager markers={markers} />
-
-          {markers.map((m) => (
-            <Marker
-              key={m.id}
-              position={{ lat: m.lat, lng: m.lng }}
-              title={m.name}
-              onClick={() => setSelected(m)}
-            />
-          ))}
-
-          {selected && (
-            <InfoWindow
-              position={{ lat: selected.lat, lng: selected.lng }}
-              onCloseClick={() => setSelected(null)}
-            >
-              <div style={{ maxWidth: 200 }}>
-                <p
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 14,
-                    margin: 0,
-                    color: "#111827",
-                  }}
-                >
-                  {selected.name}
-                </p>
-                {selected.subtitle && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "#6b7280",
-                      margin: "3px 0 0",
-                    }}
-                  >
-                    {selected.subtitle}
-                  </p>
-                )}
-                {selected.href && (
-                  <a
-                    href={selected.href}
-                    style={{
-                      display: "block",
-                      marginTop: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#ffffff",
-                      background: "#f59e0b",
-                      borderRadius: 6,
-                      padding: "4px 10px",
-                      textDecoration: "none",
-                      textAlign: "center",
-                    }}
-                  >
-                    View details →
-                  </a>
-                )}
-              </div>
-            </InfoWindow>
-          )}
+          <MapInnards
+            markers={markers}
+            hoveredMarkerId={hoveredMarkerId}
+            selectedId={selectedId}
+            onSelectId={handleSelectId}
+          />
         </Map>
       </APIProvider>
     </div>
