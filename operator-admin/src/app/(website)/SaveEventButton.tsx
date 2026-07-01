@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { isEventSaved, saveEvent, unsaveEvent } from "@/lib/consumer/savedItems";
+import { dbSaveEvent, dbUnsaveEvent } from "@/lib/consumer/savedSync";
+import { createClient } from "@/lib/supabase/browser";
+import { useConsumerId } from "./ConsumerAuthProvider";
 
 type Props = {
   eventId: string;
@@ -12,7 +15,14 @@ const HEART_PATH =
   "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z";
 
 export function SaveEventButton({ eventId, variant = "list" }: Props) {
+  const consumerId = useConsumerId();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const [saved, setSaved] = useState(false);
+
+  function getSupabase() {
+    if (!supabaseRef.current) supabaseRef.current = createClient();
+    return supabaseRef.current;
+  }
 
   useEffect(() => {
     setSaved(isEventSaved(eventId));
@@ -30,9 +40,15 @@ export function SaveEventButton({ eventId, variant = "list" }: Props) {
     if (saved) {
       unsaveEvent(eventId);
       setSaved(false);
+      if (consumerId) {
+        dbUnsaveEvent(getSupabase(), consumerId, eventId).catch(() => {});
+      }
     } else {
       saveEvent(eventId);
       setSaved(true);
+      if (consumerId) {
+        dbSaveEvent(getSupabase(), consumerId, eventId).catch(() => {});
+      }
     }
   }
 

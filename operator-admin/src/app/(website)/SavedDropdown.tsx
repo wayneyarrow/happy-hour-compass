@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   getLocalSavedItems,
@@ -9,6 +9,9 @@ import {
   migrateVenueId,
   type SavedItem,
 } from "@/lib/consumer/savedItems";
+import { dbUnsaveVenue, dbUnsaveEvent } from "@/lib/consumer/savedSync";
+import { createClient } from "@/lib/supabase/browser";
+import { useConsumerId } from "./ConsumerAuthProvider";
 import type { VenuePreview } from "@/lib/data/venues";
 import type { EventPreview } from "@/lib/data/events";
 
@@ -38,6 +41,14 @@ type Props = {
 const MAX_PREVIEW = 5;
 
 export function SavedDropdown({ marketId, open, onClose }: Props) {
+  const consumerId = useConsumerId();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+
+  function getSupabase() {
+    if (!supabaseRef.current) supabaseRef.current = createClient();
+    return supabaseRef.current;
+  }
+
   const [venueRows, setVenueRows] = useState<VenueRow[]>([]);
   const [eventRows, setEventRows] = useState<EventRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>("idle");
@@ -217,6 +228,9 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
                           onUnsave={(storedId) => {
                             unsaveVenue(storedId);
                             setVenueRows((prev) => prev.filter((r) => r.storedId !== storedId));
+                            if (consumerId) {
+                              dbUnsaveVenue(getSupabase(), consumerId, storedId).catch(() => {});
+                            }
                           }}
                         />
                       ))}
@@ -252,6 +266,9 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
                           onUnsave={(id) => {
                             unsaveEvent(id);
                             setEventRows((prev) => prev.filter((r) => r.id !== id));
+                            if (consumerId) {
+                              dbUnsaveEvent(getSupabase(), consumerId, id).catch(() => {});
+                            }
                           }}
                         />
                       ))}
@@ -268,22 +285,23 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
           )}
         </div>
 
-        {/* ── Account CTA ──────────────────────────────────────────────────── */}
-        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60">
-          <p className="text-[11px] text-gray-500 leading-snug mb-2">
-            {isEmpty
-              ? "Create a free account to sync saved places across devices."
-              : "Create a free account to keep your saved places across devices."}
-          </p>
-          {/* TODO(Consumer Saved Sync): wire up localStorage→DB merge on sign-in */}
-          <Link
-            href="/sign-up"
-            className="block w-full py-2 px-3 rounded-xl text-xs font-semibold text-center bg-amber-500 hover:bg-amber-600 text-white transition-colors"
-            onClick={onClose}
-          >
-            Create Free Account
-          </Link>
-        </div>
+        {/* ── Account CTA — hidden when signed in ──────────────────────────── */}
+        {!consumerId && (
+          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60">
+            <p className="text-[11px] text-gray-500 leading-snug mb-2">
+              {isEmpty
+                ? "Create a free account to sync saved places across devices."
+                : "Create a free account to keep your saved places across devices."}
+            </p>
+            <Link
+              href="/sign-up"
+              className="block w-full py-2 px-3 rounded-xl text-xs font-semibold text-center bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+              onClick={onClose}
+            >
+              Create Free Account
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

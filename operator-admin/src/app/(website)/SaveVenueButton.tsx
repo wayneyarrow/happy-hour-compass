@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { isVenueSaved, saveVenue, unsaveVenue } from "@/lib/consumer/savedItems";
+import { dbSaveVenue, dbUnsaveVenue } from "@/lib/consumer/savedSync";
+import { createClient } from "@/lib/supabase/browser";
+import { useConsumerId } from "./ConsumerAuthProvider";
 
 type Props = {
   venueId: string;
@@ -16,7 +19,14 @@ const HEART_PATH =
   "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z";
 
 export function SaveVenueButton({ venueId, variant = "list" }: Props) {
+  const consumerId = useConsumerId();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const [saved, setSaved] = useState(false);
+
+  function getSupabase() {
+    if (!supabaseRef.current) supabaseRef.current = createClient();
+    return supabaseRef.current;
+  }
 
   // Hydrate after mount — avoids SSR mismatch
   useEffect(() => {
@@ -35,9 +45,15 @@ export function SaveVenueButton({ venueId, variant = "list" }: Props) {
     if (saved) {
       unsaveVenue(venueId);
       setSaved(false);
+      if (consumerId) {
+        dbUnsaveVenue(getSupabase(), consumerId, venueId).catch(() => {});
+      }
     } else {
       saveVenue(venueId);
       setSaved(true);
+      if (consumerId) {
+        dbSaveVenue(getSupabase(), consumerId, venueId).catch(() => {});
+      }
     }
   }
 
