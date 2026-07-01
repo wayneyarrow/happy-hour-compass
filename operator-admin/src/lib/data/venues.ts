@@ -866,3 +866,61 @@ export async function getVenuePreviewsByIds(
     return [];
   }
 }
+
+/**
+ * Fetches a subset of published venues by their DB UUIDs.
+ * Returns ConsumerVenue[] — same shape as getPublishedVenuesForConsumer but
+ * scoped to specific IDs. Used by the /saved page to load full card data
+ * for saved venues without fetching the entire dataset.
+ * Includes primary images; events are not fetched (not needed for card display).
+ */
+export async function getPublishedVenuesByUuids(
+  uuids: string[]
+): Promise<ConsumerVenue[]> {
+  if (uuids.length === 0) return [];
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("venues")
+      .select(
+        "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
+          "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
+          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
+          "internal_boost, spotlight_eligible, exclude_from_discover, " +
+          "operators!created_by_operator_id(plan)"
+      )
+      .eq("is_published", true)
+      .in("id", uuids);
+
+    if (error || !data || data.length === 0) return [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const venues = (data as Record<string, any>[]).map(rowToConsumerVenue);
+
+    // Fetch primary image per venue (first by sort_order).
+    const { data: mediaRows } = await supabase
+      .from("media")
+      .select("venue_id, url")
+      .in("venue_id", uuids)
+      .eq("type", "venue_image")
+      .order("sort_order", { ascending: true });
+
+    const primaryByVenueId: Record<string, string> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const m of (mediaRows ?? []) as Record<string, any>[]) {
+      const vid = m.venue_id as string;
+      if (!primaryByVenueId[vid]) primaryByVenueId[vid] = m.url as string;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (data as Record<string, any>[]).forEach((r, i) => {
+      const url = primaryByVenueId[r.id as string];
+      if (url) venues[i].images = [{ url }];
+    });
+
+    return venues;
+  } catch (err) {
+    console.error("[getPublishedVenuesByUuids] Unexpected error:", err);
+    return [];
+  }
+}

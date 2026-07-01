@@ -285,6 +285,28 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
           )}
         </div>
 
+        {/* ── View All Saved — always visible when there are saved items ────── */}
+        {!isEmpty && (
+          <div className="px-4 py-2.5 border-t border-gray-100">
+            <Link
+              href="/saved"
+              onClick={onClose}
+              className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors"
+            >
+              View all saved
+              <svg
+                className="w-3.5 h-3.5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+        )}
+
         {/* ── Account CTA — hidden when signed in ──────────────────────────── */}
         {!consumerId && (
           <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60">

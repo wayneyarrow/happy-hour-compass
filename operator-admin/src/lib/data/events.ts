@@ -1188,3 +1188,67 @@ export async function getEventPreviewsByIds(
     return [];
   }
 }
+
+/**
+ * Fetches published events by their UUIDs.
+ * Returns WebsiteEventListItem[] — same shape as getPublishedEventsForWebsite but
+ * scoped to specific IDs. Used by the /saved page to load full event data
+ * for saved events without fetching the entire market dataset.
+ */
+export async function getPublishedEventsByIds(
+  ids: string[]
+): Promise<WebsiteEventListItem[]> {
+  if (ids.length === 0) return [];
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        "id, title, description, event_type, image_url, " +
+          "first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, " +
+          "venues(name, lat, lng, establishment_type)"
+      )
+      .in("id", ids)
+      .eq("is_published", true);
+
+    if (error || !data || data.length === 0) return [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data as Record<string, any>[]).map((row): WebsiteEventListItem => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const venue = (row.venues as Record<string, any> | null) ?? {};
+      const vLat = typeof venue.lat === "number" ? venue.lat : null;
+      const vLng = typeof venue.lng === "number" ? venue.lng : null;
+      const firstDate = (row.first_date as string | null) ?? null;
+      const recurrence = (row.recurrence as string | null) ?? null;
+
+      return {
+        id: row.id as string,
+        title: (row.title as string) ?? "",
+        description: (row.description as string | null) ?? null,
+        imageUrl: (row.image_url as string | null) ?? null,
+        eventType: (row.event_type as string | null) ?? null,
+        venueName: (venue.name as string) ?? "",
+        venueEstablishmentType: (venue.establishment_type as string) ?? "",
+        venueLat: vLat,
+        venueLng: vLng,
+        firstDate,
+        recurrence,
+        startTime: (row.start_time as string | null) ?? null,
+        nextOccurrenceLabel: buildOccurrenceLabel({
+          first_date: firstDate,
+          recurrence,
+          start_time: (row.start_time as string | null) ?? null,
+          end_time: (row.end_time as string | null) ?? null,
+          event_time: (row.event_time as string | null) ?? null,
+          event_frequency: (row.event_frequency as string | null) ?? null,
+        }),
+      };
+    });
+  } catch (err) {
+    console.error("[getPublishedEventsByIds] Unexpected error:", err);
+    return [];
+  }
+}

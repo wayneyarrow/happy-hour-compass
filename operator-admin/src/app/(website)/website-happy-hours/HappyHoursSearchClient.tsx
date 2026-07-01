@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import type { ReactNode } from "react";
 import { haversineKm } from "@/lib/geo";
 import { computeHhStatus } from "@/lib/happyHourStatus";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
@@ -146,9 +147,11 @@ function EmptyState({
 type Props = {
   cards: WebsiteVenueCard[];
   market: Market;
+  /** When provided, replaces the default SearchContextHeader in both desktop and mobile layouts. */
+  contextHeader?: ReactNode;
 };
 
-export function HappyHoursSearchClient({ cards, market }: Props) {
+export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) {
   // ── filter state ──
   const [nearMeActive, setNearMeActive] = useState(false);
   const [onNowActive, setOnNowActive] = useState(false);
@@ -399,7 +402,7 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
     <>
       {/* ── Sticky filter chip bar ─────────────────────────────────────────── */}
       <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center gap-2 px-4 md:px-6 py-3 overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 md:px-6 py-3 overflow-x-auto md:overflow-visible [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
 
           {/* Near Me */}
           <ChipButton
@@ -596,11 +599,11 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
       <div className="hidden md:flex">
         {/* Results column — scrolls with the page */}
         <div className="w-1/2 min-h-[calc(100dvh-72px)] border-r border-gray-100 px-5 pt-8 pb-10">
-          <SearchContextHeader
-            market={market}
-            resultCount={sortedCards.length}
-            className="mb-7"
-          />
+          <div className="mb-7">
+            {contextHeader ?? (
+              <SearchContextHeader market={market} resultCount={sortedCards.length} />
+            )}
+          </div>
 
           {sortedCards.length === 0 ? (
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
@@ -646,11 +649,11 @@ export function HappyHoursSearchClient({ cards, market }: Props) {
 
       {/* ── Mobile: stacked layout ────────────────────────────────────────────── */}
       <div className="md:hidden">
-        <SearchContextHeader
-          market={market}
-          resultCount={sortedCards.length}
-          className="px-4 pt-6 pb-5 border-b border-gray-100"
-        />
+        <div className="px-4 pt-6 pb-5 border-b border-gray-100">
+          {contextHeader ?? (
+            <SearchContextHeader market={market} resultCount={sortedCards.length} />
+          )}
+        </div>
 
         <SearchResultsMap
           markers={mapMarkers}

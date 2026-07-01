@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo } from "react";
+import type { ReactNode } from "react";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import type { Market } from "@/lib/markets";
@@ -440,9 +441,11 @@ type DateFilter = "today" | "tomorrow" | "weekend" | null;
 type Props = {
   events: WebsiteEventListItem[];
   market: Market;
+  /** When provided, replaces the default EventSearchContextHeader in both desktop and mobile layouts. */
+  contextHeader?: ReactNode;
 };
 
-export function EventSearchResults({ events, market }: Props) {
+export function EventSearchResults({ events, market, contextHeader }: Props) {
   const today = todayLocal();
   const tomorrow = tomorrowLocal();
 
@@ -735,14 +738,17 @@ export function EventSearchResults({ events, market }: Props) {
       <div className="hidden md:flex">
         {/* Results column */}
         <div className="w-1/2 min-h-[calc(100dvh-128px)] border-r border-gray-100 px-5 pt-8 pb-10">
-          <EventSearchContextHeader
-            market={market}
-            totalCount={events.length}
-            filteredCount={filtered.length}
-            activeDateLabel={activeDateLabel}
-            activeTypeLabel={activeTypeLabel}
-            className="mb-7"
-          />
+          <div className="mb-7">
+            {contextHeader ?? (
+              <EventSearchContextHeader
+                market={market}
+                totalCount={events.length}
+                filteredCount={filtered.length}
+                activeDateLabel={activeDateLabel}
+                activeTypeLabel={activeTypeLabel}
+              />
+            )}
+          </div>
 
           {filtered.length === 0 ? (
             <EmptyState hasFilters={hasFilters} />
@@ -786,14 +792,17 @@ export function EventSearchResults({ events, market }: Props) {
 
       {/* ── Mobile: stacked layout ──────────────────────────────────────── */}
       <div className="md:hidden">
-        <EventSearchContextHeader
-          market={market}
-          totalCount={events.length}
-          filteredCount={filtered.length}
-          activeDateLabel={activeDateLabel}
-          activeTypeLabel={activeTypeLabel}
-          className="px-4 pt-6 pb-5 border-b border-gray-100"
-        />
+        <div className="px-4 pt-6 pb-5 border-b border-gray-100">
+          {contextHeader ?? (
+            <EventSearchContextHeader
+              market={market}
+              totalCount={events.length}
+              filteredCount={filtered.length}
+              activeDateLabel={activeDateLabel}
+              activeTypeLabel={activeTypeLabel}
+            />
+          )}
+        </div>
 
         <SearchResultsMap
           markers={eventMapMarkers}
