@@ -275,15 +275,14 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
               ? "Create a free account to sync saved places across devices."
               : "Create a free account to keep your saved places across devices."}
           </p>
-          {/* TODO: replace href with consumer signup route when auth is built */}
-          <button
-            type="button"
-            disabled
-            className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-gray-100 text-gray-400 cursor-not-allowed"
-            title="Consumer accounts coming soon"
+          {/* TODO(Consumer Saved Sync): wire up localStorage→DB merge on sign-in */}
+          <Link
+            href="/sign-up"
+            className="block w-full py-2 px-3 rounded-xl text-xs font-semibold text-center bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+            onClick={onClose}
           >
             Create Free Account
-          </button>
+          </Link>
         </div>
       </div>
     </div>

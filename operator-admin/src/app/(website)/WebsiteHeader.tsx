@@ -6,14 +6,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import WebsiteLocationSwitcher from "./WebsiteLocationSwitcher";
 import { SavedDropdown } from "./SavedDropdown";
+import AccountDropdown from "./AccountDropdown";
 import { getSavedCounts } from "@/lib/consumer/savedItems";
 import type { CityRecord } from "@/lib/geo/types";
+
+export type ConsumerUser = {
+  email: string;
+  displayName: string | null;
+};
 
 type Props = {
   marketId: string;
   marketName: string;
   currentCityName: string;
   cities: CityRecord[];
+  consumerUser?: ConsumerUser | null;
 };
 
 const HEART_PATH =
@@ -24,6 +31,7 @@ export default function WebsiteHeader({
   marketName,
   currentCityName,
   cities,
+  consumerUser,
 }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -188,12 +196,19 @@ export default function WebsiteHeader({
               />
             </div>
 
-            <Link
-              href="/login"
-              className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              Sign In
-            </Link>
+            {consumerUser ? (
+              <AccountDropdown
+                displayName={consumerUser.displayName}
+                email={consumerUser.email}
+              />
+            ) : (
+              <Link
+                href="/sign-in"
+                className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                Sign In
+              </Link>
+            )}
           </nav>
 
           {/* Mobile — saved icon + hamburger */}
@@ -338,14 +353,38 @@ export default function WebsiteHeader({
                   </button>
                 </li>
               </ul>
-              <div className="py-5">
-                <Link
-                  href="/login"
-                  className="block w-full text-center py-3 px-6 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-full transition-colors"
-                >
-                  Sign In
-                </Link>
-              </div>
+              {consumerUser ? (
+                <div className="py-5 space-y-2">
+                  <Link
+                    href="/account"
+                    className="block w-full text-center py-3 px-6 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-full transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    My Account
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      const { createClient } = await import("@/lib/supabase/browser");
+                      await createClient().auth.signOut();
+                      window.location.href = "/";
+                    }}
+                    className="block w-full text-center py-3 px-6 border border-gray-200 text-gray-700 text-sm font-semibold rounded-full transition-colors hover:bg-gray-50"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <div className="py-5">
+                  <Link
+                    href="/sign-in"
+                    className="block w-full text-center py-3 px-6 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-full transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                </div>
+              )}
             </div>
           </nav>
         </div>

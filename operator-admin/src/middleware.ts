@@ -63,11 +63,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Guard: unauthenticated users cannot access consumer-only pages.
+  if (!user && (pathname === "/account" || pathname === "/welcome")) {
+    const signInUrl = request.nextUrl.clone();
+    signInUrl.pathname = "/sign-in";
+    signInUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
   // Convenience: authenticated users visiting /login go straight to the admin
   if (user && pathname === "/login") {
     const adminUrl = request.nextUrl.clone();
     adminUrl.pathname = "/admin/venue";
     return NextResponse.redirect(adminUrl);
+  }
+
+  // Convenience: signed-in *consumers* visiting /sign-in or /sign-up go to /account.
+  // Operators or any auth user without a consumer_profiles row are allowed through
+  // so they can create a consumer account without being bounced to /account.
+  if (user && (pathname === "/sign-in" || pathname === "/sign-up")) {
+    const { data: consumerProfile } = await supabase
+      .from("consumer_profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (consumerProfile) {
+      const accountUrl = request.nextUrl.clone();
+      accountUrl.pathname = "/account";
+      return NextResponse.redirect(accountUrl);
+    }
   }
 
   return supabaseResponse;
