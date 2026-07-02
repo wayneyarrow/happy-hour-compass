@@ -19,6 +19,7 @@ import {
   type SearchResultCardData,
 } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard";
+import { GuideCard } from "@/app/(website)/GuideCard";
 
 /**
  * Public Content Engine guide page (Card 5).
@@ -282,25 +283,12 @@ export default async function GuideDetailPage({ params }: PageProps) {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               {relatedGuides.map((g) => (
-                <Link
+                <GuideCard
                   key={g.slug}
+                  title={g.title}
                   href={`/${guide.marketSlug}/guides/${g.slug}`}
-                  className="block group rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-                >
-                  <div className="h-32 bg-gray-100 overflow-hidden">
-                    {g.hero_image_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={g.hero_image_url}
-                        alt={g.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm font-semibold text-gray-900 line-clamp-2">{g.title}</p>
-                  </div>
-                </Link>
+                  heroImageUrl={g.hero_image_url}
+                />
               ))}
             </div>
           </section>

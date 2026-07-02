@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HeroSection from "./HeroSection";
+import { GuideCard } from "./GuideCard";
 import { getActiveMarket } from "@/lib/activeMarket";
+import {
+  getFeaturedGuidesForMarket,
+  type PublicGuideCardData,
+} from "@/lib/data/contentGuideDistribution";
 
 export const metadata: Metadata = {
   title: { absolute: "Happy Hour Compass — Find the best happy hours near you" },
@@ -47,6 +52,65 @@ function HowItWorksSection() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">{step.title}</h3>
               <p className="text-sm text-gray-500 leading-relaxed">{step.body}</p>
             </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Featured Guides — Card 6B Part 4. Consumes the exact same merchandising
+ * data as the /{market}/guides library (getFeaturedGuidesForMarket just
+ * caps it), which remains the canonical destination via "View all guides".
+ * Renders nothing when the active market has no active homepage placements
+ * yet, rather than showing an empty section.
+ *
+ * TEMPORARILY DISABLED — Card 6B touch-up. This rail was throwing errors on
+ * the live homepage; the underlying distribution architecture (migration
+ * 055's tables, contentGuideDistribution.ts, the Content Engine editor's
+ * Distribution section, and Discover Management's /control-panel/discover/guides
+ * merchandising UI) is fully intact and untouched — only this homepage's
+ * consumption of it is switched off, via FEATURED_GUIDES_HOMEPAGE_ENABLED
+ * below. Proper re-integration (including root-causing the error) is
+ * planned for the Homepage & Discover Management V2 initiative.
+ */
+function FeaturedGuidesSection({
+  guides,
+  marketSlug,
+  marketName,
+}: {
+  guides: PublicGuideCardData[];
+  marketSlug: string;
+  marketName: string;
+}) {
+  if (guides.length === 0) return null;
+
+  return (
+    <section className="bg-white py-16 md:py-20 border-t border-gray-100">
+      <div className="max-w-7xl mx-auto px-6 lg:px-10">
+        <div className="flex items-end justify-between mb-8 gap-4">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+              Guides to {marketName}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">Editorial picks curated by Happy Hour Compass.</p>
+          </div>
+          <Link
+            href={`/${marketSlug}/guides`}
+            className="shrink-0 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+          >
+            View all guides →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {guides.map((g) => (
+            <GuideCard
+              key={g.slug}
+              title={g.title}
+              href={`/${marketSlug}/guides/${g.slug}`}
+              heroImageUrl={g.heroImageUrl}
+            />
           ))}
         </div>
       </div>
@@ -147,13 +211,23 @@ function CtaSection() {
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
+// FEATURED_GUIDES_HOMEPAGE_ENABLED — see the TEMPORARILY DISABLED note on
+// FeaturedGuidesSection above. Flip back to true (and re-run this page)
+// once the V2 initiative re-integrates this rail properly.
+const FEATURED_GUIDES_HOMEPAGE_ENABLED = false;
 
 export default async function WebsiteHomePage() {
   const { market, isPersisted } = await getActiveMarket();
+  const featuredGuides = FEATURED_GUIDES_HOMEPAGE_ENABLED
+    ? await getFeaturedGuidesForMarket(market.id)
+    : [];
 
   return (
     <>
       <HeroSection market={market} isPersisted={isPersisted} />
+      {FEATURED_GUIDES_HOMEPAGE_ENABLED && (
+        <FeaturedGuidesSection guides={featuredGuides} marketSlug={market.id} marketName={market.name} />
+      )}
       <HowItWorksSection />
       <ForOwnersSection />
       <CtaSection />

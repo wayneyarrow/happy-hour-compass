@@ -205,6 +205,25 @@ export type PublicGuideDetail = {
 };
 
 /**
+ * The single source of truth for "is this guide actually public right now."
+ * status must be 'published' AND (if set) publish_at/expire_at must put the
+ * current moment inside the window. Shared by every public/merchandising
+ * read (guide detail, guides library, homepage rail) so publish-window
+ * logic is never duplicated — see Card 6B Part 5.
+ */
+export function isGuidePublicNow(
+  status: string,
+  publishAt: string | null,
+  expireAt: string | null
+): boolean {
+  if (status !== "published") return false;
+  const now = Date.now();
+  if (publishAt && new Date(publishAt).getTime() > now) return false;
+  if (expireAt && new Date(expireAt).getTime() <= now) return false;
+  return true;
+}
+
+/**
  * Returns a published, in-window guide by market slug + guide slug, or null
  * if it doesn't exist, isn't published, or is outside its publish/expire
  * window. Guide slugs are unique per market (not globally), matching the
@@ -219,7 +238,7 @@ export async function getPublicGuideByMarketAndSlug(
   const { data, error } = await supabase
     .from("content_guides")
     .select(
-      "id, guide_type, title, slug, primary_keyword, secondary_keywords, " +
+      "id, guide_type, status, title, slug, primary_keyword, secondary_keywords, " +
         "intro, body, hero_image_url, publish_at, expire_at, updated_at, " +
         "page_title, meta_title, meta_description, og_title, og_description, canonical_url, " +
         "markets!inner(slug, name), city:cities(name), neighbourhood:neighbourhoods(name)"
@@ -236,9 +255,7 @@ export async function getPublicGuideByMarketAndSlug(
 
   const publishAt = (row.publish_at as string | null) ?? null;
   const expireAt = (row.expire_at as string | null) ?? null;
-  const now = Date.now();
-  if (publishAt && new Date(publishAt).getTime() > now) return null;
-  if (expireAt && new Date(expireAt).getTime() <= now) return null;
+  if (!isGuidePublicNow(row.status as string, publishAt, expireAt)) return null;
 
   const market = (row.markets as Record<string, unknown>) ?? {};
   const city = (row.city as Record<string, unknown> | null) ?? null;

@@ -12,20 +12,25 @@ import {
   searchEventCandidates,
   type AttachmentCandidate,
 } from "@/lib/data/contentGuideAttachments";
+import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
 
 /**
  * Create/update server actions for the Content Engine guide form (Card 2 +
- * Card 3 attachments + Card 4 SEO fields).
+ * Card 3 attachments + Card 4 SEO fields + Card 6B distribution eligibility).
  *
  * Scope: CRUD for content_guides (including its SEO columns — page_title,
  * meta_title, meta_description, og_title, og_description, canonical_url —
  * added in migration 054) plus its venue/event attachments
- * (content_guide_venues / content_guide_events). SEO values themselves are
- * generated client-side in GuideForm via src/lib/seo/contentGuideSeo.ts;
- * this file just persists whatever ends up in those form fields, same as
- * any other guide field — no server-side SEO generation or validation
- * blocking. No scheduling/expiry automation, no FAQ/related guides — those
- * are later cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
+ * (content_guide_venues / content_guide_events) and its distribution
+ * channel eligibility (content_guide_channels, migration 055). SEO values
+ * themselves are generated client-side in GuideForm via
+ * src/lib/seo/contentGuideSeo.ts; this file just persists whatever ends up
+ * in those form fields, same as any other guide field — no server-side SEO
+ * generation or validation blocking. Distribution here is eligibility only
+ * (editorial intent) — actual merchandising/placement is Discover
+ * Management's job (see content-engine's sibling discover/guides/actions.ts).
+ * No scheduling/expiry automation, no FAQ/related guides — those are later
+ * cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -98,6 +103,13 @@ function nullableStr(formData: FormData, key: string): string | null {
  * "attachment_ids" input the AttachmentsSelector maintains inside the form. */
 function parseAttachmentIds(formData: FormData): string[] {
   const raw = str(formData, "attachment_ids");
+  return raw.length > 0 ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
+/** Reads the comma-separated list of eligible distribution channel keys from
+ * the hidden "distribution_channels" input the Distribution section maintains. */
+function parseDistributionChannels(formData: FormData): string[] {
+  const raw = str(formData, "distribution_channels");
   return raw.length > 0 ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 }
 
@@ -242,6 +254,7 @@ export async function createGuideAction(
     parsed.guide_type as GuideType,
     parseAttachmentIds(formData)
   );
+  await saveGuideChannels(guideId, parseDistributionChannels(formData));
 
   await logAuditEvent({
     actorEmail: callerEmail,
@@ -315,6 +328,7 @@ export async function updateGuideAction(
     parsed.guide_type as GuideType,
     parseAttachmentIds(formData)
   );
+  await saveGuideChannels(guideId, parseDistributionChannels(formData));
 
   await logAuditEvent({
     actorEmail: callerEmail,

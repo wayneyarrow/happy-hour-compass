@@ -14,19 +14,26 @@ import {
   getMetaTitleWarning,
   type SeoFieldKey,
 } from "@/lib/seo/contentGuideSeo";
+import {
+  getChannelRecommendations,
+  type DistributionChannelKey,
+} from "@/lib/data/contentGuideDistributionShared";
 import { createGuideAction, updateGuideAction, type GuideFormState } from "./actions";
 import HeroImageField from "./HeroImageField";
 import AttachmentsSelector from "./AttachmentsSelector";
 
 /**
  * Shared create/edit form for Content Engine guides (Card 2 + touch-up,
- * Card 3 venue/event attachments, Card 4 SEO automation).
+ * Card 3 venue/event attachments, Card 4 SEO automation, Card 6B
+ * distribution eligibility).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
- * keywords, status, publishing dates, venue/event attachments, and SEO
- * fields only. No FAQ, related guides, preview, or public rendering — see
- * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 4 task for the
- * full guardrail list.
+ * keywords, status, publishing dates, venue/event attachments, SEO fields,
+ * and distribution channel eligibility only. No FAQ, related guides,
+ * preview, or public rendering — see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md
+ * and the Card 6B task for the full guardrail list. Distribution here is
+ * eligibility (editorial intent) only — actual merchandising/ordering is a
+ * Discover Management concern, not this form's.
  */
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -35,6 +42,7 @@ type Props = {
   mode: "create" | "edit";
   initialGuide?: ContentGuideDetail | null;
   initialAttachments?: GuideAttachmentItem[];
+  initialChannels?: DistributionChannelKey[];
   markets: MarketRecord[];
   cities: CityRecord[];
   neighbourhoods: NeighbourhoodRecord[];
@@ -115,6 +123,7 @@ export default function GuideForm({
   mode,
   initialGuide,
   initialAttachments = [],
+  initialChannels = [],
   markets,
   cities,
   neighbourhoods,
@@ -241,6 +250,21 @@ export default function GuideForm({
   const metaDescriptionWarning = getMetaDescriptionWarning(metaDescription);
   const canonicalUrlWarning = getCanonicalUrlWarning(canonicalUrl);
 
+  // ── Distribution (Card 6B) ────────────────────────────────────────────────
+  // Editorial intent only — this is eligibility, not placement. An editor
+  // can freely check/uncheck regardless of what the recommendation says;
+  // recommendations never auto-select or auto-deselect a channel.
+  const [channels, setChannels] = useState<DistributionChannelKey[]>(initialChannels);
+  const channelRecommendations = getChannelRecommendations({
+    marketName: selectedMarket?.name ?? "",
+  });
+
+  function toggleChannel(key: DistributionChannelKey) {
+    setChannels((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
   function handleMarketChange(nextMarketId: string) {
     setMarketId(nextMarketId);
     const stillValid = cities.some((c) => c.id === cityId && c.marketId === nextMarketId);
@@ -281,6 +305,7 @@ export default function GuideForm({
     { label: "Keywords", complete: primaryKeyword.trim() !== "" },
     { label: "Content", complete: intro.trim() !== "" && body.trim() !== "" },
     { label: "Hero image", complete: heroImageUrl.trim() !== "" },
+    { label: "Distribution", complete: channels.length > 0 },
     { label: "SEO", complete: metaTitle.trim() !== "" && metaDescription.trim() !== "" },
     { label: "Publishing", complete: status !== "scheduled" || publishAt !== "" },
   ];
@@ -503,6 +528,37 @@ export default function GuideForm({
                 }
               />
             )}
+          </section>
+
+          {/* Distribution */}
+          <section className={sectionCls}>
+            <h2 className={sectionTitleCls}>Distribution</h2>
+            <p className={hintCls}>
+              Choose where this guide is eligible to appear. This is editorial intent only —
+              Discover Management decides what&apos;s actually merchandised, and where.
+            </p>
+            <input type="hidden" name="distribution_channels" value={channels.join(",")} />
+            <div className="space-y-2">
+              {channelRecommendations.map((rec) => (
+                <label
+                  key={rec.channelKey}
+                  className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={channels.includes(rec.channelKey)}
+                    onChange={() => toggleChannel(rec.channelKey)}
+                    className="mt-0.5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-800">{rec.label}</span>
+                    {rec.reason && (
+                      <span className="ml-2 text-xs font-medium text-emerald-600">{rec.reason}</span>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
           </section>
 
           {/* Hero Image */}

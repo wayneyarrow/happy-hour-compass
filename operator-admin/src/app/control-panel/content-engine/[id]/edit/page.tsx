@@ -8,6 +8,7 @@ import {
   getGuideVenueAttachments,
   getGuideEventAttachments,
 } from "@/lib/data/contentGuideAttachments";
+import { getGuideChannels } from "@/lib/data/contentGuideDistribution";
 import GuideForm from "../../GuideForm";
 
 export default async function EditContentGuidePage({
@@ -24,10 +25,12 @@ export default async function EditContentGuidePage({
 
   if (!guide) notFound();
 
-  const initialAttachments =
+  const [initialAttachments, initialChannels] = await Promise.all([
     guide.guide_type === "event_guide"
-      ? await getGuideEventAttachments(guide.id)
-      : await getGuideVenueAttachments(guide.id);
+      ? getGuideEventAttachments(guide.id)
+      : getGuideVenueAttachments(guide.id),
+    getGuideChannels(guide.id),
+  ]);
 
   return (
     <div className="max-w-5xl">
@@ -46,6 +49,7 @@ export default async function EditContentGuidePage({
         mode="edit"
         initialGuide={guide}
         initialAttachments={initialAttachments}
+        initialChannels={initialChannels}
         markets={markets}
         cities={cities}
         neighbourhoods={neighbourhoods}

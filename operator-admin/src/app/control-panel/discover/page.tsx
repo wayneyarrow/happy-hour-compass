@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getCPFeaturedEventCandidates } from "@/lib/data/events";
 import {
@@ -113,6 +114,12 @@ export default async function DiscoverPage({ searchParams }: Props) {
             Manage what appears on the Consumer Home discovery rails. Internal curation
             works alongside the algorithm — geography and publish status always apply.
           </p>
+          <Link
+            href="/control-panel/discover/guides"
+            className="mt-2 inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 font-medium transition-colors"
+          >
+            Guides merchandising →
+          </Link>
         </div>
 
         {/* Rail tabs */}
@@ -248,6 +255,12 @@ export default async function DiscoverPage({ searchParams }: Props) {
           Manage what appears on the Consumer Home discovery rails. Internal curation
           works alongside the algorithm — geography and publish status always apply.
         </p>
+        <Link
+          href="/control-panel/discover/guides"
+          className="mt-2 inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 font-medium transition-colors"
+        >
+          Guides merchandising →
+        </Link>
       </div>
 
       {/* Rail tabs */}
