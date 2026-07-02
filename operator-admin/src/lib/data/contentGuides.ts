@@ -168,3 +168,150 @@ export async function getGuideFormGeography(): Promise<GuideFormGeography> {
 
   return { markets, cities, neighbourhoods };
 }
+
+// ── Public guide read (Card 5) ───────────────────────────────────────────────
+// Powers the public /{market}/guides/{guide-slug} route. Unlike the CP reads
+// above, this only ever returns a guide that is actually public right now —
+// status must be 'published' AND (if set) publish_at/expire_at must put the
+// current moment inside the publish window. This is a read-time predicate,
+// not scheduling automation: nothing here flips a guide's stored status: it
+// just declines to render a guide whose own fields say it isn't public yet
+// (or not anymore), which "Only render guides that are published / public"
+// requires beyond a bare status check.
+
+/** Guide shape for public rendering — includes resolved market/city/neighbourhood names. */
+export type PublicGuideDetail = {
+  id: string;
+  guide_type: GuideType;
+  title: string;
+  slug: string;
+  primary_keyword: string | null;
+  secondary_keywords: string[];
+  intro: string | null;
+  body: string | null;
+  hero_image_url: string | null;
+  publish_at: string | null;
+  updated_at: string;
+  marketSlug: string;
+  marketName: string;
+  cityName: string | null;
+  neighbourhoodName: string | null;
+  page_title: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  canonical_url: string | null;
+};
+
+/**
+ * Returns a published, in-window guide by market slug + guide slug, or null
+ * if it doesn't exist, isn't published, or is outside its publish/expire
+ * window. Guide slugs are unique per market (not globally), matching the
+ * /{market}/guides/{slug} URL — see migration 052.
+ */
+export async function getPublicGuideByMarketAndSlug(
+  marketSlug: string,
+  guideSlug: string
+): Promise<PublicGuideDetail | null> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select(
+      "id, guide_type, title, slug, primary_keyword, secondary_keywords, " +
+        "intro, body, hero_image_url, publish_at, expire_at, updated_at, " +
+        "page_title, meta_title, meta_description, og_title, og_description, canonical_url, " +
+        "markets!inner(slug, name), city:cities(name), neighbourhood:neighbourhoods(name)"
+    )
+    .eq("markets.slug", marketSlug)
+    .eq("slug", guideSlug)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as Record<string, any>;
+
+  const publishAt = (row.publish_at as string | null) ?? null;
+  const expireAt = (row.expire_at as string | null) ?? null;
+  const now = Date.now();
+  if (publishAt && new Date(publishAt).getTime() > now) return null;
+  if (expireAt && new Date(expireAt).getTime() <= now) return null;
+
+  const market = (row.markets as Record<string, unknown>) ?? {};
+  const city = (row.city as Record<string, unknown> | null) ?? null;
+  const neighbourhood = (row.neighbourhood as Record<string, unknown> | null) ?? null;
+
+  return {
+    id: row.id as string,
+    guide_type: row.guide_type as GuideType,
+    title: row.title as string,
+    slug: row.slug as string,
+    primary_keyword: (row.primary_keyword as string | null) ?? null,
+    secondary_keywords: (row.secondary_keywords as string[] | null) ?? [],
+    intro: row.intro as string | null,
+    body: row.body as string | null,
+    hero_image_url: row.hero_image_url as string | null,
+    publish_at: publishAt,
+    updated_at: row.updated_at as string,
+    marketSlug: (market.slug as string) ?? marketSlug,
+    marketName: (market.name as string) ?? "",
+    cityName: (city?.name as string | undefined) ?? null,
+    neighbourhoodName: (neighbourhood?.name as string | undefined) ?? null,
+    page_title: (row.page_title as string | null) ?? null,
+    meta_title: (row.meta_title as string | null) ?? null,
+    meta_description: (row.meta_description as string | null) ?? null,
+    og_title: (row.og_title as string | null) ?? null,
+    og_description: (row.og_description as string | null) ?? null,
+    canonical_url: (row.canonical_url as string | null) ?? null,
+  };
+}
+
+/** Other published guides in the same market, for a lightweight "More Guides" cross-link section. */
+export type RelatedGuideSummary = {
+  title: string;
+  slug: string;
+  guide_type: GuideType;
+  hero_image_url: string | null;
+};
+
+/**
+ * Safe, minimal "related guides" query: other published guides in the same
+ * market, newest-published first. This is NOT the Content Engine's curated
+ * Related Guides feature from the product spec (admin-selected, searchable
+ * dropdown) — that requires editor UI that hasn't been built. This is just
+ * same-market published guides, queryable from fields that already exist,
+ * so the public page can offer further reading without inventing new schema
+ * or admin curation.
+ */
+export async function getRelatedGuides(
+  marketSlug: string,
+  excludeGuideId: string,
+  limit = 3
+): Promise<RelatedGuideSummary[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select("title, slug, guide_type, hero_image_url, publish_at, markets!inner(slug)")
+    .eq("markets.slug", marketSlug)
+    .eq("status", "published")
+    .neq("id", excludeGuideId)
+    .order("publish_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[getRelatedGuides]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: Record<string, any>) => ({
+    title: row.title as string,
+    slug: row.slug as string,
+    guide_type: row.guide_type as GuideType,
+    hero_image_url: (row.hero_image_url as string | null) ?? null,
+  }));
+}

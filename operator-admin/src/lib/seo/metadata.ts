@@ -40,6 +40,21 @@ export interface PageMetadataOptions {
   ogImage?: string;
   /** Override OG type. Defaults to "website". Use "article" for guide/editorial pages. */
   ogType?: "website" | "article";
+  /**
+   * Overrides the Open Graph / Twitter title. Defaults to `title`. Lets a
+   * caller keep a longer/branded `<title>` while giving social cards a
+   * shorter, unbranded one (e.g. Content Engine guides, which store og_title
+   * separately from page_title/meta_title).
+   */
+  ogTitle?: string;
+  /** Overrides the Open Graph / Twitter description. Defaults to `description`. */
+  ogDescription?: string;
+  /**
+   * Overrides the canonical + OG url path. Defaults to `path`. Lets a caller
+   * honor an admin-entered canonical URL (e.g. a Content Engine guide's
+   * `canonical_url` field) that may differ from the route's own path.
+   */
+  canonicalPath?: string;
 }
 
 const DEFAULT_OG_IMAGE = "/og-default.png";
@@ -52,10 +67,15 @@ export function buildPageMetadata({
   path = "/",
   ogImage = DEFAULT_OG_IMAGE,
   ogType = "website",
+  ogTitle,
+  ogDescription,
+  canonicalPath,
 }: PageMetadataOptions): Metadata {
-  const canonicalUrl = absoluteUrl(path);
+  const canonicalUrl = absoluteUrl(canonicalPath ?? path);
   const imageUrl = ogImage.startsWith("http") ? ogImage : absoluteUrl(ogImage);
   const noindex = shouldNoIndex();
+  const resolvedOgTitle = ogTitle ?? title;
+  const resolvedOgDescription = ogDescription ?? description;
 
   return {
     title,
@@ -65,8 +85,8 @@ export function buildPageMetadata({
       canonical: canonicalUrl,
     },
     openGraph: {
-      title,
-      description,
+      title: resolvedOgTitle,
+      description: resolvedOgDescription,
       url: canonicalUrl,
       siteName: SITE_NAME,
       images: [
@@ -74,7 +94,7 @@ export function buildPageMetadata({
           url: imageUrl,
           width: 1200,
           height: 630,
-          alt: title,
+          alt: resolvedOgTitle,
         },
       ],
       type: ogType,
@@ -82,8 +102,8 @@ export function buildPageMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title,
-      description,
+      title: resolvedOgTitle,
+      description: resolvedOgDescription,
       images: [imageUrl],
     },
   };
