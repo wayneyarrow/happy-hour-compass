@@ -6,16 +6,19 @@ import Link from "next/link";
 import { slugify } from "@/lib/slugify";
 import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/types";
 import type { ContentGuideDetail, GuideType, GuideStatus } from "@/lib/data/contentGuides";
+import type { GuideAttachmentItem } from "@/lib/data/contentGuideAttachments";
 import { createGuideAction, updateGuideAction, type GuideFormState } from "./actions";
 import HeroImageField from "./HeroImageField";
+import AttachmentsSelector from "./AttachmentsSelector";
 
 /**
- * Shared create/edit form for Content Engine guides (Card 2 + touch-up).
+ * Shared create/edit form for Content Engine guides (Card 2 + touch-up, plus
+ * Card 3 venue/event attachments).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
- * keywords, status, and publishing dates only. No venue/event attachments,
+ * keywords, status, publishing dates, and venue/event attachments only. No
  * FAQ, related guides, SEO automation, multiple/cropped images, or preview —
- * see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 2 task for
+ * see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 3 task for
  * the full guardrail list.
  */
 
@@ -24,6 +27,7 @@ import HeroImageField from "./HeroImageField";
 type Props = {
   mode: "create" | "edit";
   initialGuide?: ContentGuideDetail | null;
+  initialAttachments?: GuideAttachmentItem[];
   markets: MarketRecord[];
   cities: CityRecord[];
   neighbourhoods: NeighbourhoodRecord[];
@@ -100,7 +104,14 @@ function CompletionChecklist({ items }: { items: ChecklistItem[] }) {
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
-export default function GuideForm({ mode, initialGuide, markets, cities, neighbourhoods }: Props) {
+export default function GuideForm({
+  mode,
+  initialGuide,
+  initialAttachments = [],
+  markets,
+  cities,
+  neighbourhoods,
+}: Props) {
   const boundAction =
     mode === "create" ? createGuideAction : updateGuideAction.bind(null, initialGuide!.id);
   const [state, formAction, isPending] = useActionState<GuideFormState, FormData>(boundAction, {});
@@ -375,6 +386,29 @@ export default function GuideForm({ mode, initialGuide, markets, cities, neighbo
               />
               <p className={hintCls}>Structured editing only — no HTML or drag-and-drop layout tools yet.</p>
             </div>
+          </section>
+
+          {/* Related Venues / Events */}
+          <section className={sectionCls}>
+            <h2 className={sectionTitleCls}>
+              {guideType === "event_guide" ? "Related Events" : "Related Venues"}
+            </h2>
+            {guideType === "" ? (
+              <p className="text-sm text-gray-400">
+                Select a guide type above to attach venues or events.
+              </p>
+            ) : (
+              <AttachmentsSelector
+                key={guideType}
+                kind={guideType === "event_guide" ? "event" : "venue"}
+                marketId={marketId}
+                cityId={cityId}
+                neighbourhoodId={neighbourhoodId}
+                initialSelected={
+                  guideType === initialGuide?.guide_type ? initialAttachments : []
+                }
+              />
+            )}
           </section>
 
           {/* Hero Image */}

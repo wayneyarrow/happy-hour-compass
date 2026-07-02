@@ -6,13 +6,21 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { logAuditEvent } from "@/lib/auditLog";
 import type { GuideType, GuideStatus } from "@/lib/data/contentGuides";
+import {
+  saveGuideAttachments,
+  searchVenueCandidates,
+  searchEventCandidates,
+  type AttachmentCandidate,
+} from "@/lib/data/contentGuideAttachments";
 
 /**
- * Create/update server actions for the Content Engine guide form (Card 2).
+ * Create/update server actions for the Content Engine guide form (Card 2 +
+ * Card 3 attachments).
  *
- * Scope: basic CRUD for content_guides only. No venue/event attachments, no
- * SEO generation, no scheduling/expiry automation — those are later cards.
- * See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
+ * Scope: CRUD for content_guides plus its venue/event attachments
+ * (content_guide_venues / content_guide_events). No SEO generation, no
+ * scheduling/expiry automation, no FAQ/related guides — those are later
+ * cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -73,6 +81,13 @@ function str(formData: FormData, key: string): string {
 function nullableStr(formData: FormData, key: string): string | null {
   const v = str(formData, key);
   return v.length > 0 ? v : null;
+}
+
+/** Reads the ordered, comma-separated list of attachment ids from the hidden
+ * "attachment_ids" input the AttachmentsSelector maintains inside the form. */
+function parseAttachmentIds(formData: FormData): string[] {
+  const raw = str(formData, "attachment_ids");
+  return raw.length > 0 ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 }
 
 function parseSecondaryKeywords(raw: string): string[] {
@@ -197,11 +212,19 @@ export async function createGuideAction(
     return { error: "Failed to create guide. Please try again." };
   }
 
+  const guideId = (inserted as { id: string }).id;
+
+  await saveGuideAttachments(
+    guideId,
+    parsed.guide_type as GuideType,
+    parseAttachmentIds(formData)
+  );
+
   await logAuditEvent({
     actorEmail: callerEmail,
     action:     "content_guide_created",
     entityType: "content_guide",
-    entityId:   (inserted as { id: string }).id,
+    entityId:   guideId,
     entityName: parsed.title,
   });
 
@@ -258,6 +281,12 @@ export async function updateGuideAction(
     return { error: "Failed to save changes. Please try again." };
   }
 
+  await saveGuideAttachments(
+    guideId,
+    parsed.guide_type as GuideType,
+    parseAttachmentIds(formData)
+  );
+
   await logAuditEvent({
     actorEmail: callerEmail,
     action:     "content_guide_updated",
@@ -269,4 +298,38 @@ export async function updateGuideAction(
   revalidatePath("/control-panel/content-engine");
   revalidatePath(`/control-panel/content-engine/${guideId}/edit`);
   redirect("/control-panel/content-engine?success=updated");
+}
+
+// ── Attachment candidate search ──────────────────────────────────────────────
+// Called directly from AttachmentsSelector (a client component) via
+// useTransition — same "use server" function-call pattern as
+// discover/actions.ts's addToRailAction / addEventToRailAction. Each action
+// independently re-checks CP admin access; a signed-out or non-admin caller
+// gets an empty result set rather than an error, since this only ever backs
+// a search-as-you-type dropdown.
+
+export type AttachmentSearchInput = {
+  marketId: string;
+  cityId: string | null;
+  neighbourhoodId: string | null;
+  query: string;
+  excludeIds: string[];
+};
+
+export async function searchVenueAttachmentCandidatesAction(
+  input: AttachmentSearchInput
+): Promise<AttachmentCandidate[]> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return [];
+  if (!input.marketId) return [];
+  return searchVenueCandidates(input);
+}
+
+export async function searchEventAttachmentCandidatesAction(
+  input: AttachmentSearchInput
+): Promise<AttachmentCandidate[]> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return [];
+  if (!input.marketId) return [];
+  return searchEventCandidates(input);
 }

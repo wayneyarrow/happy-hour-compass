@@ -4,6 +4,10 @@ export const metadata = { title: "Edit Guide — Content Engine" };
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentGuideById, getGuideFormGeography } from "@/lib/data/contentGuides";
+import {
+  getGuideVenueAttachments,
+  getGuideEventAttachments,
+} from "@/lib/data/contentGuideAttachments";
 import GuideForm from "../../GuideForm";
 
 export default async function EditContentGuidePage({
@@ -19,6 +23,11 @@ export default async function EditContentGuidePage({
   ]);
 
   if (!guide) notFound();
+
+  const initialAttachments =
+    guide.guide_type === "event_guide"
+      ? await getGuideEventAttachments(guide.id)
+      : await getGuideVenueAttachments(guide.id);
 
   return (
     <div className="max-w-5xl">
@@ -36,6 +45,7 @@ export default async function EditContentGuidePage({
       <GuideForm
         mode="edit"
         initialGuide={guide}
+        initialAttachments={initialAttachments}
         markets={markets}
         cities={cities}
         neighbourhoods={neighbourhoods}
