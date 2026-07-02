@@ -50,7 +50,16 @@ export default async function ControlPanelLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    // h-screen (not min-h-screen) is required for the internal scroll model
+    // below: <main> uses overflow-y-auto and its parent row uses
+    // overflow-hidden so the header stays fixed and only the content area
+    // scrolls. With min-h-screen, this outer container has no bounded
+    // height, so on pages taller than one viewport it just grows past 100vh
+    // and the whole window scrolls instead of <main> scrolling internally —
+    // which breaks position: sticky for anything inside <main> (e.g. the
+    // Content Engine guide form's completion checklist), since sticky tracks
+    // its nearest ancestor's own scroll position, not the window's.
+    <div className="h-screen bg-slate-100 flex flex-col">
       {/* ── Top header ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200 shadow-sm px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center">

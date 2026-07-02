@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Content Engine" };
 
+import Link from "next/link";
 import { getContentGuides, type GuideStatus, type GuideType } from "@/lib/data/contentGuides";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
 
@@ -34,11 +35,18 @@ function fmtDate(iso: string | null): string {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function ContentEnginePage() {
-  const guides = await getContentGuides();
+export default async function ContentEnginePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string }>;
+}) {
+  const [guides, { success }] = await Promise.all([getContentGuides(), searchParams]);
 
   const thCls =
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap";
+
+  const successMessage =
+    success === "created" ? "Guide created." : success === "updated" ? "Guide saved." : null;
 
   return (
     <div className="max-w-7xl">
@@ -51,15 +59,20 @@ export default async function ContentEnginePage() {
             across the Happy Hour Compass website.
           </p>
         </div>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="shrink-0 text-sm px-4 py-2 rounded-lg bg-gray-200 text-gray-400 font-medium cursor-not-allowed whitespace-nowrap"
+        <Link
+          href="/control-panel/content-engine/new"
+          className="shrink-0 text-sm px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors whitespace-nowrap"
         >
           Create Guide
-        </button>
+        </Link>
       </div>
+
+      {/* Success banner */}
+      {successMessage && (
+        <div className="mb-4 bg-green-50 border border-green-200 rounded-xl px-5 py-3 text-sm text-green-700">
+          {successMessage}
+        </div>
+      )}
 
       {/* Empty state */}
       {guides.length === 0 && (
@@ -99,12 +112,20 @@ export default async function ContentEnginePage() {
                 <th scope="col" className={thCls}>City</th>
                 <th scope="col" className={thCls}>Publish Date</th>
                 <th scope="col" className={thCls}>Updated</th>
+                <th scope="col" className={thCls}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {guides.map((guide) => (
                 <tr key={guide.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{guide.title}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    <Link
+                      href={`/control-panel/content-engine/${guide.id}/edit`}
+                      className="hover:text-amber-600 transition-colors"
+                    >
+                      {guide.title}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {GUIDE_TYPE_LABELS[guide.guide_type]}
                   </td>
@@ -125,6 +146,14 @@ export default async function ContentEnginePage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {fmtDate(guide.updated_at)}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <Link
+                      href={`/control-panel/content-engine/${guide.id}/edit`}
+                      className="text-xs font-medium text-amber-600 hover:text-amber-700"
+                    >
+                      Edit →
+                    </Link>
                   </td>
                 </tr>
               ))}
