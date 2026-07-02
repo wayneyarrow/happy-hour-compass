@@ -74,7 +74,7 @@ export async function submitClaimAction(
   async function queryVenueFull(field: "slug" | "id"): Promise<Record<string, any> | null> {
     const { data } = await supabase
       .from("venues")
-      .select("id, name, claimed_at")
+      .select("id, name, city, claimed_at")
       .eq(field, venueRouteParam)
       .eq("is_published", true)
       .maybeSingle();
@@ -138,6 +138,7 @@ export async function submitClaimAction(
     const founderResult = await sendClaimNotificationEmail({
       claimId:       insertedClaim.id as string,
       venueName:     venueRow.name as string,
+      city:          venueRow.city as string | null,
       firstName,
       lastName,
       claimantEmail: email,

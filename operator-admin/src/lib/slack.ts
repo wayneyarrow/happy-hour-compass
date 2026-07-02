@@ -5,11 +5,16 @@
  * fall back to console.error so primary workflows are never interrupted.
  *
  * Required env vars (optional per channel — alerts silently skipped if unset):
- *   SLACK_OPS_CRITICAL_WEBHOOK_URL   Webhook URL for #ops-critical
- *   SLACK_OPS_ALERTS_WEBHOOK_URL     Webhook URL for #ops-alerts
+ *   SLACK_OPS_CRITICAL_WEBHOOK_URL        Webhook URL for #ops-critical
+ *   SLACK_OPS_ALERTS_WEBHOOK_URL          Webhook URL for #ops-alerts
+ *   SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL   Webhook URL for #venue-suggestions
+ *   SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL   Webhook URL for #venue-submissions
+ *   SLACK_VENUE_CLAIMS_WEBHOOK_URL        Webhook URL for #venue-claims
+ *   SLACK_WEBSITE_CONTACT_WEBHOOK_URL     Webhook URL for #website-contact
  */
 
 export type SlackChannel = "ops-critical" | "ops-alerts";
+export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact";
 export type SlackSeverity = "critical" | "warning" | "info" | "success";
 
 type SlackAlertParams = {
@@ -32,8 +37,19 @@ const WEBHOOK_ENV: Record<SlackChannel, string> = {
   "ops-alerts":   "SLACK_OPS_ALERTS_WEBHOOK_URL",
 };
 
+const ACQUISITION_WEBHOOK_ENV: Record<AcquisitionChannel, string> = {
+  "venue-suggestions": "SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL",
+  "venue-submissions": "SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL",
+  "venue-claims":      "SLACK_VENUE_CLAIMS_WEBHOOK_URL",
+  "website-contact":   "SLACK_WEBSITE_CONTACT_WEBHOOK_URL",
+};
+
 function getWebhookUrl(channel: SlackChannel): string | null {
   return process.env[WEBHOOK_ENV[channel]] ?? null;
+}
+
+function getAcquisitionWebhookUrl(channel: AcquisitionChannel): string | null {
+  return process.env[ACQUISITION_WEBHOOK_ENV[channel]] ?? null;
 }
 
 export type SlackResult = "delivered" | "no-webhook" | "failed";
@@ -94,6 +110,51 @@ export async function sendSlackAlert({
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[SLACK] Alert delivery failed:", { channel, severity, title, error: msg });
+    return "failed";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Sends a concise acquisition notification to a channel-specific Slack webhook.
+ *
+ * Used for proactive notifications on new venue suggestions, submissions, claims,
+ * and contact messages — distinct from the ops-alert escalation path.
+ *
+ * `text` is plain mrkdwn. Use `<url|label>` for links.
+ * Never throws — Slack must not interrupt user-facing flows.
+ * Timeout: 4 seconds.
+ */
+export async function sendSlackAcquisitionNotification({
+  channel,
+  text,
+}: {
+  channel: AcquisitionChannel;
+  text: string;
+}): Promise<SlackResult> {
+  const webhookUrl = getAcquisitionWebhookUrl(channel);
+  if (!webhookUrl) return "no-webhook";
+
+  const payload = {
+    text,
+    blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4_000);
+
+  try {
+    await fetch(webhookUrl, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+      signal:  controller.signal,
+    });
+    return "delivered";
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SLACK] Acquisition notification failed:", { channel, error: msg });
     return "failed";
   } finally {
     clearTimeout(timer);

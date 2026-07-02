@@ -12,6 +12,7 @@ import {
 import {
   sendOperatorSubmissionNotificationEmail,
   sendOperatorActivationEmail,
+  sendOperatorSubmissionConfirmationEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { slugify } from "@/lib/slugify";
@@ -758,6 +759,21 @@ export async function saveOperatorSubmissionAction(
     }
   } catch (emailErr) {
     console.error("[EMAIL] saveOperatorSubmissionAction — email threw unexpected exception:", emailErr);
+  }
+
+  // ── Confirmation email to submitter ───────────────────────────────────────
+  // Sent for all paths except confirmed_auto, which already sends the operator
+  // activation email with the account setup link.
+  if (routedStatus !== "confirmed_auto") {
+    try {
+      await sendOperatorSubmissionConfirmationEmail({
+        to:           formValues.email,
+        firstName:    formValues.firstName,
+        businessName: formValues.businessName,
+      });
+    } catch (confirmErr) {
+      console.error("[EMAIL] saveOperatorSubmissionAction — confirmation email threw:", confirmErr);
+    }
   }
 
   return { success: true };

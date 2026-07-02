@@ -16,7 +16,7 @@
  */
 
 import { Resend } from "resend";
-import { sendSlackAlert } from "@/lib/slack";
+import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -283,12 +283,13 @@ Happy Hour Compass`;
  *   RESEND_API_KEY
  *
  * Optional env var:
- *   FOUNDER_NOTIFICATION_EMAIL — defaults to wayne.yarrow@gmail.com
+ *   FOUNDER_NOTIFICATION_EMAIL — defaults to ops@happyhourcompass.com
  *   APP_URL                    — used to build the review link
  */
 export async function sendClaimNotificationEmail({
   claimId,
   venueName,
+  city,
   firstName,
   lastName,
   claimantEmail,
@@ -297,6 +298,7 @@ export async function sendClaimNotificationEmail({
 }: {
   claimId: string;
   venueName: string;
+  city?: string | null;
   firstName: string;
   lastName: string;
   claimantEmail: string;
@@ -304,7 +306,7 @@ export async function sendClaimNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to =
-    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
 
@@ -351,14 +353,21 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  return sendTransactionalEmail({
+  const result = await sendTransactionalEmail({
     type:        "claim_notification",
     to,
-    subject:     `New claim: ${venueName} — ${firstName} ${lastName}`,
+    subject:     `[Venue Claim] ${venueName}${city ? ` (${city})` : ""}`,
     html,
     text,
     criticality: "important",
   });
+
+  await sendSlackAcquisitionNotification({
+    channel: "venue-claims",
+    text: `${venueName}${city ? `\n${city}` : ""}\n<${reviewUrl}|Open in Control Panel →>`,
+  });
+
+  return result;
 }
 
 // ── Claim submission confirmation email (to claimant) ────────────────────────
@@ -522,7 +531,7 @@ Founder, Happy Hour Compass`;
  * state. Caller is responsible for not awaiting this in a blocking way.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
  */
 export async function sendSuggestionNotificationEmail({
   suggestionId,
@@ -544,7 +553,7 @@ export async function sendSuggestionNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to =
-    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const notesRow = notes
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Notes</td>
@@ -610,14 +619,21 @@ ID:        ${suggestionId}
 —
 Happy Hour Compass`;
 
-  return sendTransactionalEmail({
+  const result = await sendTransactionalEmail({
     type:        "suggestion_notification",
     to,
-    subject:     `New happy hour suggestion: ${venueName} (${city})`,
+    subject:     `[Venue Suggestion] ${venueName} (${city})`,
     html,
     text,
     criticality: "standard",
   });
+
+  await sendSlackAcquisitionNotification({
+    channel: "venue-suggestions",
+    text: `${venueName}\n${city}`,
+  });
+
+  return result;
 }
 
 // ── Venue suggestion confirmation email (to submitter) ───────────────────────
@@ -700,7 +716,7 @@ Happy Hour Compass`;
  * match_status (confirmed / rejected / no_match) or Google Places availability.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
  */
 export async function sendOperatorSubmissionNotificationEmail({
   submissionId,
@@ -725,7 +741,7 @@ export async function sendOperatorSubmissionNotificationEmail({
   routedStatus: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
 
@@ -789,14 +805,21 @@ ${reviewUrl}
 —
 Happy Hour Compass Control Panel`;
 
-  return sendTransactionalEmail({
+  const result = await sendTransactionalEmail({
     type:        "operator_submission_notification",
     to,
-    subject:     `New operator submission: ${businessName} (${city}) — ${matchStatus}`,
+    subject:     `[Venue Submission] ${businessName} (${city})`,
     html,
     text,
     criticality: "important",
   });
+
+  await sendSlackAcquisitionNotification({
+    channel: "venue-submissions",
+    text: `${businessName}\n${city}\n<${reviewUrl}|Open in Control Panel →>`,
+  });
+
+  return result;
 }
 
 // ── Contact Us — founder notification ────────────────────────────────────────
@@ -808,7 +831,7 @@ Happy Hour Compass Control Panel`;
  * to the caller. If it fails, the caller should return an error to the user.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
  */
 export async function sendContactFounderNotificationEmail({
   messageId,
@@ -823,7 +846,7 @@ export async function sendContactFounderNotificationEmail({
   message: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const nameRow = name
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Name</td>
@@ -863,14 +886,21 @@ ${message}
 Message ID: ${messageId}
 Happy Hour Compass`;
 
-  return sendTransactionalEmail({
+  const result = await sendTransactionalEmail({
     type:        "contact_founder_notification",
     to,
-    subject:     `New contact message from ${name ?? email}`,
+    subject:     `[Website Contact] ${name ?? email}`,
     html,
     text,
     criticality: "important",
   });
+
+  await sendSlackAcquisitionNotification({
+    channel: "website-contact",
+    text: name ? `${name} (${email})` : email,
+  });
+
+  return result;
 }
 
 // ── Contact Us — submitter confirmation ───────────────────────────────────────
@@ -1063,6 +1093,75 @@ Founder, Happy Hour Compass`;
   });
 }
 
+// ── Operator submission confirmation email (to submitter) ─────────────────────
+
+/**
+ * Sends a submission received acknowledgement to the operator who submitted via
+ * the /suggest/owner flow, for paths where no activation email is sent
+ * (pending_review, double_claim, no_match, rejected_by_user).
+ *
+ * The confirmed_auto path already sends sendOperatorActivationEmail, so this
+ * function must not be called for that route.
+ *
+ * Failure is non-blocking: the submission record already exists.
+ */
+export async function sendOperatorSubmissionConfirmationEmail({
+  to,
+  firstName,
+  businessName,
+}: {
+  to: string;
+  firstName: string;
+  businessName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const html = emailLayout(`
+          <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">We received your submission</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for submitting <strong style="color:#0f172a;">${businessName}</strong> to Happy Hour Compass.
+          </p>
+          <p style="margin:0 0 0;font-size:15px;color:#475569;line-height:1.6;">
+            We&rsquo;ve received your details and will be in touch to continue setting things up.
+          </p>
+          ${emailWhatHappensNext([
+            "We review your submission (usually within 1&ndash;2 business days).",
+            "If we need anything else, we&rsquo;ll reach out to you at this email address.",
+            "Once verified, you&rsquo;ll receive a link to set up your operator account.",
+          ])}
+          ${emailSpamCallout()}
+          <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
+          <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
+          <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
+    "You received this email because you submitted a venue on Happy Hour Compass."
+  );
+
+  const text = `Hi ${firstName},
+
+Thanks for submitting ${businessName} to Happy Hour Compass.
+
+We've received your details and will be in touch to continue setting things up.
+
+What happens next?
+1. We review your submission (usually within 1–2 business days).
+2. If we need anything else, we'll reach out to you at this email address.
+3. Once verified, you'll receive a link to set up your operator account.
+
+Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
+
+Cheers,
+Wayne
+Founder, Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "operator_submission_confirmation",
+    to,
+    subject:     `We received your submission — ${businessName}`,
+    html,
+    text,
+    criticality: "standard",
+  });
+}
+
 // ── Operator submission "info submitted" founder notification ─────────────────
 
 /**
@@ -1091,7 +1190,7 @@ export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
   submitterEmail: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const appUrl  = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
   const fullName  = [submitterFirstName, submitterLastName].filter(Boolean).join(" ") || submitterEmail;
@@ -1305,7 +1404,7 @@ export async function sendClaimInfoSubmittedNotificationEmail({
   claimantEmail: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to       = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const to       = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const appUrl   = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
   const fullName  = [claimantFirstName, claimantLastName].filter(Boolean).join(" ") || claimantEmail;
@@ -1493,55 +1592,6 @@ Happy Hour Compass`;
   });
 }
 
-// ── Approval email (legacy — superseded by sendPasswordSetupEmail) ─────────────
-
-export async function sendApprovalEmail({
-  to,
-  firstName,
-  token,
-}: {
-  to: string;
-  firstName: string;
-  token: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const appUrl = getAppUrl();
-  const activateUrl = `${appUrl}/activate-account?token=${token}`;
-
-  const html = emailLayout(`
-          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue claim was approved</h1>
-          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
-          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-            Great news — your venue ownership claim has been reviewed and approved.
-            Click the button below to create your operator account and take control of your listing.
-          </p>
-          ${emailCta(activateUrl, "Create my account &rarr;")}
-          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires in 7 days. If it expires, contact us and we can send a new one.</p>
-          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${activateUrl}</p>`,
-    "You received this email because you submitted a venue claim on Happy Hour Compass."
-  );
-
-  const text = `Hi ${firstName},
-
-Your venue ownership claim on Happy Hour Compass has been approved.
-
-Create your operator account here:
-${activateUrl}
-
-This link expires in 7 days.
-
-—
-Happy Hour Compass`;
-
-  return sendTransactionalEmail({
-    type:        "claim_approval_legacy",
-    to,
-    subject:     "Your Happy Hour Compass claim was approved",
-    html,
-    text,
-    criticality: "standard",
-  });
-}
-
 // ── Platform admin invite email ───────────────────────────────────────────────
 
 /**
@@ -1613,7 +1663,7 @@ const CANCELLATION_REASON_LABELS: Record<string, string> = {
 /**
  * Notifies the founder when an operator cancels management of their venue.
  *
- * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to wayne.yarrow@gmail.com).
+ * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com).
  * Includes a direct link to the venue in the Control Panel.
  */
 export async function sendVenueCancellationFounderEmail({
@@ -1627,7 +1677,7 @@ export async function sendVenueCancellationFounderEmail({
   reason:        string;
   venueId:       string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "wayne.yarrow@gmail.com";
+  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
   const appUrl  = getAppUrl();
   const venueUrl = `${appUrl}/control-panel/venues/${venueId}`;
   const reasonLabel = CANCELLATION_REASON_LABELS[reason] ?? reason;
