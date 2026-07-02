@@ -9,6 +9,8 @@ import { SavedDropdown } from "./SavedDropdown";
 import AccountDropdown from "./AccountDropdown";
 import { getSavedCounts } from "@/lib/consumer/savedItems";
 import type { CityRecord } from "@/lib/geo/types";
+import { AcquisitionModal } from "./acquisition/AcquisitionModal";
+import { SuggestVenueModalContent } from "./acquisition/SuggestVenueModalContent";
 
 export type ConsumerUser = {
   email: string;
@@ -36,6 +38,7 @@ export default function WebsiteHeader({
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
   const pathname = usePathname();
   // Refs covering every element that belongs to the saved feature so the
@@ -138,12 +141,13 @@ export default function WebsiteHeader({
 
           {/* Desktop nav */}
           <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
-            <Link
-              href="/suggest/customer"
+            <button
+              type="button"
+              onClick={() => setSuggestOpen(true)}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Suggest a Venue
-            </Link>
+            </button>
             <Link
               href="/suggest/owner"
               className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
@@ -281,6 +285,16 @@ export default function WebsiteHeader({
         )}
       </header>
 
+      {/* Acquisition modals — portaled to document.body via AcquisitionModal */}
+      <AcquisitionModal
+        open={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+        title="Suggest a Venue"
+        description="Know a great happy hour? Tell us about it and we'll look into adding it to the directory."
+      >
+        <SuggestVenueModalContent onDone={() => setSuggestOpen(false)} />
+      </AcquisitionModal>
+
       {/* Mobile menu overlay */}
       {menuOpen && (
         <div
@@ -303,12 +317,16 @@ export default function WebsiteHeader({
             <div className="max-w-7xl mx-auto px-6">
               <ul role="list">
                 <li className="border-b border-gray-100">
-                  <Link
-                    href="/suggest/customer"
-                    className="flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSuggestOpen(true);
+                    }}
+                    className="w-full text-left flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
                   >
                     Suggest a Venue
-                  </Link>
+                  </button>
                 </li>
                 <li className="border-b border-gray-100">
                   <Link
