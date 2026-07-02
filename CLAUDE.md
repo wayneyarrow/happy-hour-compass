@@ -88,15 +88,16 @@ When removing: revert the two changes made to `app/(consumer)/layout.tsx`:
 
 ## Website Vision & Playbook
 
-Before any significant public-facing website functionality — UI, UX, layout, navigation, homepage, search, filters, maps, mobile experience, SEO, geographic or location architecture, content, or architecture decisions — review all three documents:
+Before any significant public-facing website functionality — UI, UX, layout, navigation, homepage, search, filters, maps, mobile experience, SEO, geographic or location architecture, content, or architecture decisions — review all four documents:
 
 1. **[`docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md`](docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md)** — Website philosophy, UX principles, and design vision. Takes precedence over implementation convenience.
 2. **[`docs/website/WEBSITE_PRODUCT_PLAYBOOK.md`](docs/website/WEBSITE_PRODUCT_PLAYBOOK.md)** — Engineering implementation guide and website build standards. Defines how to apply the philosophy during real implementation. Includes the **Geographic Information Architecture** — the authoritative reference for market, city, neighbourhood, URL structure, search origin priority, and all geographic decisions. Review this section before any geographic, URL, SEO, or location-related implementation.
 3. **[`docs/website/CONSUMER_EXPERIENCE_PRD.md`](docs/website/CONSUMER_EXPERIENCE_PRD.md)** — Consumer product experience, customer journey, homepage philosophy, search framework, search results framework, filters, maps, mobile experience, and future consumer roadmap.
+4. **[`docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md`](docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md)** — The Happy Hour Compass Content Engine is the long-term publishing engine for the public website's editorial content (Venue Guides, Event Guides, and future guide types). It is not a traditional CMS or blogging platform. It is a core architectural document, equal in importance to the Website Vision and Website Product Playbook. Review it before any Content Engine (CMS) implementation work — new guide types, publishing workflow changes, SEO automation, distribution, or admin control panel content functionality.
 
 If a requested implementation conflicts with any of these documents, surface the conflict before writing code.
 
-Key principles from both documents to carry into every website task:
+Key principles from these documents to carry into every website task:
 - The website is the product, not a marketing website. Discovery always comes before explanation.
 - Reveal and elevate the existing product engine — never rebuild what already exists.
 - Every homepage section must earn its place by improving discovery; it should feel like the beginning of the product, not an introduction to it.
@@ -105,6 +106,7 @@ Key principles from both documents to carry into every website task:
 - Desktop must feel immersive; mobile must feel native. Neither is an afterthought.
 - Do not create UI backed by immature or inconsistently populated data.
 - Preserve separation between Public Website, Consumer App, Operator Admin, and Founder Control Panel.
+- The Content Engine is the long-term publishing engine for the public website — not a traditional CMS or blogging platform. Follow `docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md` before introducing new Content Engine functionality or architecture; surface conflicts before writing code.
 
 ---
 
