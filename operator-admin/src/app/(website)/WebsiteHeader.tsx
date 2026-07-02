@@ -11,6 +11,7 @@ import { getSavedCounts } from "@/lib/consumer/savedItems";
 import type { CityRecord } from "@/lib/geo/types";
 import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { SuggestVenueModalContent } from "./acquisition/SuggestVenueModalContent";
+import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
 
 export type ConsumerUser = {
   email: string;
@@ -39,6 +40,7 @@ export default function WebsiteHeader({
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [addVenueOpen, setAddVenueOpen] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
   const pathname = usePathname();
   // Refs covering every element that belongs to the saved feature so the
@@ -148,12 +150,13 @@ export default function WebsiteHeader({
             >
               Suggest a Venue
             </button>
-            <Link
-              href="/suggest/owner"
+            <button
+              type="button"
+              onClick={() => setAddVenueOpen(true)}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-              Claim / Add Your Venue
-            </Link>
+              Add Your Venue
+            </button>
 
             {/* Saved button + dropdown */}
             <div className="relative" ref={savedRef}>
@@ -295,6 +298,15 @@ export default function WebsiteHeader({
         <SuggestVenueModalContent onDone={() => setSuggestOpen(false)} />
       </AcquisitionModal>
 
+      <AcquisitionModal
+        open={addVenueOpen}
+        onClose={() => setAddVenueOpen(false)}
+        title="Add Your Venue"
+        description="List your restaurant or bar on Happy Hour Compass and reach people looking for great happy hours."
+      >
+        <AddVenueModalContent onDone={() => setAddVenueOpen(false)} />
+      </AcquisitionModal>
+
       {/* Mobile menu overlay */}
       {menuOpen && (
         <div
@@ -329,12 +341,16 @@ export default function WebsiteHeader({
                   </button>
                 </li>
                 <li className="border-b border-gray-100">
-                  <Link
-                    href="/suggest/owner"
-                    className="flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setAddVenueOpen(true);
+                    }}
+                    className="w-full text-left flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
                   >
-                    Claim / Add Your Venue
-                  </Link>
+                    Add Your Venue
+                  </button>
                 </li>
                 <li className="border-b border-gray-100">
                   <button
