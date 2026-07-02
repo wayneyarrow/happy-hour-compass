@@ -15,12 +15,17 @@ import {
 
 /**
  * Create/update server actions for the Content Engine guide form (Card 2 +
- * Card 3 attachments).
+ * Card 3 attachments + Card 4 SEO fields).
  *
- * Scope: CRUD for content_guides plus its venue/event attachments
- * (content_guide_venues / content_guide_events). No SEO generation, no
- * scheduling/expiry automation, no FAQ/related guides — those are later
- * cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
+ * Scope: CRUD for content_guides (including its SEO columns — page_title,
+ * meta_title, meta_description, og_title, og_description, canonical_url —
+ * added in migration 054) plus its venue/event attachments
+ * (content_guide_venues / content_guide_events). SEO values themselves are
+ * generated client-side in GuideForm via src/lib/seo/contentGuideSeo.ts;
+ * this file just persists whatever ends up in those form fields, same as
+ * any other guide field — no server-side SEO generation or validation
+ * blocking. No scheduling/expiry automation, no FAQ/related guides — those
+ * are later cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -72,6 +77,12 @@ type ParsedGuide = {
   hero_image_url: string | null;
   publish_at: string | null;
   expire_at: string | null;
+  page_title: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  canonical_url: string | null;
 };
 
 function str(formData: FormData, key: string): string {
@@ -120,6 +131,12 @@ function parseGuideForm(formData: FormData): ParsedGuide {
     hero_image_url:      nullableStr(formData, "hero_image_url"),
     publish_at:          toIso(nullableStr(formData, "publish_at")),
     expire_at:           toIso(nullableStr(formData, "expire_at")),
+    page_title:          nullableStr(formData, "page_title"),
+    meta_title:          nullableStr(formData, "meta_title"),
+    meta_description:    nullableStr(formData, "meta_description"),
+    og_title:            nullableStr(formData, "og_title"),
+    og_description:      nullableStr(formData, "og_description"),
+    canonical_url:       nullableStr(formData, "canonical_url"),
   };
 }
 
@@ -197,6 +214,12 @@ export async function createGuideAction(
       hero_image_url:       parsed.hero_image_url,
       publish_at:           parsed.publish_at,
       expire_at:            parsed.expire_at,
+      page_title:           parsed.page_title,
+      meta_title:           parsed.meta_title,
+      meta_description:     parsed.meta_description,
+      og_title:             parsed.og_title,
+      og_description:       parsed.og_description,
+      canonical_url:        parsed.canonical_url,
     })
     .select("id")
     .single();
@@ -267,6 +290,12 @@ export async function updateGuideAction(
       hero_image_url:       parsed.hero_image_url,
       publish_at:           parsed.publish_at,
       expire_at:            parsed.expire_at,
+      page_title:           parsed.page_title,
+      meta_title:           parsed.meta_title,
+      meta_description:     parsed.meta_description,
+      og_title:             parsed.og_title,
+      og_description:       parsed.og_description,
+      canonical_url:        parsed.canonical_url,
     })
     .eq("id", guideId);
 

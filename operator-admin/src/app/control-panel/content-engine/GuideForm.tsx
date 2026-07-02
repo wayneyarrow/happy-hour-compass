@@ -1,25 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import { slugify } from "@/lib/slugify";
 import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/types";
 import type { ContentGuideDetail, GuideType, GuideStatus } from "@/lib/data/contentGuides";
 import type { GuideAttachmentItem } from "@/lib/data/contentGuideAttachments";
+import {
+  generateGuideSeo,
+  getCanonicalUrlWarning,
+  getMetaDescriptionWarning,
+  getMetaTitleWarning,
+  type SeoFieldKey,
+} from "@/lib/seo/contentGuideSeo";
 import { createGuideAction, updateGuideAction, type GuideFormState } from "./actions";
 import HeroImageField from "./HeroImageField";
 import AttachmentsSelector from "./AttachmentsSelector";
 
 /**
- * Shared create/edit form for Content Engine guides (Card 2 + touch-up, plus
- * Card 3 venue/event attachments).
+ * Shared create/edit form for Content Engine guides (Card 2 + touch-up,
+ * Card 3 venue/event attachments, Card 4 SEO automation).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
- * keywords, status, publishing dates, and venue/event attachments only. No
- * FAQ, related guides, SEO automation, multiple/cropped images, or preview —
- * see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 3 task for
- * the full guardrail list.
+ * keywords, status, publishing dates, venue/event attachments, and SEO
+ * fields only. No FAQ, related guides, preview, or public rendering — see
+ * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 4 task for the
+ * full guardrail list.
  */
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -137,6 +144,27 @@ export default function GuideForm({
   const [publishAt, setPublishAt] = useState(isoToInputValue(initialGuide?.publish_at ?? null));
   const [expireAt, setExpireAt] = useState(isoToInputValue(initialGuide?.expire_at ?? null));
 
+  // ── SEO fields (Card 4) ───────────────────────────────────────────────────
+  // Each field auto-fills from generateGuideSeo() until the admin edits that
+  // specific field directly — seoTouched tracks that per field, same pattern
+  // as slugTouched above. A field with an existing saved value counts as
+  // touched on load so an old guide's SEO copy is never silently rewritten;
+  // an empty field on load is untouched, so a suggestion appears immediately.
+  const [pageTitle, setPageTitle] = useState(initialGuide?.page_title ?? "");
+  const [metaTitle, setMetaTitle] = useState(initialGuide?.meta_title ?? "");
+  const [metaDescription, setMetaDescription] = useState(initialGuide?.meta_description ?? "");
+  const [ogTitle, setOgTitle] = useState(initialGuide?.og_title ?? "");
+  const [ogDescription, setOgDescription] = useState(initialGuide?.og_description ?? "");
+  const [canonicalUrl, setCanonicalUrl] = useState(initialGuide?.canonical_url ?? "");
+  const [seoTouched, setSeoTouched] = useState<Record<SeoFieldKey, boolean>>({
+    page_title: Boolean(initialGuide?.page_title?.trim()),
+    meta_title: Boolean(initialGuide?.meta_title?.trim()),
+    meta_description: Boolean(initialGuide?.meta_description?.trim()),
+    og_title: Boolean(initialGuide?.og_title?.trim()),
+    og_description: Boolean(initialGuide?.og_description?.trim()),
+    canonical_url: Boolean(initialGuide?.canonical_url?.trim()),
+  });
+
   // ── Cascading geography ──────────────────────────────────────────────────
   const filteredCities = useMemo(
     () => cities.filter((c) => c.marketId === marketId),
@@ -146,6 +174,72 @@ export default function GuideForm({
     () => neighbourhoods.filter((n) => n.cityId === cityId),
     [neighbourhoods, cityId]
   );
+  const selectedMarket = markets.find((m) => m.id === marketId) ?? null;
+  const selectedCityForSeo = cities.find((c) => c.id === cityId) ?? null;
+  const selectedNeighbourhoodForSeo = neighbourhoods.find((n) => n.id === neighbourhoodId) ?? null;
+
+  const generatedSeo = useMemo(
+    () =>
+      generateGuideSeo({
+        guideType,
+        marketName: selectedMarket?.name ?? "",
+        marketSlug: selectedMarket?.slug ?? "",
+        cityName: selectedCityForSeo?.name ?? "",
+        neighbourhoodName: selectedNeighbourhoodForSeo?.name ?? null,
+        title,
+        slug,
+        primaryKeyword,
+        secondaryKeywords: secondaryKeywords.split(/[\n,]/).map((k) => k.trim()).filter(Boolean),
+        intro,
+        body,
+      }),
+    [
+      guideType, selectedMarket, selectedCityForSeo, selectedNeighbourhoodForSeo,
+      title, slug, primaryKeyword, secondaryKeywords, intro, body,
+    ]
+  );
+
+  // Applies the current suggestion to any field the admin hasn't manually
+  // edited yet — runs on every input change, so untouched fields stay live.
+  useEffect(() => {
+    if (!seoTouched.page_title) setPageTitle(generatedSeo.page_title.value);
+    if (!seoTouched.meta_title) setMetaTitle(generatedSeo.meta_title.value);
+    if (!seoTouched.meta_description) setMetaDescription(generatedSeo.meta_description.value);
+    if (!seoTouched.og_title) setOgTitle(generatedSeo.og_title.value);
+    if (!seoTouched.og_description) setOgDescription(generatedSeo.og_description.value);
+    if (!seoTouched.canonical_url) setCanonicalUrl(generatedSeo.canonical_url.value);
+  }, [generatedSeo, seoTouched]);
+
+  const SEO_SETTERS: Record<SeoFieldKey, (value: string) => void> = {
+    page_title: setPageTitle,
+    meta_title: setMetaTitle,
+    meta_description: setMetaDescription,
+    og_title: setOgTitle,
+    og_description: setOgDescription,
+    canonical_url: setCanonicalUrl,
+  };
+
+  function handleSeoFieldChange(field: SeoFieldKey, value: string) {
+    setSeoTouched((prev) => ({ ...prev, [field]: true }));
+    SEO_SETTERS[field](value);
+  }
+
+  /** Clears touched state on every SEO field — the effect above then
+   * re-fills all of them from the current inputs on the next render. */
+  function regenerateSeo() {
+    setSeoTouched({
+      page_title: false,
+      meta_title: false,
+      meta_description: false,
+      og_title: false,
+      og_description: false,
+      canonical_url: false,
+    });
+  }
+
+  const metaTitleWarning = getMetaTitleWarning(metaTitle);
+  const metaDescriptionWarning = getMetaDescriptionWarning(metaDescription);
+  const canonicalUrlWarning = getCanonicalUrlWarning(canonicalUrl);
 
   function handleMarketChange(nextMarketId: string) {
     setMarketId(nextMarketId);
@@ -187,11 +281,11 @@ export default function GuideForm({
     { label: "Keywords", complete: primaryKeyword.trim() !== "" },
     { label: "Content", complete: intro.trim() !== "" && body.trim() !== "" },
     { label: "Hero image", complete: heroImageUrl.trim() !== "" },
+    { label: "SEO", complete: metaTitle.trim() !== "" && metaDescription.trim() !== "" },
     { label: "Publishing", complete: status !== "scheduled" || publishAt !== "" },
   ];
 
   const err = state.fieldErrors ?? {};
-  const selectedMarket = markets.find((m) => m.id === marketId) ?? null;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -415,6 +509,107 @@ export default function GuideForm({
           <section className={sectionCls}>
             <h2 className={sectionTitleCls}>Hero Image</h2>
             <HeroImageField value={heroImageUrl} onChange={setHeroImageUrl} disabled={isPending} />
+          </section>
+
+          {/* SEO */}
+          <section className={sectionCls}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className={sectionTitleCls}>SEO</h2>
+              <button
+                type="button"
+                onClick={regenerateSeo}
+                className="shrink-0 text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                Regenerate from guide inputs
+              </button>
+            </div>
+            <p className={hintCls}>
+              Generated automatically from the title, keywords, content, and location above.
+              Editing a field takes manual control of it — it stops updating until you regenerate.
+            </p>
+
+            <div>
+              <label className={labelCls} htmlFor="page_title">Page Title</label>
+              <input
+                id="page_title"
+                name="page_title"
+                type="text"
+                value={pageTitle}
+                onChange={(e) => handleSeoFieldChange("page_title", e.target.value)}
+                className={inputCls}
+              />
+              <p className={hintCls}>Generated from: {generatedSeo.page_title.generatedFrom.join(", ")}</p>
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="meta_title">Meta Title</label>
+              <input
+                id="meta_title"
+                name="meta_title"
+                type="text"
+                value={metaTitle}
+                onChange={(e) => handleSeoFieldChange("meta_title", e.target.value)}
+                className={inputCls}
+              />
+              <p className={hintCls}>Generated from: {generatedSeo.meta_title.generatedFrom.join(", ")}</p>
+              {metaTitleWarning && <p className="mt-1 text-xs text-amber-600">{metaTitleWarning}</p>}
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="meta_description">Meta Description</label>
+              <textarea
+                id="meta_description"
+                name="meta_description"
+                rows={2}
+                value={metaDescription}
+                onChange={(e) => handleSeoFieldChange("meta_description", e.target.value)}
+                className={inputCls}
+              />
+              <p className={hintCls}>Generated from: {generatedSeo.meta_description.generatedFrom.join(", ")}</p>
+              {metaDescriptionWarning && <p className="mt-1 text-xs text-amber-600">{metaDescriptionWarning}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls} htmlFor="og_title">OG Title</label>
+                <input
+                  id="og_title"
+                  name="og_title"
+                  type="text"
+                  value={ogTitle}
+                  onChange={(e) => handleSeoFieldChange("og_title", e.target.value)}
+                  className={inputCls}
+                />
+                <p className={hintCls}>Generated from: {generatedSeo.og_title.generatedFrom.join(", ")}</p>
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="canonical_url">Canonical URL</label>
+                <input
+                  id="canonical_url"
+                  name="canonical_url"
+                  type="text"
+                  value={canonicalUrl}
+                  onChange={(e) => handleSeoFieldChange("canonical_url", e.target.value)}
+                  placeholder="/{market}/guides/{guide-slug}"
+                  className={inputCls}
+                />
+                <p className={hintCls}>Generated from: {generatedSeo.canonical_url.generatedFrom.join(", ")}</p>
+                {canonicalUrlWarning && <p className="mt-1 text-xs text-amber-600">{canonicalUrlWarning}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="og_description">OG Description</label>
+              <textarea
+                id="og_description"
+                name="og_description"
+                rows={2}
+                value={ogDescription}
+                onChange={(e) => handleSeoFieldChange("og_description", e.target.value)}
+                className={inputCls}
+              />
+              <p className={hintCls}>Generated from: {generatedSeo.og_description.generatedFrom.join(", ")}</p>
+            </div>
           </section>
 
           {/* Publishing */}
