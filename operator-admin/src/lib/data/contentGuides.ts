@@ -18,7 +18,35 @@ import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/ty
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type GuideType = "venue_guide" | "event_guide";
-export type GuideStatus = "draft" | "scheduled" | "published" | "expired";
+
+/**
+ * Card 7 simplified this from the original four-state model
+ * (draft/scheduled/published/expired) down to two — see
+ * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 7 task.
+ * Scheduling and expiry are no longer part of the V1 editorial workflow;
+ * an editor moves a guide from Draft to Published manually, and Discover
+ * Management controls whether it's actually merchandised anywhere.
+ *
+ * The DB CHECK constraint (migration 052) still technically permits
+ * 'scheduled'/'expired' — deliberately left as-is rather than migrated,
+ * since the app no longer writes those values and narrowing the
+ * constraint isn't necessary to get the simplification's benefit. Any
+ * pre-existing row in one of those legacy states is normalized to
+ * "draft" on read — see normalizeGuideStatus() below.
+ */
+export type GuideStatus = "draft" | "published";
+
+/**
+ * Coerces a raw DB status value into the current two-state model. Legacy
+ * 'scheduled' guides become drafts (they were never public). Legacy
+ * 'expired' guides also become drafts — they were already excluded from
+ * public rendering under the old model too, since isGuidePublicNow() only
+ * ever treated status === 'published' as public, so this preserves their
+ * existing (non-)visibility exactly.
+ */
+function normalizeGuideStatus(status: string): GuideStatus {
+  return status === "published" ? "published" : "draft";
+}
 
 export type ContentGuideRow = {
   id: string;
@@ -85,7 +113,7 @@ export async function getContentGuides(): Promise<ContentGuideRow[]> {
   return (data ?? []).map((row: Record<string, any>) => ({
     id:          row.id as string,
     guide_type:  row.guide_type as GuideType,
-    status:      row.status as GuideStatus,
+    status:      normalizeGuideStatus(row.status as string),
     title:       row.title as string,
     slug:        row.slug as string,
     marketName:  (row.market?.name as string | undefined) ?? null,
@@ -123,7 +151,7 @@ export async function getContentGuideById(id: string): Promise<ContentGuideDetai
   return {
     id:                 row.id as string,
     guide_type:         row.guide_type as GuideType,
-    status:             row.status as GuideStatus,
+    status:             normalizeGuideStatus(row.status as string),
     market_id:          row.market_id as string,
     city_id:            row.city_id as string,
     neighbourhood_id:   row.neighbourhood_id as string | null,

@@ -16,7 +16,8 @@ import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
 
 /**
  * Create/update server actions for the Content Engine guide form (Card 2 +
- * Card 3 attachments + Card 4 SEO fields + Card 6B distribution eligibility).
+ * Card 3 attachments + Card 4 SEO fields + Card 6B distribution eligibility
+ * + Card 7 status simplification).
  *
  * Scope: CRUD for content_guides (including its SEO columns — page_title,
  * meta_title, meta_description, og_title, og_description, canonical_url —
@@ -29,15 +30,24 @@ import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
  * generation or validation blocking. Distribution here is eligibility only
  * (editorial intent) — actual merchandising/placement is Discover
  * Management's job (see content-engine's sibling discover/guides/actions.ts).
- * No scheduling/expiry automation, no FAQ/related guides — those are later
- * cards. See docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
+ *
+ * Status is now binary (draft/published) — Card 7 removed scheduled/expired
+ * from the V1 editorial workflow, along with the publish_at/expire_at inputs
+ * that only existed to support "scheduled" (see removed toIso() and the old
+ * cross-field date validation, both deleted rather than kept dead). Those
+ * two columns still exist in the DB and are still read by public rendering's
+ * publish-window check (isGuidePublicNow in contentGuides.ts) — this file
+ * just no longer writes to them, so pre-existing values are left untouched
+ * rather than overwritten with null on the next save.
+ *
+ * No FAQ/related guides — those are later cards. See
+ * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type GuideFieldKey =
-  | "guide_type" | "market_id" | "city_id" | "title" | "slug"
-  | "status" | "publish_at" | "expire_at";
+  | "guide_type" | "market_id" | "city_id" | "title" | "slug" | "status";
 
 export type GuideFormState = {
   error?: string;
@@ -45,7 +55,7 @@ export type GuideFormState = {
 };
 
 const GUIDE_TYPES: GuideType[] = ["venue_guide", "event_guide"];
-const GUIDE_STATUSES: GuideStatus[] = ["draft", "scheduled", "published", "expired"];
+const GUIDE_STATUSES: GuideStatus[] = ["draft", "published"];
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -80,8 +90,6 @@ type ParsedGuide = {
   intro: string | null;
   body: string | null;
   hero_image_url: string | null;
-  publish_at: string | null;
-  expire_at: string | null;
   page_title: string | null;
   meta_title: string | null;
   meta_description: string | null;
@@ -120,13 +128,6 @@ function parseSecondaryKeywords(raw: string): string[] {
     .filter((k) => k.length > 0);
 }
 
-/** Converts a datetime-local input value ("YYYY-MM-DDTHH:mm") to an ISO string, or null. */
-function toIso(value: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 function parseGuideForm(formData: FormData): ParsedGuide {
   return {
     guide_type:         str(formData, "guide_type"),
@@ -141,8 +142,6 @@ function parseGuideForm(formData: FormData): ParsedGuide {
     intro:               nullableStr(formData, "intro"),
     body:                nullableStr(formData, "body"),
     hero_image_url:      nullableStr(formData, "hero_image_url"),
-    publish_at:          toIso(nullableStr(formData, "publish_at")),
-    expire_at:           toIso(nullableStr(formData, "expire_at")),
     page_title:          nullableStr(formData, "page_title"),
     meta_title:          nullableStr(formData, "meta_title"),
     meta_description:    nullableStr(formData, "meta_description"),
@@ -153,10 +152,10 @@ function parseGuideForm(formData: FormData): ParsedGuide {
 }
 
 /**
- * Validates the required fields listed in the Card 2 spec:
- *   guide_type, market, city, title, slug, status required;
- *   publish_at required only when status = 'scheduled';
- *   expire_at must be after publish_at when both are provided.
+ * Validates the required fields: guide_type, market, city, title, slug,
+ * status. Status is binary (draft/published) as of Card 7 — there is no
+ * more cross-field date validation, since scheduling/expiry no longer
+ * exist in the editor.
  */
 function validateGuideForm(parsed: ParsedGuide): Partial<Record<GuideFieldKey, string>> {
   const errors: Partial<Record<GuideFieldKey, string>> = {};
@@ -180,14 +179,6 @@ function validateGuideForm(parsed: ParsedGuide): Partial<Record<GuideFieldKey, s
   }
   if (!GUIDE_STATUSES.includes(parsed.status as GuideStatus)) {
     errors.status = "Select a status.";
-  }
-  if (parsed.status === "scheduled" && !parsed.publish_at) {
-    errors.publish_at = "Publish date is required when status is Scheduled.";
-  }
-  if (parsed.publish_at && parsed.expire_at) {
-    if (new Date(parsed.expire_at).getTime() <= new Date(parsed.publish_at).getTime()) {
-      errors.expire_at = "Expiry date must be after the publish date.";
-    }
   }
 
   return errors;
@@ -224,8 +215,6 @@ export async function createGuideAction(
       intro:                parsed.intro,
       body:                 parsed.body,
       hero_image_url:       parsed.hero_image_url,
-      publish_at:           parsed.publish_at,
-      expire_at:            parsed.expire_at,
       page_title:           parsed.page_title,
       meta_title:           parsed.meta_title,
       meta_description:     parsed.meta_description,
@@ -301,8 +290,6 @@ export async function updateGuideAction(
       intro:                parsed.intro,
       body:                 parsed.body,
       hero_image_url:       parsed.hero_image_url,
-      publish_at:           parsed.publish_at,
-      expire_at:            parsed.expire_at,
       page_title:           parsed.page_title,
       meta_title:           parsed.meta_title,
       meta_description:     parsed.meta_description,

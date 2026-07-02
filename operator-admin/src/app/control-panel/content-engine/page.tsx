@@ -12,18 +12,17 @@ const GUIDE_TYPE_LABELS: Record<GuideType, string> = {
   event_guide: "Event Guide",
 };
 
+// Card 7: status is binary (draft/published) — see contentGuides.ts's
+// GuideStatus type and normalizeGuideStatus() for how legacy
+// scheduled/expired rows are coerced on read.
 const STATUS_VARIANT: Record<GuideStatus, StatusVariant> = {
   draft: "neutral",
-  scheduled: "info",
   published: "success",
-  expired: "danger",
 };
 
 const STATUS_LABELS: Record<GuideStatus, string> = {
   draft: "Draft",
-  scheduled: "Scheduled",
   published: "Published",
-  expired: "Expired",
 };
 
 function fmtDate(iso: string | null): string {

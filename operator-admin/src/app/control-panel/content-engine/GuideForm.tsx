@@ -25,15 +25,21 @@ import AttachmentsSelector from "./AttachmentsSelector";
 /**
  * Shared create/edit form for Content Engine guides (Card 2 + touch-up,
  * Card 3 venue/event attachments, Card 4 SEO automation, Card 6B
- * distribution eligibility).
+ * distribution eligibility, Card 7 status simplification).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
- * keywords, status, publishing dates, venue/event attachments, SEO fields,
- * and distribution channel eligibility only. No FAQ, related guides,
- * preview, or public rendering — see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md
- * and the Card 6B task for the full guardrail list. Distribution here is
+ * keywords, status, venue/event attachments, SEO fields, and distribution
+ * channel eligibility only. No FAQ, related guides, preview, or public
+ * rendering — see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the
+ * Card 6B task for the full guardrail list. Distribution here is
  * eligibility (editorial intent) only — actual merchandising/ordering is a
  * Discover Management concern, not this form's.
+ *
+ * Card 7 replaced the old draft/scheduled/published/expired Status model
+ * with a plain draft/published toggle — no more scheduling, no more
+ * publish/expiry date inputs. See the Status section below and its
+ * GuideForm-level state (status only; publishAt/expireAt state and the
+ * isoToInputValue() helper that supported them were removed).
  */
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -53,23 +59,14 @@ const GUIDE_TYPE_OPTIONS: { value: GuideType; label: string }[] = [
   { value: "event_guide", label: "Event Guide" },
 ];
 
+// Card 7: status is binary. Scheduled/expired are gone from the V1
+// editorial workflow — see GuideForm's module docstring.
 const STATUS_OPTIONS: { value: GuideStatus; label: string }[] = [
   { value: "draft", label: "Draft" },
-  { value: "scheduled", label: "Scheduled" },
   { value: "published", label: "Published" },
-  { value: "expired", label: "Expired" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Converts an ISO timestamp to a <input type="datetime-local"> value (local time, no seconds). */
-function isoToInputValue(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 const inputCls =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:outline-none disabled:bg-gray-50 disabled:text-gray-400";
@@ -150,8 +147,6 @@ export default function GuideForm({
   const [body, setBody] = useState(initialGuide?.body ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(initialGuide?.hero_image_url ?? "");
   const [status, setStatus] = useState<GuideStatus>(initialGuide?.status ?? "draft");
-  const [publishAt, setPublishAt] = useState(isoToInputValue(initialGuide?.publish_at ?? null));
-  const [expireAt, setExpireAt] = useState(isoToInputValue(initialGuide?.expire_at ?? null));
 
   // ── SEO fields (Card 4) ───────────────────────────────────────────────────
   // Each field auto-fills from generateGuideSeo() until the admin edits that
@@ -307,7 +302,11 @@ export default function GuideForm({
     { label: "Hero image", complete: heroImageUrl.trim() !== "" },
     { label: "Distribution", complete: channels.length > 0 },
     { label: "SEO", complete: metaTitle.trim() !== "" && metaDescription.trim() !== "" },
-    { label: "Publishing", complete: status !== "scheduled" || publishAt !== "" },
+    // Status always has a valid value (defaults to "draft"), so unlike the
+    // old draft/scheduled/published/expired model — where this checked
+    // "if scheduled, is a publish date set" — there's no incomplete state
+    // left to detect. Always complete.
+    { label: "Status", complete: true },
   ];
 
   const err = state.fieldErrors ?? {};
@@ -668,9 +667,9 @@ export default function GuideForm({
             </div>
           </section>
 
-          {/* Publishing */}
+          {/* Status */}
           <section className={sectionCls}>
-            <h2 className={sectionTitleCls}>Publishing</h2>
+            <h2 className={sectionTitleCls}>Status</h2>
             <div>
               <label className={labelCls} htmlFor="status">Status</label>
               <select
@@ -685,33 +684,16 @@ export default function GuideForm({
                 ))}
               </select>
               {err.status && <p className={errorCls}>{err.status}</p>}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls} htmlFor="publish_at">
-                  Publish Date{status === "scheduled" && <span className="text-red-500"> *</span>}
-                </label>
-                <input
-                  id="publish_at"
-                  name="publish_at"
-                  type="datetime-local"
-                  value={publishAt}
-                  onChange={(e) => setPublishAt(e.target.value)}
-                  className={inputCls}
-                />
-                {err.publish_at && <p className={errorCls}>{err.publish_at}</p>}
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="expire_at">Expiry Date</label>
-                <input
-                  id="expire_at"
-                  name="expire_at"
-                  type="datetime-local"
-                  value={expireAt}
-                  onChange={(e) => setExpireAt(e.target.value)}
-                  className={inputCls}
-                />
-                {err.expire_at && <p className={errorCls}>{err.expire_at}</p>}
+              <div className="mt-2 space-y-1.5">
+                <p className={hintCls}>
+                  Draft guides remain in the Content Engine and are not available in the
+                  selected Distribution Channels.
+                </p>
+                <p className={hintCls}>
+                  Published guides become available for merchandising in the selected
+                  Distribution Channels. Public visibility is still controlled through
+                  Discover Management.
+                </p>
               </div>
             </div>
           </section>
