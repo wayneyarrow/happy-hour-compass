@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import type { GuideType } from "@/lib/data/contentGuides";
+import { normalizeGuideStatus, type GuideStatus, type GuideType } from "@/lib/data/contentGuides";
 
 /**
  * Data helpers for Content Engine guide attachments (Card 3).
@@ -483,4 +483,128 @@ export async function saveGuideAttachments(
   if (insertError) {
     console.error(`[saveGuideAttachments] Failed inserting into ${keepTable}:`, insertError.message);
   }
+}
+
+// ── Venue-side reads (Card 7B — venue detail "Featured in Content") ─────────
+// Read-only reverse lookups for the Control Panel venue detail page: which
+// guides feature this venue directly (content_guide_venues), and which
+// guides feature one of this venue's events (content_guide_events, joined
+// through events.venue_id — events carry their own venue_id column, so no
+// join through venues is needed).
+
+export type VenueFeaturedGuide = {
+  guideId: string;
+  title: string;
+  status: GuideStatus;
+  marketName: string | null;
+  cityName: string | null;
+};
+
+export type VenueFeaturedEventGuide = VenueFeaturedGuide & {
+  eventTitles: string[];
+};
+
+export type VenueFeaturedContent = {
+  venueGuides: VenueFeaturedGuide[];
+  eventGuides: VenueFeaturedEventGuide[];
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toFeaturedGuide(guide: Record<string, any>): VenueFeaturedGuide {
+  const market = (guide.market as Record<string, unknown> | null) ?? null;
+  const city = (guide.city as Record<string, unknown> | null) ?? null;
+  return {
+    guideId: guide.id as string,
+    title: guide.title as string,
+    status: normalizeGuideStatus(guide.status as string),
+    marketName: (market?.name as string | undefined) ?? null,
+    cityName: (city?.name as string | undefined) ?? null,
+  };
+}
+
+/** Guides where `venueId` is directly attached as a venue guide item. */
+async function getVenueGuidesFeaturing(
+  supabase: ReturnType<typeof createAdminClient>,
+  venueId: string
+): Promise<VenueFeaturedGuide[]> {
+  const { data, error } = await supabase
+    .from("content_guide_venues")
+    .select(
+      "content_guides!inner(id, title, status, market:markets(name), city:cities(name))"
+    )
+    .eq("venue_id", venueId);
+
+  if (error) {
+    console.error("[getVenueGuidesFeaturing]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: Record<string, any>) => toFeaturedGuide(row.content_guides));
+}
+
+/**
+ * Guides where one or more of `venueId`'s events is attached as an event
+ * guide item. Multiple events from the same venue landing in the same guide
+ * are merged into a single row per Card 7B Part 3's "avoid noisy
+ * duplication" — eventTitles collects every matching event's title against
+ * that one guide instead of repeating the guide.
+ */
+async function getEventGuidesFeaturing(
+  supabase: ReturnType<typeof createAdminClient>,
+  venueId: string
+): Promise<VenueFeaturedEventGuide[]> {
+  const { data, error } = await supabase
+    .from("content_guide_events")
+    .select(
+      "events!inner(title, venue_id), " +
+        "content_guides!inner(id, title, status, market:markets(name), city:cities(name))"
+    )
+    .eq("events.venue_id", venueId);
+
+  if (error) {
+    console.error("[getEventGuidesFeaturing]", error.message);
+    return [];
+  }
+
+  const byGuideId = new Map<string, VenueFeaturedEventGuide>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (data ?? []) as Record<string, any>[]) {
+    const guide = toFeaturedGuide(row.content_guides);
+    const eventTitle = (row.events as Record<string, unknown> | null)?.title as
+      | string
+      | undefined;
+
+    const existing = byGuideId.get(guide.guideId);
+    if (existing) {
+      if (eventTitle) existing.eventTitles.push(eventTitle);
+    } else {
+      byGuideId.set(guide.guideId, { ...guide, eventTitles: eventTitle ? [eventTitle] : [] });
+    }
+  }
+
+  return Array.from(byGuideId.values());
+}
+
+/**
+ * Read-only "Featured in Content" summary for a venue detail page (Card 7B —
+ * see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md section 13). Reuses the
+ * existing content_guide_venues / content_guide_events attachment tables —
+ * no new schema. Both lists are sorted alphabetically by guide title for a
+ * stable, scannable order.
+ */
+export async function getVenueFeaturedContent(venueId: string): Promise<VenueFeaturedContent> {
+  const supabase = createAdminClient();
+
+  const [venueGuides, eventGuides] = await Promise.all([
+    getVenueGuidesFeaturing(supabase, venueId),
+    getEventGuidesFeaturing(supabase, venueId),
+  ]);
+
+  const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title);
+
+  return {
+    venueGuides: venueGuides.sort(byTitle),
+    eventGuides: eventGuides.sort(byTitle),
+  };
 }

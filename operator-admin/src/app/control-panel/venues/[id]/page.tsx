@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getVenueNotes } from "@/lib/data/venueNotes";
 import { getVenueHealthData } from "@/lib/data/venueHealth";
+import { getVenueFeaturedContent } from "@/lib/data/contentGuideAttachments";
 import ImpersonateButton from "./ImpersonateButton";
 import { ExcludeDiscoverControl } from "./ExcludeDiscoverControl";
 import VenueNotesSection from "./VenueNotesSection";
 import VenueHealthPanel from "./VenueHealthPanel";
 import ReactivateVenuePanel from "./ReactivateVenuePanel";
+import FeaturedInContentSection from "./FeaturedInContentSection";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -113,7 +115,7 @@ export default async function ControlPanelVenueDetailPage({
   const { id } = await params;
   const supabase = createAdminClient();
 
-  const [{ data, error }, { notes }] = await Promise.all([
+  const [{ data, error }, { notes }, featuredContent] = await Promise.all([
     supabase
       .from("venues")
       .select(
@@ -128,6 +130,7 @@ export default async function ControlPanelVenueDetailPage({
       .eq("id", id)
       .maybeSingle(),
     getVenueNotes(id),
+    getVenueFeaturedContent(id),
   ]);
 
   if (error) {
@@ -459,7 +462,10 @@ export default async function ControlPanelVenueDetailPage({
           </p>
         </Section>
 
-        {/* E. Internal notes */}
+        {/* E. Featured in Content (Content Engine guides referencing this venue) */}
+        <FeaturedInContentSection data={featuredContent} />
+
+        {/* F. Internal notes */}
         <VenueNotesSection venueId={venue.id} initialNotes={notes} />
       </div>
 

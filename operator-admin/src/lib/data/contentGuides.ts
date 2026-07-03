@@ -44,7 +44,7 @@ export type GuideStatus = "draft" | "published";
  * ever treated status === 'published' as public, so this preserves their
  * existing (non-)visibility exactly.
  */
-function normalizeGuideStatus(status: string): GuideStatus {
+export function normalizeGuideStatus(status: string): GuideStatus {
   return status === "published" ? "published" : "draft";
 }
 
