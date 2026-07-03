@@ -245,6 +245,14 @@ export default function GuideForm({
   const metaDescriptionWarning = getMetaDescriptionWarning(metaDescription);
   const canonicalUrlWarning = getCanonicalUrlWarning(canonicalUrl);
 
+  // ── Related Content count (Card 7A) ──────────────────────────────────────
+  // AttachmentsSelector owns its own selection state internally; this is
+  // just a live count reported up for the Guide Completeness checklist's
+  // "Related Content" item. Doesn't affect saving — attachment_ids (the
+  // actual persisted value) is still read straight from AttachmentsSelector's
+  // own hidden input at submit time.
+  const [attachmentCount, setAttachmentCount] = useState(initialAttachments.length);
+
   // ── Distribution (Card 6B) ────────────────────────────────────────────────
   // Editorial intent only — this is eligibility, not placement. An editor
   // can freely check/uncheck regardless of what the recommendation says;
@@ -293,15 +301,31 @@ export default function GuideForm({
   }
 
   // ── Completion checklist (local, non-blocking) ───────────────────────────
+  // Card 7A: order and labels mirror the editor's own section sequence and
+  // titles. "Guide Details" consolidates the Location, Title & Slug, and
+  // Keywords sections into one checklist line (those remain three separate
+  // section cards in the form below — only the checklist groups them).
+  // "SEO" was removed from the checklist per the Card 7A spec; the SEO
+  // section itself is unchanged. "Related Content" is new — see
+  // attachmentCount above for how it's populated.
   const checklist: ChecklistItem[] = [
-    { label: "Guide type", complete: guideType !== "" },
-    { label: "Location", complete: marketId !== "" && cityId !== "" },
-    { label: "Title and slug", complete: title.trim() !== "" && slug.trim() !== "" },
-    { label: "Keywords", complete: primaryKeyword.trim() !== "" },
+    { label: "Guide Type", complete: guideType !== "" },
+    {
+      label: "Guide Details",
+      complete:
+        marketId !== "" &&
+        cityId !== "" &&
+        title.trim() !== "" &&
+        slug.trim() !== "" &&
+        primaryKeyword.trim() !== "",
+    },
     { label: "Content", complete: intro.trim() !== "" && body.trim() !== "" },
-    { label: "Hero image", complete: heroImageUrl.trim() !== "" },
+    // Matches the editor's own validation: at least one attached venue/event
+    // is enough — guideType !== "" guards the edge case where an editor
+    // clears the guide type after having attached items under the old type.
+    { label: "Related Content", complete: guideType !== "" && attachmentCount > 0 },
+    { label: "Hero Image", complete: heroImageUrl.trim() !== "" },
     { label: "Distribution", complete: channels.length > 0 },
-    { label: "SEO", complete: metaTitle.trim() !== "" && metaDescription.trim() !== "" },
     // Status always has a valid value (defaults to "draft"), so unlike the
     // old draft/scheduled/published/expired model — where this checked
     // "if scheduled, is a publish date set" — there's no incomplete state
@@ -525,6 +549,7 @@ export default function GuideForm({
                 initialSelected={
                   guideType === initialGuide?.guide_type ? initialAttachments : []
                 }
+                onSelectionChange={setAttachmentCount}
               />
             )}
           </section>

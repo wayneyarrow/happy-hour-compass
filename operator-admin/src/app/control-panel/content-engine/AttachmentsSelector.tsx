@@ -36,6 +36,10 @@ type Props = {
   cityId: string;
   neighbourhoodId: string;
   initialSelected: GuideAttachmentItem[];
+  /** Reports the current selection count up to GuideForm, e.g. for the
+   * Guide Completeness checklist's "Related Content" item (Card 7A). Purely
+   * informational — does not affect saving or validation. */
+  onSelectionChange?: (count: number) => void;
 };
 
 const TIER_LABEL: Record<MatchTier, string> = {
@@ -86,6 +90,7 @@ export default function AttachmentsSelector({
   cityId,
   neighbourhoodId,
   initialSelected,
+  onSelectionChange,
 }: Props) {
   const [selected, setSelected] = useState<GuideAttachmentItem[]>(initialSelected);
   const [query, setQuery] = useState("");
@@ -95,6 +100,13 @@ export default function AttachmentsSelector({
 
   const label = kind === "venue" ? "venue" : "event";
   const searchAction = SEARCH_ACTION[kind];
+
+  // Reports the live count on every change (including the initial mount) —
+  // safe to include onSelectionChange in deps since GuideForm passes its
+  // raw useState setter, which React guarantees is referentially stable.
+  useEffect(() => {
+    onSelectionChange?.(selected.length);
+  }, [selected, onSelectionChange]);
 
   useEffect(() => {
     if (!marketId) {
