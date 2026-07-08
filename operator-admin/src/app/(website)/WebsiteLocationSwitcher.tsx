@@ -101,17 +101,17 @@ export default function WebsiteLocationSwitcher({
         aria-haspopup="listbox"
         aria-label={`Browsing near ${currentCityName}. Tap to change location.`}
         className="
-          flex items-center gap-1.5 px-3 py-[7px] rounded-full
+          flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-[7px] rounded-full
           border border-gray-200 bg-white text-sm font-medium text-gray-800
           hover:bg-gray-50 hover:border-gray-300
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1
           transition-colors
         "
       >
-        <span className="text-[15px] leading-none" aria-hidden="true">📍</span>
-        <span className="max-w-[110px] truncate">{currentCityName}</span>
+        <span className="text-[13px] sm:text-[15px] leading-none" aria-hidden="true">📍</span>
+        <span className="max-w-[80px] sm:max-w-[110px] truncate">{currentCityName}</span>
         <svg
-          className={`w-3 h-3 text-gray-400 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          className={`w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

@@ -3,10 +3,28 @@ import Link from "next/link";
 import HeroSection from "./HeroSection";
 import { GuideCard } from "./GuideCard";
 import { getActiveMarket } from "@/lib/activeMarket";
+import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
+import type { Market } from "@/lib/markets";
 import {
   getFeaturedGuidesForMarket,
   type PublicGuideCardData,
 } from "@/lib/data/contentGuideDistribution";
+
+// Resolves the consumer-facing city name for the hero's search placeholder.
+// Mirrors the fallback pattern in layout.tsx's header city lookup — falls
+// back to the market config name if the DB geography lookup is unavailable.
+async function getHeroCityName(market: Market): Promise<string> {
+  try {
+    const marketRecord = await getMarketBySlug(market.id);
+    if (marketRecord) {
+      const defaultCity = await getDefaultCityForMarket(marketRecord.id);
+      if (defaultCity) return defaultCity.name;
+    }
+  } catch {
+    // DB unavailable — fall back to market config name.
+  }
+  return market.name;
+}
 
 export const metadata: Metadata = {
   title: { absolute: "Happy Hour Compass — Find the best happy hours near you" },
@@ -218,13 +236,14 @@ const FEATURED_GUIDES_HOMEPAGE_ENABLED = false;
 
 export default async function WebsiteHomePage() {
   const { market, isPersisted } = await getActiveMarket();
-  const featuredGuides = FEATURED_GUIDES_HOMEPAGE_ENABLED
-    ? await getFeaturedGuidesForMarket(market.id)
-    : [];
+  const [featuredGuides, cityName] = await Promise.all([
+    FEATURED_GUIDES_HOMEPAGE_ENABLED ? getFeaturedGuidesForMarket(market.id) : Promise.resolve([]),
+    getHeroCityName(market),
+  ]);
 
   return (
     <>
-      <HeroSection market={market} isPersisted={isPersisted} />
+      <HeroSection market={market} cityName={cityName} isPersisted={isPersisted} />
       {FEATURED_GUIDES_HOMEPAGE_ENABLED && (
         <FeaturedGuidesSection guides={featuredGuides} marketSlug={market.id} marketName={market.name} />
       )}

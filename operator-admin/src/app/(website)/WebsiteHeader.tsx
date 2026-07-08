@@ -115,20 +115,16 @@ export default function WebsiteHeader({
           <Link
             href="/"
             aria-label="Happy Hour Compass — Home"
-            className="flex-shrink-0 flex items-center gap-2.5 mr-1"
+            className="flex-shrink-0 flex items-center mr-3 md:mr-4"
           >
             <Image
-              src="/hhc-icon.png"
-              alt=""
-              width={271}
-              height={345}
-              className="h-9 w-auto flex-shrink-0"
+              src="/hhc-logo-horizontal-header.png"
+              alt="Happy Hour Compass"
+              width={747}
+              height={247}
+              className="h-9 md:h-10 w-auto flex-shrink-0"
               priority
             />
-            <span className="hidden sm:inline whitespace-nowrap text-[15px] font-bold tracking-tight text-gray-900">
-              Happy Hour{" "}
-              <span className="text-amber-500">Compass</span>
-            </span>
           </Link>
 
           {/* Region & Location Switcher */}
@@ -146,14 +142,14 @@ export default function WebsiteHeader({
             <button
               type="button"
               onClick={() => setSuggestOpen(true)}
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Suggest a Venue
             </button>
             <button
               type="button"
               onClick={() => setAddVenueOpen(true)}
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Add Your Venue
             </button>
@@ -166,7 +162,7 @@ export default function WebsiteHeader({
                 aria-expanded={savedOpen}
                 aria-haspopup="dialog"
                 aria-label={`Saved items${savedTotal > 0 ? `, ${savedTotal} saved` : ""}`}
-                className={`flex items-center gap-1.5 px-3 py-[7px] rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-[7px] rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                   savedOpen
                     ? "bg-gray-100 text-gray-900"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
@@ -211,7 +207,7 @@ export default function WebsiteHeader({
             ) : (
               <Link
                 href="/sign-in"
-                className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 Sign In
               </Link>

@@ -11,24 +11,19 @@ type ContentType = "happy-hours" | "events";
 
 type Props = {
   market: Market;
+  cityName: string;
   isPersisted: boolean;
 };
 
-export default function HeroSection({ market, isPersisted }: Props) {
+export default function HeroSection({ market, cityName, isPersisted }: Props) {
   const router = useRouter();
-  const [isEvening, setIsEvening] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("happy-hours");
   const [, startTransition] = useTransition();
 
-  // Detect time of day client-side so it reflects the user's local timezone.
-  useEffect(() => {
-    setIsEvening(new Date().getHours() >= 17);
-  }, []);
-
   const subheadline =
     contentType === "happy-hours"
-      ? isEvening ? "Find tonight's best happy hour." : "Find today's best happy hour."
-      : isEvening ? "Discover tonight's events." : "Discover today's events.";
+      ? "Discover the best happy hours near you."
+      : "Discover what's happening near you.";
 
   // Auto-detect market on first visit when no cookie is set.
   // Reuses the same findNearestActiveMarket + setMarketAction as MarketChip.
@@ -54,22 +49,30 @@ export default function HeroSection({ market, isPersisted }: Props) {
   const showMeHref = contentType === "happy-hours" ? "/website-happy-hours" : "/website-events";
   const searchPlaceholder =
     contentType === "happy-hours"
-      ? "Search for a venue or neighbourhood..."
-      : "Search for an event, venue or neighbourhood...";
+      ? `Search ${cityName} venues or neighbourhoods...`
+      : `Search ${cityName} events or venues...`;
 
   return (
     <section
       aria-label="Hero"
       className="flex flex-col items-center text-center px-6
-                 pt-24 md:pt-32
-                 min-h-[540px] md:min-h-[calc(100dvh-128px)]"
+                 pt-16 md:pt-20
+                 min-h-[460px] md:min-h-[calc(100dvh-260px)]"
     >
       {/* Headline */}
-      <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 tracking-tight leading-[1.08] max-w-2xl">
-        Never ask &ldquo;Where should we go?&rdquo; again.
+      <h1 className="text-gray-900 tracking-tight max-w-4xl">
+        <span className="block text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.1]">
+          Never ask
+        </span>
+        <span className="block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05] my-0.5 md:my-1">
+          &ldquo;Where should we go?&rdquo;
+        </span>
+        <span className="block text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.1]">
+          again.
+        </span>
       </h1>
 
-      {/* Subheadline — time-based, hydrates immediately after mount */}
+      {/* Subheadline — tied to the Happy Hours / Events toggle */}
       <p className="mt-5 text-lg md:text-xl text-gray-400">
         {subheadline}
       </p>
