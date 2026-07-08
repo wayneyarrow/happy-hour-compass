@@ -11,6 +11,15 @@ import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/ty
  * app/control-panel/content-engine/actions.ts, following the actions.ts
  * convention used by discover/ and platform-admins/.
  *
+ * Guide Experience V2 Card 2A (migration 056) added three structured
+ * editorial sections (editorial_section_1/2/3_heading + _body) as the
+ * editor's authoring surface, replacing the old free-text `body` column.
+ * `body` is kept for backward compatibility — not writable from the editor
+ * anymore, but still readable, and still what the public guide page renders
+ * until Card 2B migrates public rendering to the new sections. See
+ * getEditorialSections() below for the shared rendering rules, and
+ * getGuideForPreview() for the admin-safe Draft/Published preview read.
+ *
  * Internal-only table (no RLS policies for anon/authenticated) — always
  * queried via createAdminClient() (service-role).
  */
@@ -73,7 +82,17 @@ export type ContentGuideDetail = {
   primary_keyword: string | null;
   secondary_keywords: string[];
   intro: string | null;
+  // Legacy free-text body (Card 2/3). Guide Experience V2 Card 2A replaces
+  // this as the editor's authoring surface with the editorial_section_*
+  // fields below — see the module docstring. Column is kept, still readable,
+  // and still what the public guide page renders until Card 2B.
   body: string | null;
+  editorial_section_1_heading: string | null;
+  editorial_section_1_body: string | null;
+  editorial_section_2_heading: string | null;
+  editorial_section_2_body: string | null;
+  editorial_section_3_heading: string | null;
+  editorial_section_3_body: string | null;
   hero_image_url: string | null;
   publish_at: string | null;
   expire_at: string | null;
@@ -131,8 +150,11 @@ export async function getContentGuideById(id: string): Promise<ContentGuideDetai
     .from("content_guides")
     .select(
       "id, guide_type, status, market_id, city_id, neighbourhood_id, title, slug, " +
-        "primary_keyword, secondary_keywords, intro, body, hero_image_url, " +
-        "publish_at, expire_at, " +
+        "primary_keyword, secondary_keywords, intro, body, " +
+        "editorial_section_1_heading, editorial_section_1_body, " +
+        "editorial_section_2_heading, editorial_section_2_body, " +
+        "editorial_section_3_heading, editorial_section_3_body, " +
+        "hero_image_url, publish_at, expire_at, " +
         "page_title, meta_title, meta_description, og_title, og_description, canonical_url, " +
         "created_at, updated_at"
     )
@@ -161,6 +183,12 @@ export async function getContentGuideById(id: string): Promise<ContentGuideDetai
     secondary_keywords: (row.secondary_keywords as string[] | null) ?? [],
     intro:              row.intro as string | null,
     body:               row.body as string | null,
+    editorial_section_1_heading: (row.editorial_section_1_heading as string | null) ?? null,
+    editorial_section_1_body:    (row.editorial_section_1_body as string | null) ?? null,
+    editorial_section_2_heading: (row.editorial_section_2_heading as string | null) ?? null,
+    editorial_section_2_body:    (row.editorial_section_2_body as string | null) ?? null,
+    editorial_section_3_heading: (row.editorial_section_3_heading as string | null) ?? null,
+    editorial_section_3_body:    (row.editorial_section_3_body as string | null) ?? null,
     hero_image_url:     row.hero_image_url as string | null,
     publish_at:         row.publish_at as string | null,
     expire_at:          row.expire_at as string | null,
@@ -217,6 +245,12 @@ export type PublicGuideDetail = {
   secondary_keywords: string[];
   intro: string | null;
   body: string | null;
+  editorial_section_1_heading: string | null;
+  editorial_section_1_body: string | null;
+  editorial_section_2_heading: string | null;
+  editorial_section_2_body: string | null;
+  editorial_section_3_heading: string | null;
+  editorial_section_3_body: string | null;
   hero_image_url: string | null;
   publish_at: string | null;
   updated_at: string;
@@ -231,6 +265,48 @@ export type PublicGuideDetail = {
   og_description: string | null;
   canonical_url: string | null;
 };
+
+/**
+ * A structured editorial section ready to render — always has a non-empty
+ * body (a section with a blank body is never returned, per the "empty
+ * sections don't render" rule). Heading is null when the admin left it
+ * blank, in which case only the body should render.
+ */
+export type EditorialSection = {
+  heading: string | null;
+  body: string;
+};
+
+/**
+ * Guide Experience V2 Card 2A — the shared mapping/rendering rule for the
+ * three editorial_section_N_heading/body column pairs: a section renders
+ * only if its body has content; a blank heading with a present body renders
+ * body-only; a blank body omits the section entirely (heading is ignored in
+ * that case — a heading alone is not a section). Used by whatever surface
+ * displays guide content (Card 2B's public layout, and any future preview
+ * enhancement) so this rule is never duplicated or reinterpreted per call site.
+ */
+export function getEditorialSections(guide: {
+  editorial_section_1_heading: string | null;
+  editorial_section_1_body: string | null;
+  editorial_section_2_heading: string | null;
+  editorial_section_2_body: string | null;
+  editorial_section_3_heading: string | null;
+  editorial_section_3_body: string | null;
+}): EditorialSection[] {
+  const pairs: [string | null, string | null][] = [
+    [guide.editorial_section_1_heading, guide.editorial_section_1_body],
+    [guide.editorial_section_2_heading, guide.editorial_section_2_body],
+    [guide.editorial_section_3_heading, guide.editorial_section_3_body],
+  ];
+
+  return pairs
+    .filter((pair): pair is [string | null, string] => Boolean(pair[1]?.trim()))
+    .map(([heading, body]) => ({
+      heading: heading?.trim() ? heading.trim() : null,
+      body: body.trim(),
+    }));
+}
 
 /**
  * The single source of truth for "is this guide actually public right now."
@@ -251,6 +327,59 @@ export function isGuidePublicNow(
   return true;
 }
 
+// Shared select columns + row mapping for both the public read
+// (getPublicGuideByMarketAndSlug) and the admin preview read
+// (getGuideForPreview) — kept identical so preview and public rendering
+// never see differently-shaped data. Both queries join the same
+// markets/cities/neighbourhoods tables the same way; only the WHERE clause
+// (and the public-window gate) differs.
+const GUIDE_DETAIL_COLUMNS =
+  "id, guide_type, status, title, slug, primary_keyword, secondary_keywords, " +
+  "intro, body, " +
+  "editorial_section_1_heading, editorial_section_1_body, " +
+  "editorial_section_2_heading, editorial_section_2_body, " +
+  "editorial_section_3_heading, editorial_section_3_body, " +
+  "hero_image_url, publish_at, expire_at, updated_at, " +
+  "page_title, meta_title, meta_description, og_title, og_description, canonical_url, " +
+  "markets!inner(slug, name), city:cities(name), neighbourhood:neighbourhoods(name)";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapGuideDetailRow(row: Record<string, any>, fallbackMarketSlug: string): PublicGuideDetail {
+  const market = (row.markets as Record<string, unknown>) ?? {};
+  const city = (row.city as Record<string, unknown> | null) ?? null;
+  const neighbourhood = (row.neighbourhood as Record<string, unknown> | null) ?? null;
+
+  return {
+    id: row.id as string,
+    guide_type: row.guide_type as GuideType,
+    title: row.title as string,
+    slug: row.slug as string,
+    primary_keyword: (row.primary_keyword as string | null) ?? null,
+    secondary_keywords: (row.secondary_keywords as string[] | null) ?? [],
+    intro: row.intro as string | null,
+    body: row.body as string | null,
+    editorial_section_1_heading: (row.editorial_section_1_heading as string | null) ?? null,
+    editorial_section_1_body: (row.editorial_section_1_body as string | null) ?? null,
+    editorial_section_2_heading: (row.editorial_section_2_heading as string | null) ?? null,
+    editorial_section_2_body: (row.editorial_section_2_body as string | null) ?? null,
+    editorial_section_3_heading: (row.editorial_section_3_heading as string | null) ?? null,
+    editorial_section_3_body: (row.editorial_section_3_body as string | null) ?? null,
+    hero_image_url: row.hero_image_url as string | null,
+    publish_at: (row.publish_at as string | null) ?? null,
+    updated_at: row.updated_at as string,
+    marketSlug: (market.slug as string) ?? fallbackMarketSlug,
+    marketName: (market.name as string) ?? "",
+    cityName: (city?.name as string | undefined) ?? null,
+    neighbourhoodName: (neighbourhood?.name as string | undefined) ?? null,
+    page_title: (row.page_title as string | null) ?? null,
+    meta_title: (row.meta_title as string | null) ?? null,
+    meta_description: (row.meta_description as string | null) ?? null,
+    og_title: (row.og_title as string | null) ?? null,
+    og_description: (row.og_description as string | null) ?? null,
+    canonical_url: (row.canonical_url as string | null) ?? null,
+  };
+}
+
 /**
  * Returns a published, in-window guide by market slug + guide slug, or null
  * if it doesn't exist, isn't published, or is outside its publish/expire
@@ -265,12 +394,7 @@ export async function getPublicGuideByMarketAndSlug(
 
   const { data, error } = await supabase
     .from("content_guides")
-    .select(
-      "id, guide_type, status, title, slug, primary_keyword, secondary_keywords, " +
-        "intro, body, hero_image_url, publish_at, expire_at, updated_at, " +
-        "page_title, meta_title, meta_description, og_title, og_description, canonical_url, " +
-        "markets!inner(slug, name), city:cities(name), neighbourhood:neighbourhoods(name)"
-    )
+    .select(GUIDE_DETAIL_COLUMNS)
     .eq("markets.slug", marketSlug)
     .eq("slug", guideSlug)
     .eq("status", "published")
@@ -280,37 +404,40 @@ export async function getPublicGuideByMarketAndSlug(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = data as Record<string, any>;
+  if (!isGuidePublicNow(row.status as string, row.publish_at ?? null, row.expire_at ?? null)) {
+    return null;
+  }
 
-  const publishAt = (row.publish_at as string | null) ?? null;
-  const expireAt = (row.expire_at as string | null) ?? null;
-  if (!isGuidePublicNow(row.status as string, publishAt, expireAt)) return null;
+  return mapGuideDetailRow(row, marketSlug);
+}
 
-  const market = (row.markets as Record<string, unknown>) ?? {};
-  const city = (row.city as Record<string, unknown> | null) ?? null;
-  const neighbourhood = (row.neighbourhood as Record<string, unknown> | null) ?? null;
+/**
+ * Admin-safe guide read for the Control Panel preview route (Card 2A) —
+ * looked up by id (not slug), and deliberately does NOT gate on status or
+ * the publish/expire window, so Draft guides can be previewed before they
+ * are ever public. Only reachable from /control-panel routes, which are
+ * already auth-gated (control-panel/layout.tsx) and excluded from robots.txt
+ * — never exposed as a public/unauthenticated read.
+ */
+export type PreviewGuideDetail = PublicGuideDetail & { status: GuideStatus };
+
+export async function getGuideForPreview(id: string): Promise<PreviewGuideDetail | null> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select(GUIDE_DETAIL_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as Record<string, any>;
 
   return {
-    id: row.id as string,
-    guide_type: row.guide_type as GuideType,
-    title: row.title as string,
-    slug: row.slug as string,
-    primary_keyword: (row.primary_keyword as string | null) ?? null,
-    secondary_keywords: (row.secondary_keywords as string[] | null) ?? [],
-    intro: row.intro as string | null,
-    body: row.body as string | null,
-    hero_image_url: row.hero_image_url as string | null,
-    publish_at: publishAt,
-    updated_at: row.updated_at as string,
-    marketSlug: (market.slug as string) ?? marketSlug,
-    marketName: (market.name as string) ?? "",
-    cityName: (city?.name as string | undefined) ?? null,
-    neighbourhoodName: (neighbourhood?.name as string | undefined) ?? null,
-    page_title: (row.page_title as string | null) ?? null,
-    meta_title: (row.meta_title as string | null) ?? null,
-    meta_description: (row.meta_description as string | null) ?? null,
-    og_title: (row.og_title as string | null) ?? null,
-    og_description: (row.og_description as string | null) ?? null,
-    canonical_url: (row.canonical_url as string | null) ?? null,
+    ...mapGuideDetailRow(row, ""),
+    status: normalizeGuideStatus(row.status as string),
   };
 }
 

@@ -51,6 +51,9 @@ export type ContentGuideSeoInputs = {
   primaryKeyword?: string | null;
   secondaryKeywords?: string[];
   intro?: string | null;
+  /** Guide Experience V2 Card 2A: the editor's new primary content field — checked ahead of the legacy `body`. */
+  editorialSection1Body?: string | null;
+  /** Legacy free-text content (Card 2/3), kept only as a fallback for guides that predate the editorial sections. */
   body?: string | null;
 };
 
@@ -101,7 +104,7 @@ function locationInfo(
 export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideSeo {
   const {
     guideType, marketName, marketSlug, cityName, neighbourhoodName,
-    title, slug, primaryKeyword, secondaryKeywords, intro, body,
+    title, slug, primaryKeyword, secondaryKeywords, intro, editorialSection1Body, body,
   } = inputs;
 
   const guideTitle = normalizeWhitespace(title);
@@ -138,11 +141,15 @@ export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideS
   const ogTitleSources = ["guide title", location.source].filter((s): s is string => Boolean(s));
 
   // ── meta_description / og_description share one composed base text:
-  // guide intro → guide body → a composed fallback sentence. Only the
-  // fallback sentence pulls in keyword/secondary keyword/location/brand;
-  // intro and body are used verbatim (trimmed + truncated) since they're
-  // already editorial copy written for a reader.
+  // guide intro → editorial section 1 body → legacy guide body → a composed
+  // fallback sentence. Only the fallback sentence pulls in keyword/secondary
+  // keyword/location/brand; intro/section/body are used verbatim (trimmed +
+  // truncated) since they're already editorial copy written for a reader.
+  // Editorial section 1 body sits ahead of the legacy body so newly-authored
+  // guides (which never populate `body`) still get a real content-derived
+  // description instead of falling straight to the generic sentence.
   const introText = normalizeWhitespace(intro ?? "");
+  const editorialSection1Text = normalizeWhitespace(editorialSection1Body ?? "");
   const bodyText = normalizeWhitespace(body ?? "");
 
   let descriptionBase: string;
@@ -151,6 +158,9 @@ export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideS
   if (introText) {
     descriptionBase = introText;
     descriptionSources = ["guide intro"];
+  } else if (editorialSection1Text) {
+    descriptionBase = editorialSection1Text;
+    descriptionSources = ["editorial section 1"];
   } else if (bodyText) {
     descriptionBase = bodyText;
     descriptionSources = ["guide body"];

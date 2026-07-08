@@ -40,6 +40,14 @@ import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
  * just no longer writes to them, so pre-existing values are left untouched
  * rather than overwritten with null on the next save.
  *
+ * Guide Experience V2 Card 2A: the editor's Content section now writes
+ * editorial_section_1/2/3_heading + _body instead of the legacy `body`
+ * column. `body` is deliberately NOT included in either the insert or update
+ * payload below — GuideForm no longer renders a body input, and omitting
+ * the key entirely (rather than writing an empty value read from a field
+ * that no longer exists in the DOM) means any pre-existing body content is
+ * left untouched on every save, never silently cleared.
+ *
  * No FAQ/related guides — those are later cards. See
  * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md.
  */
@@ -88,7 +96,12 @@ type ParsedGuide = {
   primary_keyword: string | null;
   secondary_keywords: string[];
   intro: string | null;
-  body: string | null;
+  editorial_section_1_heading: string | null;
+  editorial_section_1_body: string | null;
+  editorial_section_2_heading: string | null;
+  editorial_section_2_body: string | null;
+  editorial_section_3_heading: string | null;
+  editorial_section_3_body: string | null;
   hero_image_url: string | null;
   page_title: string | null;
   meta_title: string | null;
@@ -140,7 +153,12 @@ function parseGuideForm(formData: FormData): ParsedGuide {
     primary_keyword:     nullableStr(formData, "primary_keyword"),
     secondary_keywords:  parseSecondaryKeywords(str(formData, "secondary_keywords")),
     intro:               nullableStr(formData, "intro"),
-    body:                nullableStr(formData, "body"),
+    editorial_section_1_heading: nullableStr(formData, "editorial_section_1_heading"),
+    editorial_section_1_body:    nullableStr(formData, "editorial_section_1_body"),
+    editorial_section_2_heading: nullableStr(formData, "editorial_section_2_heading"),
+    editorial_section_2_body:    nullableStr(formData, "editorial_section_2_body"),
+    editorial_section_3_heading: nullableStr(formData, "editorial_section_3_heading"),
+    editorial_section_3_body:    nullableStr(formData, "editorial_section_3_body"),
     hero_image_url:      nullableStr(formData, "hero_image_url"),
     page_title:          nullableStr(formData, "page_title"),
     meta_title:          nullableStr(formData, "meta_title"),
@@ -213,7 +231,12 @@ export async function createGuideAction(
       primary_keyword:      parsed.primary_keyword,
       secondary_keywords:   parsed.secondary_keywords,
       intro:                parsed.intro,
-      body:                 parsed.body,
+      editorial_section_1_heading: parsed.editorial_section_1_heading,
+      editorial_section_1_body:    parsed.editorial_section_1_body,
+      editorial_section_2_heading: parsed.editorial_section_2_heading,
+      editorial_section_2_body:    parsed.editorial_section_2_body,
+      editorial_section_3_heading: parsed.editorial_section_3_heading,
+      editorial_section_3_body:    parsed.editorial_section_3_body,
       hero_image_url:       parsed.hero_image_url,
       page_title:           parsed.page_title,
       meta_title:           parsed.meta_title,
@@ -288,7 +311,12 @@ export async function updateGuideAction(
       primary_keyword:      parsed.primary_keyword,
       secondary_keywords:   parsed.secondary_keywords,
       intro:                parsed.intro,
-      body:                 parsed.body,
+      editorial_section_1_heading: parsed.editorial_section_1_heading,
+      editorial_section_1_body:    parsed.editorial_section_1_body,
+      editorial_section_2_heading: parsed.editorial_section_2_heading,
+      editorial_section_2_body:    parsed.editorial_section_2_body,
+      editorial_section_3_heading: parsed.editorial_section_3_heading,
+      editorial_section_3_body:    parsed.editorial_section_3_body,
       hero_image_url:       parsed.hero_image_url,
       page_title:           parsed.page_title,
       meta_title:           parsed.meta_title,

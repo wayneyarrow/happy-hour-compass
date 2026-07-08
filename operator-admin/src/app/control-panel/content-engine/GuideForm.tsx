@@ -25,21 +25,30 @@ import AttachmentsSelector from "./AttachmentsSelector";
 /**
  * Shared create/edit form for Content Engine guides (Card 2 + touch-up,
  * Card 3 venue/event attachments, Card 4 SEO automation, Card 6B
- * distribution eligibility, Card 7 status simplification).
+ * distribution eligibility, Card 7 status simplification, Guide Experience
+ * V2 Card 2A editorial sections).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
  * keywords, status, venue/event attachments, SEO fields, and distribution
- * channel eligibility only. No FAQ, related guides, preview, or public
- * rendering — see docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the
- * Card 6B task for the full guardrail list. Distribution here is
- * eligibility (editorial intent) only — actual merchandising/ordering is a
- * Discover Management concern, not this form's.
+ * channel eligibility only. No FAQ or related guides yet — see
+ * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 6B task for the
+ * full guardrail list. Distribution here is eligibility (editorial intent)
+ * only — actual merchandising/ordering is a Discover Management concern,
+ * not this form's. The "Preview Guide" action lives in the edit page's
+ * header (content-engine/[id]/edit/page.tsx), not in this form.
  *
  * Card 7 replaced the old draft/scheduled/published/expired Status model
  * with a plain draft/published toggle — no more scheduling, no more
  * publish/expiry date inputs. See the Status section below and its
  * GuideForm-level state (status only; publishAt/expireAt state and the
  * isoToInputValue() helper that supported them were removed).
+ *
+ * Card 2A replaced the old single free-text Body field with three
+ * structured editorial sections (optional heading + body each) as the
+ * Content section's primary authoring surface. `body` is no longer
+ * rendered as an editable field and is never re-submitted (see actions.ts)
+ * — a guide with pre-existing body content shows a small non-destructive
+ * note instead, via the read-only `legacyBody` snapshot below.
  */
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -144,7 +153,16 @@ export default function GuideForm({
     (initialGuide?.secondary_keywords ?? []).join(", ")
   );
   const [intro, setIntro] = useState(initialGuide?.intro ?? "");
-  const [body, setBody] = useState(initialGuide?.body ?? "");
+  // Legacy free-text body (Card 2/3) — no longer editable here (Guide
+  // Experience V2 Card 2A). Never re-submitted (see actions.ts), so this is
+  // a read-only snapshot used only to show the legacy-content note below.
+  const legacyBody = initialGuide?.body ?? "";
+  const [section1Heading, setSection1Heading] = useState(initialGuide?.editorial_section_1_heading ?? "");
+  const [section1Body, setSection1Body] = useState(initialGuide?.editorial_section_1_body ?? "");
+  const [section2Heading, setSection2Heading] = useState(initialGuide?.editorial_section_2_heading ?? "");
+  const [section2Body, setSection2Body] = useState(initialGuide?.editorial_section_2_body ?? "");
+  const [section3Heading, setSection3Heading] = useState(initialGuide?.editorial_section_3_heading ?? "");
+  const [section3Body, setSection3Body] = useState(initialGuide?.editorial_section_3_body ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(initialGuide?.hero_image_url ?? "");
   const [status, setStatus] = useState<GuideStatus>(initialGuide?.status ?? "draft");
 
@@ -195,11 +213,12 @@ export default function GuideForm({
         primaryKeyword,
         secondaryKeywords: secondaryKeywords.split(/[\n,]/).map((k) => k.trim()).filter(Boolean),
         intro,
-        body,
+        editorialSection1Body: section1Body,
+        body: legacyBody,
       }),
     [
       guideType, selectedMarket, selectedCityForSeo, selectedNeighbourhoodForSeo,
-      title, slug, primaryKeyword, secondaryKeywords, intro, body,
+      title, slug, primaryKeyword, secondaryKeywords, intro, section1Body, legacyBody,
     ]
   );
 
@@ -319,7 +338,18 @@ export default function GuideForm({
         slug.trim() !== "" &&
         primaryKeyword.trim() !== "",
     },
-    { label: "Content", complete: intro.trim() !== "" && body.trim() !== "" },
+    {
+      label: "Content",
+      // Intro (Standfirst) plus at least one editorial section body — or,
+      // for guides created before Card 2A, existing legacy body content
+      // that hasn't been migrated into editorial sections yet.
+      complete:
+        intro.trim() !== "" &&
+        (section1Body.trim() !== "" ||
+          section2Body.trim() !== "" ||
+          section3Body.trim() !== "" ||
+          legacyBody.trim() !== ""),
+    },
     // Matches the editor's own validation: at least one attached venue/event
     // is enough — guideType !== "" guards the edge case where an editor
     // clears the guide type after having attached items under the old type.
@@ -506,7 +536,7 @@ export default function GuideForm({
           <section className={sectionCls}>
             <h2 className={sectionTitleCls}>Content</h2>
             <div>
-              <label className={labelCls} htmlFor="intro">Introduction</label>
+              <label className={labelCls} htmlFor="intro">Introduction (Standfirst)</label>
               <textarea
                 id="intro"
                 name="intro"
@@ -515,19 +545,114 @@ export default function GuideForm({
                 onChange={(e) => setIntro(e.target.value)}
                 className={inputCls}
               />
+              <p className={hintCls}>
+                Appears as the large, bold opening paragraph at the top of the public guide
+                layout — keep it short and compelling.
+              </p>
             </div>
-            <div>
-              <label className={labelCls} htmlFor="body">Body</label>
-              <textarea
-                id="body"
-                name="body"
-                rows={10}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className={inputCls}
-              />
-              <p className={hintCls}>Structured editing only — no HTML or drag-and-drop layout tools yet.</p>
+
+            {legacyBody.trim() !== "" && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
+                This guide has existing Body content from the previous editor. It&apos;s preserved
+                and still used by the public page for now, but is no longer editable here — move
+                it into the Editorial Sections below when you&apos;re ready.
+              </p>
+            )}
+
+            <div className="pt-1">
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">Editorial Section 1</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_1_heading">
+                    Heading <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="editorial_section_1_heading"
+                    name="editorial_section_1_heading"
+                    type="text"
+                    value={section1Heading}
+                    onChange={(e) => setSection1Heading(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_1_body">Body</label>
+                  <textarea
+                    id="editorial_section_1_body"
+                    name="editorial_section_1_body"
+                    rows={6}
+                    value={section1Body}
+                    onChange={(e) => setSection1Body(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
             </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">Editorial Section 2</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_2_heading">
+                    Heading <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="editorial_section_2_heading"
+                    name="editorial_section_2_heading"
+                    type="text"
+                    value={section2Heading}
+                    onChange={(e) => setSection2Heading(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_2_body">Body</label>
+                  <textarea
+                    id="editorial_section_2_body"
+                    name="editorial_section_2_body"
+                    rows={6}
+                    value={section2Body}
+                    onChange={(e) => setSection2Body(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">Editorial Section 3</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_3_heading">
+                    Heading <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="editorial_section_3_heading"
+                    name="editorial_section_3_heading"
+                    type="text"
+                    value={section3Heading}
+                    onChange={(e) => setSection3Heading(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="editorial_section_3_body">Body</label>
+                  <textarea
+                    id="editorial_section_3_body"
+                    name="editorial_section_3_body"
+                    rows={6}
+                    value={section3Body}
+                    onChange={(e) => setSection3Body(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p className={hintCls}>
+              Structured editing only — no HTML or drag-and-drop layout tools. A section with no
+              body is left out of the guide entirely; headings are optional.
+            </p>
           </section>
 
           {/* Related Venues / Events */}
@@ -711,13 +836,12 @@ export default function GuideForm({
               {err.status && <p className={errorCls}>{err.status}</p>}
               <div className="mt-2 space-y-1.5">
                 <p className={hintCls}>
-                  Draft guides remain in the Content Engine and are not available in the
-                  selected Distribution Channels.
+                  Draft guides are not public. They can only be viewed via Preview Guide, above.
                 </p>
                 <p className={hintCls}>
-                  Published guides become available for merchandising in the selected
-                  Distribution Channels. Public visibility is still controlled through
-                  Discover Management.
+                  Published guides are immediately live at their public URL. Discover Management
+                  controls where a published guide is promoted or surfaced (Guides Library,
+                  homepage sections, etc.) — not whether its direct URL exists.
                 </p>
               </div>
             </div>

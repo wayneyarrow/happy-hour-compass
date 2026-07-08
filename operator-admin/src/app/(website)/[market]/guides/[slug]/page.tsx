@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   getPublicGuideByMarketAndSlug,
   getRelatedGuides,
@@ -14,12 +13,8 @@ import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/e
 import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
-import {
-  SearchResultCard,
-  type SearchResultCardData,
-} from "@/app/(website)/website-happy-hours/SearchResultCard";
-import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard";
-import { GuideCard } from "@/app/(website)/GuideCard";
+import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
+import { GuideDetailView } from "./GuideDetailView";
 
 /**
  * Public Content Engine guide page (Card 5).
@@ -35,6 +30,14 @@ import { GuideCard } from "@/app/(website)/GuideCard";
  * yet), no curated Related Guides (that's an editor feature that hasn't
  * been built — see getRelatedGuides' docstring for the safe substitute used
  * here instead).
+ *
+ * Guide Experience V2 Card 2A extracted the actual guide-detail presentation
+ * into GuideDetailView (same directory), so the Control Panel's admin-safe
+ * preview route can render Draft and Published guides identically to this
+ * page without a second, drift-prone copy of the markup. This file now only
+ * owns metadata generation and the public-only data fetch/gating
+ * (getPublicGuideByMarketAndSlug enforces published + in-window; the preview
+ * route's getGuideForPreview deliberately does not).
  */
 
 // Guides can be published/edited/expired at any time — always read fresh.
@@ -65,6 +68,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     primaryKeyword: guide.primary_keyword,
     secondaryKeywords: guide.secondary_keywords,
     intro: guide.intro,
+    editorialSection1Body: guide.editorial_section_1_body,
     body: guide.body,
   });
 
@@ -115,12 +119,6 @@ function fallbackImage(establishmentType: string): string {
     return "/images/sports-bar-1.jpg";
   if (t.includes("casual")) return "/images/casual-dining-2.jpg";
   return "/images/casual-dining-1.jpg";
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -174,126 +172,13 @@ export default async function GuideDetailPage({ params }: PageProps) {
       .filter((e): e is WebsiteEventListItem => Boolean(e));
   }
 
-  const locationLabel =
-    [guide.neighbourhoodName, guide.cityName].filter(Boolean).join(", ") || guide.marketName;
-
   return (
-    <div className="bg-white pb-16">
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
-
-        {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
-          <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
-            Home
-          </Link>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-          <span className="text-gray-900 font-medium truncate min-w-0">{guide.title}</span>
-        </nav>
-
-        {/* ── Hero image ───────────────────────────────────────────────────── */}
-        {guide.hero_image_url && (
-          <div className="relative h-[220px] md:h-[340px] rounded-2xl overflow-hidden bg-gray-100 shadow-sm mb-8">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={guide.hero_image_url}
-              alt={guide.title}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
-
-        {/* ── Title + context ──────────────────────────────────────────────── */}
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight leading-tight mb-3">
-          {guide.title}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 mb-8">
-          <span className="font-medium text-gray-700">{locationLabel}</span>
-          {guide.publish_at && (
-            <>
-              <span aria-hidden="true" className="text-gray-300">·</span>
-              <span>Updated {formatDate(guide.publish_at)}</span>
-            </>
-          )}
-        </div>
-
-        {/* ── Intro ────────────────────────────────────────────────────────── */}
-        {guide.intro && (
-          <p className="text-lg text-gray-600 leading-relaxed mb-8">{guide.intro}</p>
-        )}
-
-        {/* ── Body ─────────────────────────────────────────────────────────── */}
-        {guide.body && (
-          <div className="text-[15px] text-gray-700 leading-relaxed whitespace-pre-wrap mb-12">
-            {guide.body}
-          </div>
-        )}
-
-        {/* ── Attached venues / events ─────────────────────────────────────── */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-5 tracking-tight leading-snug">
-            {isVenueGuide ? "Featured Venues" : "Featured Events"}
-          </h2>
-          {isVenueGuide ? (
-            venueCards.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {venueCards.map((v) => (
-                  <SearchResultCard key={v.venueUuid} data={v} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400">
-                No venues have been added to this guide yet.
-              </p>
-            )
-          ) : eventItems.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {eventItems.map((e) => (
-                <EventSearchCard key={e.id} event={e} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">
-              No events have been added to this guide yet.
-            </p>
-          )}
-        </section>
-
-        {/* ── CTA back into discovery ──────────────────────────────────────── */}
-        <div className="mb-12 p-6 rounded-2xl bg-amber-50 border border-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <p className="text-sm font-medium text-amber-900">
-            {isVenueGuide
-              ? `Explore every happy hour in ${guide.marketName}.`
-              : `Explore every upcoming event in ${guide.marketName}.`}
-          </p>
-          <Link
-            href={isVenueGuide ? "/website-happy-hours" : "/website-events"}
-            className="shrink-0 inline-flex items-center px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
-          >
-            {isVenueGuide ? "Browse Venues" : "Browse Events"}
-          </Link>
-        </div>
-
-        {/* ── More guides ──────────────────────────────────────────────────── */}
-        {relatedGuides.length > 0 && (
-          <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 tracking-tight leading-snug">
-              More Guides in {guide.marketName}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              {relatedGuides.map((g) => (
-                <GuideCard
-                  key={g.slug}
-                  title={g.title}
-                  href={`/${guide.marketSlug}/guides/${g.slug}`}
-                  heroImageUrl={g.hero_image_url}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
+    <GuideDetailView
+      guide={guide}
+      isVenueGuide={isVenueGuide}
+      venueCards={venueCards}
+      eventItems={eventItems}
+      relatedGuides={relatedGuides}
+    />
   );
 }
