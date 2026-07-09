@@ -6,6 +6,7 @@ import {
   getGuideVenueAttachments,
   getGuideEventAttachments,
 } from "@/lib/data/contentGuideAttachments";
+import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { computeHhStatus } from "@/lib/happyHourStatus";
@@ -30,6 +31,11 @@ import { GuideDetailView } from "@/app/(website)/[market]/guides/[slug]/GuideDet
  *
  * Looked up by id, not slug — the whole point is previewing a guide before
  * (or without) it ever having a live public URL.
+ *
+ * Card 2D: GuideDetailView now also renders GuideFaqSection, which emits a
+ * FAQPage JSON-LD <script> tag when the guide has FAQs. That's fine here —
+ * JSON-LD carries no indexing directive of its own, and this route is
+ * already noindexed/auth-gated per the protection notes above.
  */
 
 export const dynamic = "force-dynamic";
@@ -60,9 +66,10 @@ export default async function GuidePreviewPage({
 
   const isVenueGuide = guide.guide_type === "venue_guide";
 
-  const [attachments, relatedGuides] = await Promise.all([
+  const [attachments, relatedGuides, faqs] = await Promise.all([
     isVenueGuide ? getGuideVenueAttachments(guide.id) : getGuideEventAttachments(guide.id),
     getRelatedGuides(guide.marketSlug, guide.id),
+    getGuideFaqs(guide.id),
   ]);
   const orderedIds = attachments.map((a) => a.id);
 
@@ -139,6 +146,7 @@ export default async function GuidePreviewPage({
           venueCards={venueCards}
           eventItems={eventItems}
           relatedGuides={relatedGuides}
+          faqs={faqs}
         />
       </div>
     </div>

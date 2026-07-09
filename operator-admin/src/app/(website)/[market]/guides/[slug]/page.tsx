@@ -8,6 +8,7 @@ import {
   getGuideVenueAttachments,
   getGuideEventAttachments,
 } from "@/lib/data/contentGuideAttachments";
+import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { computeHhStatus } from "@/lib/happyHourStatus";
@@ -26,10 +27,11 @@ import { GuideDetailView } from "./GuideDetailView";
  * since that's what content_guides.market_id actually references.
  *
  * Scope: public rendering only. No Discover/homepage distribution, no
- * publishing-workflow changes, no FAQ (content_guides has no FAQ column
- * yet), no curated Related Guides (that's an editor feature that hasn't
- * been built — see getRelatedGuides' docstring for the safe substitute used
- * here instead).
+ * publishing-workflow changes, no curated Related Guides (that's an editor
+ * feature that hasn't been built — see getRelatedGuides' docstring for the
+ * safe substitute used here instead). Card 2D added FAQ rendering
+ * (getGuideFaqs, GuideFaqSection) — see that component's docstring for the
+ * FAQPage JSON-LD it also emits.
  *
  * Guide Experience V2 Card 2A extracted the actual guide-detail presentation
  * into GuideDetailView (same directory), so the Control Panel's admin-safe
@@ -131,9 +133,10 @@ export default async function GuideDetailPage({ params }: PageProps) {
 
   const isVenueGuide = guide.guide_type === "venue_guide";
 
-  const [attachments, relatedGuides] = await Promise.all([
+  const [attachments, relatedGuides, faqs] = await Promise.all([
     isVenueGuide ? getGuideVenueAttachments(guide.id) : getGuideEventAttachments(guide.id),
     getRelatedGuides(guide.marketSlug, guide.id),
+    getGuideFaqs(guide.id),
   ]);
   const orderedIds = attachments.map((a) => a.id);
 
@@ -179,6 +182,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
       venueCards={venueCards}
       eventItems={eventItems}
       relatedGuides={relatedGuides}
+      faqs={faqs}
     />
   );
 }

@@ -6,6 +6,8 @@ import { SearchResultCard } from "@/app/(website)/website-happy-hours/SearchResu
 import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { GuideCard } from "@/app/(website)/GuideCard";
+import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
+import { GuideFaqSection } from "./GuideFaqSection";
 
 /**
  * Guide Experience V2 — the guide-detail presentation, extracted (Card 2A)
@@ -77,6 +79,7 @@ type Props = {
   venueCards: SearchResultCardData[];
   eventItems: WebsiteEventListItem[];
   relatedGuides: RelatedGuideSummary[];
+  faqs: GuideFaqAnswer[];
 };
 
 export function GuideDetailView({
@@ -85,6 +88,7 @@ export function GuideDetailView({
   venueCards,
   eventItems,
   relatedGuides,
+  faqs,
 }: Props) {
   const cityOrMarket = guide.cityName || guide.marketName;
   const province = MARKET_PROVINCE[guide.marketName];
@@ -227,6 +231,9 @@ export function GuideDetailView({
             {isVenueGuide ? "Browse Venues" : "Browse Events"}
           </Link>
         </div>
+
+        {/* ── FAQ ───────────────────────────────────────────────────────────── */}
+        <GuideFaqSection faqs={faqs} />
 
         {/* ── More guides ──────────────────────────────────────────────────── */}
         {relatedGuides.length > 0 && (

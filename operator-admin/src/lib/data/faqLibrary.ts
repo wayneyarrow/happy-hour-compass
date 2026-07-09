@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { normalizeAppliesTo, type FaqLibraryItem, type GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
+import { isGuidePublicNow } from "@/lib/data/contentGuides";
 
 /**
  * Data helpers for the FAQ Library & Content Engine FAQ architecture
@@ -10,8 +11,10 @@ import { normalizeAppliesTo, type FaqLibraryItem, type GuideFaqAnswer } from "@/
  * guide belongs to an individual guide's answer (content_guide_faqs.
  * related_guide_id). See migration 057_faq_library.sql.
  *
- * CMS foundation only — no public rendering yet. Create/update/delete
- * writes for the library live in
+ * Card 2C was the CMS foundation only. Card 2D (see docs/website/
+ * CONTENT_ENGINE_PRODUCT_SPEC.md) adds public rendering: getGuideFaqs() is
+ * called from both the public guide page and the Control Panel preview
+ * route. Create/update/delete writes for the library live in
  * app/control-panel/content-engine/faq-library/actions.ts, and guide↔FAQ
  * writes live in app/control-panel/content-engine/actions.ts, following the
  * existing actions.ts convention (see contentGuideAttachments.ts).
@@ -121,7 +124,21 @@ export async function isFaqInUse(faqId: string): Promise<boolean> {
 
 // ── Guide ↔ FAQ relationship (content_guide_faqs) ───────────────────────────────
 
-/** A guide's saved FAQ answers, ordered, with the library question and any related guide's title joined in for display. */
+/**
+ * A guide's saved FAQ answers, ordered, with the library question and any
+ * related guide's title/URL joined in for display. related_guide_id has no
+ * market constraint (a related guide may live in a different market than
+ * the guide being viewed), so the related guide's own market slug is
+ * fetched alongside its slug — never assume the current guide's marketSlug.
+ * relatedGuideSlug/relatedGuideMarketSlug/relatedGuideTitle are only
+ * populated when the related guide is actually public right now (published
+ * + in its publish window, via isGuidePublicNow — same predicate the public
+ * guide page itself is gated on), so a guide can never link to a draft or
+ * expired guide. Every row returned here has a non-empty question and
+ * answer by construction: saveGuideFaqs() only ever persists rows that had
+ * both at save time (see that function's docstring), so callers never need
+ * to defensively filter for "complete" FAQs — this whole array is complete.
+ */
 export async function getGuideFaqs(guideId: string): Promise<GuideFaqAnswer[]> {
   const supabase = createAdminClient();
 
@@ -130,7 +147,7 @@ export async function getGuideFaqs(guideId: string): Promise<GuideFaqAnswer[]> {
     .select(
       "faq_id, answer, related_guide_id, display_order, " +
         "faq:faq_library(question, applies_to), " +
-        "related_guide:content_guides!content_guide_faqs_related_guide_id_fkey(title)"
+        "related_guide:content_guides!content_guide_faqs_related_guide_id_fkey(title, slug, status, publish_at, expire_at, markets(slug))"
     )
     .eq("guide_id", guideId)
     .order("display_order", { ascending: true });
@@ -144,13 +161,36 @@ export async function getGuideFaqs(guideId: string): Promise<GuideFaqAnswer[]> {
   return (data ?? []).map((row: Record<string, any>) => {
     const faq = (row.faq as Record<string, unknown> | null) ?? null;
     const relatedGuide = (row.related_guide as Record<string, unknown> | null) ?? null;
+
+    let relatedGuideTitle: string | null = null;
+    let relatedGuideSlug: string | null = null;
+    let relatedGuideMarketSlug: string | null = null;
+
+    if (relatedGuide) {
+      const isPublic = isGuidePublicNow(
+        (relatedGuide.status as string | undefined) ?? "draft",
+        (relatedGuide.publish_at as string | null) ?? null,
+        (relatedGuide.expire_at as string | null) ?? null
+      );
+      const marketSlug = (relatedGuide.markets as Record<string, unknown> | null)?.slug as
+        | string
+        | undefined;
+      if (isPublic && marketSlug) {
+        relatedGuideTitle = (relatedGuide.title as string | undefined) ?? null;
+        relatedGuideSlug = (relatedGuide.slug as string | undefined) ?? null;
+        relatedGuideMarketSlug = marketSlug;
+      }
+    }
+
     return {
       faqId: row.faq_id as string,
       question: (faq?.question as string | undefined) ?? "(question no longer available)",
       appliesTo: normalizeAppliesTo((faq?.applies_to as string | undefined) ?? "both"),
       answer: row.answer as string,
       relatedGuideId: (row.related_guide_id as string | null) ?? null,
-      relatedGuideTitle: (relatedGuide?.title as string | undefined) ?? null,
+      relatedGuideTitle,
+      relatedGuideSlug,
+      relatedGuideMarketSlug,
       displayOrder: row.display_order as number,
     };
   });

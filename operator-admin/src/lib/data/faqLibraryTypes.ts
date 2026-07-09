@@ -49,6 +49,17 @@ export type GuideFaqAnswer = {
   answer: string;
   relatedGuideId: string | null;
   relatedGuideTitle: string | null;
+  /**
+   * Card 2D — slug + market slug of the related guide, populated only when
+   * that guide is actually public right now (published + in its publish
+   * window). A related guide can live in a different market than the guide
+   * being viewed (content_guide_faqs.related_guide_id has no market
+   * constraint), so both fields are needed to build its URL — never assume
+   * the current guide's own marketSlug. All three related* fields are null
+   * together whenever there's no related guide, or it isn't public.
+   */
+  relatedGuideSlug: string | null;
+  relatedGuideMarketSlug: string | null;
   displayOrder: number;
 };
 
