@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { getEditorialSections, type PublicGuideDetail, type RelatedGuideSummary } from "@/lib/data/contentGuides";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
@@ -15,19 +16,32 @@ import { GuideCard } from "@/app/(website)/GuideCard";
  * getPublicGuideByMarketAndSlug, bypassing the published/in-window gate —
  * see contentGuides.ts).
  *
- * Card 2B final polish: matches the approved magazine reference
- * (docs/website/design-reference/guide-layout-v2-reference.png) —
- * full-width hero across the top, then an editorial spread below it: left
- * column is location/kicker/title (the "cover" block), right column is
- * standfirst followed by the editorial sections. This is NOT a side-by-side
- * hero/title layout — the hero is a separate full-width band above the
- * two-column spread, never one of its columns.
+ * Card 2B final layout polish: contained (not edge-to-edge) hero image,
+ * then a two-column opening — left column is location/title/updated date,
+ * right column is the standfirst only — followed by full-width editorial
+ * sections below both columns, then the unchanged featured cards/CTA/
+ * related guides.
  *
- * On mobile the grid collapses to one column; because the left column
- * (location, kicker, title) and right column (standfirst, sections) are
- * already in that DOM order, mobile stacking falls out for free — hero →
- * location → title → standfirst → sections — with no CSS `order` tricks and
- * no duplicated markup.
+ * Alignment: location, title, and updated date are three separate grid
+ * children explicitly placed at lg:row-start-1/2/3 in column 1; the
+ * standfirst is placed at lg:row-start-2 in column 2. Because CSS Grid row
+ * gaps are shared across every column in that row, the standfirst always
+ * starts exactly where row 2 begins — i.e. level with the title, never
+ * with the location — without any hardcoded pixel offsets. The generous
+ * gap the task asks for between location and title is a margin on the
+ * location element itself, which (being in row 1) pushes row 2's start
+ * down for both columns uniformly. On mobile (`grid-cols-1`, no lg:
+ * placement) the same four children simply fall back to DOM order:
+ * location → title → date → standfirst, which is exactly the required
+ * mobile stack.
+ *
+ * Location text: "{City}, {Province}" — province is NOT part of
+ * PublicGuideDetail (the guide query only selects market slug/name; adding
+ * province would be a data-layer change, out of scope for this card), so
+ * it's resolved from a small local lookup keyed by the already-available
+ * guide.marketName. See MARKET_PROVINCE below. Falls back to just the
+ * city/market name if the market isn't in the lookup, rather than
+ * guessing or showing "Canada".
  *
  * Legacy `body` fallback: a guide only renders its editorial sections when
  * at least one exists. Guides created before Card 2A (or not yet migrated
@@ -47,8 +61,15 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
-const LOCATION_PIN_PATH =
-  "M12 21s-6.75-6.35-6.75-11A6.75 6.75 0 1118.75 10c0 4.65-6.75 11-6.75 11z";
+// Presentation-only province abbreviation, derived from the known markets
+// in src/lib/markets.ts — NOT sourced from the guide query (see module
+// docstring). Extend this if a new market is added.
+const MARKET_PROVINCE: Record<string, string> = {
+  "Central Okanagan": "BC",
+  "Greater Vancouver": "BC",
+  "Victoria": "BC",
+  "Calgary": "AB",
+};
 
 type Props = {
   guide: PublicGuideDetail;
@@ -65,17 +86,17 @@ export function GuideDetailView({
   eventItems,
   relatedGuides,
 }: Props) {
-  const locationLabel =
-    [guide.neighbourhoodName, guide.cityName].filter(Boolean).join(", ") || guide.marketName;
-  const kicker = isVenueGuide ? "Venue Guide" : "Event Guide";
+  const cityOrMarket = guide.cityName || guide.marketName;
+  const province = MARKET_PROVINCE[guide.marketName];
+  const locationLabel = province ? `${cityOrMarket}, ${province}` : cityOrMarket;
 
   const editorialSections = getEditorialSections(guide);
   const hasEditorialContent = editorialSections.length > 0;
 
   return (
     <div className="bg-white pb-16">
-      {/* ── Breadcrumb ─────────────────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
+        {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
           <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
@@ -85,77 +106,75 @@ export function GuideDetailView({
           </svg>
           <span className="text-gray-900 font-medium truncate min-w-0">{guide.title}</span>
         </nav>
-      </div>
 
-      {/* ── Hero image — full width across the top, shorter than a marketing hero ── */}
-      {guide.hero_image_url && (
-        <div className="relative w-full h-[240px] sm:h-[320px] md:h-[400px] overflow-hidden bg-gray-100 mb-10 md:mb-14">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={guide.hero_image_url}
-            alt={guide.title}
-            className="w-full h-full object-cover"
-          />
-        </div>
-      )}
+        {/* ── Hero image — contained, editorial but not oversized ─────────────── */}
+        {guide.hero_image_url && (
+          <div className="relative w-full h-[220px] sm:h-[280px] md:h-[340px] rounded-2xl overflow-hidden bg-gray-100 mb-10 md:mb-14">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={guide.hero_image_url}
+              alt={guide.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
 
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
-        {/* ── Editorial spread: left = cover block, right = standfirst + sections ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start">
-          {/* Left column — location, kicker, title */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden="true">
-                <path d={LOCATION_PIN_PATH} />
-              </svg>
-              <span className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-500">
-                {locationLabel}
-              </span>
-            </div>
-
-            <p className="text-sm text-gray-400 mb-2">{kicker}</p>
-
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
-              {guide.title}
-            </h1>
-
-            {guide.publish_at && (
-              <p className="mt-4 text-sm text-gray-400">Updated {formatDate(guide.publish_at)}</p>
-            )}
+        {/* ── Two-column opening: location/title/date (left) + standfirst (right) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 lg:gap-x-16 gap-y-3">
+          <div className="lg:col-start-1 lg:row-start-1 mb-8 lg:mb-10 flex items-center gap-2">
+            <Image
+              src="/hhc-icon.png"
+              alt=""
+              width={271}
+              height={345}
+              aria-hidden="true"
+              className="h-4 w-auto shrink-0"
+            />
+            <span className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-500">
+              {locationLabel}
+            </span>
           </div>
 
-          {/* Right column — standfirst, then editorial sections (falls back to legacy body) */}
-          <div>
-            {guide.intro && (
-              <p className="pl-5 border-l-[3px] border-amber-400 text-xl md:text-2xl font-medium text-gray-800 leading-relaxed">
-                {guide.intro}
-              </p>
-            )}
+          <h1 className="lg:col-start-1 lg:row-start-2 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
+            {guide.title}
+          </h1>
 
-            {hasEditorialContent ? (
-              <div className={`space-y-8 md:space-y-10 ${guide.intro ? "mt-8 md:mt-10" : ""}`}>
-                {editorialSections.map((section, i) => (
-                  <div key={i}>
-                    {section.heading && (
-                      <h2 className="text-xl font-bold text-gray-900 tracking-tight leading-snug mb-3">
-                        {section.heading}
-                      </h2>
-                    )}
-                    <p className="text-[16px] text-gray-700 leading-[1.8] whitespace-pre-wrap">
-                      {section.body}
-                    </p>
-                  </div>
-                ))}
+          {guide.publish_at && (
+            <p className="lg:col-start-1 lg:row-start-3 text-sm text-gray-400">
+              Updated {formatDate(guide.publish_at)}
+            </p>
+          )}
+
+          {guide.intro && (
+            <p className="lg:col-start-2 lg:row-start-2 pl-5 border-l-[3px] border-amber-400 text-xl md:text-2xl font-medium text-gray-800 leading-relaxed">
+              {guide.intro}
+            </p>
+          )}
+        </div>
+
+        {/* ── Editorial sections — full width, below both columns (falls back to legacy body) ── */}
+        {hasEditorialContent ? (
+          <div className="mt-14 md:mt-16 space-y-8 md:space-y-10 max-w-3xl">
+            {editorialSections.map((section, i) => (
+              <div key={i}>
+                {section.heading && (
+                  <h2 className="text-xl font-bold text-gray-900 tracking-tight leading-snug mb-3">
+                    {section.heading}
+                  </h2>
+                )}
+                <p className="text-[16px] text-gray-700 leading-[1.8] whitespace-pre-wrap">
+                  {section.body}
+                </p>
               </div>
-            ) : (
-              guide.body && (
-                <div className={`text-[16px] text-gray-700 leading-[1.8] whitespace-pre-wrap ${guide.intro ? "mt-8 md:mt-10" : ""}`}>
-                  {guide.body}
-                </div>
-              )
-            )}
+            ))}
           </div>
-        </div>
+        ) : (
+          guide.body && (
+            <div className="mt-14 md:mt-16 text-[16px] text-gray-700 leading-[1.8] whitespace-pre-wrap max-w-3xl">
+              {guide.body}
+            </div>
+          )
+        )}
 
         {/* ── Featured venues / events ─────────────────────────────────────── */}
         <section className="mt-14 md:mt-16 pt-10 md:pt-12 border-t border-gray-100 mb-12">
