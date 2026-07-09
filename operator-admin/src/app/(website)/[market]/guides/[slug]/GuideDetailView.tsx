@@ -15,13 +15,21 @@ import { GuideCard } from "@/app/(website)/GuideCard";
  * getPublicGuideByMarketAndSlug, bypassing the published/in-window gate —
  * see contentGuides.ts).
  *
- * Card 2B replaced the editorial opening (hero → location → title →
- * standfirst → body) with a premium layout consuming the structured
- * editorial sections introduced in Card 2A (getEditorialSections), inspired
- * by docs/website/design-reference/guide-layout-v2-reference.png — adapted
- * to HHC's own visual language (brand color, type scale, single-column
- * responsive flow) rather than copied. Below the opening — attached
- * venues/events, CTA, Related Guides — is unchanged from Card 2A.
+ * Card 2B replaced the editorial opening with a premium layout consuming
+ * the structured editorial sections introduced in Card 2A
+ * (getEditorialSections), inspired by
+ * docs/website/design-reference/guide-layout-v2-reference.png — adapted to
+ * HHC's own visual language rather than copied. Below the opening —
+ * attached venues/events, CTA, Related Guides — is unchanged from Card 2A.
+ *
+ * Card 2B polish pass: the opening is a two-column editorial composition on
+ * desktop/large-tablet (lg: and up) — left column is location/title/
+ * standfirst, right column is the hero image, both inside one max-width
+ * container (no full-bleed hero). On mobile it collapses to a single
+ * column stacked hero → location → title → standfirst, using CSS `order`
+ * on the same two grid children rather than two separate markup branches,
+ * so there's only one DOM to keep in sync. A guide with no hero image
+ * simply renders the text column at full width — no empty second column.
  *
  * Legacy `body` fallback: a guide only renders its editorial sections when
  * at least one exists. Guides created before Card 2A (or not yet migrated
@@ -65,10 +73,43 @@ export function GuideDetailView({
   const editorialSections = getEditorialSections(guide);
   const hasEditorialContent = editorialSections.length > 0;
 
+  // Left column of the opening — location, title, standfirst. Extracted to
+  // a variable (not a separate component) so the with-hero (two-column) and
+  // no-hero (single-column) branches below share identical markup.
+  const textColumn = (
+    <div className="order-2 lg:order-1">
+      {/* ── Location ───────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden="true">
+          <path d={LOCATION_PIN_PATH} />
+        </svg>
+        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-500">
+          {locationLabel}
+        </span>
+      </div>
+
+      {/* ── Title ──────────────────────────────────────────────────────── */}
+      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
+        {guide.title}
+      </h1>
+
+      {guide.publish_at && (
+        <p className="mt-3 text-sm text-gray-400">Updated {formatDate(guide.publish_at)}</p>
+      )}
+
+      {/* ── Standfirst (Introduction) ─────────────────────────────────── */}
+      {guide.intro && (
+        <p className="mt-7 pl-5 border-l-[3px] border-amber-400 text-xl md:text-2xl font-medium text-gray-800 leading-relaxed">
+          {guide.intro}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className="bg-white pb-16">
-      {/* ── Breadcrumb ─────────────────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
+        {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
           <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
@@ -78,45 +119,24 @@ export function GuideDetailView({
           </svg>
           <span className="text-gray-900 font-medium truncate min-w-0">{guide.title}</span>
         </nav>
-      </div>
 
-      {/* ── Hero image — large, immersive, full-bleed ───────────────────────── */}
-      {guide.hero_image_url && (
-        <div className="relative w-full h-[280px] sm:h-[400px] md:h-[520px] overflow-hidden bg-gray-100 mb-10 md:mb-14">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={guide.hero_image_url}
-            alt={guide.title}
-            className="w-full h-full object-cover"
-          />
-        </div>
-      )}
-
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
-        {/* ── Location ─────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 mb-4">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden="true">
-            <path d={LOCATION_PIN_PATH} />
-          </svg>
-          <span className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-500">
-            {locationLabel}
-          </span>
-        </div>
-
-        {/* ── Title ────────────────────────────────────────────────────────── */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05] max-w-3xl">
-          {guide.title}
-        </h1>
-
-        {guide.publish_at && (
-          <p className="mt-3 text-sm text-gray-400">Updated {formatDate(guide.publish_at)}</p>
-        )}
-
-        {/* ── Standfirst (Introduction) ────────────────────────────────────── */}
-        {guide.intro && (
-          <p className="mt-7 md:mt-9 pl-5 border-l-[3px] border-amber-400 text-xl md:text-2xl font-medium text-gray-800 leading-relaxed max-w-2xl">
-            {guide.intro}
-          </p>
+        {/* ── Editorial opening: two columns from lg: up, stacked below it ──── */}
+        {guide.hero_image_url ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start mb-12 md:mb-16">
+            {textColumn}
+            <div className="order-1 lg:order-2">
+              <div className="relative w-full aspect-[4/5] sm:aspect-[16/10] lg:aspect-[4/5] rounded-2xl overflow-hidden bg-gray-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={guide.hero_image_url}
+                  alt={guide.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-2xl mb-12 md:mb-16">{textColumn}</div>
         )}
 
         {/* ── Editorial sections (falls back to legacy body if none exist) ───── */}
