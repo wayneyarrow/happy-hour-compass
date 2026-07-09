@@ -2,11 +2,23 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "New Guide — Content Engine" };
 
 import Link from "next/link";
-import { getGuideFormGeography } from "@/lib/data/contentGuides";
+import { getContentGuides, getGuideFormGeography } from "@/lib/data/contentGuides";
+import { getActiveFaqLibrary } from "@/lib/data/faqLibrary";
 import GuideForm from "../GuideForm";
 
 export default async function NewContentGuidePage() {
-  const { markets, cities, neighbourhoods } = await getGuideFormGeography();
+  const [{ markets, cities, neighbourhoods }, faqLibrary, allGuides] = await Promise.all([
+    getGuideFormGeography(),
+    getActiveFaqLibrary(),
+    getContentGuides(),
+  ]);
+
+  // No guide id yet on the create page, so nothing to exclude — a brand new
+  // guide can reference any existing guide as a FAQ's related guide.
+  const relatedGuideOptions = allGuides.map((g) => ({
+    id: g.id,
+    title: g.marketName ? `${g.title} — ${g.marketName}` : g.title,
+  }));
 
   return (
     <div className="max-w-5xl">
@@ -23,7 +35,14 @@ export default async function NewContentGuidePage() {
         </p>
       </div>
 
-      <GuideForm mode="create" markets={markets} cities={cities} neighbourhoods={neighbourhoods} />
+      <GuideForm
+        mode="create"
+        markets={markets}
+        cities={cities}
+        neighbourhoods={neighbourhoods}
+        faqLibrary={faqLibrary}
+        relatedGuideOptions={relatedGuideOptions}
+      />
     </div>
   );
 }

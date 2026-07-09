@@ -13,6 +13,7 @@ import {
   type AttachmentCandidate,
 } from "@/lib/data/contentGuideAttachments";
 import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
+import { saveGuideFaqs } from "@/lib/data/faqLibrary";
 
 /**
  * Create/update server actions for the Content Engine guide form (Card 2 +
@@ -132,6 +133,36 @@ function parseAttachmentIds(formData: FormData): string[] {
 function parseDistributionChannels(formData: FormData): string[] {
   const raw = str(formData, "distribution_channels");
   return raw.length > 0 ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
+/**
+ * Reads the guide's FAQ rows from the hidden "guide_faqs" JSON input
+ * GuideFaqsSelector maintains (Card 2C). Malformed or unexpected-shaped
+ * entries are dropped defensively — saveGuideFaqs() also drops any row
+ * missing a question or answer, so this only needs to guard against the
+ * JSON itself being invalid or not an array.
+ */
+function parseGuideFaqs(
+  formData: FormData
+): { faqId: string; answer: string; relatedGuideId: string | null }[] {
+  const raw = str(formData, "guide_faqs");
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((item) => ({
+      faqId: typeof item.faqId === "string" ? item.faqId : "",
+      answer: typeof item.answer === "string" ? item.answer : "",
+      relatedGuideId: typeof item.relatedGuideId === "string" ? item.relatedGuideId : null,
+    }));
 }
 
 function parseSecondaryKeywords(raw: string): string[] {
@@ -267,6 +298,7 @@ export async function createGuideAction(
     parseAttachmentIds(formData)
   );
   await saveGuideChannels(guideId, parseDistributionChannels(formData));
+  await saveGuideFaqs(guideId, parseGuideFaqs(formData));
 
   await logAuditEvent({
     actorEmail: callerEmail,
@@ -344,6 +376,7 @@ export async function updateGuideAction(
     parseAttachmentIds(formData)
   );
   await saveGuideChannels(guideId, parseDistributionChannels(formData));
+  await saveGuideFaqs(guideId, parseGuideFaqs(formData));
 
   await logAuditEvent({
     actorEmail: callerEmail,

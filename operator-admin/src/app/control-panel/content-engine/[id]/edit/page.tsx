@@ -3,12 +3,13 @@ export const metadata = { title: "Edit Guide — Content Engine" };
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getContentGuideById, getGuideFormGeography } from "@/lib/data/contentGuides";
+import { getContentGuideById, getContentGuides, getGuideFormGeography } from "@/lib/data/contentGuides";
 import {
   getGuideVenueAttachments,
   getGuideEventAttachments,
 } from "@/lib/data/contentGuideAttachments";
 import { getGuideChannels } from "@/lib/data/contentGuideDistribution";
+import { getActiveFaqLibrary, getGuideFaqs } from "@/lib/data/faqLibrary";
 import GuideForm from "../../GuideForm";
 
 export default async function EditContentGuidePage({
@@ -25,12 +26,23 @@ export default async function EditContentGuidePage({
 
   if (!guide) notFound();
 
-  const [initialAttachments, initialChannels] = await Promise.all([
+  const [initialAttachments, initialChannels, initialFaqs, faqLibrary, allGuides] = await Promise.all([
     guide.guide_type === "event_guide"
       ? getGuideEventAttachments(guide.id)
       : getGuideVenueAttachments(guide.id),
     getGuideChannels(guide.id),
+    getGuideFaqs(guide.id),
+    getActiveFaqLibrary(),
+    getContentGuides(),
   ]);
+
+  // A guide can't be its own "related guide" — exclude self from the picker.
+  const relatedGuideOptions = allGuides
+    .filter((g) => g.id !== guide.id)
+    .map((g) => ({
+      id: g.id,
+      title: g.marketName ? `${g.title} — ${g.marketName}` : g.title,
+    }));
 
   return (
     <div className="max-w-5xl">
@@ -67,9 +79,12 @@ export default async function EditContentGuidePage({
         initialGuide={guide}
         initialAttachments={initialAttachments}
         initialChannels={initialChannels}
+        initialFaqs={initialFaqs}
         markets={markets}
         cities={cities}
         neighbourhoods={neighbourhoods}
+        faqLibrary={faqLibrary}
+        relatedGuideOptions={relatedGuideOptions}
       />
     </div>
   );

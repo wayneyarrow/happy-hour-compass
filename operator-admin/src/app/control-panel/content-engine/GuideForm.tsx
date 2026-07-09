@@ -7,6 +7,7 @@ import { slugify } from "@/lib/slugify";
 import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/types";
 import type { ContentGuideDetail, GuideType, GuideStatus } from "@/lib/data/contentGuides";
 import type { GuideAttachmentItem } from "@/lib/data/contentGuideAttachments";
+import type { FaqLibraryItem, GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import {
   generateGuideSeo,
   getCanonicalUrlWarning,
@@ -21,16 +22,18 @@ import {
 import { createGuideAction, updateGuideAction, type GuideFormState } from "./actions";
 import HeroImageField from "./HeroImageField";
 import AttachmentsSelector from "./AttachmentsSelector";
+import GuideFaqsSelector from "./GuideFaqsSelector";
 
 /**
  * Shared create/edit form for Content Engine guides (Card 2 + touch-up,
  * Card 3 venue/event attachments, Card 4 SEO automation, Card 6B
  * distribution eligibility, Card 7 status simplification, Guide Experience
- * V2 Card 2A editorial sections).
+ * V2 Card 2A editorial sections, Card 2C FAQ architecture).
  *
  * Scope: guide details, content fields, hero image (upload or URL),
- * keywords, status, venue/event attachments, SEO fields, and distribution
- * channel eligibility only. No FAQ or related guides yet — see
+ * keywords, status, venue/event attachments, FAQs, SEO fields, and
+ * distribution channel eligibility. No related-guides curation outside the
+ * FAQ answer's own optional related guide — see
  * docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md and the Card 6B task for the
  * full guardrail list. Distribution here is eligibility (editorial intent)
  * only — actual merchandising/ordering is a Discover Management concern,
@@ -49,6 +52,12 @@ import AttachmentsSelector from "./AttachmentsSelector";
  * rendered as an editable field and is never re-submitted (see actions.ts)
  * — a guide with pre-existing body content shows a small non-destructive
  * note instead, via the read-only `legacyBody` snapshot below.
+ *
+ * Card 2C added the FAQs section (GuideFaqsSelector): a structured
+ * question/answer picker sourced from the FAQ Library
+ * (control-panel/content-engine/faq-library), replacing the free-form FAQ
+ * idea from the original product spec. This is CMS foundation only — no
+ * public FAQ rendering yet.
  */
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -58,9 +67,12 @@ type Props = {
   initialGuide?: ContentGuideDetail | null;
   initialAttachments?: GuideAttachmentItem[];
   initialChannels?: DistributionChannelKey[];
+  initialFaqs?: GuideFaqAnswer[];
   markets: MarketRecord[];
   cities: CityRecord[];
   neighbourhoods: NeighbourhoodRecord[];
+  faqLibrary: FaqLibraryItem[];
+  relatedGuideOptions: { id: string; title: string }[];
 };
 
 const GUIDE_TYPE_OPTIONS: { value: GuideType; label: string }[] = [
@@ -130,9 +142,12 @@ export default function GuideForm({
   initialGuide,
   initialAttachments = [],
   initialChannels = [],
+  initialFaqs = [],
   markets,
   cities,
   neighbourhoods,
+  faqLibrary,
+  relatedGuideOptions,
 }: Props) {
   const boundAction =
     mode === "create" ? createGuideAction : updateGuideAction.bind(null, initialGuide!.id);
@@ -272,6 +287,16 @@ export default function GuideForm({
   // own hidden input at submit time.
   const [attachmentCount, setAttachmentCount] = useState(initialAttachments.length);
 
+  // ── FAQs (Card 2C touch-up) ───────────────────────────────────────────────
+  // GuideFaqsSelector owns its own row state internally; this is just a live
+  // mirror (question id + answer only) reported up for the Guide
+  // Completeness checklist's "Frequently Asked Questions" item. Doesn't
+  // affect saving — the hidden "guide_faqs" input GuideFaqsSelector renders
+  // is still what's actually submitted.
+  const [faqRows, setFaqRows] = useState<{ faqId: string; answer: string }[]>(() =>
+    initialFaqs.map((f) => ({ faqId: f.faqId, answer: f.answer }))
+  );
+
   // ── Distribution (Card 6B) ────────────────────────────────────────────────
   // Editorial intent only — this is eligibility, not placement. An editor
   // can freely check/uncheck regardless of what the recommendation says;
@@ -319,6 +344,19 @@ export default function GuideForm({
     setSlugTouched(true);
   }
 
+  // FAQ checklist completeness (FAQ Checklist Polish): at least one FAQ row
+  // exists, and every row present has both a selected library question and
+  // a non-empty answer — a single dangling incomplete row (question picked
+  // but no answer yet, or vice versa) keeps the whole item incomplete,
+  // rather than counting only the valid rows. This is stricter than
+  // saveGuideFaqs, which silently drops incomplete rows at save time — the
+  // checklist is a guide only, so it's free to nudge for a cleaner state
+  // than what's strictly required to save. The optional Related Guide field
+  // is intentionally not part of this check.
+  const faqsComplete =
+    faqRows.length > 0 &&
+    faqRows.every((r) => r.faqId.trim() !== "" && r.answer.trim() !== "");
+
   // ── Completion checklist (local, non-blocking) ───────────────────────────
   // Card 7A: order and labels mirror the editor's own section sequence and
   // titles. "Guide Details" consolidates the Location, Title & Slug, and
@@ -326,7 +364,9 @@ export default function GuideForm({
   // section cards in the form below — only the checklist groups them).
   // "SEO" was removed from the checklist per the Card 7A spec; the SEO
   // section itself is unchanged. "Related Content" is new — see
-  // attachmentCount above for how it's populated.
+  // attachmentCount above for how it's populated. "Frequently Asked
+  // Questions" mirrors the FAQs section's position in the form, directly
+  // below Content — see faqsComplete above for how it's computed.
   const checklist: ChecklistItem[] = [
     { label: "Guide Type", complete: guideType !== "" },
     {
@@ -350,6 +390,7 @@ export default function GuideForm({
           section3Body.trim() !== "" ||
           legacyBody.trim() !== ""),
     },
+    { label: "Frequently Asked Questions (3–6 recommended)", complete: faqsComplete },
     // Matches the editor's own validation: at least one attached venue/event
     // is enough — guideType !== "" guards the edge case where an editor
     // clears the guide type after having attached items under the old type.
@@ -653,6 +694,24 @@ export default function GuideForm({
               Structured editing only — no HTML or drag-and-drop layout tools. A section with no
               body is left out of the guide entirely; headings are optional.
             </p>
+          </section>
+
+          {/* FAQs (Card 2C) — structured question/answer picker, CMS foundation only.
+              Rendering on the public guide page is a later card. */}
+          <section className={sectionCls}>
+            <h2 className={sectionTitleCls}>FAQs</h2>
+            <p className={hintCls}>
+              Answer questions from the FAQ Library for this guide. Only active questions for the
+              selected guide type are shown. Manage the library itself under Content Engine →
+              FAQ Library.
+            </p>
+            <GuideFaqsSelector
+              guideType={guideType}
+              faqLibrary={faqLibrary}
+              relatedGuideOptions={relatedGuideOptions}
+              initialFaqs={initialFaqs}
+              onFaqsChange={setFaqRows}
+            />
           </section>
 
           {/* Related Venues / Events */}

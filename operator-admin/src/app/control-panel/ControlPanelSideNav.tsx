@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { label: "Operators",          href: "/control-panel/operators" },
   { label: "Discover Management",href: "/control-panel/discover" },
   { label: "Content Engine",     href: "/control-panel/content-engine" },
+  { label: "FAQ Library",        href: "/control-panel/content-engine/faq-library" },
   { label: "Venue QA",           href: "/control-panel/settings" },
   { label: "Integrations",       href: "/control-panel/integrations" },
   { label: "Platform Admins",    href: "/control-panel/platform-admins" },
