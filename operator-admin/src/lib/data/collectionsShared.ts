@@ -118,6 +118,7 @@ export type CollectionMutationResult =
 export type CollectionSummary = {
   id: string;
   name: string;
+  description: string | null;
   collectionType: CollectionType;
   status: CollectionStatus;
   algorithmKey: AlgorithmKey | null;

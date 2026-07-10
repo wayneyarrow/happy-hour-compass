@@ -19,7 +19,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { validateCityBelongsToMarket } from "@/lib/geo/geography";
+import { validateCityBelongsToMarket, getAllMarkets, getCitiesByMarket } from "@/lib/geo/geography";
+import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import { normalizeHomepageStatus } from "@/lib/data/homepagesShared";
 import {
   isCollectionType,
@@ -76,6 +77,7 @@ function mapCollectionSummaryRow(row: Row): CollectionSummary {
   return {
     id:            row.id as string,
     name:          row.name as string,
+    description:   (row.description as string | null) ?? null,
     collectionType: row.collection_type as CollectionType,
     status:        normalizeCollectionStatus(row.status as string),
     algorithmKey:  (row.algorithm_key as AlgorithmKey | null) ?? null,
@@ -140,9 +142,15 @@ function mapGuideItemRow(row: Row): CollectionGuideItem {
   };
 }
 
+// `city:cities!city_id(...)` disambiguates the embed: collections has two FK
+// paths to cities (the plain city_id FK, plus the composite
+// collections_city_market_consistency (city_id, market_id) FK added for
+// city/market consistency checking — see migration 058). Without the `!city_id`
+// hint, PostgREST can't tell which relationship to embed and errors with
+// "more than one relationship was found for 'collections' and 'cities'".
 const COLLECTION_SUMMARY_COLUMNS =
-  "id, name, collection_type, status, algorithm_key, market_id, city_id, updated_at, " +
-  "market:markets(name), city:cities(name)";
+  "id, name, description, collection_type, status, algorithm_key, market_id, city_id, updated_at, " +
+  "market:markets(name), city:cities!city_id(name)";
 
 // ── Collection list ──────────────────────────────────────────────────────────
 
@@ -184,7 +192,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     .from("collections")
     .select(
       "id, name, description, collection_type, status, algorithm_key, item_limit, " +
-        "market_id, city_id, created_at, updated_at, market:markets(name), city:cities(name)"
+        "market_id, city_id, created_at, updated_at, market:markets(name), city:cities!city_id(name)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -932,7 +940,7 @@ export async function getCollectionUsage(collectionId: string): Promise<Collecti
     .from("homepage_sections")
     .select(
       "id, section_type, title, " +
-        "homepage:homepages(id, name, status, market:markets(name), city:cities(name))"
+        "homepage:homepages(id, name, status, market:markets(name), city:cities!city_id(name))"
     )
     .eq("collection_id", collectionId);
 
@@ -962,4 +970,107 @@ export async function getCollectionUsage(collectionId: string): Promise<Collecti
     isUsedByPublishedHomepage: entries.some((e) => e.homepageStatus === "published"),
     entries,
   };
+}
+
+/**
+ * Batch usage counts for the Collections management list — avoids an N+1
+ * getCollectionUsage() call per row. Read-only, same non-authoritative
+ * relationship to the DB's ON DELETE RESTRICT backstop as getCollectionUsage.
+ */
+export type CollectionUsageCount = { sectionCount: number; isUsedByPublishedHomepage: boolean };
+
+export async function getCollectionUsageCounts(): Promise<Map<string, CollectionUsageCount>> {
+  const supabase = createAdminClient();
+  const map = new Map<string, CollectionUsageCount>();
+
+  const { data, error } = await supabase
+    .from("homepage_sections")
+    .select("collection_id, homepage:homepages(status)")
+    .not("collection_id", "is", null);
+
+  if (error) {
+    console.error("[getCollectionUsageCounts]", error.message);
+    return map;
+  }
+
+  for (const row of (data ?? []) as Row[]) {
+    const collectionId = row.collection_id as string;
+    const homepage = (row.homepage as Row | null) ?? {};
+    const isPublished = normalizeHomepageStatus((homepage.status as string | undefined) ?? "draft") === "published";
+    const existing = map.get(collectionId);
+    if (existing) {
+      existing.sectionCount += 1;
+      existing.isUsedByPublishedHomepage = existing.isUsedByPublishedHomepage || isPublished;
+    } else {
+      map.set(collectionId, { sectionCount: 1, isUsedByPublishedHomepage: isPublished });
+    }
+  }
+  return map;
+}
+
+// ── Form geography (create/edit page) ───────────────────────────────────────
+
+export type CollectionFormGeography = { markets: MarketRecord[]; cities: CityRecord[] };
+
+/** Mirrors getGuideFormGeography() in contentGuides.ts — Collections have no neighbourhood tier. */
+export async function getCollectionFormGeography(): Promise<CollectionFormGeography> {
+  const markets = await getAllMarkets();
+  const citiesByMarket = await Promise.all(markets.map((m) => getCitiesByMarket(m.id)));
+  return { markets, cities: citiesByMarket.flat() };
+}
+
+// ── Guide candidate search (Guide Collection membership) ────────────────────
+//
+// content_guides has no equivalent to contentGuideAttachments.ts's
+// searchVenueCandidates/searchEventCandidates (those search venues/events as
+// a *guide's* attachments, not guides themselves) — this is the Guide
+// Collection analog. Small, geography-scoped, fully-loadable result set, same
+// as GuideFaqsSelector's own faqLibrary/relatedGuideOptions props — no need
+// for tiered ranking, just a straight geography-eligible list the client can
+// filter as-you-type.
+
+export type GuideCandidate = {
+  id: string;
+  title: string;
+  marketName: string;
+  cityName: string | null;
+  status: CollectionStatus;
+};
+
+/**
+ * All guides eligible for a Collection with this geography — market must
+ * match; if the Collection has a city, the guide's city must match too
+ * (mirrors validateContentGeography's rule for guides). Includes both Draft
+ * and Published guides — the spec allows a Draft Collection to reference
+ * Draft guides; the editor surfaces the draft-content warning, this function
+ * doesn't gate on it.
+ */
+export async function getEligibleGuidesForCollection(
+  marketId: string,
+  cityId: string | null
+): Promise<GuideCandidate[]> {
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("content_guides")
+    .select("id, title, status, market:markets(name), city:cities(name), city_id")
+    .eq("market_id", marketId);
+  if (cityId) query = query.eq("city_id", cityId);
+
+  const { data, error } = await query.order("title", { ascending: true });
+  if (error) {
+    console.error("[getEligibleGuidesForCollection]", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row: Row) => {
+    const market = (row.market as Row | null) ?? {};
+    const city = (row.city as Row | null) ?? null;
+    return {
+      id: row.id as string,
+      title: row.title as string,
+      marketName: (market.name as string | undefined) ?? "",
+      cityName: (city?.name as string | undefined) ?? null,
+      status: normalizeCollectionStatus(row.status as string),
+    };
+  });
 }

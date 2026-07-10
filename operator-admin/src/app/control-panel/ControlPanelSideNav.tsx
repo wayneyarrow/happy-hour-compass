@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "Discover Management",href: "/control-panel/discover" },
   { label: "Content Engine",     href: "/control-panel/content-engine" },
   { label: "FAQ Library",        href: "/control-panel/content-engine/faq-library" },
+  { label: "Collections",        href: "/control-panel/collections" },
   { label: "Venue QA",           href: "/control-panel/settings" },
   { label: "Integrations",       href: "/control-panel/integrations" },
   { label: "Platform Admins",    href: "/control-panel/platform-admins" },
