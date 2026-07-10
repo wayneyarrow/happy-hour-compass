@@ -317,3 +317,33 @@ export async function getNearbyCities(
 ): Promise<CityRecord[]> {
   return [];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// City / Market consistency — pure function, no DB call
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The application-level twin of the composite FK constraints added in
+ * migration 058 (`collections_city_market_consistency`,
+ * `homepages_city_market_consistency`): a selected city must belong to the
+ * selected market. Pure — deliberately takes the city's own market_id as a
+ * plain string rather than a full CityRecord, so a caller that already has
+ * to look up the city for existence (a single `id, market_id` query) never
+ * needs a second, heavier fetch just to run this check.
+ *
+ * Returns null when valid (including the "no city selected" case — always
+ * valid), or a short, user-facing error string otherwise.
+ */
+export function validateCityBelongsToMarket(input: {
+  marketId: string;
+  cityId: string | null;
+  /** The selected city's own market_id, or null if cityId was set but no matching city was found. Ignored when cityId is null. */
+  cityMarketId: string | null;
+}): string | null {
+  if (input.cityId === null) return null;
+  if (input.cityMarketId === null) return "Selected city could not be found.";
+  if (input.cityMarketId !== input.marketId) {
+    return "Selected city does not belong to the selected market.";
+  }
+  return null;
+}
