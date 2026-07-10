@@ -88,12 +88,13 @@ When removing: revert the two changes made to `app/(consumer)/layout.tsx`:
 
 ## Website Vision & Playbook
 
-Before any significant public-facing website functionality — UI, UX, layout, navigation, homepage, search, filters, maps, mobile experience, SEO, geographic or location architecture, content, or architecture decisions — review all four documents:
+Before any significant public-facing website functionality — UI, UX, layout, navigation, homepage, search, filters, maps, mobile experience, SEO, geographic or location architecture, content, or architecture decisions — review all five documents:
 
 1. **[`docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md`](docs/website/WEBSITE_VISION_AND_DESIGN_PRINCIPLES.md)** — Website philosophy, UX principles, and design vision. Takes precedence over implementation convenience.
 2. **[`docs/website/WEBSITE_PRODUCT_PLAYBOOK.md`](docs/website/WEBSITE_PRODUCT_PLAYBOOK.md)** — Engineering implementation guide and website build standards. Defines how to apply the philosophy during real implementation. Includes the **Geographic Information Architecture** — the authoritative reference for market, city, neighbourhood, URL structure, search origin priority, and all geographic decisions. Review this section before any geographic, URL, SEO, or location-related implementation.
 3. **[`docs/website/CONSUMER_EXPERIENCE_PRD.md`](docs/website/CONSUMER_EXPERIENCE_PRD.md)** — Consumer product experience, customer journey, homepage philosophy, search framework, search results framework, filters, maps, mobile experience, and future consumer roadmap.
 4. **[`docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md`](docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md)** — The Happy Hour Compass Content Engine is the long-term publishing engine for the public website's editorial content (Venue Guides, Event Guides, and future guide types). It is not a traditional CMS or blogging platform. It is a core architectural document, equal in importance to the Website Vision and Website Product Playbook. Review it before any Content Engine (CMS) implementation work — new guide types, publishing workflow changes, SEO automation, distribution, or admin control panel content functionality.
+5. **[`docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md`](docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md)** — The canonical reference for Homepage Management and Collections: the Content → Collections → Homepages ownership model, geography-aware curation, Homepage Sections/Templates/Fallback, and how existing Discover Management logic evolves into Collections. Review it before any Homepage, Collection, or editorial merchandising implementation work.
 
 If a requested implementation conflicts with any of these documents, surface the conflict before writing code.
 
@@ -107,6 +108,7 @@ Key principles from these documents to carry into every website task:
 - Do not create UI backed by immature or inconsistently populated data.
 - Preserve separation between Public Website, Consumer App, Operator Admin, and Founder Control Panel.
 - The Content Engine is the long-term publishing engine for the public website — not a traditional CMS or blogging platform. Follow `docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md` before introducing new Content Engine functionality or architecture; surface conflicts before writing code.
+- Homepages assemble Collections; Collections own editorial curation; content never knows where it's displayed. Follow `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md` before introducing new Homepage, Collection, or editorial merchandising functionality or architecture; surface conflicts before writing code.
 
 ---
 
