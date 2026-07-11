@@ -19,7 +19,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { validateCityBelongsToMarket, getMarketBySlug, getCityBySlug } from "@/lib/geo/geography";
+import {
+  validateCityBelongsToMarket,
+  getMarketBySlug,
+  getCityBySlug,
+  getAllMarkets,
+  getCitiesByMarket,
+} from "@/lib/geo/geography";
+import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import { getCollections } from "@/lib/data/collections";
 import {
   normalizeCollectionStatus,
@@ -60,13 +67,17 @@ export {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
+// `city:cities!city_id(...)` disambiguates the embed: homepages has two FK
+// paths to cities (the plain city_id FK, and the composite
+// homepages_city_market_consistency FK — migration 058) — same fix as
+// collections.ts's identical `city:cities!city_id(name)` (see its comment).
 const HOMEPAGE_SUMMARY_COLUMNS =
-  "id, name, status, market_id, city_id, updated_at, market:markets(name), city:cities(name)";
+  "id, name, status, market_id, city_id, updated_at, market:markets(name), city:cities!city_id(name)";
 
 const HOMEPAGE_DETAIL_COLUMNS =
   "id, name, status, market_id, city_id, page_title, meta_title, meta_description, " +
   "og_title, og_description, canonical_url, created_at, updated_at, " +
-  "market:markets(name), city:cities(name)";
+  "market:markets(name), city:cities!city_id(name)";
 
 const SECTION_COLUMNS =
   "id, homepage_id, section_type, title, collection_id, display_order, is_enabled, created_at, updated_at, " +
@@ -129,6 +140,17 @@ async function getHomepageSections(homepageId: string): Promise<HomepageSection[
     return [];
   }
   return (data ?? []).map(mapHomepageSectionRow);
+}
+
+// ── Form geography (create/edit page) ───────────────────────────────────────
+
+export type HomepageFormGeography = { markets: MarketRecord[]; cities: CityRecord[] };
+
+/** Mirrors getCollectionFormGeography() in collections.ts — Homepages have no neighbourhood tier. */
+export async function getHomepageFormGeography(): Promise<HomepageFormGeography> {
+  const markets = await getAllMarkets();
+  const citiesByMarket = await Promise.all(markets.map((m) => getCitiesByMarket(m.id)));
+  return { markets, cities: citiesByMarket.flat() };
 }
 
 // ── Homepage list ────────────────────────────────────────────────────────────
