@@ -6,6 +6,7 @@ import { SearchResultCard } from "@/app/(website)/website-happy-hours/SearchResu
 import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { GuideCard } from "@/app/(website)/GuideCard";
+import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
 
@@ -139,9 +140,14 @@ export function GuideDetailView({
             </span>
           </div>
 
-          <h1 className="lg:col-start-1 lg:row-start-2 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
-            {guide.title}
-          </h1>
+          <div className="lg:col-start-1 lg:row-start-2 flex items-start gap-3">
+            <h1 className="flex-1 min-w-0 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
+              {guide.title}
+            </h1>
+            <div className="shrink-0 -mt-1">
+              <SaveGuideButton guideId={guide.id} variant="detail" />
+            </div>
+          </div>
 
           {guide.publish_at && (
             <p className="lg:col-start-1 lg:row-start-3 text-sm text-gray-400">
@@ -245,6 +251,7 @@ export function GuideDetailView({
               {relatedGuides.map((g) => (
                 <GuideCard
                   key={g.slug}
+                  guideId={g.id}
                   title={g.title}
                   href={`/${guide.marketSlug}/guides/${g.slug}`}
                   heroImageUrl={g.hero_image_url}

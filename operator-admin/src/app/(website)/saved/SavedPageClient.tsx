@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { getLocalSavedItems } from "@/lib/consumer/savedItems";
 import { useConsumerId } from "@/app/(website)/ConsumerAuthProvider";
+import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
 import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
@@ -11,10 +12,11 @@ import {
 import { EventSearchResults } from "@/app/(website)/website-events/EventSearchResults";
 import type { Market } from "@/lib/markets";
 import type { WebsiteEventListItem } from "@/lib/data/events";
+import type { SavedGuideCard } from "@/lib/data/contentGuides";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "venues" | "events";
+type Tab = "venues" | "events" | "guides";
 
 type Props = {
   market: Market;
@@ -29,6 +31,7 @@ function SavedContextHeader({
   displayedCount,
   savedVenueCount,
   savedEventCount,
+  savedGuideCount,
   onTabChange,
   consumerId,
 }: {
@@ -36,6 +39,7 @@ function SavedContextHeader({
   displayedCount: number;
   savedVenueCount: number;
   savedEventCount: number;
+  savedGuideCount: number;
   onTabChange: (t: Tab) => void;
   consumerId: string | null;
 }) {
@@ -43,10 +47,14 @@ function SavedContextHeader({
     displayedCount === 1
       ? tab === "venues"
         ? "venue"
-        : "event"
+        : tab === "events"
+        ? "event"
+        : "guide"
       : tab === "venues"
       ? "venues"
-      : "events";
+      : tab === "events"
+      ? "events"
+      : "guides";
 
   return (
     <div>
@@ -78,6 +86,17 @@ function SavedContextHeader({
         >
           Events{savedEventCount > 0 ? ` (${savedEventCount})` : ""}
         </button>
+        <button
+          type="button"
+          onClick={() => onTabChange("guides")}
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+            tab === "guides"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Guides{savedGuideCount > 0 ? ` (${savedGuideCount})` : ""}
+        </button>
       </div>
 
       {/* Count sub-line */}
@@ -86,7 +105,7 @@ function SavedContextHeader({
       </p>
 
       {/* Sign-in nudge — subtle, non-blocking */}
-      {!consumerId && (savedVenueCount > 0 || savedEventCount > 0) && (
+      {!consumerId && (savedVenueCount > 0 || savedEventCount > 0 || savedGuideCount > 0) && (
         <p className="mt-2 text-xs text-gray-400">
           <Link href="/sign-in" className="text-amber-600 hover:underline font-medium">
             Sign in
@@ -171,6 +190,53 @@ function EventsEmptyState({ consumerId }: { consumerId: string | null }) {
         className="inline-flex items-center px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-full transition-colors"
       >
         Explore Events
+      </Link>
+      {!consumerId && (
+        <p className="mt-4 text-xs text-gray-400">
+          <Link href="/sign-in" className="text-amber-600 hover:underline font-medium">
+            Sign in
+          </Link>{" "}
+          to sync saved places across devices.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function GuidesEmptyState({
+  consumerId,
+  marketSlug,
+}: {
+  consumerId: string | null;
+  marketSlug: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center px-8 py-24 min-h-[40vh]">
+      <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-5">
+        <svg
+          className="w-8 h-8 text-amber-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"
+          />
+        </svg>
+      </div>
+      <p className="text-lg font-bold text-gray-900 mb-2">No saved guides yet</p>
+      <p className="text-sm text-gray-500 max-w-xs leading-relaxed mb-6">
+        Tap the heart on any guide to save it here for later reading.
+      </p>
+      <Link
+        href={`/${marketSlug}/guides`}
+        className="inline-flex items-center px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-full transition-colors"
+      >
+        Browse Guides
       </Link>
       {!consumerId && (
         <p className="mt-4 text-xs text-gray-400">
@@ -287,11 +353,13 @@ export function SavedPageClient({ market }: Props) {
   // ── Saved ID sets — kept in sync with localStorage ──────────────────────────
   const [savedVenueIds, setSavedVenueIds] = useState<Set<string>>(() => new Set());
   const [savedEventIds, setSavedEventIds] = useState<Set<string>>(() => new Set());
+  const [savedGuideIds, setSavedGuideIds] = useState<Set<string>>(() => new Set());
 
   function refreshSavedIds() {
     const store = getLocalSavedItems();
     setSavedVenueIds(new Set(store.savedVenues.map((v) => v.id)));
     setSavedEventIds(new Set(store.savedEvents.map((e) => e.id)));
+    setSavedGuideIds(new Set(store.savedGuides.map((g) => g.id)));
   }
 
   useEffect(() => {
@@ -303,6 +371,7 @@ export function SavedPageClient({ market }: Props) {
   // ── Fetched full card data (loaded once on mount) ────────────────────────────
   const [allVenueCards, setAllVenueCards] = useState<WebsiteVenueCard[]>([]);
   const [allEventItems, setAllEventItems] = useState<WebsiteEventListItem[]>([]);
+  const [allGuideCards, setAllGuideCards] = useState<SavedGuideCard[]>([]);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "done">("idle");
 
   const fetchData = useCallback(async () => {
@@ -311,8 +380,9 @@ export function SavedPageClient({ market }: Props) {
     const store = getLocalSavedItems();
     const venueIds = store.savedVenues.map((v) => v.id);
     const eventIds = store.savedEvents.map((e) => e.id);
+    const guideIds = store.savedGuides.map((g) => g.id);
 
-    const [venueCards, eventItems] = await Promise.all([
+    const [venueCards, eventItems, guideCards] = await Promise.all([
       venueIds.length > 0
         ? fetch("/api/consumer/saved-venues-full", {
             method: "POST",
@@ -332,10 +402,30 @@ export function SavedPageClient({ market }: Props) {
             .then((r) => (r.ok ? (r.json() as Promise<WebsiteEventListItem[]>) : []))
             .catch(() => [] as WebsiteEventListItem[])
         : Promise.resolve([] as WebsiteEventListItem[]),
+
+      guideIds.length > 0
+        ? fetch("/api/consumer/saved-guides", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ guideIds }),
+          })
+            .then((r) => (r.ok ? (r.json() as Promise<SavedGuideCard[]>) : []))
+            .catch(() => [] as SavedGuideCard[])
+        : Promise.resolve([] as SavedGuideCard[]),
     ]);
+
+    // Order by savedAt descending (most-recently-saved first) — the same
+    // recency convention the Saved dropdown already uses. Venues/Events don't
+    // do this in their tabs today (their "-full" card shapes don't carry
+    // savedAt), so this doesn't change their behaviour; it's guide-only.
+    const savedAtByGuideId = new Map(store.savedGuides.map((g) => [g.id, g.savedAt]));
+    const orderedGuideCards = [...guideCards].sort((a, b) =>
+      (savedAtByGuideId.get(b.id) ?? "").localeCompare(savedAtByGuideId.get(a.id) ?? "")
+    );
 
     setAllVenueCards(venueCards);
     setAllEventItems(eventItems);
+    setAllGuideCards(orderedGuideCards);
     setLoadState("done");
   }, [market.id]);
 
@@ -343,15 +433,24 @@ export function SavedPageClient({ market }: Props) {
     if (loadState === "idle") fetchData();
   }, [loadState, fetchData]);
 
-  // ── Active tab — default to venues unless empty and events exist ─────────────
+  // ── Active tab — default to venues unless empty and events/guides exist ─────
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
 
   useEffect(() => {
     if (loadState !== "done" || activeTab !== null) return;
     const hasVenues = savedVenueIds.size > 0;
     const hasEvents = savedEventIds.size > 0;
-    setActiveTab(!hasVenues && hasEvents ? "events" : "venues");
-  }, [loadState, activeTab, savedVenueIds.size, savedEventIds.size]);
+    const hasGuides = savedGuideIds.size > 0;
+    if (hasVenues) {
+      setActiveTab("venues");
+    } else if (hasEvents) {
+      setActiveTab("events");
+    } else if (hasGuides) {
+      setActiveTab("guides");
+    } else {
+      setActiveTab("venues");
+    }
+  }, [loadState, activeTab, savedVenueIds.size, savedEventIds.size, savedGuideIds.size]);
 
   // ── Filtered datasets — unsave a card and it immediately disappears ──────────
   // Filter by venueUuid (the DB UUID, which is what savedItems.ts stores).
@@ -362,10 +461,15 @@ export function SavedPageClient({ market }: Props) {
   const displayedEventItems = allEventItems.filter((e) =>
     savedEventIds.has(e.id)
   );
+  // Filter by guide id (UUID); a saved guide that has been unpublished/removed
+  // is simply absent from allGuideCards (getSavedGuideCardsByIds already
+  // drops it) and so silently disappears here too — no broken-card risk.
+  const displayedGuideCards = allGuideCards.filter((g) => savedGuideIds.has(g.id));
 
   const venueCount = savedVenueIds.size;
   const eventCount = savedEventIds.size;
-  const nothingSaved = venueCount === 0 && eventCount === 0;
+  const guideCount = savedGuideIds.size;
+  const nothingSaved = venueCount === 0 && eventCount === 0 && guideCount === 0;
 
   if (loadState !== "done") {
     return <LoadingSkeleton />;
@@ -380,10 +484,13 @@ export function SavedPageClient({ market }: Props) {
       displayedCount={
         currentTab === "venues"
           ? displayedVenueCards.length
-          : displayedEventItems.length
+          : currentTab === "events"
+          ? displayedEventItems.length
+          : displayedGuideCards.length
       }
       savedVenueCount={venueCount}
       savedEventCount={eventCount}
+      savedGuideCount={guideCount}
       onTabChange={setActiveTab}
       consumerId={consumerId}
     />
@@ -402,6 +509,9 @@ export function SavedPageClient({ market }: Props) {
               </span>
               <span className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500">
                 Events
+              </span>
+              <span className="px-4 py-1.5 rounded-full text-sm font-semibold text-gray-500">
+                Guides
               </span>
             </div>
           </div>
@@ -435,23 +545,109 @@ export function SavedPageClient({ market }: Props) {
   }
 
   // ── Events tab ───────────────────────────────────────────────────────────────
-  if (displayedEventItems.length === 0) {
-    return (
-      <>
-        <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-          <div className="px-4 md:px-6 py-3">
-            {header}
+  if (currentTab === "events") {
+    if (displayedEventItems.length === 0) {
+      return (
+        <>
+          <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+            <div className="px-4 md:px-6 py-3">
+              {header}
+            </div>
           </div>
-        </div>
-        <EventsEmptyState consumerId={consumerId} />
-      </>
+          <EventsEmptyState consumerId={consumerId} />
+        </>
+      );
+    }
+    return (
+      <EventSearchResults
+        events={displayedEventItems}
+        market={market}
+        contextHeader={header}
+      />
     );
   }
+
+  // ── Guides tab — editorial card/list, no map, no venue/event filters ────────
   return (
-    <EventSearchResults
-      events={displayedEventItems}
-      market={market}
-      contextHeader={header}
-    />
+    <>
+      <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <div className="px-4 md:px-6 py-3">
+          {header}
+        </div>
+      </div>
+      {displayedGuideCards.length === 0 ? (
+        <GuidesEmptyState consumerId={consumerId} marketSlug={market.id} />
+      ) : (
+        <SavedGuidesGrid guides={displayedGuideCards} />
+      )}
+    </>
+  );
+}
+
+// ─── SavedGuidesGrid ──────────────────────────────────────────────────────────
+// Editorial card list for the Guides tab — reuses GuideCard's visual language
+// (rounded image-top card) but, per the task's "editorial card/list" ask,
+// adds the location + standfirst + remove control a bare GuideCard doesn't
+// carry. No map, no happy-hour/event filters, no sort controls — this is a
+// simple grid, ordered by savedAt (most-recently-saved first), matching the
+// Saved dropdown's ordering convention.
+
+function SavedGuidesGrid({ guides }: { guides: SavedGuideCard[] }) {
+  return (
+    <div className="max-w-6xl mx-auto px-4 md:px-6 py-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {guides.map((guide) => (
+          <SavedGuideEditorialCard key={guide.id} guide={guide} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SavedGuideEditorialCard({ guide }: { guide: SavedGuideCard }) {
+  return (
+    <Link
+      href={`/${guide.marketSlug}/guides/${guide.slug}`}
+      className="block group relative rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow bg-white"
+    >
+      <div className="h-40 sm:h-44 bg-gray-100 overflow-hidden">
+        {guide.heroImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={guide.heroImageUrl}
+            alt={guide.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          />
+        )}
+      </div>
+
+      {/* Remove button — top-right, frosted circle, matches other Save buttons */}
+      <div
+        className="absolute top-2.5 right-3"
+        style={{
+          background: "rgba(255,255,255,0.88)",
+          borderRadius: "50%",
+          backdropFilter: "blur(4px)",
+        }}
+      >
+        <SaveGuideButton guideId={guide.id} variant="list" />
+      </div>
+
+      <div className="p-4">
+        {guide.locationLabel && (
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+            {guide.locationLabel}
+          </p>
+        )}
+        <p className="text-base font-bold text-gray-900 leading-snug line-clamp-2">
+          {guide.title}
+        </p>
+        {guide.standfirst && (
+          <p className="mt-1.5 text-sm text-gray-500 leading-relaxed line-clamp-2">
+            {guide.standfirst}
+          </p>
+        )}
+      </div>
+    </Link>
   );
 }

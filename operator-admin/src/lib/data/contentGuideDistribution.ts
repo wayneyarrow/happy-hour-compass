@@ -177,6 +177,7 @@ export async function getMerchandisableGuides(
 // ── Public reads (website) ───────────────────────────────────────────────────
 
 export type PublicGuideCardData = {
+  id: string;
   title: string;
   slug: string;
   guideType: GuideType;
@@ -204,7 +205,7 @@ async function getMerchandisedPublicGuides(
     .from("content_guide_placements")
     .select(
       "sort_order, " +
-        "content_guides!inner(title, slug, guide_type, status, hero_image_url, publish_at, expire_at, market_id)"
+        "content_guides!inner(id, title, slug, guide_type, status, hero_image_url, publish_at, expire_at, market_id)"
     )
     .eq("channel_key", channelKey)
     .eq("is_active", true)
@@ -228,6 +229,7 @@ async function getMerchandisedPublicGuides(
       )
     )
     .map((g) => ({
+      id: g.id as string,
       title: g.title as string,
       slug: g.slug as string,
       guideType: g.guide_type as GuideType,

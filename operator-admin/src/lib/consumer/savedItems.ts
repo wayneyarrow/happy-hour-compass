@@ -27,11 +27,13 @@ export type SavedItemsStore = {
   version: 1;
   savedVenues: SavedItem[];
   savedEvents: SavedItem[];
+  savedGuides: SavedItem[];
 };
 
 export type SavedCounts = {
   venues: number;
   events: number;
+  guides: number;
 };
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -41,7 +43,7 @@ function isServer(): boolean {
 }
 
 function emptyStore(): SavedItemsStore {
-  return { version: 1, savedVenues: [], savedEvents: [] };
+  return { version: 1, savedVenues: [], savedEvents: [], savedGuides: [] };
 }
 
 function readStore(): SavedItemsStore {
@@ -51,13 +53,22 @@ function readStore(): SavedItemsStore {
     if (!raw) return emptyStore();
     const parsed = JSON.parse(raw);
     // Validate shape — fall back to empty store if corrupt or wrong version.
+    // savedGuides is validated separately (defaulted to []) rather than
+    // required, so existing hhc_saved_v1 data written before Guides support
+    // existed — which has no savedGuides key at all — still loads instead of
+    // being discarded as "corrupt".
     if (
       parsed &&
       parsed.version === 1 &&
       Array.isArray(parsed.savedVenues) &&
       Array.isArray(parsed.savedEvents)
     ) {
-      return parsed as SavedItemsStore;
+      return {
+        version: 1,
+        savedVenues: parsed.savedVenues,
+        savedEvents: parsed.savedEvents,
+        savedGuides: Array.isArray(parsed.savedGuides) ? parsed.savedGuides : [],
+      };
     }
     return emptyStore();
   } catch {
@@ -92,12 +103,18 @@ export function getSavedEventIds(): string[] {
   return readStore().savedEvents.map((e) => e.id);
 }
 
-/** Returns counts of saved venues and events. */
+/** Returns all saved guide IDs in insertion order (most-recent-saved last). */
+export function getSavedGuideIds(): string[] {
+  return readStore().savedGuides.map((g) => g.id);
+}
+
+/** Returns counts of saved venues, events, and guides. */
 export function getSavedCounts(): SavedCounts {
   const store = readStore();
   return {
     venues: store.savedVenues.length,
     events: store.savedEvents.length,
+    guides: store.savedGuides.length,
   };
 }
 
@@ -109,6 +126,11 @@ export function isVenueSaved(venueId: string): boolean {
 /** Returns true if the event is currently saved locally. */
 export function isEventSaved(eventId: string): boolean {
   return readStore().savedEvents.some((e) => e.id === eventId);
+}
+
+/** Returns true if the guide is currently saved locally. */
+export function isGuideSaved(guideId: string): boolean {
+  return readStore().savedGuides.some((g) => g.id === guideId);
 }
 
 /**
@@ -157,6 +179,31 @@ export function unsaveEvent(eventId: string): boolean {
   const before = store.savedEvents.length;
   store.savedEvents = store.savedEvents.filter((e) => e.id !== eventId);
   if (store.savedEvents.length === before) return false;
+  writeStore(store);
+  return true;
+}
+
+/**
+ * Saves a guide. No-op if already saved.
+ * Returns true if the item was newly added, false if it was already present.
+ */
+export function saveGuide(guideId: string): boolean {
+  const store = readStore();
+  if (store.savedGuides.some((g) => g.id === guideId)) return false;
+  store.savedGuides.push({ id: guideId, savedAt: new Date().toISOString() });
+  writeStore(store);
+  return true;
+}
+
+/**
+ * Removes a saved guide. No-op if not present.
+ * Returns true if the item was removed, false if it was not found.
+ */
+export function unsaveGuide(guideId: string): boolean {
+  const store = readStore();
+  const before = store.savedGuides.length;
+  store.savedGuides = store.savedGuides.filter((g) => g.id !== guideId);
+  if (store.savedGuides.length === before) return false;
   writeStore(store);
   return true;
 }

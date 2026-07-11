@@ -6,14 +6,16 @@ import {
   getLocalSavedItems,
   unsaveVenue,
   unsaveEvent,
+  unsaveGuide,
   migrateVenueId,
   type SavedItem,
 } from "@/lib/consumer/savedItems";
-import { dbUnsaveVenue, dbUnsaveEvent } from "@/lib/consumer/savedSync";
+import { dbUnsaveVenue, dbUnsaveEvent, dbUnsaveGuide } from "@/lib/consumer/savedSync";
 import { createClient } from "@/lib/supabase/browser";
 import { useConsumerId } from "./ConsumerAuthProvider";
 import type { VenuePreview } from "@/lib/data/venues";
 import type { EventPreview } from "@/lib/data/events";
+import type { SavedGuideCard } from "@/lib/data/contentGuides";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,7 @@ import type { EventPreview } from "@/lib/data/events";
 // It may differ from VenuePreview.id (which is always the DB UUID) for legacy items.
 type VenueRow = VenuePreview & { savedAt: string; storedId: string };
 type EventRow = EventPreview & { savedAt: string };
+type GuideRow = SavedGuideCard & { savedAt: string };
 
 type FetchState = "idle" | "loading" | "done";
 
@@ -51,6 +54,7 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
 
   const [venueRows, setVenueRows] = useState<VenueRow[]>([]);
   const [eventRows, setEventRows] = useState<EventRow[]>([]);
+  const [guideRows, setGuideRows] = useState<GuideRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>("idle");
 
   // Total saved count — kept in sync with hhc:savedChanged so callers can
@@ -81,7 +85,11 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
       .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
       .slice(0, MAX_PREVIEW);
 
-    const [venueData, eventData] = await Promise.all([
+    const topGuideItems: SavedItem[] = [...store.savedGuides]
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+      .slice(0, MAX_PREVIEW);
+
+    const [venueData, eventData, guideData] = await Promise.all([
       topVenueItems.length > 0
         ? fetch("/api/consumer/saved-venues", {
             method: "POST",
@@ -101,6 +109,16 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
             .then((r) => (r.ok ? (r.json() as Promise<EventPreview[]>) : []))
             .catch(() => [] as EventPreview[])
         : Promise.resolve([] as EventPreview[]),
+
+      topGuideItems.length > 0
+        ? fetch("/api/consumer/saved-guides", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ guideIds: topGuideItems.map((g) => g.id) }),
+          })
+            .then((r) => (r.ok ? (r.json() as Promise<SavedGuideCard[]>) : []))
+            .catch(() => [] as SavedGuideCard[])
+        : Promise.resolve([] as SavedGuideCard[]),
     ]);
 
     // Build venue lookup keyed by both UUID (id) and slug so that legacy slug
@@ -137,6 +155,13 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
         .map((item) => ({ ...eventById[item.id], savedAt: item.savedAt }))
     );
 
+    const guideById = Object.fromEntries(guideData.map((g) => [g.id, g]));
+    setGuideRows(
+      topGuideItems
+        .filter((item) => guideById[item.id])
+        .map((item) => ({ ...guideById[item.id], savedAt: item.savedAt }))
+    );
+
     setFetchState("done");
   }, [fetchState]);
 
@@ -149,16 +174,20 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
       setFetchState("idle");
       setVenueRows([]);
       setEventRows([]);
+      setGuideRows([]);
     }
   }, [open, fetchState, fetchPreviews]);
 
   if (!open) return null;
 
   const isEmpty =
-    savedItems.savedVenues.length === 0 && savedItems.savedEvents.length === 0;
+    savedItems.savedVenues.length === 0 &&
+    savedItems.savedEvents.length === 0 &&
+    savedItems.savedGuides.length === 0;
 
   const hasMoreVenues = savedItems.savedVenues.length > MAX_PREVIEW;
   const hasMoreEvents = savedItems.savedEvents.length > MAX_PREVIEW;
+  const hasMoreGuides = savedItems.savedGuides.length > MAX_PREVIEW;
 
   return (
     <div>
@@ -199,7 +228,7 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
               </div>
               <p className="text-sm font-semibold text-gray-800 mb-1">Nothing saved yet</p>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Tap the heart on any venue or event to save it for later.
+                Tap the heart on any venue, event, or guide to save it for later.
               </p>
             </div>
           ) : (
@@ -275,6 +304,50 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
                       {hasMoreEvents && (
                         <p className="px-4 py-2 text-xs text-gray-400 italic">
                           +{savedItems.savedEvents.length - MAX_PREVIEW} more saved events
+                        </p>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* Guides section */}
+              {savedItems.savedGuides.length > 0 && (
+                <section
+                  className={
+                    savedItems.savedVenues.length > 0 || savedItems.savedEvents.length > 0
+                      ? "mt-1 border-t border-gray-100 pt-1"
+                      : ""
+                  }
+                >
+                  <p className="px-4 pt-2 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Guides
+                  </p>
+                  {fetchState !== "done" ? (
+                    <LoadingRows count={Math.min(savedItems.savedGuides.length, MAX_PREVIEW)} />
+                  ) : guideRows.length === 0 ? (
+                    <p className="px-4 py-2 text-xs text-gray-400 italic">
+                      Some saved guides could not be loaded.
+                    </p>
+                  ) : (
+                    <>
+                      {guideRows.map((g) => (
+                        <GuideDropdownRow
+                          key={g.id}
+                          guide={g}
+                          onClose={onClose}
+                          onUnsave={(id) => {
+                            unsaveGuide(id);
+                            setGuideRows((prev) => prev.filter((r) => r.id !== id));
+                            if (consumerId) {
+                              dbUnsaveGuide(getSupabase(), consumerId, id).catch(() => {});
+                            }
+                          }}
+                        />
+                      ))}
+                      {hasMoreGuides && (
+                        <p className="px-4 py-2 text-xs text-gray-400 italic">
+                          +{savedItems.savedGuides.length - MAX_PREVIEW} more saved guides
                         </p>
                       )}
                     </>
@@ -434,6 +507,62 @@ function EventDropdownRow({
         type="button"
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnsave(event.id); }}
         aria-label={`Remove ${event.title} from saved`}
+        className="shrink-0 p-1 ml-1.5 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }} aria-hidden="true">
+          <path d={HEART_PATH} />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+// ─── GuideDropdownRow ─────────────────────────────────────────────────────────
+
+function GuideDropdownRow({
+  guide,
+  onClose,
+  onUnsave,
+}: {
+  guide: GuideRow;
+  onClose: () => void;
+  onUnsave: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-center px-4 py-2 hover:bg-gray-50 group transition-colors">
+      {/* Thumbnail + text inside Link so the whole content area navigates */}
+      <Link
+        href={`/${guide.marketSlug}/guides/${guide.slug}`}
+        onClick={onClose}
+        className="flex flex-1 min-w-0 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
+      >
+        <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+          {guide.heroImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={guide.heroImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-amber-50 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "none", stroke: "#d97706", strokeWidth: 2 }} aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 leading-snug truncate">
+            {guide.title}
+          </p>
+          {guide.locationLabel && (
+            <p className="text-[11px] text-gray-400 leading-tight truncate">{guide.locationLabel}</p>
+          )}
+        </div>
+      </Link>
+
+      {/* Unsave button — sibling of Link, not nested inside it */}
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnsave(guide.id); }}
+        aria-label={`Remove ${guide.title} from saved`}
         className="shrink-0 p-1 ml-1.5 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       >
         <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }} aria-hidden="true">

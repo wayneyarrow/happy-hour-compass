@@ -89,7 +89,7 @@ export default function WebsiteHeader({
   useEffect(() => {
     function refresh() {
       const counts = getSavedCounts();
-      setSavedTotal(counts.venues + counts.events);
+      setSavedTotal(counts.venues + counts.events + counts.guides);
     }
     refresh();
     window.addEventListener("hhc:savedChanged", refresh);

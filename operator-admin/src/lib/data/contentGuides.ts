@@ -446,6 +446,7 @@ export async function getGuideForPreview(id: string): Promise<PreviewGuideDetail
 
 /** Other published guides in the same market, for a lightweight "More Guides" cross-link section. */
 export type RelatedGuideSummary = {
+  id: string;
   title: string;
   slug: string;
   guide_type: GuideType;
@@ -470,7 +471,7 @@ export async function getRelatedGuides(
 
   const { data, error } = await supabase
     .from("content_guides")
-    .select("title, slug, guide_type, hero_image_url, publish_at, markets!inner(slug)")
+    .select("id, title, slug, guide_type, hero_image_url, publish_at, markets!inner(slug)")
     .eq("markets.slug", marketSlug)
     .eq("status", "published")
     .neq("id", excludeGuideId)
@@ -484,9 +485,82 @@ export async function getRelatedGuides(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: Record<string, any>) => ({
+    id: row.id as string,
     title: row.title as string,
     slug: row.slug as string,
     guide_type: row.guide_type as GuideType,
     hero_image_url: (row.hero_image_url as string | null) ?? null,
   }));
+}
+
+// ── Saved Guides (Task 4) ────────────────────────────────────────────────────
+// Powers both the header Saved dropdown's Guides group and the /saved page's
+// Guides tab — a single lean read, mirroring getVenuePreviewsByIds /
+// getEventPreviewsByIds in src/lib/data/venues.ts and events.ts. Guides carry
+// their own marketSlug per row (unlike venues/events, a saved guide's link
+// never needs an externally-supplied marketId), so one shape serves both call
+// sites without a second "-full" query.
+
+export type SavedGuideCard = {
+  id: string;
+  slug: string;
+  title: string;
+  guideType: GuideType;
+  marketSlug: string;
+  /** City name if set, else the market name — same fallback GuideDetailView uses for its location label. */
+  locationLabel: string;
+  heroImageUrl: string | null;
+  /** Guide's intro/standfirst, for the Saved Guides card. Null if not authored. */
+  standfirst: string | null;
+};
+
+/**
+ * Returns published, in-window guides for the given ids, silently dropping
+ * any id that is unpublished, deleted, or outside its publish window — the
+ * same "stale saved id disappears quietly" behaviour the Saved experience
+ * already relies on for venues/events. Reuses isGuidePublicNow so the
+ * publish-window rule is never re-implemented here.
+ */
+export async function getSavedGuideCardsByIds(ids: string[]): Promise<SavedGuideCard[]> {
+  if (ids.length === 0) return [];
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select(
+      "id, guide_type, status, title, slug, intro, hero_image_url, publish_at, expire_at, " +
+        "markets!inner(slug, name), city:cities(name)"
+    )
+    .in("id", ids)
+    .eq("status", "published");
+
+  if (error) {
+    console.error("[getSavedGuideCardsByIds]", error.message);
+    return [];
+  }
+
+  return (data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((row: Record<string, any>) =>
+      isGuidePublicNow(
+        row.status as string,
+        (row.publish_at as string | null) ?? null,
+        (row.expire_at as string | null) ?? null
+      )
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: Record<string, any>) => {
+      const market = (row.markets as Record<string, unknown>) ?? {};
+      const city = (row.city as Record<string, unknown> | null) ?? null;
+      return {
+        id: row.id as string,
+        slug: row.slug as string,
+        title: row.title as string,
+        guideType: row.guide_type as GuideType,
+        marketSlug: (market.slug as string) ?? "",
+        locationLabel: (city?.name as string | undefined) || (market.name as string) || "",
+        heroImageUrl: (row.hero_image_url as string | null) ?? null,
+        standfirst: (row.intro as string | null) ?? null,
+      };
+    });
 }

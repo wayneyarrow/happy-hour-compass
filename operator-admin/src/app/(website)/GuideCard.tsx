@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SaveGuideButton } from "./SaveGuideButton";
 
 /**
  * Shared Content Engine guide card — the same small link-card style used by
@@ -7,19 +8,24 @@ import Link from "next/link";
  * Extracted here so all three stay visually identical without copy-pasting
  * the markup — per Card 6B Part 4's "reuse existing guide cards and
  * styling wherever practical."
+ *
+ * guideId is optional because a couple of callers may only have slug-shaped
+ * summaries; the heart is simply omitted when it's not supplied, rather than
+ * saving being possible from some card instances but not others by accident.
  */
 
 type Props = {
+  guideId?: string;
   title: string;
   href: string;
   heroImageUrl: string | null;
 };
 
-export function GuideCard({ title, href, heroImageUrl }: Props) {
+export function GuideCard({ guideId, title, href, heroImageUrl }: Props) {
   return (
     <Link
       href={href}
-      className="block group rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+      className="block group relative rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
     >
       <div className="h-32 bg-gray-100 overflow-hidden">
         {heroImageUrl && (
@@ -31,6 +37,18 @@ export function GuideCard({ title, href, heroImageUrl }: Props) {
           />
         )}
       </div>
+      {guideId && (
+        <div
+          className="absolute top-2.5 right-3"
+          style={{
+            background: "rgba(255,255,255,0.88)",
+            borderRadius: "50%",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <SaveGuideButton guideId={guideId} variant="list" />
+        </div>
+      )}
       <div className="p-3">
         <p className="text-sm font-semibold text-gray-900 line-clamp-2">{title}</p>
       </div>

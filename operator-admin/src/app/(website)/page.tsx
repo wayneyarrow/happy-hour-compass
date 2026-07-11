@@ -125,6 +125,7 @@ function FeaturedGuidesSection({
           {guides.map((g) => (
             <GuideCard
               key={g.slug}
+              guideId={g.id}
               title={g.title}
               href={`/${marketSlug}/guides/${g.slug}`}
               heroImageUrl={g.heroImageUrl}

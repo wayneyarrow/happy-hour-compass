@@ -17,6 +17,7 @@ import {
   getLocalSavedItems,
   saveVenue,
   saveEvent,
+  saveGuide,
 } from "@/lib/consumer/savedItems";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,6 +65,21 @@ export async function fetchDbSavedEventIds(
     return [];
   }
   return (data ?? []).map((r: { event_id: string }) => r.event_id);
+}
+
+export async function fetchDbSavedGuideIds(
+  supabase: SupabaseClient,
+  consumerId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("consumer_saved_guides")
+    .select("guide_id")
+    .eq("consumer_id", consumerId);
+  if (error) {
+    devLog("fetchDbSavedGuideIds:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r: { guide_id: string }) => r.guide_id);
 }
 
 // ─── Single save/unsave (called on each button click when signed in) ──────────
@@ -126,6 +142,35 @@ export async function dbUnsaveEvent(
   if (error) devLog("dbUnsaveEvent:", error.message);
 }
 
+export async function dbSaveGuide(
+  supabase: SupabaseClient,
+  consumerId: string,
+  guideId: string
+): Promise<void> {
+  if (!isUUID(guideId)) return;
+  const { error } = await supabase
+    .from("consumer_saved_guides")
+    .upsert(
+      { consumer_id: consumerId, guide_id: guideId },
+      { onConflict: "consumer_id,guide_id", ignoreDuplicates: true }
+    );
+  if (error) devLog("dbSaveGuide:", error.message);
+}
+
+export async function dbUnsaveGuide(
+  supabase: SupabaseClient,
+  consumerId: string,
+  guideId: string
+): Promise<void> {
+  if (!isUUID(guideId)) return;
+  const { error } = await supabase
+    .from("consumer_saved_guides")
+    .delete()
+    .eq("consumer_id", consumerId)
+    .eq("guide_id", guideId);
+  if (error) devLog("dbUnsaveGuide:", error.message);
+}
+
 // ─── Initial merge sync ───────────────────────────────────────────────────────
 
 /**
@@ -150,24 +195,30 @@ export async function mergeSavedItems(
 
     const localVenueIds = local.savedVenues.map((v) => v.id).filter(isUUID);
     const localEventIds = local.savedEvents.map((e) => e.id).filter(isUUID);
+    const localGuideIds = local.savedGuides.map((g) => g.id).filter(isUUID);
 
-    const [dbVenueIds, dbEventIds] = await Promise.all([
+    const [dbVenueIds, dbEventIds, dbGuideIds] = await Promise.all([
       fetchDbSavedVenueIds(supabase, consumerId),
       fetchDbSavedEventIds(supabase, consumerId),
+      fetchDbSavedGuideIds(supabase, consumerId),
     ]);
 
     const dbVenueSet = new Set(dbVenueIds);
     const dbEventSet = new Set(dbEventIds);
+    const dbGuideSet = new Set(dbGuideIds);
     const localVenueSet = new Set(localVenueIds);
     const localEventSet = new Set(localEventIds);
+    const localGuideSet = new Set(localGuideIds);
 
     // Items to push from local → DB
     const venuesToInsert = localVenueIds.filter((id) => !dbVenueSet.has(id));
     const eventsToInsert = localEventIds.filter((id) => !dbEventSet.has(id));
+    const guidesToInsert = localGuideIds.filter((id) => !dbGuideSet.has(id));
 
     // Items to pull from DB → localStorage
     const venuesToLocal = dbVenueIds.filter((id) => !localVenueSet.has(id));
     const eventsToLocal = dbEventIds.filter((id) => !localEventSet.has(id));
+    const guidesToLocal = dbGuideIds.filter((id) => !localGuideSet.has(id));
 
     const writes: Promise<void>[] = [];
 
@@ -205,13 +256,33 @@ export async function mergeSavedItems(
       );
     }
 
-    // Write DB-only items into localStorage. saveVenue/saveEvent each fire
-    // hhc:savedChanged, so UI updates automatically as items are written.
+    if (guidesToInsert.length > 0) {
+      writes.push(
+        (async () => {
+          const { error } = await supabase
+            .from("consumer_saved_guides")
+            .upsert(
+              guidesToInsert.map((id) => ({
+                consumer_id: consumerId,
+                guide_id: id,
+              })),
+              { onConflict: "consumer_id,guide_id", ignoreDuplicates: true }
+            );
+          if (error) devLog("bulk guide insert:", error.message);
+        })()
+      );
+    }
+
+    // Write DB-only items into localStorage. saveVenue/saveEvent/saveGuide
+    // each fire hhc:savedChanged, so UI updates automatically as items are written.
     for (const id of venuesToLocal) {
       saveVenue(id);
     }
     for (const id of eventsToLocal) {
       saveEvent(id);
+    }
+    for (const id of guidesToLocal) {
+      saveGuide(id);
     }
 
     await Promise.all(writes);

@@ -60,6 +60,7 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
           {guides.map((g) => (
             <GuideCard
               key={g.slug}
+              guideId={g.id}
               title={g.title}
               href={`/${market}/guides/${g.slug}`}
               heroImageUrl={g.heroImageUrl}
