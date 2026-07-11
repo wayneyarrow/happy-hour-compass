@@ -1,12 +1,16 @@
 # Happy Hour Compass — Project Rules for Claude Code
 
+## Repository layout
+
+The active Next.js application lives entirely under **`operator-admin/`**. Every path below — `src/app/`, `src/lib/`, `app/(website)/`, `app/(consumer)/`, `app/admin/`, `app/control-panel/`, etc. — is relative to `operator-admin/` (e.g. "`src/lib/markets.ts`" means `operator-admin/src/lib/markets.ts`). The repository root also contains `docs/`, data CSVs, and a shared **`supabase/`** directory (migrations apply to the one Supabase project used by the whole app) — `supabase/` is the one exception and is *not* nested under `operator-admin/`.
+
 ## Product Architecture
 
 ### One engine, four presentation layers
 
 HHC is a single product engine with multiple separate presentation layers. The engine is shared; the presentation layers must not be blended.
 
-**Shared product engine** — lives in `src/lib/`, `src/app/api/`, `supabase/`. Reuse freely across all presentation layers:
+**Shared product engine** — lives in `src/lib/`, `src/app/api/` (both under `operator-admin/`), and the repo-root `supabase/`. Reuse freely across all presentation layers:
 - Discover Engine: `src/lib/discover/discoverEngine.ts`, `featuredEventsEngine.ts`
 - Data helpers: `src/lib/data/venues.ts`, `events.ts`, `discoverOverrides.ts`, etc.
 - Market infrastructure: `src/lib/markets.ts`, `src/lib/activeMarket.ts`
@@ -19,7 +23,7 @@ HHC is a single product engine with multiple separate presentation layers. The e
 
 **The four presentation layers — each is separate. Do not blend them:**
 
-#### 1. Public Website — `app/(website)/` ← does not exist yet; must be created
+#### 1. Public Website — `app/(website)/`
 - SEO-first, responsive desktop layout, premium modern consumer experience
 - Should feel like Airbnb, OpenTable, Resy, Spotify, or Apple
 - Must NOT feel like admin software, a SaaS dashboard, or an app simulator
@@ -28,6 +32,15 @@ HHC is a single product engine with multiple separate presentation layers. The e
 - Has its own layout, nav, footer — completely separate from the consumer app shell
 - May reuse engine functions, data helpers, and individual UI components from `(consumer)` where they fit
 - Must NOT use or modify `ConsumerLayout` (phone frame + `ConsumerNav`) as its shell
+
+**Current implementation** (`app/(website)/`) includes:
+- Homepage with hero section (`page.tsx`, `HeroSection.tsx`)
+- Website header/footer, including location switching across markets/cities (`WebsiteHeader.tsx`, `WebsiteFooter.tsx`, `WebsiteLocationSwitcher.tsx`)
+- Happy hour and event search, with results maps (`website-happy-hours/`, `website-events/`, `SearchResultsMap.tsx`)
+- Venue and event detail pages (`[market]/venue/[slug]/`, `website-events/[id]/`)
+- Consumer accounts, saved venues/events, and save actions (`ConsumerAuthProvider.tsx`, `account/`, `saved/`, `SaveVenueButton.tsx`, `SaveEventButton.tsx`)
+- Acquisition flows — claim venue, suggest venue, add venue, contact us (`acquisition/`)
+- Public guides with FAQ sections and schema markup (`[market]/guides/`, `[market]/guides/[slug]/`)
 
 #### 2. Consumer App — `app/(consumer)/`
 - App-like experience: 375px phone frame on desktop, full-screen on mobile, bottom nav
@@ -52,30 +65,27 @@ HHC is a single product engine with multiple separate presentation layers. The e
 ### Website branch rules
 
 1. **Website work happens on the `website` branch only.** Never commit website-specific changes to `main`.
-2. **Website UI goes in `app/(website)/`.** This route group does not exist yet — Phase 2 implementation creates it.
+2. **Website UI goes in `app/(website)/`.**
 3. **The website has its own layout.** Do not add website routes or layout changes to `app/(consumer)/layout.tsx`, `app/(legal)/layout.tsx`, or `app/(standalone)/layout.tsx`.
 4. **Reuse the engine.** Any function in `src/lib/` is fair game. Any API route is shared. Any data helper is shared.
 5. **Components: import, don't modify.** If a `(consumer)` component fits the website, import it as-is. Adapt it in a wrapper or a new component in `(website)/`. Do not edit the `(consumer)` component to accommodate website needs.
-6. **The temporary staging marker in `app/(consumer)/layout.tsx` must be removed** before any real website content is built in Phase 2. It was added only to confirm the deployment pipeline. See "Staging marker" note below.
 
 ---
 
 ### Staging and deployment
 
 - `main` branch → Vercel Production → happy-hour-compass.vercel.app (the consumer app, operator admin, control panel)
-- `website` branch → Vercel Preview → staging.happyhourcompass.com (the public website, in development)
+- `website` branch → Vercel Preview → staging.happyhourcompass.com (the public website)
 - **No Vercel build config changes are needed.** Staging vs production behavior is controlled entirely through Next.js routing on the respective branches and the `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_NOINDEX` env vars already in place.
 - When the website is ready for launch, the routing and domain assignment changes in Vercel dashboard — not in the codebase.
 
 ---
 
-### Staging marker — where to remove it
+### Current status and next steps
 
-The bootstrap marker added in `app/(consumer)/layout.tsx` (lines 24–27) must be removed as the **first step of Phase 2** (website route group creation), replacing it with a real `app/(website)/` home page. Until that page exists, the marker confirms staging.happyhourcompass.com is live.
-
-When removing: revert the two changes made to `app/(consumer)/layout.tsx`:
-1. Remove the `<p>` element (the amber banner)
-2. Remove `md:flex-col` from the wrapper `div` (restoring the original layout)
+- Content Engine (guide publishing) Phase 1 and the public Guide Experience V2 (editorial layout, FAQ sections with schema markup) are complete.
+- Collections Management V1 (control-panel CRUD for Collections, resolved/preview tables, guide picker) is the most recently completed feature.
+- Homepage management — the control-panel admin UI for assembling Collections into Homepages — has a database foundation and data layer in place but **no admin UI yet**; this is the next major implementation area. See `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md`.
 
 ---
 
