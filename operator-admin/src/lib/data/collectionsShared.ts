@@ -112,6 +112,23 @@ export type CollectionMutationResult =
   | { success: true }
   | { success: false; error: string };
 
+// ── Override reason markers ──────────────────────────────────────────────────
+//
+// collection_venue_overrides.reason_type / collection_event_overrides.reason_type
+// are intentionally unconstrained free-text columns (see migration 058) —
+// no CHECK, no enum. MANUAL_ADD_REASON is an application-level convention
+// (not a schema constraint) that marks a row as a genuine editor-initiated
+// add via the Resolved Collection "Add" search, as distinct from a
+// promotion row created only to give an already-algorithm-selected item a
+// stored position/boost for reordering (see ResolvedCollectionTable.tsx's
+// promote()/updateBoost()). Both row shapes have action = "include" and are
+// otherwise identical — reason_type is the only field that distinguishes
+// them, which is what resolveAlgorithmicVenues/resolveAlgorithmicEvents
+// (collectionsPreview.ts) use to decide the "Algorithmic" vs "Added
+// manually" origin label. No migration was needed: the column already
+// existed, unused, ready for exactly this purpose.
+export const MANUAL_ADD_REASON = "manual-add";
+
 // ── Row types ────────────────────────────────────────────────────────────────
 
 /** List-row shape — enough to render a management list without N+1 queries (market/city names joined in). */

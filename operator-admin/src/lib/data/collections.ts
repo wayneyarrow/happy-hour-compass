@@ -51,6 +51,7 @@ export {
   isAlgorithmKey,
   validateAlgorithmKey,
   validateItemLimit,
+  MANUAL_ADD_REASON,
   type CollectionType,
   type CollectionStatus,
   type AlgorithmKey,

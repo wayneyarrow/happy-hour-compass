@@ -4,16 +4,20 @@
  * Answers "what does this Collection actually contain right now?" — see
  * docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
  *
- * Called from two places: the editor's explicit "Generate Collection" action
- * (generateCollectionResultAction in control-panel/collections/actions.ts),
- * which runs it against the CURRENT, possibly-unsaved form state so an
- * editor can see results before ever saving; and the Publish validation step
- * in updateCollectionAction, which runs it against the submitted (about to
- * be saved) state to confirm at least one item resolves. Neither call site
- * requires a public preview route — this is purely an internal admin
- * resolver. A true public preview will only be meaningful once Collection
- * landing pages exist (out of scope here — see product spec, "Collection
- * Landing Pages").
+ * Called from three places: ResolvedCollectionTable.tsx's live editorial
+ * refinement (generateCollectionResultAction in
+ * control-panel/collections/actions.ts), which re-resolves after an
+ * exclude/restore/boost/add/reorder edit against current, possibly-unsaved
+ * override state; the Publish validation step in updateCollectionAction,
+ * which runs it against the submitted (about to be saved) state to confirm
+ * at least one item resolves; and resolveCollectionPreviewById below, which
+ * the Edit page calls on every visit to an Algorithmic Collection to
+ * display its current base pool (Algorithmic Collections are generated
+ * once, automatically, at creation — there is no user-facing "Generate"
+ * action anymore). No call site requires a public preview route — this is
+ * purely an internal admin resolver. A true public preview will only be
+ * meaningful once Collection landing pages exist (out of scope here — see
+ * product spec, "Collection Landing Pages").
  *
  * This is NOT the future Collections resolver that will power public
  * Homepage Sections (see migration 058's header comment on the intended
@@ -51,17 +55,19 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { getCollectionById } from "@/lib/data/collections";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getCPFeaturedEventCandidates, type CPFeaturedEventItem } from "@/lib/data/events";
 import { getRailVenuesByKey, type RailOverride, type MarketConfig } from "@/lib/discover/discoverEngine";
 import { computeFeaturedEventRail } from "@/lib/discover/featuredEventsEngine";
 import type { EventRailOverride } from "@/lib/data/discoverOverridesShared";
-import type {
-  CollectionType,
-  AlgorithmKey,
-  CollectionVenueOverride,
-  CollectionEventOverride,
-  CollectionGuideItem,
+import {
+  MANUAL_ADD_REASON,
+  type CollectionType,
+  type AlgorithmKey,
+  type CollectionVenueOverride,
+  type CollectionEventOverride,
+  type CollectionGuideItem,
 } from "@/lib/data/collectionsShared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,6 +78,22 @@ type Row = Record<string, any>;
 // docstring. lat/lng are irrelevant once radiusKm is unbounded.
 const UNBOUNDED_MARKET: MarketConfig = { lat: 0, lng: 0, radiusKm: Number.MAX_SAFE_INTEGER };
 
+/**
+ * "algorithm" — the item is part of the algorithm's own capped base (its
+ * natural, override-free ranking, sliced to the configured Item Limit — see
+ * resolveAlgorithmicVenues/resolveAlgorithmicEvents below). "manual-include"
+ * — the item was explicitly added by an editor via an include-override row
+ * carrying MANUAL_ADD_REASON (collectionsShared.ts), added on TOP of the
+ * capped base rather than counted against the Item Limit.
+ *
+ * This is NOT "does an include-override row exist" — a row can also exist
+ * purely to carry a promoted algorithm-native row's position/boost for
+ * reordering (see ResolvedCollectionTable.tsx's `promote()`/`updateBoost()`),
+ * and such a row never carries MANUAL_ADD_REASON. A genuine manual add keeps
+ * its "manual-include" label even if the same item would also naturally
+ * qualify for the algorithm's base. Reordering, boosting, excluding, or
+ * restoring an item never changes this value on its own.
+ */
 export type PreviewOrigin = "algorithm" | "manual-include";
 
 export type CollectionPreviewItem = {
@@ -83,7 +105,14 @@ export type CollectionPreviewItem = {
 };
 
 export type CollectionPreviewResult = {
-  /** Resolved, ordered, item-limit-applied result — what a Homepage Section using this Collection would show. */
+  /**
+   * Resolved, ordered result — what a Homepage Section using this Collection
+   * would show. For an Algorithmic Collection, the Item Limit is applied
+   * only to the algorithm-origin portion (see resolveAlgorithmicVenues/
+   * resolveAlgorithmicEvents below) — genuine manual adds are layered on top
+   * and are never capped by it, so `items.length` can exceed the configured
+   * limit.
+   */
   items: CollectionPreviewItem[];
   /** Manual override rows with action = "exclude" that are currently suppressing content — shown for admin visibility. */
   excludedCount: number;
@@ -186,21 +215,57 @@ async function resolveAlgorithmicVenues(
   ]);
 
   const pool = allVenues.filter((v) => eligibleIds.has(v.venueUuid));
-  const railOverrides: RailOverride[] = overrides.map((o) => ({ venueUuid: o.venueId, action: o.action }));
+  const venueByUuid = new Map(pool.map((v) => [v.venueUuid, v]));
   const excludedCount = overrides.filter((o) => o.action === "exclude").length;
 
-  const resolved = getRailVenuesByKey(algorithmKey, pool, railOverrides, UNBOUNDED_MARKET);
+  // Step 1+3: the natural algorithm base — excludes applied (backfilling
+  // from the next-ranked candidate, matching the rail's existing exclude
+  // semantics), but NO include overrides at all. Neither a genuine manual
+  // add nor a reorder/boost promotion row may influence which venues the
+  // algorithm itself selects or how many "slots" it fills — that's the
+  // Item Limit's job, applied next, to this base alone.
+  const excludeOnlyOverrides: RailOverride[] = overrides
+    .filter((o) => o.action === "exclude")
+    .map((o) => ({ venueUuid: o.venueId, action: "exclude" as const }));
+  const naturalBase = getRailVenuesByKey(algorithmKey, pool, excludeOnlyOverrides, UNBOUNDED_MARKET);
 
+  // Step 2: cap to the configured Item Limit. This is the ONLY place the
+  // limit is applied — it fixes algorithm-origin membership; nothing outside
+  // this capped set can ever be labeled "algorithm" (see approved behavior:
+  // "The configured Item Limit applies only to the algorithm-generated
+  // starting list").
+  const cappedBase = itemLimit ? naturalBase.slice(0, itemLimit) : naturalBase;
+
+  // Step 4: genuine manual adds, identified by MANUAL_ADD_REASON — NOT
+  // merely "has an include override row" (a promotion row created only to
+  // give an already-capped algorithm venue a stored position/boost for
+  // reordering also has action "include", but no MANUAL_ADD_REASON — see
+  // ResolvedCollectionTable.tsx's promote()/updateBoost()). A manual add
+  // keeps its "Added manually" label even if it also happens to appear in
+  // the natural/capped algorithm base (approved behavior) — so it's always
+  // removed from the algorithm side and only ever counted once, as manual.
+  const manualAddIds = new Set(
+    overrides.filter((o) => o.action === "include" && o.reasonType === MANUAL_ADD_REASON).map((o) => o.venueId)
+  );
+  const algorithmVenues = cappedBase.filter((v) => !manualAddIds.has(v.venueUuid));
+  const manualVenues = [...manualAddIds]
+    .map((id) => venueByUuid.get(id))
+    .filter((v): v is NonNullable<typeof v> => v !== undefined);
+
+  // Step 5: ordering/boost — applies uniformly across the combined list
+  // (added on top per step 4, never capped by Item Limit) and never affects
+  // origin, which was already fixed above.
   const includeOverrides = overrides.filter((o) => o.action === "include");
   const boostByVenue = new Map(includeOverrides.map((o) => [o.venueId, o.boost]));
-  const includedByVenue = new Set(includeOverrides.map((o) => o.venueId));
   // Position among override rows only — see module docstring "Explicit ordering note".
   const orderByVenue = new Map(includeOverrides.map((o, i) => [o.venueId, i]));
 
-  const withBoost = resolved.map((v, index) => ({
+  const combined = [...algorithmVenues, ...manualVenues];
+  const withBoost = combined.map((v, index) => ({
     venue: v,
     index,
     boost: boostByVenue.get(v.venueUuid) ?? 0,
+    origin: (manualAddIds.has(v.venueUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
   }));
   // Stable: boost lifts first; among equal boost, rows with an explicit
   // override position tie-break by that position, then float above
@@ -215,13 +280,11 @@ async function resolveAlgorithmicVenues(
     return a.index - b.index;
   });
 
-  const limited = itemLimit ? withBoost.slice(0, itemLimit) : withBoost;
-
-  const items: CollectionPreviewItem[] = limited.map(({ venue, boost }) => ({
+  const items: CollectionPreviewItem[] = withBoost.map(({ venue, boost, origin }) => ({
     id: venue.venueUuid,
     primaryLabel: venue.name,
     secondaryLabel: venue.city || null,
-    origin: includedByVenue.has(venue.venueUuid) ? "manual-include" : "algorithm",
+    origin,
     boosted: boost > 0,
   }));
 
@@ -249,20 +312,38 @@ async function resolveAlgorithmicEvents(
   ]);
 
   const pool: CPFeaturedEventItem[] = allCandidates.filter((e) => eligibleIds.has(e.eventUuid));
-  const eventOverrides: EventRailOverride[] = overrides.map((o) => ({ eventUuid: o.eventId, action: o.action }));
+  const eventByUuid = new Map(pool.map((e) => [e.eventUuid, e]));
   const excludedCount = overrides.filter((o) => o.action === "exclude").length;
 
-  const resolved = computeFeaturedEventRail(pool, eventOverrides, [], UNBOUNDED_MARKET);
+  // Steps 1+3 — see the identical comments in resolveAlgorithmicVenues above.
+  const excludeOnlyOverrides: EventRailOverride[] = overrides
+    .filter((o) => o.action === "exclude")
+    .map((o) => ({ eventUuid: o.eventId, action: "exclude" as const }));
+  const naturalBase = computeFeaturedEventRail(pool, excludeOnlyOverrides, [], UNBOUNDED_MARKET);
 
+  // Step 2: cap to the configured Item Limit.
+  const cappedBase = itemLimit ? naturalBase.slice(0, itemLimit) : naturalBase;
+
+  // Step 4: genuine manual adds, identified by MANUAL_ADD_REASON.
+  const manualAddIds = new Set(
+    overrides.filter((o) => o.action === "include" && o.reasonType === MANUAL_ADD_REASON).map((o) => o.eventId)
+  );
+  const algorithmEvents = cappedBase.filter((e) => !manualAddIds.has(e.eventUuid));
+  const manualEvents = [...manualAddIds]
+    .map((id) => eventByUuid.get(id))
+    .filter((e): e is NonNullable<typeof e> => e !== undefined);
+
+  // Step 5: ordering/boost — see resolveAlgorithmicVenues above.
   const includeOverrides = overrides.filter((o) => o.action === "include");
   const boostByEvent = new Map(includeOverrides.map((o) => [o.eventId, o.boost]));
-  const includedByEvent = new Set(includeOverrides.map((o) => o.eventId));
   const orderByEvent = new Map(includeOverrides.map((o, i) => [o.eventId, i]));
 
-  const withBoost = resolved.map((e, index) => ({
+  const combined = [...algorithmEvents, ...manualEvents];
+  const withBoost = combined.map((e, index) => ({
     event: e,
     index,
     boost: boostByEvent.get(e.eventUuid) ?? 0,
+    origin: (manualAddIds.has(e.eventUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
   }));
   withBoost.sort((a, b) => {
     if (b.boost !== a.boost) return b.boost - a.boost;
@@ -274,13 +355,11 @@ async function resolveAlgorithmicEvents(
     return a.index - b.index;
   });
 
-  const limited = itemLimit ? withBoost.slice(0, itemLimit) : withBoost;
-
-  const items: CollectionPreviewItem[] = limited.map(({ event, boost }) => ({
+  const items: CollectionPreviewItem[] = withBoost.map(({ event, boost, origin }) => ({
     id: event.eventUuid,
     primaryLabel: event.title,
     secondaryLabel: event.venueName,
-    origin: includedByEvent.has(event.eventUuid) ? "manual-include" : "algorithm",
+    origin,
     boosted: boost > 0,
   }));
 
@@ -322,4 +401,70 @@ export async function resolveCollectionPreview(input: CollectionPreviewInput): P
     return resolveManualVenueOrEvent(input.eventOverrides, "eventId", "eventTitle");
   }
   return resolveAlgorithmicEvents(input.marketId, input.cityId, input.itemLimit, input.eventOverrides);
+}
+
+// ── By-id entry point (Algorithmic Collection auto-resolution) ──────────────
+//
+// Approved V1 product rule: "Algorithmic Collections are generated once
+// during creation." After that, Curation Method/Algorithm/Item Limit are
+// locked (see CollectionForm.tsx's module docstring) and there is no
+// "Generate"/"Regenerate" button anywhere in the normal Edit flow — so the
+// Edit page's initial load (control-panel/collections/[id]/edit/page.tsx)
+// calls this on EVERY visit to an Algorithmic Collection, not just right
+// after creation, to resolve and display its current base pool + stored
+// overrides. This is load/display behavior, not user-triggered regeneration.
+// It funnels through the exact same resolveCollectionPreview() above that
+// the override-editing handlers in ResolvedCollectionTable.tsx (via
+// generateCollectionResultAction) already use for live editorial refinement
+// — nothing about the algorithm, geography, ranking, or override logic is
+// duplicated.
+//
+// Deliberately takes a collectionId and re-fetches the Collection's own
+// saved state rather than accepting an already-loaded CollectionDetail:
+// Algorithm/Item Limit/geography are locked, so the Collection's current
+// stored state is always exactly what should be resolved against — there is
+// no unsaved client state to account for here (contrast with
+// generateCollectionResultAction, which intentionally works off raw,
+// possibly-unsaved form values for the editor's live override-editing
+// refinement). Structured success/failure result — never throws — so a
+// resolution failure can be surfaced as a clear message without losing the
+// Collection, altering its status, or resetting stored overrides.
+export type CollectionPreviewByIdResult =
+  | { success: true; preview: CollectionPreviewResult }
+  | { success: false; error: string };
+
+export async function resolveCollectionPreviewById(collectionId: string): Promise<CollectionPreviewByIdResult> {
+  const collection = await getCollectionById(collectionId);
+  if (!collection) return { success: false, error: "Collection not found." };
+  if (collection.collectionType === "guide" || collection.algorithmKey === null) {
+    // Guide Collections are manual-only and Manual venue/event Collections
+    // have no algorithm to run — callers should only invoke this for
+    // Algorithmic venue/event Collections, but this guard keeps the function
+    // safe (a structured error, not a crash) if that ever isn't true.
+    return { success: false, error: "This Collection is not Algorithmic." };
+  }
+
+  try {
+    const preview = await resolveCollectionPreview({
+      collectionType: collection.collectionType,
+      marketId: collection.marketId,
+      cityId: collection.cityId,
+      algorithmKey: collection.algorithmKey,
+      itemLimit: collection.itemLimit,
+      venueOverrides: collection.venueOverrides,
+      eventOverrides: collection.eventOverrides,
+      guideItems: [],
+    });
+    return { success: true, preview };
+  } catch (err) {
+    console.error("[resolveCollectionPreviewById]", err);
+    // No "click Generate Collection" wording — that action no longer exists
+    // (see header comment). This can surface on any visit, not just after
+    // creation, so the copy points at retrying the page or fixing data,
+    // not a one-time creation step.
+    return {
+      success: false,
+      error: "This Collection's resolved items could not be loaded. Try reloading the page, or the underlying data may need attention.",
+    };
+  }
 }

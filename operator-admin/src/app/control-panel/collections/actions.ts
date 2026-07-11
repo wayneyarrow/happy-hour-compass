@@ -41,6 +41,12 @@ import { searchVenueCandidates, searchEventCandidates, type AttachmentCandidate 
  * own delete-then-insert-only-on-successful-validation design (they validate
  * every row before deleting anything).
  *
+ * createCollectionAction always writes status = "draft", regardless of what
+ * (if anything) the client submitted — the create page never renders a
+ * Status control (see CollectionForm's module docstring), so this is a
+ * server-side guarantee, not just a hidden UI default. Publishing is a
+ * decision the full editor makes later, once content actually exists.
+ *
  * Publish-failure guarantee: updateCollectionAction validates BEFORE writing
  * anything when the submitted status is "published" (see the Publishing
  * validation block below). A failed publish attempt therefore never writes
@@ -51,12 +57,47 @@ import { searchVenueCandidates, searchEventCandidates, type AttachmentCandidate 
  * Published status) rather than silently falling back to whatever was last
  * persisted.
  *
- * generateCollectionResultAction is intentionally read-only and does not
- * require the Collection to have been saved first — it resolves the
- * algorithm against whatever market/city/algorithm/item-limit/override
- * values the client currently holds (saved or not). This is what lets the
- * editor's "Generate Collection" button work immediately, without a forced
- * "Save & Generate" step.
+ * generateCollectionResultAction is intentionally read-only. There is no
+ * standalone "Generate"/"Regenerate" button anymore (removed — Algorithmic
+ * Collections are generated once, automatically, at creation; see
+ * CollectionForm.tsx's module docstring for the full product rule); this
+ * action now exists purely to power ResolvedCollectionTable.tsx's live
+ * editorial refinement — re-resolving the merged algorithm + override view
+ * immediately after an exclude/restore/boost/add/reorder edit, without
+ * requiring the Collection to be saved first (Market/City/Algorithm/Item
+ * Limit are locked by that point, so only the override rows themselves can
+ * actually change between calls).
+ *
+ * Item limit is required for Algorithmic Collections on create (see the
+ * field-error check in createCollectionAction) — Manual/Guide Collections
+ * never submit an algorithm_key, so the check never applies to them.
+ *
+ * Curation Method (Manual vs Algorithmic), Algorithm, and Item Limit are
+ * fixed at creation and never editable afterward — "Algorithmic Collections
+ * are generated once during creation" (approved V1 product rule). See
+ * CollectionForm.tsx's module docstring for the full rationale.
+ * updateCollectionAction enforces this unconditionally: it never reads
+ * algorithm_key or item_limit from formData at all, always using the
+ * Collection's own already-stored algorithmKey/itemLimit instead, and never
+ * passes them to updateCollection() (so the DB columns are never touched by
+ * an update, regardless of what a stale tab or crafted request might submit
+ * — the CollectionForm Edit UI simply doesn't render controls for these
+ * anymore, but that's a UX convenience, not the enforcement mechanism).
+ *
+ * Automatic generation for an Algorithmic Collection does NOT happen in
+ * createCollectionAction or updateCollectionAction — the redirect target
+ * below is unchanged (`.../edit?success=created#collection-content`), and
+ * the Edit page's own initial load (control-panel/collections/[id]/edit/page.tsx)
+ * calls resolveCollectionPreviewById() (src/lib/data/collectionsPreview.ts)
+ * on EVERY visit to an Algorithmic Collection's Edit page — not just right
+ * after creation — to resolve and display its current base pool + stored
+ * overrides. This is load/display behavior, not a user-triggered action:
+ * there is no "Generate"/"Regenerate" button anywhere in the normal Edit
+ * flow (see ResolvedCollectionTable.tsx's module docstring). It funnels
+ * through the exact same resolveCollectionPreview() the override-editing
+ * handlers below (via generateCollectionResultAction) already use — nothing
+ * about the algorithm is duplicated, and a resolution failure can never
+ * affect whether the Draft Collection exists or what's stored.
  */
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -118,7 +159,13 @@ function parseItemLimit(formData: FormData): { value: number | null; error: stri
   return { value: n, error: null };
 }
 
-export type OverrideRowInput = { id: string; action: "include" | "exclude"; boost: number };
+export type OverrideRowInput = {
+  id: string;
+  action: "include" | "exclude";
+  boost: number;
+  /** MANUAL_ADD_REASON marks a genuine editor add, vs null for a reorder/boost promotion row — see MembershipRow's doc comment in ResolvedCollectionTable.tsx. */
+  reasonType: string | null;
+};
 
 function parseOverrideRows(formData: FormData, key: string): OverrideRowInput[] {
   const raw = str(formData, key);
@@ -136,6 +183,7 @@ function parseOverrideRows(formData: FormData, key: string): OverrideRowInput[] 
       id: typeof r.id === "string" ? r.id : "",
       action: r.action === "exclude" ? "exclude" as const : "include" as const,
       boost: typeof r.boost === "number" && Number.isFinite(r.boost) ? Math.max(0, Math.min(100, r.boost)) : 0,
+      reasonType: typeof r.reasonType === "string" && r.reasonType.length > 0 ? r.reasonType : null,
     }))
     .filter((r) => r.id !== "");
 }
@@ -159,26 +207,30 @@ function parseGuideRows(formData: FormData): string[] {
 // CollectionEventOverride / CollectionGuideItem row shapes (it's also used
 // to read already-saved rows in the editor's old server-computed path). Both
 // the Publish validation check and generateCollectionResultAction below only
-// have the client's lightweight {id, action, boost} rows — not real DB rows,
+// have the client's lightweight OverrideRowInput rows — not real DB rows,
 // since generation deliberately works against current, possibly-unsaved
-// state (see module docstring). These builders fill in the unused fields
-// with harmless placeholders; resolveCollectionPreview never reads
-// id/collectionId/createdAt/etc. for its resolution logic, only
-// venueId/eventId/guideId/action/boost/sortOrder (sortOrder = array index,
-// consistent with how replaceVenueOverrides/replaceEventOverrides/
-// replaceGuideItems persist order at save time).
+// state (see module docstring). These builders fill in the truly-unused
+// fields (id/collectionId/createdAt/etc. — never read by the resolver) with
+// harmless placeholders, but pass reasonType through for real: it's what
+// resolveAlgorithmicVenues/resolveAlgorithmicEvents (collectionsPreview.ts)
+// use to distinguish a genuine manual add from a reorder/boost promotion
+// row for the "Algorithmic" vs "Added manually" origin label.
+// venueId/eventId/guideId/action/boost/sortOrder/reasonType are the fields
+// that matter (sortOrder = array index, consistent with how
+// replaceVenueOverrides/replaceEventOverrides/replaceGuideItems persist
+// order at save time).
 
 function toVenueOverridesForPreview(rows: OverrideRowInput[]): CollectionVenueOverride[] {
   return rows.map((r, i) => ({
     id: "", collectionId: "", venueId: r.id, venueName: null, action: r.action, boost: r.boost,
-    sortOrder: i, reasonType: null, note: null, createdAt: "", createdBy: null, updatedAt: "", updatedBy: null,
+    sortOrder: i, reasonType: r.reasonType, note: null, createdAt: "", createdBy: null, updatedAt: "", updatedBy: null,
   }));
 }
 
 function toEventOverridesForPreview(rows: OverrideRowInput[]): CollectionEventOverride[] {
   return rows.map((r, i) => ({
     id: "", collectionId: "", eventId: r.id, eventTitle: null, action: r.action, boost: r.boost,
-    sortOrder: i, reasonType: null, note: null, createdAt: "", createdBy: null, updatedAt: "", updatedBy: null,
+    sortOrder: i, reasonType: r.reasonType, note: null, createdAt: "", createdBy: null, updatedAt: "", updatedBy: null,
   }));
 }
 
@@ -204,7 +256,8 @@ export async function createCollectionAction(
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
   const algorithmKey = nullableStr(formData, "algorithm_key");
-  const status = str(formData, "status") as CollectionStatus;
+  // Always Draft on create — see module docstring. Never read from formData.
+  const status: CollectionStatus = "draft";
   const { value: itemLimit, error: itemLimitError } = parseItemLimit(formData);
 
   const values: CollectionFormValues = { name, description, marketId, cityId, algorithmKey, itemLimit, status };
@@ -213,9 +266,17 @@ export async function createCollectionAction(
   if (!name) fieldErrors.name = "Name is required.";
   if (!isCollectionType(collectionType)) fieldErrors.collection_type = "Select a Collection type.";
   if (!marketId) fieldErrors.market_id = "Market is required.";
-  if (!COLLECTION_STATUSES.includes(status)) fieldErrors.status = "Select a status.";
   if (itemLimitError) fieldErrors.item_limit = itemLimitError;
   if (algorithmKey && !isAlgorithmKey(algorithmKey)) fieldErrors.algorithm_key = "Unsupported algorithm.";
+  // Item limit is required for Algorithmic Collections on create (it drives
+  // the automatic first generation below) — Manual/Guide Collections never
+  // submit an algorithm_key, so this never fires for them. parseItemLimit()
+  // itself still treats an empty value as merely optional (unchanged, since
+  // updateCollectionAction's existing Algorithmic Collections may legitimately
+  // have no item_limit yet) — this is an additional, create-only requirement.
+  if (!itemLimitError && algorithmKey && isAlgorithmKey(algorithmKey) && itemLimit === null) {
+    fieldErrors.item_limit = "Item limit is required for Algorithmic Collections.";
+  }
 
   if (Object.keys(fieldErrors).length > 0) {
     return { error: "Please fix the errors below.", fieldErrors, values };
@@ -250,8 +311,8 @@ export async function createCollectionAction(
   revalidatePath("/control-panel/collections");
   // Anchor jumps the editor straight to the Resolved Collection section — for
   // a Manual Collection that's the content picker, for an Algorithmic
-  // Collection that's the Generate Collection action (see "Initial Editor
-  // Focus" — CollectionForm.tsx renders that section with this id).
+  // Collection that's the auto-resolved result the Edit page's own load
+  // just produced (see CollectionForm.tsx's module docstring).
   redirect(`/control-panel/collections/${result.id}/edit?success=created#collection-content`);
 }
 
@@ -273,9 +334,14 @@ export async function updateCollectionAction(
   const description = nullableStr(formData, "description");
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
-  const algorithmKey = nullableStr(formData, "algorithm_key");
   const status = str(formData, "status") as CollectionStatus;
-  const { value: itemLimit, error: itemLimitError } = parseItemLimit(formData);
+
+  // Curation Method, Algorithm, and Item Limit are locked after creation —
+  // see module docstring. Always the stored values; formData is never
+  // consulted for them, so the Edit form doesn't need to (and doesn't)
+  // submit anything for these fields at all.
+  const algorithmKey = existing.algorithmKey;
+  const itemLimit = existing.itemLimit;
 
   const values: CollectionFormValues = { name, description, marketId, cityId, algorithmKey, itemLimit, status };
 
@@ -283,8 +349,6 @@ export async function updateCollectionAction(
   if (!name) fieldErrors.name = "Name is required.";
   if (!marketId) fieldErrors.market_id = "Market is required.";
   if (!COLLECTION_STATUSES.includes(status)) fieldErrors.status = "Select a status.";
-  if (itemLimitError) fieldErrors.item_limit = itemLimitError;
-  if (algorithmKey && !isAlgorithmKey(algorithmKey)) fieldErrors.algorithm_key = "Unsupported algorithm.";
 
   if (Object.keys(fieldErrors).length > 0) {
     return { error: "Please fix the errors below.", fieldErrors, values };
@@ -323,13 +387,15 @@ export async function updateCollectionAction(
     const venueRows = existing.collectionType === "venue" ? parseOverrideRows(formData, "venue_overrides") : [];
     const eventRows = existing.collectionType === "event" ? parseOverrideRows(formData, "event_overrides") : [];
     const guideIds = existing.collectionType === "guide" ? parseGuideRows(formData) : [];
-    const resolvedAlgorithmKey = algorithmKey && isAlgorithmKey(algorithmKey) ? algorithmKey : null;
 
+    // algorithmKey/itemLimit are already the Collection's own stored, valid
+    // values (see above) — no re-validation needed here, unlike before this
+    // task when they came from the submitted form.
     const preview = await resolveCollectionPreview({
       collectionType: existing.collectionType,
       marketId,
       cityId,
-      algorithmKey: resolvedAlgorithmKey,
+      algorithmKey,
       itemLimit,
       venueOverrides: toVenueOverridesForPreview(venueRows),
       eventOverrides: toEventOverridesForPreview(eventRows),
@@ -347,9 +413,14 @@ export async function updateCollectionAction(
     }
   }
 
+  // algorithmKey/itemLimit are deliberately omitted from this patch — see
+  // module docstring. updateCollection() only writes fields it's given
+  // (undefined = untouched column), so the DB's algorithm_key/item_limit
+  // columns are never written by an update, regardless of what was computed
+  // above.
   const coreResult = await updateCollection(
     collectionId,
-    { name, description, marketId, cityId, status, algorithmKey, itemLimit },
+    { name, description, marketId, cityId, status },
     callerEmail
   );
   if (!coreResult.success) {
@@ -361,14 +432,14 @@ export async function updateCollectionAction(
   if (existing.collectionType === "venue") {
     const rows = parseOverrideRows(formData, "venue_overrides");
     const input: VenueOverrideInput[] = rows.map((r, i) => ({
-      venueId: r.id, action: r.action, boost: r.boost, sortOrder: i,
+      venueId: r.id, action: r.action, boost: r.boost, sortOrder: i, reasonType: r.reasonType,
     }));
     const result = await replaceVenueOverrides(collectionId, input, callerEmail);
     if (!result.success) membershipError = result.error;
   } else if (existing.collectionType === "event") {
     const rows = parseOverrideRows(formData, "event_overrides");
     const input: EventOverrideInput[] = rows.map((r, i) => ({
-      eventId: r.id, action: r.action, boost: r.boost, sortOrder: i,
+      eventId: r.id, action: r.action, boost: r.boost, sortOrder: i, reasonType: r.reasonType,
     }));
     const result = await replaceEventOverrides(collectionId, input, callerEmail);
     if (!result.success) membershipError = result.error;
@@ -398,7 +469,11 @@ export async function updateCollectionAction(
 
   revalidatePath("/control-panel/collections");
   revalidatePath(`/control-panel/collections/${collectionId}/edit`);
-  redirect(`/control-panel/collections/${collectionId}/edit?success=updated#collection-content`);
+  // No #collection-content anchor here (unlike the create redirect below) —
+  // Save Changes is the end of the workflow (see CollectionForm's module
+  // docstring), so landing back at the top next to the "Collection saved."
+  // banner is expected, not a jump back down the page the admin just left.
+  redirect(`/control-panel/collections/${collectionId}/edit?success=updated`);
 }
 
 // ── Content candidate search (venue / event) ─────────────────────────────────
@@ -465,17 +540,19 @@ export async function searchCollectionEventCandidatesAction(
   return filterToCollectionGeography(results, input.cityId);
 }
 
-// ── Generate Collection ───────────────────────────────────────────────────────
+// ── Resolve for live editorial refinement ───────────────────────────────────
 //
-// The editor's explicit "Generate Collection" action for Algorithmic
-// Collections (see ResolvedCollectionTable.tsx). Deliberately takes raw,
-// possibly-unsaved client state rather than reading the Collection from the
-// database — resolveCollectionPreview() needs only market/city/algorithm/
-// item-limit/overrides to run, so generation works immediately after
-// changing a setting or adding/excluding/boosting/reordering content,
-// without requiring a prior Save. This is read-only: it never writes
-// anything, so there is no risk of misleading or partial state from calling
-// it freely.
+// Powers ResolvedCollectionTable.tsx's automatic re-resolution after an
+// override edit (exclude/restore/boost/add/reorder) — not a standalone
+// "Generate"/"Regenerate" action (removed; Algorithmic Collections are
+// generated once, automatically, at creation — see CollectionForm.tsx's
+// module docstring). Deliberately takes raw client state rather than
+// reading the Collection from the database — resolveCollectionPreview()
+// needs only market/city/algorithm/item-limit/overrides to run, so
+// refinement works immediately after adding/excluding/boosting/reordering
+// content, without requiring a prior Save. This is read-only: it never
+// writes anything, so there is no risk of misleading or partial state from
+// calling it freely.
 
 export type GenerateCollectionInput = {
   collectionType: "venue" | "event";
@@ -509,6 +586,7 @@ export async function generateCollectionResultAction(
       id: r.id,
       action: r.action === "exclude" ? ("exclude" as const) : ("include" as const),
       boost: typeof r.boost === "number" && Number.isFinite(r.boost) ? Math.max(0, Math.min(100, r.boost)) : 0,
+      reasonType: typeof r.reasonType === "string" && r.reasonType.length > 0 ? r.reasonType : null,
     }));
 
   const preview = await resolveCollectionPreview({

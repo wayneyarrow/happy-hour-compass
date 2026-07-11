@@ -8,6 +8,7 @@ import {
   getCollectionFormGeography,
   getEligibleGuidesForCollection,
 } from "@/lib/data/collections";
+import { resolveCollectionPreviewById } from "@/lib/data/collectionsPreview";
 import CollectionForm from "../../CollectionForm";
 
 export default async function EditCollectionPage({
@@ -26,15 +27,30 @@ export default async function EditCollectionPage({
 
   if (!collection) notFound();
 
-  // Guide candidates are the only server-side data the Resolved Collection
-  // section needs up front — Venue/Event resolution now runs on demand via
-  // the editor's own "Generate Collection" action (generateCollectionResultAction),
-  // not a page-load computation, so an algorithmic Collection's resolved list
-  // no longer needs to be (re)computed on every visit to this page.
+  // Guide candidates are the only other server-side data the Resolved
+  // Collection section needs up front — Guide Collections are manual-only,
+  // with no algorithm to resolve.
   const guideCandidates =
     collection.collectionType === "guide"
       ? await getEligibleGuidesForCollection(collection.marketId, collection.cityId)
       : [];
+
+  // Algorithmic Collections are generated once, at creation, and then locked
+  // (Curation Method/Algorithm/Item Limit can no longer change — see
+  // CollectionForm.tsx's module docstring). There is no "Generate"/
+  // "Regenerate" button anywhere in the normal Edit flow, so this is the
+  // only place a Collection's current base pool + stored overrides ever get
+  // resolved — on every visit to this page (fresh creation, a refresh,
+  // leaving and reopening, or after Save Changes), not just once. This is
+  // load/display behavior, not user-triggered regeneration: it always
+  // re-resolves against the Collection's own stored algorithm/item-limit/
+  // overrides (see resolveCollectionPreviewById in collectionsPreview.ts),
+  // never persists the algorithm's base pool, and a Manual or Guide
+  // Collection's algorithmKey is always null, so this never runs for them.
+  const isAlgorithmic = collection.algorithmKey !== null;
+  const resolution = isAlgorithmic ? await resolveCollectionPreviewById(id) : null;
+  const resolvedResult = resolution?.success ? resolution.preview : null;
+  const resolvedError = resolution && !resolution.success ? resolution.error : null;
 
   const successMessage =
     success === "created" ? "Collection created." : success === "updated" ? "Collection saved." : null;
@@ -64,6 +80,8 @@ export default async function EditCollectionPage({
         markets={markets}
         cities={cities}
         guideCandidates={guideCandidates}
+        resolvedResult={resolvedResult}
+        resolvedError={resolvedError}
       />
     </div>
   );

@@ -11,6 +11,7 @@ import type {
 } from "@/lib/data/collectionsShared";
 import { ALGORITHM_KEYS, ALGORITHM_COLLECTION_TYPE } from "@/lib/data/collectionsShared";
 import type { GuideCandidate } from "@/lib/data/collections";
+import type { CollectionPreviewResult } from "@/lib/data/collectionsPreview";
 import { RAIL_LABELS, type RailKey } from "@/lib/data/discoverOverridesShared";
 import { createCollectionAction, updateCollectionAction, type CollectionFormState } from "./actions";
 import ResolvedCollectionTable, { type MembershipRow } from "./ResolvedCollectionTable";
@@ -22,31 +23,68 @@ import CollectionUsageSection from "./CollectionUsageSection";
  * (docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md), following the same
  * one-page sectioned editor pattern as GuideForm.tsx.
  *
- * Create mode intentionally omits Resolved Collection and Homepage Usage —
- * per the approved workflow (Collection list -> Create Collection -> dedicated
- * editor -> Save), a new Collection is created with just its core fields
- * (name, geography, curation method), then redirects into the full editor
- * (mode="edit") for curation. The submit button's label makes that next step
- * explicit (e.g. "Create Collection & Choose Venues" / "...& Generate")
- * rather than leaving the admin at a dead end.
+ * Create mode has exactly one job: create the Collection shell (name,
+ * geography, curation method) so it receives an id. It intentionally omits
+ * Resolved Collection, Homepage Usage, and Status — those belong to the full
+ * editor. Every new Collection is created as Draft (enforced server-side in
+ * createCollectionAction, not just hidden here) so an editor never has to
+ * decide Draft vs Published before any content exists. On success, the
+ * server action redirects straight into the full editor (mode="edit") with a
+ * `#collection-content` URL fragment so the browser lands the admin directly
+ * on the Resolved Collection section — the next actual work, since Details/
+ * Geography/Curation were just set on the create page a moment ago. Later
+ * saves from the editor itself redirect back to the plain edit URL (no
+ * fragment), landing at the top where the "Collection saved." confirmation
+ * banner is shown, rather than yanking the admin back down the page after
+ * they just clicked Save Changes at the bottom.
  *
  * Resolved Collection (this replaced an earlier, disconnected split between
  * a "Content Membership" picker and a separate read-only "Preview" section —
  * browser QA found that confusing). It's now one section:
  *   - Manual Collections: the section IS the membership list (search, add,
  *     remove, reorder) — no separate preview needed.
- *   - Algorithmic Collections: an explicit "Generate Collection" action
- *     resolves the algorithm against the Collection's current (possibly
- *     unsaved) settings and overrides — see ResolvedCollectionTable.tsx and
- *     actions.ts's generateCollectionResultAction. Nothing here is labeled
- *     "Preview" — there is no public Collection landing page yet to preview
- *     against (see product spec, "Collection Landing Pages"); this is purely
- *     the admin's working area for building the Collection's contents.
+ *   - Algorithmic Collections: resolved automatically (see resolvedResult/
+ *     resolvedError below) — there is no "Generate"/"Regenerate" button
+ *     anywhere in the normal Edit flow (see ResolvedCollectionTable.tsx's
+ *     module docstring). Nothing here is labeled "Preview" — there is no
+ *     public Collection landing page yet to preview against (see product
+ *     spec, "Collection Landing Pages"); this is purely the admin's working
+ *     area for editorially refining the Collection's contents.
  *
- * After create/save, the server action redirects back to this page with a
- * `#collection-content` URL fragment so the browser lands the admin directly
- * on this section (the content picker for Manual, the Generate action for
- * Algorithmic) rather than at the top of a long form with no clear next step.
+ * Create-mode Curation Method starts unselected (curationMode === null) —
+ * the editor must deliberately pick Manual or Algorithmic rather than
+ * silently inheriting a default. Because Resolved Collection/Usage/Status
+ * are edit-only (gated below), the shared Save/Cancel row that follows the
+ * Curation Method section is already the next thing rendered in create
+ * mode — no separate "Create Collection" section exists to remove. That
+ * button is gated by `canCreate` (mode="create" only) so it stays disabled
+ * until the chosen method's own required fields are valid, and its label
+ * reads "Continue" rather than "Save Changes" to reflect that it's the
+ * create action, not a mid-editor save.
+ *
+ * Approved V1 product rule: "Algorithmic Collections are generated once
+ * during creation." Item limit is required for Algorithmic Collections on
+ * create — it's what that one generation runs against: clicking Continue
+ * creates the Draft, and the Edit page's initial load resolves the base
+ * pool automatically (see resolveCollectionPreviewById in
+ * collectionsPreview.ts), seeding ResolvedCollectionTable with the result
+ * via the resolvedResult/resolvedError props below — the editor lands on an
+ * already-populated Resolved Collection, no manual click required. After
+ * that first creation, Curation Method, Algorithm, and Item Limit are
+ * locked: edit mode renders them as a read-only summary (see the Curation
+ * Method section below), never an editable selector/dropdown/input, and
+ * updateCollectionAction (actions.ts) enforces the lock server-side —
+ * always preserving the Collection's own stored values, never reading
+ * algorithm_key/item_limit from the submitted form at all. This applies to
+ * Manual Collections too (Curation Method itself is locked in both
+ * directions) for consistency — a Manual Collection can't be silently
+ * switched to Algorithmic through Save Changes with no "generate once"
+ * moment to match. The Edit page's initial load still resolves an
+ * Algorithmic Collection's current base pool on *every* visit (not just
+ * right after creation) — see collections/[id]/edit/page.tsx — since that's
+ * necessary display/loading behavior (stored overrides need to be re-merged
+ * with the algorithm's pool on every view), distinct from the removed
+ * user-triggered regeneration.
  */
 
 const TYPE_OPTIONS: { value: CollectionType; label: string }[] = [
@@ -74,6 +112,10 @@ type Props = {
   markets: MarketRecord[];
   cities: CityRecord[];
   guideCandidates?: GuideCandidate[];
+  /** The Edit page's own server-side resolution of an Algorithmic Collection's current base pool — passed on every Edit-page visit, not just after creation. See ResolvedCollectionTable's module docstring. */
+  resolvedResult?: CollectionPreviewResult | null;
+  /** A resolution failure from that same server-side load. */
+  resolvedError?: string | null;
 };
 
 export default function CollectionForm({
@@ -82,6 +124,8 @@ export default function CollectionForm({
   markets,
   cities,
   guideCandidates = [],
+  resolvedResult = null,
+  resolvedError = null,
 }: Props) {
   const boundAction =
     mode === "create" ? createCollectionAction : updateCollectionAction.bind(null, initialCollection!.id);
@@ -94,8 +138,12 @@ export default function CollectionForm({
   );
   const [marketId, setMarketId] = useState(initialCollection?.marketId ?? "");
   const [cityId, setCityId] = useState(initialCollection?.cityId ?? "");
-  const [curationMode, setCurationMode] = useState<"manual" | "algorithmic">(
-    initialCollection?.algorithmKey ? "algorithmic" : "manual"
+  // Edit mode always has a concrete, previously-saved method. Create mode
+  // starts unselected (null) — neither radio is checked, Algorithmic
+  // configuration stays hidden, and Continue stays disabled — until the
+  // editor deliberately picks one (see module docstring).
+  const [curationMode, setCurationMode] = useState<"manual" | "algorithmic" | null>(
+    initialCollection ? (initialCollection.algorithmKey ? "algorithmic" : "manual") : null
   );
   const [algorithmKey, setAlgorithmKey] = useState<AlgorithmKey | "">(initialCollection?.algorithmKey ?? "");
   const [itemLimit, setItemLimit] = useState(initialCollection?.itemLimit?.toString() ?? "");
@@ -104,9 +152,9 @@ export default function CollectionForm({
   // Defensive re-sync: if a failed submit ever arrives after this component
   // re-mounted (so its local state no longer reflects what was submitted),
   // restore exactly what was attempted — including the chosen Published
-  // status — rather than silently showing stale initial values. In the
-  // normal case (no remount) this is a no-op, since local state already
-  // matches what was submitted.
+  // status in edit mode — rather than silently showing stale initial values.
+  // In the normal case (no remount) this is a no-op, since local state
+  // already matches what was submitted.
   useEffect(() => {
     if (!state.values) return;
     setName(state.values.name);
@@ -130,6 +178,33 @@ export default function CollectionForm({
     return ALGORITHM_KEYS.filter((key) => ALGORITHM_COLLECTION_TYPE[key] === collectionType);
   }, [collectionType]);
 
+  // ── Continue enablement (create mode only) ────────────────────────────────
+  // Mirrors the server's own validation (createCollectionAction / parseItemLimit
+  // in actions.ts) closely enough to gate the button responsively, without
+  // being the source of truth — the server re-validates everything on submit
+  // regardless of what this computes.
+  //
+  // Item limit is required for Algorithmic Collections on create — it drives
+  // the one-time automatic generation that happens right after (see module
+  // docstring). itemLimitFormatValid/itemLimitValid/curationMethodValid are
+  // computed unconditionally but only ever consumed via `canCreate`, which
+  // only gates the create-mode Continue button below — edit mode no longer
+  // renders any algorithm_key/item_limit input at all (Curation Method is
+  // locked, read-only there), so these are effectively inert in edit mode.
+  const itemLimitFormatValid =
+    itemLimit.trim() === "" || (Number.isInteger(Number(itemLimit)) && Number(itemLimit) > 0);
+  const itemLimitValid =
+    mode === "create" ? itemLimit.trim() !== "" && itemLimitFormatValid : itemLimitFormatValid;
+  const curationMethodValid = isGuideType
+    ? true
+    : curationMode === "manual"
+      ? true
+      : curationMode === "algorithmic"
+        ? Boolean(algorithmKey) && itemLimitValid
+        : false; // curationMode === null — not yet deliberately chosen
+  const canCreate =
+    name.trim() !== "" && collectionType !== "" && marketId !== "" && curationMethodValid;
+
   function handleMarketChange(nextMarketId: string) {
     setMarketId(nextMarketId);
     const stillValid = cities.some((c) => c.id === cityId && c.marketId === nextMarketId);
@@ -137,13 +212,21 @@ export default function CollectionForm({
   }
 
   function handleTypeChange(nextType: CollectionType) {
+    const previousType = collectionType;
     setCollectionType(nextType);
-    // Algorithm options are type-specific — clear a now-incompatible selection.
     if (nextType === "guide") {
+      // Guide Collections are manual-only in V1 — there's no choice to make,
+      // so this is an implied default, not a deliberate pick.
       setCurationMode("manual");
       setAlgorithmKey("");
-    } else if (algorithmKey && ALGORITHM_COLLECTION_TYPE[algorithmKey] !== nextType) {
-      setAlgorithmKey("");
+    } else {
+      // Coming back from Guide, "manual" was only ever implied — require a
+      // fresh, deliberate choice now that Algorithmic is available again.
+      if (previousType === "guide") setCurationMode(null);
+      // Algorithm options are type-specific — clear a now-incompatible selection.
+      if (algorithmKey && ALGORITHM_COLLECTION_TYPE[algorithmKey] !== nextType) {
+        setAlgorithmKey("");
+      }
     }
   }
 
@@ -152,12 +235,15 @@ export default function CollectionForm({
     if (nextMode === "manual") setAlgorithmKey("");
   }
 
-  // Membership rows, mapped from initialCollection for edit mode
+  // Membership rows, mapped from initialCollection for edit mode. reasonType
+  // carries forward from the DB row (see MembershipRow's doc comment in
+  // ResolvedCollectionTable.tsx) so a previously-saved manual add is still
+  // recognized as manual — not merely re-derived from natural-pool membership.
   const initialVenueRows: MembershipRow[] = (initialCollection?.venueOverrides ?? []).map((o) => ({
-    id: o.venueId, primaryLabel: o.venueName ?? "(unknown venue)", secondaryLabel: null, action: o.action, boost: o.boost,
+    id: o.venueId, primaryLabel: o.venueName ?? "(unknown venue)", secondaryLabel: null, action: o.action, boost: o.boost, reasonType: o.reasonType,
   }));
   const initialEventRows: MembershipRow[] = (initialCollection?.eventOverrides ?? []).map((o) => ({
-    id: o.eventId, primaryLabel: o.eventTitle ?? "(unknown event)", secondaryLabel: null, action: o.action, boost: o.boost,
+    id: o.eventId, primaryLabel: o.eventTitle ?? "(unknown event)", secondaryLabel: null, action: o.action, boost: o.boost, reasonType: o.reasonType,
   }));
   const initialGuideRows: GuideMembershipRow[] = (initialCollection?.guideItems ?? []).map((g) => {
     const candidate = guideCandidates.find((c) => c.id === g.guideId);
@@ -185,14 +271,6 @@ export default function CollectionForm({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-
-  // ── Dynamic create-button label (Primary Goal #2/#3) ──────────────────────
-  function createButtonLabel(): string {
-    if (!collectionType) return "Create Collection";
-    if (collectionType === "guide") return "Create Collection & Choose Guides";
-    if (curationMode === "algorithmic") return "Create Collection & Generate";
-    return collectionType === "venue" ? "Create Collection & Choose Venues" : "Create Collection & Choose Events";
-  }
 
   return (
     <form action={formAction} onChange={() => setDirty(true)} className="space-y-6">
@@ -318,14 +396,51 @@ export default function CollectionForm({
           )}
         </section>
 
-        {/* Curation Method */}
+        {/* Curation Method — locked after creation in edit mode (see module
+            docstring). Create mode is unchanged: a deliberate Manual/
+            Algorithmic choice, with Algorithm + Item Limit required for
+            Algorithmic. */}
         <section className={sectionCls}>
           <h2 className={sectionTitleCls}>Curation Method</h2>
           {isGuideType ? (
             <p className="text-sm text-gray-500">
-              Guide Collections are manual-only in V1 — there&apos;s no algorithmic guide feed yet. Add and order
-              guides directly in Resolved Collection below.
+              Guide Collections are manual-only in V1 — there&apos;s no algorithmic guide feed yet.{" "}
+              {mode === "edit"
+                ? "Add and order guides directly in Resolved Collection below."
+                : "You'll add and order guides on the next screen."}
             </p>
+          ) : mode === "edit" ? (
+            <div className="space-y-3">
+              <div>
+                <span className={labelCls}>Curation Method</span>
+                <p className="text-sm text-slate-700 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                  {algorithmic ? "Algorithmic" : "Manual"}
+                </p>
+              </div>
+              {algorithmic && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <span className={labelCls}>Algorithm</span>
+                    <p className="text-sm text-slate-700 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                      {algorithmKey ? RAIL_LABELS[algorithmKey as RailKey] : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className={labelCls}>Item Limit</span>
+                    <p className="text-sm text-slate-700 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                      {itemLimit.trim() !== "" ? itemLimit : "Not set"}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <p className={hintCls}>
+                {algorithmic
+                  ? "This Collection was created Algorithmically — its setup is fixed. Curate the resolved " +
+                    "items in Resolved Collection below."
+                  : "Curation Method can't be changed after creation. Add and order content in Resolved " +
+                    "Collection below."}
+              </p>
+            </div>
           ) : (
             <>
               <div className="flex gap-3">
@@ -352,9 +467,7 @@ export default function CollectionForm({
                 </label>
               </div>
               {curationMode === "manual" && (
-                <p className={hintCls}>
-                  Content is selected and ordered entirely by hand in Resolved Collection below.
-                </p>
+                <p className={hintCls}>You&apos;ll select and order content entirely by hand on the next screen.</p>
               )}
               {curationMode === "algorithmic" && (
                 <>
@@ -375,9 +488,7 @@ export default function CollectionForm({
                     {err.algorithm_key && <p className={errorCls}>{err.algorithm_key}</p>}
                   </div>
                   <div>
-                    <label className={labelCls} htmlFor="item_limit">
-                      Item Limit <span className="text-gray-400 font-normal">(optional)</span>
-                    </label>
+                    <label className={labelCls} htmlFor="item_limit">Item Limit</label>
                     <input
                       id="item_limit"
                       name="item_limit"
@@ -385,36 +496,49 @@ export default function CollectionForm({
                       min={1}
                       value={itemLimit}
                       onChange={(e) => setItemLimit(e.target.value)}
-                      placeholder="No cap"
+                      placeholder="e.g. 12"
                       className={inputCls}
                     />
                     {err.item_limit && <p className={errorCls}>{err.item_limit}</p>}
+                    {!err.item_limit && itemLimit.trim() !== "" && !itemLimitFormatValid && (
+                      <p className={errorCls}>Item limit must be a positive whole number.</p>
+                    )}
                   </div>
                   <p className={hintCls}>
-                    Generate the Collection below to run this algorithm now. Manual includes, excludes, and
-                    boosts refine that result — they don&apos;t replace it. Changing the algorithm or item limit
-                    after generating marks the result stale until you generate again.
+                    This Collection will be generated automatically when you click Continue, and its setup —
+                    Algorithm and Item Limit — is fixed after that. Manual includes, excludes, and boosts on
+                    the next screen refine the result — they don&apos;t replace it.
                   </p>
                 </>
               )}
               {!curationMode && algorithmOptions.length === 0 && (
                 <p className={hintCls}>No algorithms are available for this Collection Type yet.</p>
               )}
+              {!curationMode && algorithmOptions.length > 0 && (
+                <p className={hintCls}>Choose Manual or Algorithmic to continue.</p>
+              )}
               {/* Manual mode always submits algorithm_key = "" (null) and no item_limit. */}
               {curationMode === "manual" && <input type="hidden" name="algorithm_key" value="" />}
             </>
           )}
-          {isGuideType && <input type="hidden" name="algorithm_key" value="" />}
+          {isGuideType && mode === "create" && <input type="hidden" name="algorithm_key" value="" />}
         </section>
 
         {/* Resolved Collection — edit mode only. Manual: the membership
-            picker itself. Algorithmic: Generate Collection + the merged
-            algorithm/manual result table. Neither is a "preview" of a public
-            page — no Collection landing page exists yet (see module
-            docstring). */}
+            picker itself. Algorithmic: the auto-resolved algorithm/manual
+            result table (see module docstring — resolved automatically on
+            every visit, no Generate/Regenerate button). Neither is a
+            "preview" of a public page — no Collection landing page exists
+            yet (see module docstring). */}
         {mode === "edit" && initialCollection && (
           <section id="collection-content" className={`${sectionCls} scroll-mt-8`}>
             <h2 className={sectionTitleCls}>Resolved Collection</h2>
+            <p className={hintCls}>
+              {algorithmic
+                ? "This Collection's resolved items, from its Algorithmic setup — refine them with additions, " +
+                  "exclusions, boosts, and ordering."
+                : "Add and order the content that belongs in this Collection."}
+            </p>
             {collectionType === "venue" && (
               <ResolvedCollectionTable
                 kind="venue"
@@ -425,6 +549,8 @@ export default function CollectionForm({
                 algorithmKey={algorithmKeyValue}
                 itemLimit={itemLimitNumber}
                 initialOverrideRows={initialVenueRows}
+                resolvedResult={resolvedResult}
+                resolvedError={resolvedError}
               />
             )}
             {collectionType === "event" && (
@@ -437,6 +563,8 @@ export default function CollectionForm({
                 algorithmKey={algorithmKeyValue}
                 itemLimit={itemLimitNumber}
                 initialOverrideRows={initialEventRows}
+                resolvedResult={resolvedResult}
+                resolvedError={resolvedError}
               />
             )}
             {collectionType === "guide" && (
@@ -453,49 +581,59 @@ export default function CollectionForm({
           </section>
         )}
 
-        {/* Status */}
-        <section className={sectionCls}>
-          <h2 className={sectionTitleCls}>Status</h2>
-          <div>
-            <label className={labelCls} htmlFor="status">Status</label>
-            <select
-              id="status"
-              name="status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as CollectionStatus)}
-              className={inputCls}
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            {err.status && <p className={errorCls}>{err.status}</p>}
-            <div className="mt-2 space-y-1.5">
-              <p className={hintCls}>
-                Draft Collections can be saved incomplete while you work — they&apos;re never assignable to a
-                Homepage Section until Published.
-              </p>
-              <p className={hintCls}>
-                Published requires at least one resolved item for the current geography and curation method.
-                A Collection does not need to be used by any Homepage to be Published — Homepage assignment
-                happens later, from Homepage Management.
-              </p>
-              <p className={hintCls}>
-                If publishing fails, nothing is saved and this Collection stays exactly as it was — fix the
-                issue described above and try again, or choose Draft.
-              </p>
+        {/* Status — edit mode only. Every new Collection is created as Draft
+            (createCollectionAction ignores any submitted status); publishing
+            is a decision made here, after content exists, never on the
+            create page. */}
+        {mode === "edit" && (
+          <section className={sectionCls}>
+            <h2 className={sectionTitleCls}>Status</h2>
+            <div>
+              <label className={labelCls} htmlFor="status">Status</label>
+              <select
+                id="status"
+                name="status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as CollectionStatus)}
+                className={inputCls}
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {err.status && <p className={errorCls}>{err.status}</p>}
+              <div className="mt-2 space-y-1.5">
+                <p className={hintCls}>
+                  Draft Collections can be saved incomplete while you work — they&apos;re never assignable to a
+                  Homepage Section until Published.
+                </p>
+                <p className={hintCls}>
+                  Published requires at least one resolved item for the current geography and curation method.
+                  A Collection can be Published without being assigned to a Homepage.
+                </p>
+                <p className={hintCls}>
+                  If publishing fails, nothing is saved and this Collection stays exactly as it was — fix the
+                  issue described above and try again, or choose Draft.
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        {/* Save / Cancel */}
+        {/* Continue (create) / Save Changes (edit). In create mode this
+            renders directly below Curation Method — Resolved Collection,
+            Homepage Usage, and Status are edit-only, so nothing separates
+            them (see module docstring). Continue is gated by `canCreate`;
+            Save Changes keeps its existing isPending-only gating. */}
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || (mode === "create" && !canCreate)}
             className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isPending ? "Saving…" : mode === "create" ? createButtonLabel() : "Save Changes"}
+            {mode === "create"
+              ? isPending ? "Creating…" : "Continue"
+              : isPending ? "Saving…" : "Save Changes"}
           </button>
           <Link href="/control-panel/collections" className="px-5 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
             Cancel
@@ -503,8 +641,7 @@ export default function CollectionForm({
         </div>
         {mode === "create" && (
           <p className="text-xs text-gray-400 -mt-3">
-            The Collection is created first with these settings. Content selection and refinement happen on
-            the next screen.
+            This Collection is created as a Draft. You can add content and publish it on the next screen.
           </p>
         )}
       </div>
