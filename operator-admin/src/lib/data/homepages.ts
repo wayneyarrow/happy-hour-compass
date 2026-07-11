@@ -1,7 +1,8 @@
 /**
  * Server-side data helpers for the Homepages data layer
- * (homepages, homepage_sections — migration
- * 058_collections_homepages_foundation.sql).
+ * (homepages, homepage_sections — migrations
+ * 058_collections_homepages_foundation.sql and
+ * 060_homepage_sections_editor.sql).
  *
  * Must only be imported from Server Components, Route Handlers, or Server
  * Actions. Client-safe constants, types, and pure validators live in
@@ -36,13 +37,17 @@ import {
 import {
   isHomepageSectionType,
   normalizeHomepageStatus,
+  normalizeContentMode,
   isCollectionAssignableToHomepage,
   type HomepageStatus,
   type HomepageSectionType,
+  type HomepageSectionContentMode,
   type HomepageSummary,
   type HomepageDetail,
   type HomepageSection,
   type HomepageSectionCollectionRef,
+  type HomepageSectionFeatureRef,
+  type HomepageGuideFeatureCandidate,
   type HomepageListFilters,
   type HomepageWriteResult,
   type HomepageMutationResult,
@@ -50,15 +55,25 @@ import {
 
 export {
   HOMEPAGE_SECTION_TYPES,
+  HOMEPAGE_SECTION_KINDS,
+  SECTION_KIND_LABELS,
   isHomepageSectionType,
+  isHomepageSectionKind,
   normalizeHomepageStatus,
+  normalizeContentMode,
   isCollectionAssignableToHomepage,
+  toSectionKind,
+  fromSectionKind,
   type HomepageStatus,
   type HomepageSectionType,
+  type HomepageSectionContentMode,
+  type HomepageSectionKind,
   type HomepageSummary,
   type HomepageDetail,
   type HomepageSection,
   type HomepageSectionCollectionRef,
+  type HomepageSectionFeatureRef,
+  type HomepageGuideFeatureCandidate,
   type HomepageListFilters,
   type HomepageWriteResult,
   type HomepageMutationResult,
@@ -79,9 +94,17 @@ const HOMEPAGE_DETAIL_COLUMNS =
   "og_title, og_description, canonical_url, created_at, updated_at, " +
   "market:markets(name), city:cities!city_id(name)";
 
+// content_mode/venue_id/event_id/guide_id — migration 060. venue_id/event_id/
+// guide_id each have exactly one FK path to their target table (no composite
+// twin the way collection_id has), so none of these embeds need the
+// `!column` disambiguation hint collection_id's embed above needs.
 const SECTION_COLUMNS =
-  "id, homepage_id, section_type, title, collection_id, display_order, is_enabled, created_at, updated_at, " +
-  "collection:collections(id, name, collection_type, status, market_id, city_id)";
+  "id, homepage_id, section_type, content_mode, title, collection_id, venue_id, event_id, guide_id, " +
+  "display_order, is_enabled, created_at, updated_at, " +
+  "collection:collections(id, name, collection_type, status, market_id, city_id), " +
+  "venue:venues(id, name, city), " +
+  "event:events(id, title, venue:venues(name, city)), " +
+  "guide:content_guides(id, title)";
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
@@ -112,14 +135,44 @@ function mapSectionCollectionRef(row: Row | null): HomepageSectionCollectionRef 
   };
 }
 
+/** Resolves whichever of venue/event/guide is the Feature target — only one of the three raw *_id columns is ever set (see homepage_sections_content_mode_target_check, migration 060). */
+function mapSectionFeatureRef(row: Row): HomepageSectionFeatureRef | null {
+  if (row.venue_id && row.venue) {
+    const v = row.venue as Row;
+    return { id: v.id as string, name: v.name as string, secondaryLabel: (v.city as string | null) ?? null };
+  }
+  if (row.event_id && row.event) {
+    const e = row.event as Row;
+    const venue = (e.venue as Row | null) ?? null;
+    const venueName = (venue?.name as string | undefined) ?? "";
+    const venueCity = (venue?.city as string | null) ?? null;
+    return {
+      id: e.id as string,
+      name: e.title as string,
+      secondaryLabel: venueCity ? `${venueName} · ${venueCity}` : venueName || null,
+    };
+  }
+  if (row.guide_id && row.guide) {
+    const g = row.guide as Row;
+    return { id: g.id as string, name: g.title as string, secondaryLabel: null };
+  }
+  return null;
+}
+
 function mapHomepageSectionRow(row: Row): HomepageSection {
+  const contentMode = normalizeContentMode(row.content_mode as string);
   return {
     id:           row.id as string,
     homepageId:   row.homepage_id as string,
     sectionType:  row.section_type as HomepageSectionType,
+    contentMode,
     title:        row.title as string,
     collectionId: (row.collection_id as string | null) ?? null,
     collection:   mapSectionCollectionRef((row.collection as Row | null) ?? null),
+    venueId:      (row.venue_id as string | null) ?? null,
+    eventId:      (row.event_id as string | null) ?? null,
+    guideId:      (row.guide_id as string | null) ?? null,
+    feature:      contentMode === "feature" ? mapSectionFeatureRef(row) : null,
     displayOrder: row.display_order as number,
     isEnabled:    row.is_enabled as boolean,
     createdAt:    row.created_at as string,
@@ -246,6 +299,15 @@ export type CreateHomepageInput = {
  * homepages_one_homepage_per_city — migration 058) as the authoritative
  * duplicate-geography guard, translating a 23505 violation into a readable
  * error rather than surfacing the raw Postgres error.
+ *
+ * Creates with zero Sections — the Homepage Sections editor (control-panel/
+ * homepages/HomepageSectionsEditor.tsx) starts from an empty state and adds
+ * Sections one at a time via "Add Section". An earlier version of this data
+ * layer offered createHomepageWithDefaultTemplate() to pre-seed three fixed,
+ * unassigned Sections (Featured Venues/Events/Guides) — removed once the
+ * Homepage Sections editor task replaced that rigid three-slot template with
+ * a top-down, repeatable Add Section workflow supporting six Section Types;
+ * a fixed three-slot template no longer matches the product.
  */
 export async function createHomepage(
   input: CreateHomepageInput,
@@ -308,40 +370,6 @@ export async function createHomepage(
     return { success: false, error: "Failed to create Homepage." };
   }
   return { success: true, id: (data as Row).id as string };
-}
-
-/** Default V1 template — Featured Venues, Featured Events, Featured Guides, each with no Collection assigned yet (see HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md "Homepage Templates"). */
-const DEFAULT_TEMPLATE_SECTIONS: { sectionType: HomepageSectionType; title: string }[] = [
-  { sectionType: "venue", title: "Featured Venues" },
-  { sectionType: "event", title: "Featured Events" },
-  { sectionType: "guide", title: "Featured Guides" },
-];
-
-/**
- * Creates a Homepage and seeds it with the standard V1 template (Featured
- * Venues / Featured Events / Featured Guides, each unassigned). A reusable,
- * UI-independent data helper — editors never start from a blank page (see
- * spec "Homepage Templates"), but this is opt-in: createHomepage() alone
- * still creates a Homepage with zero sections for callers that want that.
- * Template seeding failure does not roll back Homepage creation — the
- * Homepage still exists and sections can be added manually.
- */
-export async function createHomepageWithDefaultTemplate(
-  input: CreateHomepageInput,
-  actorEmail: string | null = null
-): Promise<HomepageWriteResult> {
-  const created = await createHomepage(input, actorEmail);
-  if (!created.success) return created;
-
-  const templateResult = await replaceHomepageSections(
-    created.id,
-    DEFAULT_TEMPLATE_SECTIONS.map((section) => ({ ...section, collectionId: null })),
-    actorEmail
-  );
-  if (!templateResult.success) {
-    console.error("[createHomepageWithDefaultTemplate] template seeding failed:", templateResult.error);
-  }
-  return created;
 }
 
 // ── Homepage update ──────────────────────────────────────────────────────────
@@ -416,20 +444,18 @@ export async function updateHomepage(
   return { success: true };
 }
 
-// ── Section <-> Collection compatibility validation ─────────────────────────
+// ── Section content validation ────────────────────────────────────────────────
 
-/** Shared by createHomepageSection, assignCollectionToSection, and replaceHomepageSections so the rule is never re-derived per call site. */
+/** Shared by createHomepageSection and updateHomepageSectionContent for Collection-mode Sections. */
 async function validateSectionCollectionAssignment(
   homepage: { marketId: string; cityId: string | null },
   sectionType: HomepageSectionType,
-  collectionId: string | null
+  collectionId: string
 ): Promise<string | null> {
-  if (collectionId === null) return null;
-
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("collections")
-    .select("id, collection_type, market_id, city_id, archived_at")
+    .select("id, collection_type, status, market_id, city_id, archived_at")
     .eq("id", collectionId)
     .maybeSingle();
 
@@ -438,14 +464,13 @@ async function validateSectionCollectionAssignment(
 
   // Archived Collections (migration 059) can't be assigned to a new
   // Homepage Section — archiving is a separate lifecycle from `status`, but
-  // an archived Collection is no longer an active editorial asset. This
-  // check has no current caller wired to a live route (Homepage Management
-  // has no admin UI yet — see CLAUDE.md), but it's the correct enforcement
-  // point once one exists, so it's added now rather than deferred.
+  // an archived Collection is no longer an active editorial asset.
   if (row.archived_at) {
     return "This Collection is archived and can't be assigned to a Homepage Section. Restore it first.";
   }
-
+  if (normalizeCollectionStatus(row.status as string) !== "published") {
+    return "Only Published Collections can be assigned to a Homepage Section.";
+  }
   if ((row.collection_type as string) !== sectionType) {
     return `A ${sectionType} section requires a ${sectionType} Collection.`;
   }
@@ -456,16 +481,127 @@ async function validateSectionCollectionAssignment(
   return null;
 }
 
-// ── Homepage Sections ─────────────────────────────────────────────────────────
+/**
+ * Feature-content geography rule — deliberately different from
+ * isCollectionAssignableToHomepage's Collection-reuse rule. A single Venue/
+ * Event/Guide always belongs to one concrete city; there is no "market-level
+ * Venue" the way there's a market-level Collection (city_id IS NULL). So a
+ * Market Homepage may feature anything within the market (any city); a City
+ * Homepage may only feature content in that exact city — no market-level
+ * fallback, unlike Collection reuse.
+ */
+function isFeatureContentAssignableToHomepage(
+  homepage: { marketId: string; cityId: string | null },
+  content: { marketId: string | null; cityId: string | null }
+): boolean {
+  if (content.marketId !== homepage.marketId) return false;
+  if (homepage.cityId === null) return true;
+  return content.cityId === homepage.cityId;
+}
+
+/** Shared by createHomepageSection and updateHomepageSectionContent for Feature-mode Sections — mirrors validateSectionCollectionAssignment's shape. */
+async function validateFeatureContentAssignment(
+  homepage: { marketId: string; cityId: string | null },
+  sectionType: HomepageSectionType,
+  contentId: string
+): Promise<string | null> {
+  const supabase = createAdminClient();
+
+  if (sectionType === "venue") {
+    const { data, error } = await supabase
+      .from("venues")
+      .select("id, market_id, city_id, is_published")
+      .eq("id", contentId)
+      .maybeSingle();
+    if (error || !data) return "Venue not found.";
+    const row = data as Row;
+    if (!row.is_published) return "This Venue is not published and can't be featured.";
+    if (!isFeatureContentAssignableToHomepage(homepage, { marketId: (row.market_id as string | null) ?? null, cityId: (row.city_id as string | null) ?? null })) {
+      return "This Venue's geography is not compatible with this Homepage.";
+    }
+    return null;
+  }
+
+  if (sectionType === "event") {
+    const { data, error } = await supabase
+      .from("events")
+      .select("id, is_published, venue:venues(market_id, city_id)")
+      .eq("id", contentId)
+      .maybeSingle();
+    if (error || !data) return "Event not found.";
+    const row = data as Row;
+    if (!row.is_published) return "This Event is not published and can't be featured.";
+    const venue = (row.venue as Row | null) ?? {};
+    if (!isFeatureContentAssignableToHomepage(homepage, { marketId: (venue.market_id as string | null) ?? null, cityId: (venue.city_id as string | null) ?? null })) {
+      return "This Event's geography is not compatible with this Homepage.";
+    }
+    return null;
+  }
+
+  // guide
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select("id, status, market_id, city_id")
+    .eq("id", contentId)
+    .maybeSingle();
+  if (error || !data) return "Guide not found.";
+  const row = data as Row;
+  if ((row.status as string) !== "published") {
+    return "This Guide is not published and can't be featured.";
+  }
+  if (!isFeatureContentAssignableToHomepage(homepage, { marketId: (row.market_id as string | null) ?? null, cityId: (row.city_id as string | null) ?? null })) {
+    return "This Guide's geography is not compatible with this Homepage.";
+  }
+  return null;
+}
+
+type ContentColumn = "collection_id" | "venue_id" | "event_id" | "guide_id";
+
+/** "A Homepage may not use the same Collection or Feature more than once" — checked against every OTHER Section on this Homepage. excludeSectionId lets an edit re-save its own current content without tripping over itself. Backed by the four partial unique indexes added in migration 060 (homepage_sections_unique_*_per_homepage) as the authoritative DB-level guard; this is the friendly pre-check. */
+async function isContentAlreadyUsed(
+  homepageId: string,
+  column: ContentColumn,
+  value: string,
+  excludeSectionId: string | null
+): Promise<boolean> {
+  const supabase = createAdminClient();
+  let query = supabase.from("homepage_sections").select("id").eq("homepage_id", homepageId).eq(column, value);
+  if (excludeSectionId) query = query.neq("id", excludeSectionId);
+  const { data } = await query.maybeSingle();
+  return Boolean(data);
+}
+
+const CONTENT_COLUMN_LABEL: Record<ContentColumn, string> = {
+  collection_id: "Collection",
+  venue_id: "Venue",
+  event_id: "Event",
+  guide_id: "Guide",
+};
+
+function contentColumnFor(sectionType: HomepageSectionType): ContentColumn {
+  return sectionType === "venue" ? "venue_id" : sectionType === "event" ? "event_id" : "guide_id";
+}
+
+// ── Homepage Sections — create ────────────────────────────────────────────────
 
 export type CreateHomepageSectionInput = {
   sectionType: HomepageSectionType;
+  contentMode: HomepageSectionContentMode;
   title: string;
   collectionId?: string | null;
-  displayOrder?: number;
-  isEnabled?: boolean;
+  venueId?: string | null;
+  eventId?: string | null;
+  guideId?: string | null;
 };
 
+/**
+ * Adds a Section to the bottom of a Homepage. No more one-Section-per-type
+ * limit (migration 060 dropped homepage_sections_unique_type_per_homepage) —
+ * "repeat as needed" is the approved workflow. display_order is always
+ * computed as the current max + 1, so a new Section always lands at the
+ * bottom, matching "The section is immediately added to the bottom of the
+ * Homepage."
+ */
 export async function createHomepageSection(
   homepageId: string,
   input: CreateHomepageSectionInput,
@@ -477,127 +613,154 @@ export async function createHomepageSection(
     return { success: false, error: `Invalid section type "${input.sectionType}".` };
   }
   const title = input.title.trim();
-  if (!title) return { success: false, error: "Title is required." };
+  if (!title) return { success: false, error: "A public heading is required." };
 
   const supabase = createAdminClient();
+  const insertRow: Row = {
+    homepage_id: homepageId,
+    section_type: input.sectionType,
+    content_mode: input.contentMode,
+    title,
+    collection_id: null,
+    venue_id: null,
+    event_id: null,
+    guide_id: null,
+    is_enabled: true,
+    created_by: actorEmail,
+    updated_by: actorEmail,
+  };
 
-  const { data: existingSection } = await supabase
-    .from("homepage_sections")
-    .select("id")
-    .eq("homepage_id", homepageId)
-    .eq("section_type", input.sectionType)
-    .maybeSingle();
-  if (existingSection) {
-    return { success: false, error: `This Homepage already has a ${input.sectionType} section.` };
+  if (input.contentMode === "collection") {
+    const collectionId = input.collectionId ?? null;
+    if (!collectionId) return { success: false, error: "Select a Collection." };
+    const collectionError = await validateSectionCollectionAssignment(homepage, input.sectionType, collectionId);
+    if (collectionError) return { success: false, error: collectionError };
+    if (await isContentAlreadyUsed(homepageId, "collection_id", collectionId, null)) {
+      return { success: false, error: "This Collection is already used on this Homepage." };
+    }
+    insertRow.collection_id = collectionId;
+  } else {
+    const column = contentColumnFor(input.sectionType);
+    const contentId =
+      input.sectionType === "venue" ? input.venueId ?? null :
+      input.sectionType === "event" ? input.eventId ?? null :
+      input.guideId ?? null;
+    if (!contentId) return { success: false, error: `Select a ${CONTENT_COLUMN_LABEL[column]}.` };
+    const contentError = await validateFeatureContentAssignment(homepage, input.sectionType, contentId);
+    if (contentError) return { success: false, error: contentError };
+    if (await isContentAlreadyUsed(homepageId, column, contentId, null)) {
+      return { success: false, error: `This ${CONTENT_COLUMN_LABEL[column]} is already used on this Homepage.` };
+    }
+    insertRow[column] = contentId;
   }
 
-  const collectionId = input.collectionId ?? null;
-  const collectionError = await validateSectionCollectionAssignment(homepage, input.sectionType, collectionId);
-  if (collectionError) return { success: false, error: collectionError };
+  // Append to the bottom.
+  const { data: maxRow } = await supabase
+    .from("homepage_sections")
+    .select("display_order")
+    .eq("homepage_id", homepageId)
+    .order("display_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  insertRow.display_order = maxRow ? (maxRow.display_order as number) + 1 : 0;
 
   const { data, error } = await supabase
     .from("homepage_sections")
-    .insert({
-      homepage_id: homepageId,
-      section_type: input.sectionType,
-      title,
-      collection_id: collectionId,
-      display_order: input.displayOrder ?? 0,
-      is_enabled: input.isEnabled ?? true,
-      created_by: actorEmail,
-      updated_by: actorEmail,
-    })
+    .insert(insertRow)
     .select("id")
     .single();
 
   if (error) {
     console.error("[createHomepageSection]", error.message);
     if (error.code === "23505") {
-      return { success: false, error: `This Homepage already has a ${input.sectionType} section.` };
+      return { success: false, error: "This content is already used on this Homepage." };
     }
     return { success: false, error: "Failed to create section." };
   }
   return { success: true, id: (data as Row).id as string };
 }
 
-export async function updateHomepageSectionTitle(
+// ── Homepage Sections — edit (heading + content together) ───────────────────
+
+export type UpdateHomepageSectionContentInput = {
+  title: string;
+  collectionId?: string | null;
+  venueId?: string | null;
+  eventId?: string | null;
+  guideId?: string | null;
+};
+
+/**
+ * Edits a Section's public heading and/or its assigned content.
+ * sectionType and contentMode are locked at creation and never change here
+ * — "Edit... Change the public heading. Select different compatible
+ * content" (approved behavior does not include changing Section Type).
+ * Only the one content column matching the Section's existing
+ * sectionType/contentMode is ever read from `input` or written.
+ */
+export async function updateHomepageSectionContent(
   sectionId: string,
-  title: string,
-  actorEmail: string | null = null
-): Promise<HomepageMutationResult> {
-  const trimmed = title.trim();
-  if (!trimmed) return { success: false, error: "Title is required." };
-
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("homepage_sections")
-    .update({ title: trimmed, updated_by: actorEmail })
-    .eq("id", sectionId);
-
-  if (error) {
-    console.error("[updateHomepageSectionTitle]", error.message);
-    return { success: false, error: "Failed to update section title." };
-  }
-  return { success: true };
-}
-
-/** Assigns (or clears, with collectionId = null) a Section's Collection. Re-validates type + geography compatibility every time. */
-export async function assignCollectionToSection(
-  sectionId: string,
-  collectionId: string | null,
+  input: UpdateHomepageSectionContentInput,
   actorEmail: string | null = null
 ): Promise<HomepageMutationResult> {
   const supabase = createAdminClient();
-
   const { data: section, error: sectionError } = await supabase
     .from("homepage_sections")
-    .select("id, homepage_id, section_type")
+    .select("id, homepage_id, section_type, content_mode")
     .eq("id", sectionId)
     .maybeSingle();
   if (sectionError || !section) return { success: false, error: "Section not found." };
   const sectionRow = section as Row;
+  const homepageId = sectionRow.homepage_id as string;
+  const sectionType = sectionRow.section_type as HomepageSectionType;
+  const contentMode = normalizeContentMode(sectionRow.content_mode as string);
 
-  const homepage = await getHomepageForValidation(sectionRow.homepage_id as string);
+  const homepage = await getHomepageForValidation(homepageId);
   if (!homepage) return { success: false, error: "Homepage not found." };
 
-  const collectionError = await validateSectionCollectionAssignment(
-    homepage,
-    sectionRow.section_type as HomepageSectionType,
-    collectionId
-  );
-  if (collectionError) return { success: false, error: collectionError };
+  const title = input.title.trim();
+  if (!title) return { success: false, error: "A public heading is required." };
 
-  const { error } = await supabase
-    .from("homepage_sections")
-    .update({ collection_id: collectionId, updated_by: actorEmail })
-    .eq("id", sectionId);
+  const patch: Row = { title, updated_by: actorEmail };
 
-  if (error) {
-    console.error("[assignCollectionToSection]", error.message);
-    return { success: false, error: "Failed to assign Collection." };
+  if (contentMode === "collection") {
+    const collectionId = input.collectionId ?? null;
+    if (!collectionId) return { success: false, error: "Select a Collection." };
+    const collectionError = await validateSectionCollectionAssignment(homepage, sectionType, collectionId);
+    if (collectionError) return { success: false, error: collectionError };
+    if (await isContentAlreadyUsed(homepageId, "collection_id", collectionId, sectionId)) {
+      return { success: false, error: "This Collection is already used on this Homepage." };
+    }
+    patch.collection_id = collectionId;
+  } else {
+    const column = contentColumnFor(sectionType);
+    const contentId =
+      sectionType === "venue" ? input.venueId ?? null :
+      sectionType === "event" ? input.eventId ?? null :
+      input.guideId ?? null;
+    if (!contentId) return { success: false, error: `Select a ${CONTENT_COLUMN_LABEL[column]}.` };
+    const contentError = await validateFeatureContentAssignment(homepage, sectionType, contentId);
+    if (contentError) return { success: false, error: contentError };
+    if (await isContentAlreadyUsed(homepageId, column, contentId, sectionId)) {
+      return { success: false, error: `This ${CONTENT_COLUMN_LABEL[column]} is already used on this Homepage.` };
+    }
+    patch[column] = contentId;
   }
-  return { success: true };
-}
 
-export async function setHomepageSectionEnabled(
-  sectionId: string,
-  isEnabled: boolean,
-  actorEmail: string | null = null
-): Promise<HomepageMutationResult> {
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("homepage_sections")
-    .update({ is_enabled: isEnabled, updated_by: actorEmail })
-    .eq("id", sectionId);
-
+  const { error } = await supabase.from("homepage_sections").update(patch).eq("id", sectionId);
   if (error) {
-    console.error("[setHomepageSectionEnabled]", error.message);
+    console.error("[updateHomepageSectionContent]", error.message);
+    if (error.code === "23505") {
+      return { success: false, error: "This content is already used on this Homepage." };
+    }
     return { success: false, error: "Failed to update section." };
   }
   return { success: true };
 }
 
-/** Reassigns display_order 0..n-1 to match array position. Rejects if the id set doesn't exactly match the Homepage's current sections (deterministic — no partial reorders). */
+// ── Homepage Sections — reorder ──────────────────────────────────────────────
+
+/** Reassigns display_order 0..n-1 to match array position. Rejects if the id set doesn't exactly match the Homepage's current sections (deterministic — no partial reorders). Powers Move Up / Move Down (the caller swaps two adjacent ids and passes the full resulting order). */
 export async function updateHomepageSectionOrder(
   homepageId: string,
   orderedSectionIds: string[],
@@ -634,87 +797,38 @@ export async function updateHomepageSectionOrder(
   return { success: true };
 }
 
-export type ReplaceSectionInput = {
-  sectionType: HomepageSectionType;
-  title: string;
-  collectionId: string | null;
-  isEnabled?: boolean;
-};
+// ── Homepage Sections — remove ───────────────────────────────────────────────
 
-/**
- * Replaces a Homepage's complete ordered section set. Validates every
- * section (type, no duplicate types, Collection compatibility) before
- * writing any of them — matches the validate-then-delete-then-insert
- * pattern used by collections.ts's replace*Overrides functions. display_order
- * is always assigned deterministically from array position (0..n-1),
- * regardless of any order implied by input.
- */
-export async function replaceHomepageSections(
+/** Removes a Section from a Homepage only — never touches the underlying Collection/Venue/Event/Guide. (ON DELETE CASCADE only ever runs the other direction: deleting the *content* removes a Feature Section that pointed at it, never the reverse.) */
+export async function deleteHomepageSection(
   homepageId: string,
-  sections: ReplaceSectionInput[],
-  actorEmail: string | null = null
+  sectionId: string
 ): Promise<HomepageMutationResult> {
-  const homepage = await getHomepageForValidation(homepageId);
-  if (!homepage) return { success: false, error: "Homepage not found." };
-
-  const seenTypes = new Set<string>();
-  for (const section of sections) {
-    if (!isHomepageSectionType(section.sectionType)) {
-      return { success: false, error: `Invalid section type "${section.sectionType}".` };
-    }
-    if (seenTypes.has(section.sectionType)) {
-      return {
-        success: false,
-        error: `Duplicate section type "${section.sectionType}" — a Homepage may have at most one section of each type.`,
-      };
-    }
-    seenTypes.add(section.sectionType);
-
-    if (!section.title.trim()) return { success: false, error: "Title is required for every section." };
-
-    const collectionError = await validateSectionCollectionAssignment(
-      homepage,
-      section.sectionType,
-      section.collectionId
-    );
-    if (collectionError) return { success: false, error: `${collectionError} (section: ${section.sectionType})` };
-  }
-
   const supabase = createAdminClient();
-  const { error: deleteError } = await supabase.from("homepage_sections").delete().eq("homepage_id", homepageId);
-  if (deleteError) {
-    console.error("[replaceHomepageSections] delete failed:", deleteError.message);
-    return { success: false, error: "Failed to replace sections." };
-  }
-  if (sections.length === 0) return { success: true };
+  const { error } = await supabase
+    .from("homepage_sections")
+    .delete()
+    .eq("id", sectionId)
+    .eq("homepage_id", homepageId);
 
-  const { error: insertError } = await supabase.from("homepage_sections").insert(
-    sections.map((section, index) => ({
-      homepage_id: homepageId,
-      section_type: section.sectionType,
-      title: section.title.trim(),
-      collection_id: section.collectionId,
-      display_order: index,
-      is_enabled: section.isEnabled ?? true,
-      created_by: actorEmail,
-      updated_by: actorEmail,
-    }))
-  );
-  if (insertError) {
-    console.error("[replaceHomepageSections] insert failed:", insertError.message);
-    return { success: false, error: "Failed to replace sections." };
+  if (error) {
+    console.error("[deleteHomepageSection]", error.message);
+    return { success: false, error: "Failed to remove section." };
   }
   return { success: true };
 }
 
-// ── Assignable Collections (future editor support) ──────────────────────────
+// ── Assignable content for the Sections editor ──────────────────────────────
 
 /**
  * Published Collections of the right type, filtered to this Homepage's
- * geography per isCollectionAssignableToHomepage — the same "editors should
+ * geography per isCollectionAssignableToHomepage — the "editors should
  * always be guided toward the correct choices through filtered, geography-
- * aware workflows" behavior the spec describes for the future section
- * editor's Collection picker.
+ * aware workflows" behavior the spec describes for the Section editor's
+ * Collection picker. Does not exclude Collections already used elsewhere on
+ * this Homepage — the editor shows those disabled-but-visible instead (see
+ * product task "Already-used content should remain visible but be
+ * disabled").
  */
 export async function getAssignableCollectionsForSection(
   homepageId: string,
@@ -727,14 +841,58 @@ export async function getAssignableCollectionsForSection(
   return candidates.filter((c) => isCollectionAssignableToHomepage(homepage, { marketId: c.marketId, cityId: c.cityId }));
 }
 
+/**
+ * Published-only guide candidates for a Guide Feature Section — mirrors
+ * getEligibleGuidesForCollection (collections.ts) but restricted to
+ * Published guides only. A Guide Collection may stage Draft guides before
+ * the Collection itself is published; a Guide Feature Section publishes a
+ * single guide directly to the public Homepage, so only already-Published
+ * guides are eligible. Takes homepageId (not raw marketId/cityId) to mirror
+ * getAssignableCollectionsForSection's signature exactly.
+ */
+export async function getAssignableGuidesForFeatureSection(
+  homepageId: string
+): Promise<HomepageGuideFeatureCandidate[]> {
+  const homepage = await getHomepageForValidation(homepageId);
+  if (!homepage) return [];
+
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("content_guides")
+    .select("id, title, market:markets(name), city:cities(name), city_id")
+    .eq("market_id", homepage.marketId)
+    .eq("status", "published");
+  if (homepage.cityId) query = query.eq("city_id", homepage.cityId);
+
+  const { data, error } = await query.order("title", { ascending: true });
+  if (error) {
+    console.error("[getAssignableGuidesForFeatureSection]", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row: Row) => {
+    const market = (row.market as Row | null) ?? {};
+    const city = (row.city as Row | null) ?? null;
+    return {
+      id: row.id as string,
+      title: row.title as string,
+      marketName: (market.name as string | undefined) ?? "",
+      cityName: (city?.name as string | undefined) ?? null,
+    };
+  });
+}
+
 // ── Public loaders (read-only; not wired to any route yet) ─────────────────
 //
 // Every loader here returns only a published Homepage with enabled Sections,
-// and only surfaces a Section's Collection when that Collection is itself
-// published — a draft Collection is not yet "eligible" content, mirroring
-// the spec's "an assigned Collection with no eligible members does not
-// render publicly" principle at the publish-status level. This is a data
-// safety net only; no card resolution or rendering happens here (deferred).
+// and only surfaces a Collection-mode Section's Collection when that
+// Collection is itself published — a draft Collection is not yet "eligible"
+// content, mirroring the spec's "an assigned Collection with no eligible
+// members does not render publicly" principle at the publish-status level.
+// Feature-mode Section content eligibility (e.g. a Featured Venue that's
+// since been unpublished) is not filtered here yet — public rendering is a
+// later task; this is a data safety net only, no card resolution or
+// rendering happens here.
 
 async function getPublishedHomepageByGeography(
   marketId: string,

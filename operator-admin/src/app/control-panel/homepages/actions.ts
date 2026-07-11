@@ -6,19 +6,28 @@ import { createClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { logAuditEvent } from "@/lib/auditLog";
 import {
-  createHomepageWithDefaultTemplate,
+  createHomepage,
   updateHomepage,
   getHomepageById,
   getHomepageFormGeography,
+  createHomepageSection,
+  updateHomepageSectionContent,
+  deleteHomepageSection,
+  updateHomepageSectionOrder,
   type HomepageStatus,
+  type HomepageSection,
+  type HomepageSectionType,
+  type HomepageSectionContentMode,
 } from "@/lib/data/homepages";
 import { homepageDisplayName } from "@/lib/seo/homepageSeo";
+import { searchVenueCandidates, searchEventCandidates, type AttachmentCandidate } from "@/lib/data/contentGuideAttachments";
 
 /**
- * Server actions for Homepage Management V1
- * (docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md). Mirrors the
- * create/update action pattern already used by collections/actions.ts —
- * every action independently re-checks CP admin access.
+ * Server actions for Homepage Management V1 + the Homepage Sections editor
+ * (docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md; Section-editor task).
+ * Mirrors the create/update action pattern already used by
+ * collections/actions.ts — every action independently re-checks CP admin
+ * access.
  *
  * createHomepageAction always writes status = "draft", regardless of what
  * (if anything) the client submitted — the create page never renders a
@@ -26,12 +35,16 @@ import { homepageDisplayName } from "@/lib/seo/homepageSeo";
  * createCollectionAction's identical guarantee. Publishing is a decision
  * made on the Edit page, after Sections and SEO are in place.
  *
- * createHomepageAction seeds the standard V1 template (Featured Venues /
- * Featured Events / Featured Guides, each unassigned) via
- * createHomepageWithDefaultTemplate() — editors never start from a blank
- * Homepage (see HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md "Homepage Templates").
- * Assigning Collections to those Sections is out of scope for this task —
- * see HomepageForm.tsx's "Homepage Sections" placeholder card.
+ * A new Homepage now starts with zero Sections (plain createHomepage(), not
+ * the earlier createHomepageWithDefaultTemplate() three-slot auto-template).
+ * The Homepage Sections editor's own "begins with [Add Section]" / empty
+ * state (HomepageSectionsEditor.tsx) replaces that rigid template — an
+ * editor now assembles Sections top-down, one at a time, choosing from six
+ * real Section Types (Venue/Event/Guide Collection or Feature) rather than
+ * starting from three fixed, always-unassigned slots. This is a deliberate
+ * behavior change from the previous Homepage Management task — see the
+ * Homepage Sections editor task's implementation summary for the full
+ * rationale.
  *
  * Homepage Name is never read from formData — there is no `name` input in
  * HomepageForm at all. Both actions independently derive it via
@@ -41,17 +54,35 @@ import { homepageDisplayName } from "@/lib/seo/homepageSeo";
  * on create).
  *
  * updateHomepageAction blocks a Market/City change while any of the
- * Homepage's Sections already carries an assigned Collection — that
- * Collection's geography compatibility was validated against the Homepage's
- * *current* geography (isCollectionAssignableToHomepage /
- * validateSectionCollectionAssignment in homepages.ts), so silently
- * reassigning the Homepage's own geography out from under it would leave a
- * stale, unvalidated assignment. This task builds no Section editor, so no
- * Section can currently acquire a Collection through the admin UI — but the
- * guard is the correct enforcement point regardless of which future editor
- * (or direct data-layer call) puts a Section into that state, mirroring
- * updateCollectionAction's identical "geography-change safety check" for
- * Collection membership.
+ * Homepage's Sections already carries assigned content (a Collection, or a
+ * Feature Venue/Event/Guide) — that content's geography compatibility was
+ * validated against the Homepage's *current* geography
+ * (isCollectionAssignableToHomepage / validateSectionContentAssignment in
+ * homepages.ts), so silently reassigning the Homepage's own geography out
+ * from under it would leave a stale, unvalidated assignment. The admin can
+ * remove the Section's content (or the Section itself) first, then change
+ * Market/City, mirroring updateCollectionAction's identical
+ * "geography-change safety check" for Collection membership.
+ *
+ * ── Homepage Sections editor actions ─────────────────────────────────────
+ *
+ * createSectionAction / updateSectionAction / removeSectionAction /
+ * moveSectionAction are plain async functions (not useActionState-bound
+ * <form> actions) — the Sections editor is an independently-interactive
+ * mini-CRUD area nested inside HomepageForm's outer <form>, the same way
+ * ResolvedCollectionTable.tsx's override editing calls
+ * generateCollectionResultAction directly via startTransition rather than
+ * submitting the parent form. Every one of these returns the Homepage's
+ * complete, freshly-reloaded Section list on success (not just the mutated
+ * row) — the row count is always small, so refetching the whole list after
+ * every mutation is cheap and removes any risk of the client's local state
+ * ever drifting from the database.
+ *
+ * Duplicate-content and geography validation happen in
+ * validateSectionContentAssignment (homepages.ts) on every create/update —
+ * the "Already used on this Homepage" UI graying in
+ * HomepageSectionsEditor.tsx is a responsive guide only, never the source
+ * of truth.
  */
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -178,7 +209,8 @@ export async function createHomepageAction(
     };
   }
 
-  const result = await createHomepageWithDefaultTemplate(
+  // Empty-state creation — no default template. See module docstring.
+  const result = await createHomepage(
     { name: nameResult.name, marketId, cityId, status, ...seo },
     callerEmail
   );
@@ -233,11 +265,13 @@ export async function updateHomepageAction(
 
   // ── Geography-change safety check — see module docstring ────────────────
   const geographyChanged = marketId !== existing.marketId || cityId !== existing.cityId;
-  const hasAssignedSections = existing.sections.some((s) => s.collectionId !== null);
+  const hasAssignedSections = existing.sections.some(
+    (s) => s.collectionId !== null || s.venueId !== null || s.eventId !== null || s.guideId !== null
+  );
   if (geographyChanged && hasAssignedSections) {
     return {
       error:
-        "This Homepage has Sections with an assigned Collection. Unassign them first, then change Market/City.",
+        "This Homepage has Sections with assigned content. Remove that content first, then change Market/City.",
       values,
     };
   }
@@ -271,4 +305,192 @@ export async function updateHomepageAction(
   revalidatePath("/control-panel/homepages");
   revalidatePath(`/control-panel/homepages/${homepageId}/edit`);
   redirect(`/control-panel/homepages/${homepageId}/edit?success=updated`);
+}
+
+// ── Homepage Sections editor — content search ───────────────────────────────
+//
+// Reuses contentGuideAttachments.ts's searchVenueCandidates/searchEventCandidates
+// verbatim (the same established selector already used by Collections' own
+// Feature-equivalent content search — see collections/actions.ts's identical
+// filterToCollectionGeography). Unlike that Collections picker (which
+// excludes already-selected ids entirely, since Collections allow multi-item
+// membership), results here are never excluded for being already used
+// elsewhere on the Homepage — the product spec requires those to remain
+// visible, just disabled ("Already used on this Homepage"), which
+// HomepageSectionsEditor.tsx computes client-side from the Homepage's own
+// already-loaded Section list.
+
+export type FeatureSearchInput = {
+  marketId: string;
+  cityId: string | null;
+  query: string;
+};
+
+function filterToHomepageGeography(results: AttachmentCandidate[], cityId: string | null): AttachmentCandidate[] {
+  if (cityId) {
+    // City Homepage — only same-city matches are eligible Features.
+    return results.filter((r) => r.matchTier === "city");
+  }
+  // Market Homepage — same-market (or same-city, a subset) matches are eligible.
+  return results.filter((r) => r.matchTier === "market" || r.matchTier === "city");
+}
+
+export async function searchHomepageVenueFeatureCandidatesAction(
+  input: FeatureSearchInput
+): Promise<AttachmentCandidate[]> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return [];
+  if (!input.marketId) return [];
+  const results = await searchVenueCandidates({
+    marketId: input.marketId,
+    cityId: input.cityId,
+    neighbourhoodId: null,
+    query: input.query,
+  });
+  return filterToHomepageGeography(results, input.cityId);
+}
+
+export async function searchHomepageEventFeatureCandidatesAction(
+  input: FeatureSearchInput
+): Promise<AttachmentCandidate[]> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return [];
+  if (!input.marketId) return [];
+  const results = await searchEventCandidates({
+    marketId: input.marketId,
+    cityId: input.cityId,
+    neighbourhoodId: null,
+    query: input.query,
+  });
+  return filterToHomepageGeography(results, input.cityId);
+}
+
+// ── Homepage Sections editor — Section CRUD ─────────────────────────────────
+
+export type SectionActionResult =
+  | { success: true; sections: HomepageSection[] }
+  | { success: false; error: string };
+
+async function reloadSections(homepageId: string): Promise<HomepageSection[]> {
+  const homepage = await getHomepageById(homepageId);
+  return homepage?.sections ?? [];
+}
+
+export type SectionContentActionInput = {
+  collectionId: string | null;
+  venueId: string | null;
+  eventId: string | null;
+  guideId: string | null;
+};
+
+export type CreateSectionActionInput = SectionContentActionInput & {
+  sectionType: HomepageSectionType;
+  contentMode: HomepageSectionContentMode;
+  title: string;
+};
+
+export async function createSectionAction(
+  homepageId: string,
+  input: CreateSectionActionInput
+): Promise<SectionActionResult> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { success: false, error: "Unauthorized." };
+
+  const result = await createHomepageSection(homepageId, input, callerEmail);
+  if (!result.success) return { success: false, error: result.error };
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action: "homepage_section_created",
+    entityType: "homepage_section",
+    entityId: result.id,
+    entityName: input.title,
+  });
+
+  revalidatePath(`/control-panel/homepages/${homepageId}/edit`);
+  return { success: true, sections: await reloadSections(homepageId) };
+}
+
+export type UpdateSectionActionInput = SectionContentActionInput & {
+  title: string;
+};
+
+export async function updateSectionAction(
+  homepageId: string,
+  sectionId: string,
+  input: UpdateSectionActionInput
+): Promise<SectionActionResult> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { success: false, error: "Unauthorized." };
+
+  const result = await updateHomepageSectionContent(sectionId, input, callerEmail);
+  if (!result.success) return { success: false, error: result.error };
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action: "homepage_section_updated",
+    entityType: "homepage_section",
+    entityId: sectionId,
+    entityName: input.title,
+  });
+
+  revalidatePath(`/control-panel/homepages/${homepageId}/edit`);
+  return { success: true, sections: await reloadSections(homepageId) };
+}
+
+/** Removes a Section from the Homepage only — never the underlying Collection/Venue/Event/Guide (see deleteHomepageSection's doc comment). A simple confirm() in the client gates this before it's ever called. */
+export async function removeSectionAction(
+  homepageId: string,
+  sectionId: string
+): Promise<SectionActionResult> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { success: false, error: "Unauthorized." };
+
+  const homepage = await getHomepageById(homepageId);
+  const removedTitle = homepage?.sections.find((s) => s.id === sectionId)?.title ?? null;
+
+  const result = await deleteHomepageSection(homepageId, sectionId);
+  if (!result.success) return { success: false, error: result.error };
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action: "homepage_section_removed",
+    entityType: "homepage_section",
+    entityId: sectionId,
+    entityName: removedTitle,
+  });
+
+  revalidatePath(`/control-panel/homepages/${homepageId}/edit`);
+  return { success: true, sections: await reloadSections(homepageId) };
+}
+
+/** Move Up / Move Down — swaps the Section with its adjacent neighbour and persists via the existing updateHomepageSectionOrder (reassigns display_order 0..n-1). A no-op (returns current state, not an error) if already at the boundary — the client-side disabled state on the first/last row's button is the primary guard; this is the server-side backstop. */
+export async function moveSectionAction(
+  homepageId: string,
+  sectionId: string,
+  direction: "up" | "down"
+): Promise<SectionActionResult> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { success: false, error: "Unauthorized." };
+
+  const homepage = await getHomepageById(homepageId);
+  if (!homepage) return { success: false, error: "Homepage not found." };
+
+  const ordered = [...homepage.sections].sort((a, b) => a.displayOrder - b.displayOrder);
+  const index = ordered.findIndex((s) => s.id === sectionId);
+  if (index === -1) return { success: false, error: "Section not found." };
+
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= ordered.length) {
+    return { success: true, sections: homepage.sections };
+  }
+
+  const reordered = [...ordered];
+  [reordered[index], reordered[swapIndex]] = [reordered[swapIndex], reordered[index]];
+
+  const result = await updateHomepageSectionOrder(homepageId, reordered.map((s) => s.id), callerEmail);
+  if (!result.success) return { success: false, error: result.error };
+
+  revalidatePath(`/control-panel/homepages/${homepageId}/edit`);
+  return { success: true, sections: await reloadSections(homepageId) };
 }

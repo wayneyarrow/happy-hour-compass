@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import type { MarketRecord, CityRecord } from "@/lib/geo/types";
-import type { HomepageDetail, HomepageStatus, HomepageSummary } from "@/lib/data/homepages";
+import type {
+  HomepageDetail,
+  HomepageStatus,
+  HomepageSummary,
+  HomepageGuideFeatureCandidate,
+} from "@/lib/data/homepages";
+import type { CollectionSummary } from "@/lib/data/collectionsShared";
 import {
   generateHomepageSeo,
   homepageDisplayName,
@@ -14,6 +20,7 @@ import {
   type SeoFieldKey,
 } from "@/lib/seo/homepageSeo";
 import { createHomepageAction, updateHomepageAction, type HomepageFormState } from "./actions";
+import HomepageSectionsEditor from "./HomepageSectionsEditor";
 
 /**
  * Shared create/edit form for Homepage Management V1
@@ -29,8 +36,9 @@ import { createHomepageAction, updateHomepageAction, type HomepageFormState } fr
  *   reasoning CollectionForm.tsx uses for gating Resolved Collection/Status
  *   to edit-only.
  *
- *   Edit mode: Geography -> Homepage Details -> Homepage Sections
- *   (placeholder — no editor built yet) -> SEO -> Status -> Save Changes.
+ *   Edit mode: Geography -> Homepage Details -> Homepage Sections (the
+ *   editorial assembly tool — see HomepageSectionsEditor.tsx) -> SEO ->
+ *   Status -> Save Changes.
  *
  * Geography comes first in both modes because it drives everything below
  * it: the generated Homepage Name, the generated SEO defaults, and (later)
@@ -74,18 +82,16 @@ type Props = {
   existingHomepages?: HomepageSummary[];
   /** True only right after a fresh create-and-redirect (`success=created`) — triggers the one-time smooth-scroll to Homepage Sections. See module docstring. */
   scrollToSectionsOnMount?: boolean;
+  /** Published Collections eligible for this Homepage's geography, by Section content-kind — edit mode only. See HomepageSectionsEditor.tsx. */
+  assignableCollections?: { venue: CollectionSummary[]; event: CollectionSummary[]; guide: CollectionSummary[] };
+  /** Published Guides eligible to feature on this Homepage's geography — edit mode only. */
+  assignableGuideFeatures?: HomepageGuideFeatureCandidate[];
 };
 
 const STATUS_OPTIONS: { value: HomepageStatus; label: string }[] = [
   { value: "draft", label: "Draft" },
   { value: "published", label: "Published" },
 ];
-
-const SECTION_TYPE_LABELS: Record<string, string> = {
-  venue: "Featured Venues",
-  event: "Featured Events",
-  guide: "Featured Guides",
-};
 
 // ── Shared styles (mirrors CollectionForm.tsx / GuideForm.tsx) ───────────────
 
@@ -106,6 +112,8 @@ export default function HomepageForm({
   cities,
   existingHomepages = [],
   scrollToSectionsOnMount = false,
+  assignableCollections = { venue: [], event: [], guide: [] },
+  assignableGuideFeatures = [],
 }: Props) {
   const boundAction =
     mode === "create" ? createHomepageAction : updateHomepageAction.bind(null, initialHomepage!.id);
@@ -325,7 +333,8 @@ export default function HomepageForm({
         )}
         {mode === "edit" && (
           <p className={hintCls}>
-            Changing Market/City is blocked while any Section already has an assigned Collection.
+            Changing Market/City is blocked while any Section already has assigned content (a
+            Collection, or a Feature Venue/Event/Guide).
           </p>
         )}
       </section>
@@ -367,43 +376,28 @@ export default function HomepageForm({
             </Link>
           </div>
           <p className="text-xs text-gray-400 -mt-3">
-            This creates the Homepage as a Draft with the standard Section template. You&apos;ll build
-            Sections, SEO, and Status next.
+            This creates the Homepage as a Draft with no Sections yet. You&apos;ll add Sections, SEO,
+            and Status next.
           </p>
         </>
       )}
 
-      {/* Homepage Sections — reserved, not editable in this task. Edit mode
-          only: this is the next working area right after Continue. */}
-      {mode === "edit" && (
+      {/* Homepage Sections — the editorial assembly tool. Edit mode only:
+          this is the next working area right after Continue. */}
+      {mode === "edit" && initialHomepage && (
         <section id="homepage-sections" className={`${sectionCls} scroll-mt-8`}>
           <h2 className={sectionTitleCls}>Homepage Sections</h2>
-          <p className="text-sm text-gray-500">
-            Section assembly (assigning Collections, reordering, enabling/disabling) is managed on a
-            future Homepage Editor screen — not available yet.
+          <p className={hintCls}>
+            Assemble reusable Collections or hand-picked Features into this Homepage. This is an
+            editorial assembly tool, not a page builder — no display, CTA, or layout configuration.
           </p>
-          {initialHomepage && initialHomepage.sections.length > 0 ? (
-            <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
-              {initialHomepage.sections.map((section) => (
-                <li key={section.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <div>
-                    <div className="font-medium text-gray-900">{section.title}</div>
-                    <div className="text-xs text-gray-400">
-                      {SECTION_TYPE_LABELS[section.sectionType] ?? section.sectionType}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400 text-right">
-                    {section.collection ? section.collection.name : "No Collection assigned"}
-                    {!section.isEnabled && <div className="text-amber-600">Disabled</div>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center">
-              No Sections yet.
-            </p>
-          )}
+          <HomepageSectionsEditor
+            homepageId={initialHomepage.id}
+            homepageGeography={{ marketId: initialHomepage.marketId, cityId: initialHomepage.cityId }}
+            initialSections={initialHomepage.sections}
+            assignableCollections={assignableCollections}
+            assignableGuideFeatures={assignableGuideFeatures}
+          />
         </section>
       )}
 
@@ -536,7 +530,7 @@ export default function HomepageForm({
                 their geography, per the City-first / Market-fallback rule.
               </p>
               <p className={hintCls}>
-                Sections with no assigned Collection simply don&apos;t render — they&apos;re never an
+                Sections with no assigned content simply don&apos;t render — they&apos;re never an
                 error state.
               </p>
             </div>

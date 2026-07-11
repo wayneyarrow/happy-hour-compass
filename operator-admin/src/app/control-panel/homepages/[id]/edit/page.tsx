@@ -3,7 +3,13 @@ export const metadata = { title: "Edit Homepage — Homepages" };
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getHomepageById, getHomepageFormGeography, getHomepages } from "@/lib/data/homepages";
+import {
+  getHomepageById,
+  getHomepageFormGeography,
+  getHomepages,
+  getAssignableCollectionsForSection,
+  getAssignableGuidesForFeatureSection,
+} from "@/lib/data/homepages";
 import HomepageForm from "../../HomepageForm";
 
 export default async function EditHomepagePage({
@@ -14,13 +20,29 @@ export default async function EditHomepagePage({
   searchParams: Promise<{ success?: string }>;
 }) {
   const { id } = await params;
-  const [homepage, { markets, cities }, existingHomepages, { success }] = await Promise.all([
+  const [
+    homepage,
+    { markets, cities },
+    existingHomepages,
+    venueCollections,
+    eventCollections,
+    guideCollections,
+    guideFeatures,
+    { success },
+  ] = await Promise.all([
     getHomepageById(id),
     getHomepageFormGeography(),
     // Unfiltered, same as the create page — HomepageForm excludes this
     // Homepage's own id from the "taken" set so its current geography
     // stays selectable.
     getHomepages(),
+    // Homepage Sections editor content candidates — small, geography-scoped
+    // lists loaded once up front (unlike Venue/Event Feature search, which
+    // is live and server-driven — see SectionEditorPanel.tsx).
+    getAssignableCollectionsForSection(id, "venue"),
+    getAssignableCollectionsForSection(id, "event"),
+    getAssignableCollectionsForSection(id, "guide"),
+    getAssignableGuidesForFeatureSection(id),
     searchParams,
   ]);
 
@@ -57,6 +79,8 @@ export default async function EditHomepagePage({
         // Only right after a fresh create-and-redirect — see HomepageForm's
         // module docstring for the smooth-scroll behavior this triggers.
         scrollToSectionsOnMount={success === "created"}
+        assignableCollections={{ venue: venueCollections, event: eventCollections, guide: guideCollections }}
+        assignableGuideFeatures={guideFeatures}
       />
     </div>
   );

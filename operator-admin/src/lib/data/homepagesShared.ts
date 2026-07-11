@@ -36,6 +36,71 @@ export function isHomepageSectionType(value: string): value is HomepageSectionTy
   return (HOMEPAGE_SECTION_TYPES as readonly string[]).includes(value);
 }
 
+// ── Content mode + Section Kind (Homepage Sections editor V1) ───────────────
+//
+// migration 060 adds `content_mode` alongside the existing `section_type`:
+// a Section is fully described by the pair (section_type, content_mode).
+// collection = assembles a reusable Collection (existing behavior).
+// feature = hand-picks exactly one Venue/Event/Guide directly, no Collection
+// involved. `HomepageSectionKind` is the six-value union the editor UI
+// actually presents ("Venue Collection", "Venue Feature", etc.) — a pure
+// client-facing convenience over the (section_type, content_mode) pair
+// stored in the DB; the pair stays the source of truth everywhere else
+// (queries, composite FK compatibility) so section_type keeps sharing one
+// code space with collections.collection_type exactly as migration 058
+// established.
+
+export type HomepageSectionContentMode = "collection" | "feature";
+
+/** Coerces a raw DB content_mode value — mirrors normalizeHomepageStatus(). */
+export function normalizeContentMode(value: string): HomepageSectionContentMode {
+  return value === "feature" ? "feature" : "collection";
+}
+
+export type HomepageSectionKind =
+  | "venue_collection"
+  | "event_collection"
+  | "guide_collection"
+  | "venue_feature"
+  | "event_feature"
+  | "guide_feature";
+
+export const HOMEPAGE_SECTION_KINDS: HomepageSectionKind[] = [
+  "venue_collection",
+  "event_collection",
+  "guide_collection",
+  "venue_feature",
+  "event_feature",
+  "guide_feature",
+];
+
+export const SECTION_KIND_LABELS: Record<HomepageSectionKind, string> = {
+  venue_collection: "Venue Collection",
+  event_collection: "Event Collection",
+  guide_collection: "Guide Collection",
+  venue_feature: "Venue Feature",
+  event_feature: "Event Feature",
+  guide_feature: "Guide Feature",
+};
+
+export function isHomepageSectionKind(value: string): value is HomepageSectionKind {
+  return (HOMEPAGE_SECTION_KINDS as readonly string[]).includes(value);
+}
+
+export function toSectionKind(
+  sectionType: HomepageSectionType,
+  contentMode: HomepageSectionContentMode
+): HomepageSectionKind {
+  return `${sectionType}_${contentMode}` as HomepageSectionKind;
+}
+
+export function fromSectionKind(
+  kind: HomepageSectionKind
+): { sectionType: HomepageSectionType; contentMode: HomepageSectionContentMode } {
+  const [sectionType, contentMode] = kind.split("_") as [HomepageSectionType, HomepageSectionContentMode];
+  return { sectionType, contentMode };
+}
+
 // ── Result types ──────────────────────────────────────────────────────────────
 
 export type HomepageWriteResult =
@@ -69,14 +134,36 @@ export type HomepageSectionCollectionRef = {
   cityId: string | null;
 };
 
+/** Minimal Venue/Event/Guide metadata joined onto a Feature section — the single-item equivalent of HomepageSectionCollectionRef. */
+export type HomepageSectionFeatureRef = {
+  id: string;
+  /** Venue/Event title or Guide title. */
+  name: string;
+  secondaryLabel: string | null;
+};
+
+/** A Published Guide eligible for a Guide Feature Section's content picker — GuideFeaturePicker.tsx's small, fully-loaded (not server-searched) candidate list. Unlike collections.ts's GuideCandidate, there's no `status` field — Feature candidates are always pre-filtered to Published only, so the field would never vary. */
+export type HomepageGuideFeatureCandidate = {
+  id: string;
+  title: string;
+  marketName: string;
+  cityName: string | null;
+};
+
 export type HomepageSection = {
   id: string;
   homepageId: string;
   sectionType: HomepageSectionType;
+  contentMode: HomepageSectionContentMode;
   title: string;
   collectionId: string | null;
-  /** null when collectionId is null, OR when collectionId points to a Collection that no longer resolves (should not happen given ON DELETE RESTRICT, but reads defensively). */
+  /** null when collectionId is null, OR when collectionId points to a Collection that no longer resolves (should not happen given ON DELETE RESTRICT, but reads defensively). Only meaningful when contentMode = "collection". */
   collection: HomepageSectionCollectionRef | null;
+  venueId: string | null;
+  eventId: string | null;
+  guideId: string | null;
+  /** Resolved display ref for whichever of venueId/eventId/guideId is set — only meaningful when contentMode = "feature". */
+  feature: HomepageSectionFeatureRef | null;
   displayOrder: number;
   isEnabled: boolean;
   createdAt: string;
@@ -111,36 +198,39 @@ export type HomepageListFilters = {
   cityId?: string;
 };
 
-// ── Homepage <-> Collection geography compatibility (V1 rule) ───────────────
+// ── Homepage <-> Collection geography compatibility (approved rule) ─────────
 //
-// Approved V1 rule (see implementation summary for the full rationale — the
-// product spec is explicit that a City Homepage falls back to its parent
-// Market Homepage publicly, but is ambiguous about whether a City Homepage's
-// EDITOR may directly assign a parent Market Collection to one of its own
-// Sections. This implements the least-restrictive-safe reading requested for
-// that ambiguity, while cross-market assignment is unambiguous and always
-// rejected):
+// Corrected after browser QA found Kelowna (city) Collections missing from
+// the Central Okanagan (market) Homepage's picker — the Market Homepage
+// branch previously required collection.cityId === null, which wrongly
+// rejected every city-level Collection within the market instead of
+// accepting them. The approved rule:
 //
-//   Market Homepage (cityId null) -> only Market Collections of the same market.
+//   Market Homepage (cityId null) -> Collections assigned directly to that
+//                                     market (cityId null), OR any city-level
+//                                     Collection belonging to a city within
+//                                     that same market.
 //   City Homepage (cityId set)    -> same-city Collections, OR the parent
 //                                     Market Collection (editorial reuse,
 //                                     consistent with the City -> Market
 //                                     public fallback already approved for
-//                                     whole-Homepage resolution).
+//                                     whole-Homepage resolution). Never a
+//                                     different city's Collections, even
+//                                     within the same market.
 //   Cross-market (any direction)  -> always rejected.
 //
 // Pure — callers fetch both records themselves; this performs no DB access,
 // so it is reusable from Section create/update validation, a future bulk
-// section-replace, and a future admin "assignable collections" list without
-// each call site re-deriving the rule.
+// section-replace, and the admin "assignable collections" list (both UI
+// availability and server-side validation share this single function —
+// see getAssignableCollectionsForSection / validateSectionCollectionAssignment
+// in homepages.ts) without each call site re-deriving the rule.
 
 export function isCollectionAssignableToHomepage(
   homepage: { marketId: string; cityId: string | null },
   collection: { marketId: string; cityId: string | null }
 ): boolean {
   if (collection.marketId !== homepage.marketId) return false;
-  if (homepage.cityId === null) {
-    return collection.cityId === null;
-  }
+  if (homepage.cityId === null) return true;
   return collection.cityId === homepage.cityId || collection.cityId === null;
 }
