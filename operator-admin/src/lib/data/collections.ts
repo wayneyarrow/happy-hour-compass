@@ -1,7 +1,8 @@
 /**
  * Server-side data helpers for the Collections data layer
  * (collections, collection_venue_overrides, collection_event_overrides,
- * collection_guide_items — migration 058_collections_homepages_foundation.sql).
+ * collection_guide_items — migration 058_collections_homepages_foundation.sql;
+ * archive lifecycle — migration 059_collections_archive.sql).
  *
  * Must only be imported from Server Components, Route Handlers, or Server
  * Actions. Client-safe constants, types, and pure validators live in
@@ -16,6 +17,12 @@
  * membership (that belongs to a future Collections resolver, analogous to
  * discoverEngine.ts), and does not render anything. See migration 058's
  * header comment for the intended Discover Management transition path.
+ *
+ * Archive lifecycle (archived_at, migration 059) is deliberately independent
+ * of the editorial `status` column — see archiveCollection/restoreCollection
+ * below and collections.archived_at's migration COMMENT for the full
+ * rationale. getCollections() defaults to active-only (archived_at IS NULL)
+ * whenever a caller doesn't explicitly ask otherwise.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -33,6 +40,7 @@ import {
   type CollectionSummary,
   type CollectionDetail,
   type CollectionListFilters,
+  type CollectionLifecycleFilter,
   type CollectionVenueOverride,
   type CollectionEventOverride,
   type CollectionGuideItem,
@@ -63,6 +71,7 @@ export {
   type CollectionUsageSummary,
   type CollectionUsageEntry,
   type CollectionListFilters,
+  type CollectionLifecycleFilter,
   type CollectionWriteResult,
   type CollectionMutationResult,
 } from "@/lib/data/collectionsShared";
@@ -87,6 +96,7 @@ function mapCollectionSummaryRow(row: Row): CollectionSummary {
     cityId:        (row.city_id as string | null) ?? null,
     cityName:      (city?.name as string | undefined) ?? null,
     updatedAt:     row.updated_at as string,
+    archivedAt:    (row.archived_at as string | null) ?? null,
   };
 }
 
@@ -150,7 +160,7 @@ function mapGuideItemRow(row: Row): CollectionGuideItem {
 // hint, PostgREST can't tell which relationship to embed and errors with
 // "more than one relationship was found for 'collections' and 'cities'".
 const COLLECTION_SUMMARY_COLUMNS =
-  "id, name, description, collection_type, status, algorithm_key, market_id, city_id, updated_at, " +
+  "id, name, description, collection_type, status, algorithm_key, market_id, city_id, updated_at, archived_at, " +
   "market:markets(name), city:cities!city_id(name)";
 
 // ── Collection list ──────────────────────────────────────────────────────────
@@ -160,6 +170,11 @@ const COLLECTION_SUMMARY_COLUMNS =
  * Ordering is deterministic (name, then id as a tiebreak) so a filtered list
  * stays stable across reloads/pagination rather than drifting with
  * updated_at churn.
+ *
+ * `lifecycle` defaults to "active" (archived_at IS NULL) when omitted — see
+ * CollectionListFilters.lifecycle's doc comment for why this default matters
+ * beyond just the management list (it's also what keeps
+ * getAssignableCollectionsForSection in homepages.ts safe by construction).
  */
 export async function getCollections(filters: CollectionListFilters = {}): Promise<CollectionSummary[]> {
   const supabase = createAdminClient();
@@ -171,6 +186,11 @@ export async function getCollections(filters: CollectionListFilters = {}): Promi
   if (filters.marketId) query = query.eq("market_id", filters.marketId);
   if (filters.cityId) query = query.eq("city_id", filters.cityId);
   if (filters.search?.trim()) query = query.ilike("name", `%${filters.search.trim()}%`);
+
+  const lifecycle: CollectionLifecycleFilter = filters.lifecycle ?? "active";
+  if (lifecycle === "active") query = query.is("archived_at", null);
+  else if (lifecycle === "archived") query = query.not("archived_at", "is", null);
+  // "all" — no filter.
 
   const { data, error } = await query
     .order("name", { ascending: true })
@@ -193,7 +213,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     .from("collections")
     .select(
       "id, name, description, collection_type, status, algorithm_key, item_limit, " +
-        "market_id, city_id, created_at, updated_at, market:markets(name), city:cities!city_id(name)"
+        "market_id, city_id, created_at, updated_at, archived_at, market:markets(name), city:cities!city_id(name)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -231,6 +251,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     itemLimit:      (row.item_limit as number | null) ?? null,
     createdAt:      row.created_at as string,
     updatedAt:      row.updated_at as string,
+    archivedAt:     (row.archived_at as string | null) ?? null,
     venueOverrides,
     eventOverrides,
     guideItems,
@@ -1007,6 +1028,76 @@ export async function getCollectionUsageCounts(): Promise<Map<string, Collection
     }
   }
   return map;
+}
+
+// ── Archive / restore ────────────────────────────────────────────────────────
+//
+// Separate lifecycle from `status` (draft | published) — see
+// collections.archived_at's migration COMMENT (059) for the full rationale.
+// Archiving is blocked at the application layer while any Homepage Section
+// currently references the Collection: there is no DB-level FK/CHECK that
+// could enforce this (archiving is an UPDATE, not a DELETE, so
+// homepage_sections_collection_type_match's ON DELETE RESTRICT — migration
+// 058 — never fires here), so getCollectionUsage() is the source of truth,
+// mirroring how isFaqInUse() gates deleteFaqAction for FAQ Library questions
+// (the explicit "in use" protection precedent this feature reuses).
+
+export type ArchiveCollectionResult =
+  | { success: true }
+  | { success: false; error: string; usage: CollectionUsageSummary };
+
+/**
+ * Archives a Collection (sets archived_at = now()). Refuses if the
+ * Collection is currently assigned to any Homepage Section — the caller
+ * (the Edit page / archiveCollectionAction) already has this same
+ * `usage` data on hand to explain which Homepage(s) are blocking it, but it
+ * is echoed back here too so the check is authoritative even if a caller's
+ * own cached usage view is stale (e.g. two admins editing concurrently).
+ */
+export async function archiveCollection(
+  id: string,
+  actorEmail: string | null = null
+): Promise<ArchiveCollectionResult> {
+  const usage = await getCollectionUsage(id);
+  if (usage.entries.length > 0) {
+    return {
+      success: false,
+      error:
+        `This Collection is currently used by ${usage.entries.length} Homepage Section` +
+        `${usage.entries.length === 1 ? "" : "s"}. Remove it from every Homepage before archiving.`,
+      usage,
+    };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("collections")
+    .update({ archived_at: new Date().toISOString(), updated_by: actorEmail })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[archiveCollection]", error.message);
+    return { success: false, error: "Failed to archive Collection.", usage };
+  }
+  return { success: true };
+}
+
+/** Restores an archived Collection (archived_at = NULL). Always allowed — restoring never conflicts with Homepage usage the way archiving can. */
+export async function restoreCollection(
+  id: string,
+  actorEmail: string | null = null
+): Promise<CollectionMutationResult> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("collections")
+    .update({ archived_at: null, updated_by: actorEmail })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[restoreCollection]", error.message);
+    return { success: false, error: "Failed to restore Collection." };
+  }
+  return { success: true };
 }
 
 // ── Form geography (create/edit page) ───────────────────────────────────────

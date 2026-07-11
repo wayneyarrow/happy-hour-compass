@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import StatusBadge from "@/components/StatusBadge";
 import type { MarketRecord, CityRecord } from "@/lib/geo/types";
-import type { CollectionSummary, CollectionType, CollectionStatus } from "@/lib/data/collectionsShared";
+import type { CollectionSummary, CollectionType, CollectionStatus, CollectionLifecycleFilter } from "@/lib/data/collectionsShared";
 import { RAIL_LABELS, type RailKey } from "@/lib/data/discoverOverridesShared";
+import { restoreCollectionAction, type ArchiveActionState } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -18,9 +20,11 @@ export type CollectionRow = CollectionSummary & {
 type SortCol = "name" | "collectionType" | "status" | "updatedAt";
 type StatusFilter = "all" | CollectionStatus;
 type TypeFilter = "all" | CollectionType;
+type LifecycleFilter = CollectionLifecycleFilter;
 
 const PAGE_SIZE = 25;
 const DEFAULT_SORT: SortCol = "updatedAt";
+const DEFAULT_LIFECYCLE: LifecycleFilter = "active";
 
 const TYPE_LABELS: Record<CollectionType, string> = {
   venue: "Venue",
@@ -46,7 +50,7 @@ function readUrlParam(key: string, fallback: string): string {
 
 function syncUrl(
   q: string, status: string, type: string, marketId: string, cityId: string,
-  sort: string, dir: string, page: number
+  lifecycle: string, sort: string, dir: string, page: number
 ) {
   const p = new URLSearchParams();
   if (q) p.set("q", q);
@@ -54,11 +58,41 @@ function syncUrl(
   if (type !== "all") p.set("type", type);
   if (marketId) p.set("market", marketId);
   if (cityId) p.set("city", cityId);
+  if (lifecycle !== DEFAULT_LIFECYCLE) p.set("lifecycle", lifecycle);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir !== "desc") p.set("dir", dir);
   if (page > 1) p.set("page", String(page));
   const qs = p.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+}
+
+// ── Restore action (per-row) ─────────────────────────────────────────────────
+
+function RestoreButton({ collectionId }: { collectionId: string }) {
+  const router = useRouter();
+  const boundRestore = restoreCollectionAction.bind(null, collectionId);
+  const [state, formAction, isPending] = useActionState<ArchiveActionState, FormData>(boundRestore, {});
+
+  useEffect(() => {
+    if (state.success) router.refresh();
+  }, [state.success, router]);
+
+  return (
+    <form
+      action={formAction}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-block"
+    >
+      <button
+        type="submit"
+        disabled={isPending}
+        className="text-xs font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+      >
+        {isPending ? "Restoring…" : "Restore"}
+      </button>
+      {state.error && <p className="mt-1 text-xs text-red-600 max-w-[10rem] text-right">{state.error}</p>}
+    </form>
+  );
 }
 
 // ── CollectionsTable ───────────────────────────────────────────────────────────
@@ -79,6 +113,7 @@ export default function CollectionsTable({
   const [type, setType] = useState<TypeFilter>("all");
   const [marketId, setMarketId] = useState("");
   const [cityId, setCityId] = useState("");
+  const [lifecycle, setLifecycle] = useState<LifecycleFilter>(DEFAULT_LIFECYCLE);
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -89,6 +124,7 @@ export default function CollectionsTable({
     setType(readUrlParam("type", "all") as TypeFilter);
     setMarketId(readUrlParam("market", ""));
     setCityId(readUrlParam("city", ""));
+    setLifecycle(readUrlParam("lifecycle", DEFAULT_LIFECYCLE) as LifecycleFilter);
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir", "desc") as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
@@ -115,9 +151,11 @@ export default function CollectionsTable({
       if (type !== "all" && c.collectionType !== type) return false;
       if (marketId && c.marketId !== marketId) return false;
       if (cityId && c.cityId !== cityId) return false;
+      if (lifecycle === "active" && c.archivedAt !== null) return false;
+      if (lifecycle === "archived" && c.archivedAt === null) return false;
       return true;
     });
-  }, [rows, q, status, type, marketId, cityId]);
+  }, [rows, q, status, type, marketId, cityId, lifecycle]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -151,25 +189,25 @@ export default function CollectionsTable({
     setSortCol(col);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, status, type, marketId, cityId, col, newDir, 1);
+    syncUrl(q, status, type, marketId, cityId, lifecycle, col, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, status, type, marketId, cityId, sortCol, sortDir, 1);
+    syncUrl(val, status, type, marketId, cityId, lifecycle, sortCol, sortDir, 1);
   };
 
   const applyStatus = (val: StatusFilter) => {
     setStatus(val);
     setPage(1);
-    syncUrl(q, val, type, marketId, cityId, sortCol, sortDir, 1);
+    syncUrl(q, val, type, marketId, cityId, lifecycle, sortCol, sortDir, 1);
   };
 
   const applyType = (val: TypeFilter) => {
     setType(val);
     setPage(1);
-    syncUrl(q, status, val, marketId, cityId, sortCol, sortDir, 1);
+    syncUrl(q, status, val, marketId, cityId, lifecycle, sortCol, sortDir, 1);
   };
 
   const applyMarket = (val: string) => {
@@ -179,18 +217,24 @@ export default function CollectionsTable({
     const nextCity = stillValid ? cityId : "";
     setCityId(nextCity);
     setPage(1);
-    syncUrl(q, status, type, val, nextCity, sortCol, sortDir, 1);
+    syncUrl(q, status, type, val, nextCity, lifecycle, sortCol, sortDir, 1);
   };
 
   const applyCity = (val: string) => {
     setCityId(val);
     setPage(1);
-    syncUrl(q, status, type, marketId, val, sortCol, sortDir, 1);
+    syncUrl(q, status, type, marketId, val, lifecycle, sortCol, sortDir, 1);
+  };
+
+  const applyLifecycle = (val: LifecycleFilter) => {
+    setLifecycle(val);
+    setPage(1);
+    syncUrl(q, status, type, marketId, cityId, val, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, status, type, marketId, cityId, sortCol, sortDir, p);
+    syncUrl(q, status, type, marketId, cityId, lifecycle, sortCol, sortDir, p);
   };
 
   // ── Shared styles ─────────────────────────────────────────────────────────
@@ -246,6 +290,15 @@ export default function CollectionsTable({
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+        <select
+          value={lifecycle}
+          onChange={(e) => applyLifecycle(e.target.value as LifecycleFilter)}
+          className={selectCls}
+        >
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+          <option value="all">All</option>
+        </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length} Collections
         </span>
@@ -297,54 +350,63 @@ export default function CollectionsTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {pageRows.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => router.push(`/control-panel/collections/${c.id}/edit`)}
-                    className="hover:bg-amber-50 cursor-pointer transition-colors"
-                  >
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap max-w-xs">
-                      <div className="truncate">{c.name}</div>
-                      {c.description && (
-                        <div className="text-xs text-gray-400 mt-0.5 truncate font-normal">{c.description}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{TYPE_LABELS[c.collectionType]}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {c.cityName ? (
-                        <>
-                          {c.cityName} <span className="text-gray-300">·</span>{" "}
-                          <span className="text-gray-400">{c.marketName}</span>
-                        </>
-                      ) : (
-                        c.marketName
-                      )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <StatusBadge
-                        variant={c.status === "published" ? "success" : "neutral"}
-                        label={c.status === "published" ? "Published" : "Draft"}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{algorithmLabel(c.algorithmKey)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {c.usageCount === 0 ? (
-                        <span className="text-gray-300">Unused</span>
-                      ) : (
-                        <span className="text-gray-600">
-                          {c.usageCount} section{c.usageCount === 1 ? "" : "s"}
-                          {c.isUsedByPublishedHomepage && (
-                            <span className="ml-1.5 text-xs font-medium text-emerald-600">● Live</span>
-                          )}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(c.updatedAt)}</td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <span className="text-xs font-medium text-amber-600 hover:text-amber-700">Edit →</span>
-                    </td>
-                  </tr>
-                ))}
+                {pageRows.map((c) => {
+                  const isArchived = c.archivedAt !== null;
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => router.push(`/control-panel/collections/${c.id}/edit`)}
+                      className={`cursor-pointer transition-colors ${isArchived ? "opacity-60 hover:opacity-100 hover:bg-gray-50" : "hover:bg-amber-50"}`}
+                    >
+                      <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap max-w-xs">
+                        <div className="truncate">{c.name}</div>
+                        {c.description && (
+                          <div className="text-xs text-gray-400 mt-0.5 truncate font-normal">{c.description}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{TYPE_LABELS[c.collectionType]}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {c.cityName ? (
+                          <>
+                            {c.cityName} <span className="text-gray-300">·</span>{" "}
+                            <span className="text-gray-400">{c.marketName}</span>
+                          </>
+                        ) : (
+                          c.marketName
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusBadge
+                            variant={c.status === "published" ? "success" : "neutral"}
+                            label={c.status === "published" ? "Published" : "Draft"}
+                          />
+                          {isArchived && <StatusBadge variant="warning" label="Archived" />}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{algorithmLabel(c.algorithmKey)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {c.usageCount === 0 ? (
+                          <span className="text-gray-300">Unused</span>
+                        ) : (
+                          <span className="text-gray-600">
+                            {c.usageCount} section{c.usageCount === 1 ? "" : "s"}
+                            {c.isUsedByPublishedHomepage && (
+                              <span className="ml-1.5 text-xs font-medium text-emerald-600">● Live</span>
+                            )}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(c.updatedAt)}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-3">
+                          {isArchived && <RestoreButton collectionId={c.id} />}
+                          <span className="text-xs font-medium text-amber-600 hover:text-amber-700">Edit →</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

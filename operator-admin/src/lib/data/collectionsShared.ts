@@ -144,6 +144,8 @@ export type CollectionSummary = {
   cityId: string | null;
   cityName: string | null;
   updatedAt: string;
+  /** Archive lifecycle (migration 059) — independent of `status`. Null = active. See collections.archived_at's COMMENT for the full rationale. */
+  archivedAt: string | null;
 };
 
 export type CollectionVenueOverride = {
@@ -232,6 +234,8 @@ export type CollectionDetail = {
   itemLimit: number | null;
   createdAt: string;
   updatedAt: string;
+  /** Archive lifecycle (migration 059) — independent of `status`. Null = active. */
+  archivedAt: string | null;
   /** Populated when collectionType === "venue", otherwise []. */
   venueOverrides: CollectionVenueOverride[];
   /** Populated when collectionType === "event", otherwise []. */
@@ -240,6 +244,13 @@ export type CollectionDetail = {
   guideItems: CollectionGuideItem[];
   usage: CollectionUsageSummary;
 };
+
+// ── Archive lifecycle ─────────────────────────────────────────────────────────
+//
+// Deliberately separate from CollectionStatus (draft | published) — see
+// collections.archived_at's migration COMMENT for the full rationale.
+
+export type CollectionLifecycleFilter = "active" | "archived" | "all";
 
 // ── List filters ─────────────────────────────────────────────────────────────
 
@@ -250,4 +261,13 @@ export type CollectionListFilters = {
   cityId?: string;
   /** Case-insensitive substring match against name. */
   search?: string;
+  /**
+   * Defaults to "active" when omitted — the safe-by-default choice: any
+   * existing or future caller that doesn't explicitly ask for archived
+   * Collections (e.g. getAssignableCollectionsForSection in homepages.ts)
+   * automatically excludes them, satisfying "archived Collections cannot be
+   * assigned to new Homepage Sections" without that call site needing to
+   * know archiving exists.
+   */
+  lifecycle?: CollectionLifecycleFilter;
 };

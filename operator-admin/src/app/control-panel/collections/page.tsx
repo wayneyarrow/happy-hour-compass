@@ -14,8 +14,14 @@ export default async function CollectionsPage({
 }: {
   searchParams: Promise<{ success?: string }>;
 }) {
+  // lifecycle: "all" — the client table (CollectionsTable.tsx) filters
+  // Active/Archived/All itself, the same way it already filters status/type/
+  // market/city entirely client-side. The server must hand over the full
+  // row-set (including archived rows) for that filter to have anything to
+  // narrow down to; getCollections()'s own default (active-only) is for
+  // callers that DON'T offer a lifecycle toggle, which this page does.
   const [collections, { markets, cities }, usageCounts, { success }] = await Promise.all([
-    getCollections(),
+    getCollections({ lifecycle: "all" }),
     getCollectionFormGeography(),
     getCollectionUsageCounts(),
     searchParams,
@@ -31,7 +37,13 @@ export default async function CollectionsPage({
   });
 
   const successMessage =
-    success === "created" ? "Collection created." : success === "updated" ? "Collection saved." : null;
+    success === "created"
+      ? "Collection created."
+      : success === "updated"
+        ? "Collection saved."
+        : success === "archived"
+          ? "Collection archived."
+          : null;
 
   return (
     <div className="max-w-7xl">

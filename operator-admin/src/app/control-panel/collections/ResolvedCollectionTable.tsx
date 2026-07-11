@@ -91,6 +91,8 @@ type Props = {
   resolvedResult?: CollectionPreviewResult | null;
   /** A resolution failure from the Edit page's server-side load — see module docstring. */
   resolvedError?: string | null;
+  /** Reports the live resolved-item count up for the Collection Checklist's "at least one resolved item" item — mirrors GuideForm.tsx's AttachmentsSelector onSelectionChange convention. */
+  onResolvedCountChange?: (count: number) => void;
 };
 
 const SEARCH_ACTION: Record<Kind, (input: CollectionCandidateSearchInput) => Promise<AttachmentCandidate[]>> = {
@@ -140,6 +142,7 @@ export default function ResolvedCollectionTable({
   initialOverrideRows,
   resolvedResult = null,
   resolvedError = null,
+  onResolvedCountChange,
 }: Props) {
   const label = kind === "venue" ? "venue" : "event";
   const labelCap = kind === "venue" ? "Venue" : "Event";
@@ -148,6 +151,16 @@ export default function ResolvedCollectionTable({
   const [generated, setGenerated] = useState<CollectionPreviewResult | null>(resolvedResult);
   const [generateError, setGenerateError] = useState<string | null>(resolvedError);
   const [isPending, startTransition] = useTransition();
+
+  // Algorithmic: the resolved (capped algorithm + manual) list length.
+  // Manual: the count of currently-included rows (excludes are 0-length
+  // contributors). Reported up for the Collection Checklist — see Props doc.
+  const resolvedCount = algorithmic
+    ? generated?.items.length ?? 0
+    : overrideRows.filter((r) => r.action === "include").length;
+  useEffect(() => {
+    onResolvedCountChange?.(resolvedCount);
+  }, [resolvedCount, onResolvedCountChange]);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AttachmentCandidate[]>([]);

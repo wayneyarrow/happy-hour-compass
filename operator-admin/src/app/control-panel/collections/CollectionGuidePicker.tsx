@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GuideCandidate } from "@/lib/data/collections";
 
 /**
@@ -22,11 +22,17 @@ export type GuideMembershipRow = { id: string; title: string; status: "draft" | 
 type Props = {
   candidates: GuideCandidate[];
   initialRows: GuideMembershipRow[];
+  /** Reports the live row count up for the Collection Checklist's "at least one resolved item" item — mirrors GuideForm.tsx's AttachmentsSelector onSelectionChange convention. */
+  onRowsChange?: (count: number) => void;
 };
 
-export default function CollectionGuidePicker({ candidates, initialRows }: Props) {
+export default function CollectionGuidePicker({ candidates, initialRows, onRowsChange }: Props) {
   const [rows, setRows] = useState<GuideMembershipRow[]>(initialRows);
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    onRowsChange?.(rows.length);
+  }, [rows, onRowsChange]);
 
   const selectedIds = new Set(rows.map((r) => r.id));
   const available = candidates.filter(

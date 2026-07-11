@@ -56,7 +56,11 @@ export default async function EditCollectionPage({
     success === "created" ? "Collection created." : success === "updated" ? "Collection saved." : null;
 
   return (
-    <div className="max-w-5xl">
+    // max-w-6xl (wider than the create page's max-w-5xl): the two-column
+    // editor layout (main column + 320px right rail — see CollectionForm.tsx)
+    // needs more room than the single-column create page or the old
+    // single-column edit layout did.
+    <div className="max-w-6xl">
       <div className="mb-6">
         <Link
           href="/control-panel/collections"
@@ -82,6 +86,9 @@ export default async function EditCollectionPage({
         guideCandidates={guideCandidates}
         resolvedResult={resolvedResult}
         resolvedError={resolvedError}
+        // Only right after a fresh create-and-redirect — see CollectionForm's
+        // module docstring for the smooth-scroll behavior this triggers.
+        scrollToContentOnMount={success === "created"}
       />
     </div>
   );

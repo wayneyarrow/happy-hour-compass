@@ -12,6 +12,8 @@ import {
   replaceVenueOverrides,
   replaceEventOverrides,
   replaceGuideItems,
+  archiveCollection,
+  restoreCollection,
   isCollectionType,
   isAlgorithmKey,
   type CollectionType,
@@ -601,4 +603,78 @@ export async function generateCollectionResultAction(
   });
 
   return { success: true, preview };
+}
+
+// ── Archive / restore ─────────────────────────────────────────────────────────
+//
+// Archive lifecycle (migration 059) is deliberately separate from the
+// editorial `status` field — see collections.archived_at's migration
+// COMMENT for the full rationale. Archiving is blocked while the Collection
+// is assigned to any Homepage Section; archiveCollection() (data layer) is
+// the authoritative check (never trust only the client's already-rendered
+// Homepage Usage card, which could be stale by the time this submits).
+// Mirrors the isFaqInUse()-gated deleteFaqAction pattern (FAQ Library) — the
+// explicit "in use" protection precedent this reuses, per product spec
+// "Collection Usage & Deletion Protection".
+
+export type ArchiveActionState = {
+  error?: string;
+  usageCount?: number;
+  success?: true;
+};
+
+export async function archiveCollectionAction(
+  collectionId: string,
+  _prevState: ArchiveActionState,
+  _formData: FormData
+): Promise<ArchiveActionState> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { error: "Unauthorized." };
+
+  const existing = await getCollectionById(collectionId);
+  if (!existing) return { error: "Collection not found." };
+
+  const result = await archiveCollection(collectionId, callerEmail);
+  if (!result.success) {
+    return { error: result.error, usageCount: result.usage.entries.length };
+  }
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action: "collection_archived",
+    entityType: "collection",
+    entityId: collectionId,
+    entityName: existing.name,
+  });
+
+  revalidatePath("/control-panel/collections");
+  revalidatePath(`/control-panel/collections/${collectionId}/edit`);
+  redirect("/control-panel/collections?success=archived");
+}
+
+export async function restoreCollectionAction(
+  collectionId: string,
+  _prevState: ArchiveActionState,
+  _formData: FormData
+): Promise<ArchiveActionState> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return { error: "Unauthorized." };
+
+  const existing = await getCollectionById(collectionId);
+  if (!existing) return { error: "Collection not found." };
+
+  const result = await restoreCollection(collectionId, callerEmail);
+  if (!result.success) return { error: result.error };
+
+  await logAuditEvent({
+    actorEmail: callerEmail,
+    action: "collection_restored",
+    entityType: "collection",
+    entityId: collectionId,
+    entityName: existing.name,
+  });
+
+  revalidatePath("/control-panel/collections");
+  revalidatePath(`/control-panel/collections/${collectionId}/edit`);
+  return { success: true };
 }

@@ -407,12 +407,22 @@ async function validateSectionCollectionAssignment(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("collections")
-    .select("id, collection_type, market_id, city_id")
+    .select("id, collection_type, market_id, city_id, archived_at")
     .eq("id", collectionId)
     .maybeSingle();
 
   if (error || !data) return "Collection not found.";
   const row = data as Row;
+
+  // Archived Collections (migration 059) can't be assigned to a new
+  // Homepage Section — archiving is a separate lifecycle from `status`, but
+  // an archived Collection is no longer an active editorial asset. This
+  // check has no current caller wired to a live route (Homepage Management
+  // has no admin UI yet — see CLAUDE.md), but it's the correct enforcement
+  // point once one exists, so it's added now rather than deferred.
+  if (row.archived_at) {
+    return "This Collection is archived and can't be assigned to a Homepage Section. Restore it first.";
+  }
 
   if ((row.collection_type as string) !== sectionType) {
     return `A ${sectionType} section requires a ${sectionType} Collection.`;
