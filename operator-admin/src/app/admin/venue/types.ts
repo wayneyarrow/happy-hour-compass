@@ -74,5 +74,5 @@ export const ABOUT_VENUE_MAX_CHARS = 750;
 export type AboutVenueState = {
   success?: boolean;
   errors?: { form?: string; about_your_venue?: string };
-  values?: { about_your_venue: string };
+  values?: { about_your_venue: string; teaser: string };
 };

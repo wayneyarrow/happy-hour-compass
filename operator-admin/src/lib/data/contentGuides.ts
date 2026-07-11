@@ -82,6 +82,8 @@ export type ContentGuideDetail = {
   primary_keyword: string | null;
   secondary_keywords: string[];
   intro: string | null;
+  /** Optional, short (~one sentence) editorial teaser for Homepage Feature sections (Guide Feature) — distinct from intro/body. Not rendered publicly yet. */
+  teaser: string | null;
   // Legacy free-text body (Card 2/3). Guide Experience V2 Card 2A replaces
   // this as the editor's authoring surface with the editorial_section_*
   // fields below — see the module docstring. Column is kept, still readable,
@@ -150,7 +152,7 @@ export async function getContentGuideById(id: string): Promise<ContentGuideDetai
     .from("content_guides")
     .select(
       "id, guide_type, status, market_id, city_id, neighbourhood_id, title, slug, " +
-        "primary_keyword, secondary_keywords, intro, body, " +
+        "primary_keyword, secondary_keywords, intro, teaser, body, " +
         "editorial_section_1_heading, editorial_section_1_body, " +
         "editorial_section_2_heading, editorial_section_2_body, " +
         "editorial_section_3_heading, editorial_section_3_body, " +
@@ -182,6 +184,7 @@ export async function getContentGuideById(id: string): Promise<ContentGuideDetai
     primary_keyword:    row.primary_keyword as string | null,
     secondary_keywords: (row.secondary_keywords as string[] | null) ?? [],
     intro:              row.intro as string | null,
+    teaser:             row.teaser as string | null,
     body:               row.body as string | null,
     editorial_section_1_heading: (row.editorial_section_1_heading as string | null) ?? null,
     editorial_section_1_body:    (row.editorial_section_1_body as string | null) ?? null,

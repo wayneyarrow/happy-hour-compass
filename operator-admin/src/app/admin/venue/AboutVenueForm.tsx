@@ -9,6 +9,7 @@ type Props = {
   venueId: string;
   venueName: string;
   initialAboutYourVenue: string;
+  initialTeaser: string;
 };
 
 const initialState: AboutVenueState = {};
@@ -20,13 +21,14 @@ const textareaCls =
 
 const labelCls = "block text-sm font-medium text-gray-700 mb-1";
 
-export default function AboutVenueForm({ venueId, venueName, initialAboutYourVenue }: Props) {
+export default function AboutVenueForm({ venueId, venueName, initialAboutYourVenue, initialTeaser }: Props) {
   const router = useRouter();
   const boundAction = updateAboutVenueAction.bind(null, venueId);
   const [state, formAction, isPending] = useActionState(boundAction, initialState);
   const [saved, setSaved] = useState(false);
   const [charCount, setCharCount] = useState(initialAboutYourVenue.length);
   const [liveText, setLiveText] = useState(initialAboutYourVenue);
+  const [liveTeaser, setLiveTeaser] = useState(initialTeaser);
 
   // One-shot hydration latch: re-sync from DB on navigation (full remount),
   // but don't reset user edits mid-session after router.refresh().
@@ -35,9 +37,10 @@ export default function AboutVenueForm({ venueId, venueName, initialAboutYourVen
     if (!hasHydrated.current) {
       setLiveText(initialAboutYourVenue);
       setCharCount(initialAboutYourVenue.length);
+      setLiveTeaser(initialTeaser);
       hasHydrated.current = true;
     }
-  }, [initialAboutYourVenue]);
+  }, [initialAboutYourVenue, initialTeaser]);
 
   useEffect(() => {
     if (state.success) {
@@ -49,6 +52,7 @@ export default function AboutVenueForm({ venueId, venueName, initialAboutYourVen
   }, [state, router]);
 
   const currentText = state.values?.about_your_venue ?? liveText;
+  const currentTeaser = state.values?.teaser ?? liveTeaser;
   const isOverLimit = charCount > ABOUT_VENUE_MAX_CHARS;
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -97,6 +101,28 @@ export default function AboutVenueForm({ venueId, venueName, initialAboutYourVen
             {state.errors.about_your_venue}
           </p>
         )}
+      </div>
+
+      <div>
+        <label htmlFor="venue-teaser" className={labelCls}>
+          Teaser{" "}
+          <span className="text-gray-400 font-normal">(optional)</span>
+        </label>
+        <textarea
+          id="venue-teaser"
+          name="teaser"
+          rows={2}
+          disabled={isPending}
+          value={currentTeaser}
+          onChange={(e) => setLiveTeaser(e.target.value)}
+          placeholder="e.g. Sunset patio views, $2 oysters, and the best happy hour on the block."
+          className={textareaCls}
+        />
+        <p className="mt-1 text-xs text-gray-400">
+          A short, compelling sentence used when this venue, event, or guide is featured
+          throughout Happy Hour Compass. Aim for one sentence that encourages someone to click
+          and learn more.
+        </p>
       </div>
 
       {/* Live preview — updates as operator types */}

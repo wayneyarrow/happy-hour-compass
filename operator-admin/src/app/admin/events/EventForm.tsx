@@ -38,6 +38,7 @@ type EventFormState = {
   reservationRecommendation: string;
   parkingNotes: string;
   accessibilityNotes: string;
+  teaser: string;
 };
 
 export type EventRow = {
@@ -66,6 +67,7 @@ export type EventRow = {
   reservation_recommendation: string | null;
   parking_notes: string | null;
   accessibility_notes: string | null;
+  teaser: string | null;
 };
 
 type Props = {
@@ -134,6 +136,7 @@ const EMPTY: EventFormState = {
   reservationRecommendation: "",
   parkingNotes: "",
   accessibilityNotes: "",
+  teaser: "",
 };
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -248,6 +251,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       reservationRecommendation: initialEvent.reservation_recommendation ?? "",
       parkingNotes: initialEvent.parking_notes ?? "",
       accessibilityNotes: initialEvent.accessibility_notes ?? "",
+      teaser: initialEvent.teaser ?? "",
     });
     setCurrentEventId(initialEvent.id);
     setImageUrl(initialEvent.image_url ?? null);
@@ -329,6 +333,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
         reservationRecommendation: formState.reservationRecommendation || null,
         parkingNotes: formState.parkingNotes || null,
         accessibilityNotes: formState.accessibilityNotes || null,
+        teaser: formState.teaser || null,
       },
       currentEventId
     );
@@ -520,6 +525,28 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
           />
           <p className="mt-1 text-xs text-gray-400 text-right tabular-nums">
             {formState.description.length} / {DESCRIPTION_MAX} characters
+          </p>
+        </div>
+
+        {/* Teaser */}
+        <div>
+          <label htmlFor="event-teaser" className={labelCls}>
+            Teaser{" "}
+            <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="event-teaser"
+            rows={2}
+            value={formState.teaser}
+            onChange={(e) => update("teaser", e.target.value)}
+            placeholder="e.g. Half-price wings, live jazz, and a patio you won't want to leave."
+            disabled={isSaving}
+            className={inputCls + " resize-none"}
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            A short, compelling sentence used when this venue, event, or guide is featured
+            throughout Happy Hour Compass. Aim for one sentence that encourages someone to click
+            and learn more.
           </p>
         </div>
 

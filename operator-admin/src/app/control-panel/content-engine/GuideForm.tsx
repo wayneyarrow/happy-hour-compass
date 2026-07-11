@@ -168,6 +168,7 @@ export default function GuideForm({
     (initialGuide?.secondary_keywords ?? []).join(", ")
   );
   const [intro, setIntro] = useState(initialGuide?.intro ?? "");
+  const [teaser, setTeaser] = useState(initialGuide?.teaser ?? "");
   // Legacy free-text body (Card 2/3) — no longer editable here (Guide
   // Experience V2 Card 2A). Never re-submitted (see actions.ts), so this is
   // a read-only snapshot used only to show the legacy-content note below.
@@ -589,6 +590,25 @@ export default function GuideForm({
               <p className={hintCls}>
                 Appears as the large, bold opening paragraph at the top of the public guide
                 layout — keep it short and compelling.
+              </p>
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="teaser">
+                Teaser <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                id="teaser"
+                name="teaser"
+                rows={2}
+                value={teaser}
+                onChange={(e) => setTeaser(e.target.value)}
+                className={inputCls}
+              />
+              <p className={hintCls}>
+                A short, compelling sentence used when this venue, event, or guide is featured
+                throughout Happy Hour Compass. Aim for one sentence that encourages someone to
+                click and learn more.
               </p>
             </div>
 

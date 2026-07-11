@@ -60,6 +60,7 @@ export type EventSavePayload = {
   reservationRecommendation: string | null;
   parkingNotes: string | null;
   accessibilityNotes: string | null;
+  teaser: string | null;
 };
 
 export type SaveEventResult = { savedId: string } | { error: string };
@@ -165,6 +166,7 @@ export async function saveEventAction(
     reservation_recommendation:  payload.reservationRecommendation || null,
     parking_notes:               payload.parkingNotes || null,
     accessibility_notes:         payload.accessibilityNotes || null,
+    teaser:                      payload.teaser || null,
     updated_by_operator_id:      ctx.operator.id,
   };
 

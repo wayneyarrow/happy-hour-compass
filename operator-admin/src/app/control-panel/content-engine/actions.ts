@@ -97,6 +97,7 @@ type ParsedGuide = {
   primary_keyword: string | null;
   secondary_keywords: string[];
   intro: string | null;
+  teaser: string | null;
   editorial_section_1_heading: string | null;
   editorial_section_1_body: string | null;
   editorial_section_2_heading: string | null;
@@ -184,6 +185,7 @@ function parseGuideForm(formData: FormData): ParsedGuide {
     primary_keyword:     nullableStr(formData, "primary_keyword"),
     secondary_keywords:  parseSecondaryKeywords(str(formData, "secondary_keywords")),
     intro:               nullableStr(formData, "intro"),
+    teaser:              nullableStr(formData, "teaser"),
     editorial_section_1_heading: nullableStr(formData, "editorial_section_1_heading"),
     editorial_section_1_body:    nullableStr(formData, "editorial_section_1_body"),
     editorial_section_2_heading: nullableStr(formData, "editorial_section_2_heading"),
@@ -262,6 +264,7 @@ export async function createGuideAction(
       primary_keyword:      parsed.primary_keyword,
       secondary_keywords:   parsed.secondary_keywords,
       intro:                parsed.intro,
+      teaser:               parsed.teaser,
       editorial_section_1_heading: parsed.editorial_section_1_heading,
       editorial_section_1_body:    parsed.editorial_section_1_body,
       editorial_section_2_heading: parsed.editorial_section_2_heading,
@@ -343,6 +346,7 @@ export async function updateGuideAction(
       primary_keyword:      parsed.primary_keyword,
       secondary_keywords:   parsed.secondary_keywords,
       intro:                parsed.intro,
+      teaser:               parsed.teaser,
       editorial_section_1_heading: parsed.editorial_section_1_heading,
       editorial_section_1_body:    parsed.editorial_section_1_body,
       editorial_section_2_heading: parsed.editorial_section_2_heading,

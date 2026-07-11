@@ -20,7 +20,8 @@ export const EVENT_COLUMNS =
   "event_time, event_frequency, is_published, venue_id, image_url, " +
   "created_by_operator_id, updated_by_operator_id, updated_at, " +
   "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
-  "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes";
+  "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes, " +
+  "teaser";
 
 /**
  * Builds the short schedule string shown in each list row.

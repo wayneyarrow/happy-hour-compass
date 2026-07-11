@@ -248,7 +248,8 @@ export async function updateAboutVenueAction(
   formData: FormData
 ): Promise<AboutVenueState> {
   const raw = (formData.get("about_your_venue") as string | null) ?? "";
-  const values = { about_your_venue: raw };
+  const teaserRaw = (formData.get("teaser") as string | null) ?? "";
+  const values = { about_your_venue: raw, teaser: teaserRaw };
 
   if (raw.length > ABOUT_VENUE_MAX_CHARS) {
     return {
@@ -268,6 +269,7 @@ export async function updateAboutVenueAction(
 
   const updates = {
     about_your_venue: raw.trim() || null,
+    teaser: teaserRaw.trim() || null,
     ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
   };
 

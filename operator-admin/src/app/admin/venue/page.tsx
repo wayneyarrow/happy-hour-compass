@@ -46,6 +46,11 @@ type AdminVenueRow = {
    * NULL/blank → public Venue Detail page hides the About section entirely.
    */
   about_your_venue?: string | null;
+  /**
+   * Optional, short editorial Teaser for Homepage Feature sections (~one
+   * sentence). Distinct from about_your_venue. Not rendered anywhere yet.
+   */
+  teaser?: string | null;
 };
 
 /**
@@ -254,6 +259,7 @@ export default async function AdminVenuePage({
               venueId={venue.id}
               venueName={venue.name ?? ""}
               initialAboutYourVenue={venue.about_your_venue ?? ""}
+              initialTeaser={venue.teaser ?? ""}
             />
           </AccordionSection>
 
