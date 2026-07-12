@@ -2,3 +2,5 @@
 env.js
 original-app/env.js
 operator-admin/venue-tagging-matrix.xlsx
+# Supabase CLI local metadata
+operator-admin/supabase/.temp/
