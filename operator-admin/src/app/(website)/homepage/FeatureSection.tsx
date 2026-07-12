@@ -13,6 +13,16 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
  * the `feature.teaser &&` guard below). Missing/ineligible content never
  * reaches this component at all — homepagePreview.ts omits the whole
  * Section in that case.
+ *
+ * Alternate desktop layout (Venue Features only — polish task "Alternate the
+ * desktop layout for Venue Feature sections"): Guide/Event stay image-left/
+ * content-right; Venue Feature reverses to content-left/image-right at the
+ * `lg:` breakpoint only, via `lg:order-*` on the same two grid children —
+ * DOM order (image, then content) is untouched, so mobile's stacked
+ * image → content → CTA layout is unaffected regardless of feature type.
+ * The content column's horizontal padding is mirrored alongside the order
+ * flip (`lg:pl-12` instead of `lg:pr-12`) so the outer breathing room stays
+ * on the card's true outer edge rather than ending up against the grid gap.
  */
 
 type Props = {
@@ -21,19 +31,28 @@ type Props = {
 
 export function FeatureSection({ section }: Props) {
   const { feature } = section;
+  const isVenueFeature = section.kind === "venue_feature";
 
   return (
     <section className="py-10 md:py-12 border-t border-gray-100">
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center rounded-3xl overflow-hidden border border-gray-100 bg-gray-50">
-          <div className="relative h-[220px] sm:h-[300px] lg:h-[420px] bg-gray-100">
+          <div
+            className={`relative h-[220px] sm:h-[300px] lg:h-[420px] bg-gray-100 ${
+              isVenueFeature ? "lg:order-2" : ""
+            }`}
+          >
             {feature.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={feature.imageUrl} alt={feature.title} className="w-full h-full object-cover" />
             )}
           </div>
 
-          <div className="px-6 lg:px-0 lg:pr-12 py-8 lg:py-0">
+          <div
+            className={`px-6 lg:px-0 py-8 lg:py-0 ${
+              isVenueFeature ? "lg:order-1 lg:pl-12" : "lg:pr-12"
+            }`}
+          >
             <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-3">
               {feature.eyebrow}
             </p>
