@@ -104,6 +104,8 @@ export type ConsumerVenue = {
    * Max 750 characters enforced by the operator admin form.
    */
   aboutYourVenue: string | null;
+  /** Optional, short (~one sentence) editorial teaser for Homepage Feature sections (migration 061) — distinct from aboutYourVenue's longer description. Null if not authored; only selected/populated by queries that need it (currently getPublishedVenuesByUuids). */
+  teaser: string | null;
   /** ISO timestamp when the venue row was created in Supabase. */
   createdAt: string;
   /** ISO timestamp when the venue row was last updated in Supabase. */
@@ -563,6 +565,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     aboutYourVenue: typeof row.about_your_venue === "string" && row.about_your_venue.trim()
       ? row.about_your_venue
       : null,
+    teaser: typeof row.teaser === "string" && row.teaser.trim() ? row.teaser : null,
     createdAt: (row.created_at as string) ?? "",
     updatedAt: (row.updated_at as string) ?? "",
     internalBoost: typeof row.internal_boost === "number" ? row.internal_boost : 0,
@@ -886,7 +889,7 @@ export async function getPublishedVenuesByUuids(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
           "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
-          "internal_boost, spotlight_eligible, exclude_from_discover, " +
+          "internal_boost, spotlight_eligible, exclude_from_discover, teaser, " +
           "operators!created_by_operator_id(plan)"
       )
       .eq("is_published", true)

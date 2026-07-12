@@ -807,6 +807,8 @@ export type WebsiteEventListItem = {
   startTime: string | null;
   /** Human-readable occurrence label, e.g. "Fridays 8:00–10:00 PM". */
   nextOccurrenceLabel: string;
+  /** Optional, short (~one sentence) editorial teaser for Homepage Feature sections (migration 061) — distinct from description. Null if not authored. */
+  teaser: string | null;
 };
 
 /**
@@ -889,6 +891,10 @@ export async function getPublishedEventsForWebsite(
             event_time: (row.event_time as string | null) ?? null,
             event_frequency: (row.event_frequency as string | null) ?? null,
           }),
+          // Not selected by this query — event search results never show a
+          // Teaser (Homepage Feature sections are the only consumer; see
+          // getPublishedEventsByIds below, which does select it).
+          teaser: null,
         },
       ];
     });
@@ -1205,7 +1211,7 @@ export async function getPublishedEventsByIds(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, title, description, event_type, image_url, " +
+        "id, title, description, event_type, image_url, teaser, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
           "venues(name, lat, lng, establishment_type)"
@@ -1245,6 +1251,7 @@ export async function getPublishedEventsByIds(
           event_time: (row.event_time as string | null) ?? null,
           event_frequency: (row.event_frequency as string | null) ?? null,
         }),
+        teaser: (row.teaser as string | null) ?? null,
       };
     });
   } catch (err) {

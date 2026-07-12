@@ -33,6 +33,15 @@ import GuideFeaturePicker from "./GuideFeaturePicker";
  * Section Type is chosen once, at creation, and locked afterward (shown as
  * read-only text in edit mode) — the approved behavior only allows changing
  * the heading and the selected content on Edit, never the Section Type.
+ *
+ * Public Heading is Collection-mode only (Polish task — Homepage Preview
+ * Banner & Feature Section Headings). Feature sections always render their
+ * fixed automatic label (Featured Venue/Event/Guide + the selected content's
+ * own title — see (website)/homepage/FeatureSection.tsx) and never collect
+ * one; handleSubmit substitutes SECTION_KIND_LABELS[kind] as the stored
+ * value purely to satisfy homepage_sections.title's NOT NULL constraint and
+ * the unchanged "A public heading is required" validation in homepages.ts —
+ * it is never shown or read back as an editable field.
  */
 
 type HomepageGeography = { marketId: string; cityId: string | null };
@@ -101,7 +110,11 @@ export default function SectionEditorPanel({
 
   const collectionCandidates = assignableCollections[sectionType];
   const contentSelected = contentMode === "collection" ? collectionId !== null : featureId !== null;
-  const canSubmit = title.trim() !== "" && contentSelected;
+  // Feature sections no longer collect a Public Heading — they always render
+  // their fixed automatic label (Featured Venue/Event/Guide + the selected
+  // content's own title; see FeatureSection.tsx). Collection sections are
+  // unchanged and still require one.
+  const canSubmit = (contentMode === "collection" ? title.trim() !== "" : true) && contentSelected;
 
   function handleSubmit() {
     setError(null);
@@ -111,12 +124,20 @@ export default function SectionEditorPanel({
       eventId: contentMode === "feature" && sectionType === "event" ? featureId : null,
       guideId: contentMode === "feature" && sectionType === "guide" ? featureId : null,
     };
+    // Feature sections still write a non-blank `title` (the column is
+    // NOT NULL and homepages.ts's "A public heading is required" validation
+    // is unchanged — see this task's "do not change Homepage validation
+    // rules"), but it's an auto-derived, never-shown, never-rendered value
+    // rather than editor input. SECTION_KIND_LABELS is already the exact
+    // fixed label the editor shows for the Section Type itself (e.g. "Venue
+    // Feature"), so it doubles as a stable placeholder here.
+    const effectiveTitle = contentMode === "collection" ? title : SECTION_KIND_LABELS[kind];
 
     startTransition(async () => {
       const result =
         mode === "create"
-          ? await createSectionAction(homepageId, { sectionType, contentMode, title, ...content })
-          : await updateSectionAction(homepageId, existingSection!.id, { title, ...content });
+          ? await createSectionAction(homepageId, { sectionType, contentMode, title: effectiveTitle, ...content })
+          : await updateSectionAction(homepageId, existingSection!.id, { title: effectiveTitle, ...content });
 
       if (!result.success) {
         setError(result.error);
@@ -140,9 +161,13 @@ export default function SectionEditorPanel({
               {mode === "create" ? "Add Section" : "Edit Section"}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {mode === "create"
-                ? "Choose a Section Type, give it a public heading, then select the content to use."
-                : "Change the public heading or select different compatible content."}
+              {contentMode === "collection"
+                ? mode === "create"
+                  ? "Choose a Section Type, give it a public heading, then select the content to use."
+                  : "Change the public heading or select different compatible content."
+                : mode === "create"
+                ? "Choose a Section Type, then select the content to feature. Its public presentation is automatic."
+                : "Select different compatible content. Its public presentation is automatic."}
             </p>
           </div>
           <button
@@ -163,7 +188,7 @@ export default function SectionEditorPanel({
             <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
-          {/* Step 1 — Section Type (locked once created) */}
+          {/* Section Type (locked once created) */}
           <div>
             <label className={labelCls} htmlFor="section_kind">Section Type</label>
             {mode === "create" ? (
@@ -184,24 +209,28 @@ export default function SectionEditorPanel({
             )}
           </div>
 
-          {/* Step 2 — Public heading */}
-          <div>
-            <label className={labelCls} htmlFor="section_title">Public Heading</label>
-            <input
-              id="section_title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Patio Picks"
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Shown to visitors on the public Homepage. Doesn&apos;t change the underlying{" "}
-              {contentMode === "collection" ? "Collection" : "content"}&apos;s own name.
-            </p>
-          </div>
+          {/* Public heading — Collection sections only. Feature sections always
+              render their fixed automatic label (Featured Venue/Event/Guide +
+              the selected content's own title — see FeatureSection.tsx) and
+              never collect or show an editable heading. */}
+          {contentMode === "collection" && (
+            <div>
+              <label className={labelCls} htmlFor="section_title">Public Heading</label>
+              <input
+                id="section_title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Patio Picks"
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Shown to visitors on the public Homepage. Doesn&apos;t change the underlying Collection&apos;s own name.
+              </p>
+            </div>
+          )}
 
-          {/* Step 3 — Content selection */}
+          {/* Content selection */}
           <div>
             <label className={labelCls}>
               {contentMode === "collection" ? "Collection" : "Content"}

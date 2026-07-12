@@ -48,6 +48,19 @@ function contentTypeLabel(section: HomepageSection): string {
   return section.sectionType === "venue" ? "Venue" : section.sectionType === "event" ? "Event" : "Guide";
 }
 
+/**
+ * The meaningful, human-facing label for a Section in this list, in confirm
+ * dialogs, and in aria-labels. Collection sections keep their editor-entered
+ * Public Heading (section.title). Feature sections no longer have one —
+ * section.title is now just an auto-derived placeholder that satisfies the
+ * NOT NULL column (see SectionEditorPanel.tsx) — so the assigned content's
+ * own name is used instead, falling back to a plain "not assigned yet" state.
+ */
+function sectionDisplayLabel(section: HomepageSection): string {
+  if (section.contentMode === "collection") return section.title;
+  return section.feature?.name ?? "No content assigned yet";
+}
+
 export default function HomepageSectionsEditor({
   homepageId,
   homepageGeography,
@@ -94,7 +107,7 @@ export default function HomepageSectionsEditor({
 
   function handleRemove(section: HomepageSection) {
     const confirmed = confirm(
-      `Remove "${section.title}" from this Homepage? This won't delete the underlying ${contentTypeLabel(section)}.`
+      `Remove "${sectionDisplayLabel(section)}" from this Homepage? This won't delete the underlying ${contentTypeLabel(section)}.`
     );
     if (!confirmed) return;
 
@@ -133,6 +146,14 @@ export default function HomepageSectionsEditor({
               section.contentMode === "collection"
                 ? section.collection?.name ?? null
                 : section.feature?.name ?? null;
+            // Feature sections no longer have an editor-entered heading —
+            // section.title is now just an auto-derived placeholder (see
+            // SectionEditorPanel.tsx) that would otherwise duplicate the kind
+            // badge next to it. sectionDisplayLabel() promotes the assigned
+            // content's own name instead, so the separate "Using:" line
+            // (still shown for Collection sections below) is skipped here to
+            // avoid repeating it.
+            const primaryLabel = sectionDisplayLabel(section);
             return (
               <li
                 key={section.id}
@@ -140,17 +161,25 @@ export default function HomepageSectionsEditor({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-slate-900 truncate">{section.title}</span>
+                    <span
+                      className={`font-medium truncate ${
+                        section.contentMode === "feature" && !usingLabel ? "text-amber-600" : "text-slate-900"
+                      }`}
+                    >
+                      {primaryLabel}
+                    </span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0 whitespace-nowrap">
                       {SECTION_KIND_LABELS[kind]}
                     </span>
                   </div>
-                  <p className="text-xs mt-0.5 truncate">
-                    <span className="text-gray-400">Using: </span>
-                    <span className={usingLabel ? "text-gray-600" : "text-amber-600"}>
-                      {usingLabel ?? "No content assigned yet"}
-                    </span>
-                  </p>
+                  {section.contentMode === "collection" && (
+                    <p className="text-xs mt-0.5 truncate">
+                      <span className="text-gray-400">Using: </span>
+                      <span className={usingLabel ? "text-gray-600" : "text-amber-600"}>
+                        {usingLabel ?? "No content assigned yet"}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -158,7 +187,7 @@ export default function HomepageSectionsEditor({
                     onClick={() => handleMove(section.id, "up")}
                     disabled={index === 0 || isPending}
                     className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    aria-label={`Move ${section.title} up`}
+                    aria-label={`Move ${primaryLabel} up`}
                   >
                     ↑
                   </button>
@@ -167,7 +196,7 @@ export default function HomepageSectionsEditor({
                     onClick={() => handleMove(section.id, "down")}
                     disabled={index === ordered.length - 1 || isPending}
                     className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    aria-label={`Move ${section.title} down`}
+                    aria-label={`Move ${primaryLabel} down`}
                   >
                     ↓
                   </button>

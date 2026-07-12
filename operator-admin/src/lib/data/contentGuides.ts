@@ -493,13 +493,14 @@ export async function getRelatedGuides(
   }));
 }
 
-// ── Saved Guides (Task 4) ────────────────────────────────────────────────────
-// Powers both the header Saved dropdown's Guides group and the /saved page's
-// Guides tab — a single lean read, mirroring getVenuePreviewsByIds /
-// getEventPreviewsByIds in src/lib/data/venues.ts and events.ts. Guides carry
-// their own marketSlug per row (unlike venues/events, a saved guide's link
-// never needs an externally-supplied marketId), so one shape serves both call
-// sites without a second "-full" query.
+// ── Saved Guides (Task 4) / Homepage Preview (Task 5) ───────────────────────
+// Powers the header Saved dropdown's Guides group, the /saved page's Guides
+// tab, AND the Homepage Preview's Guide Collection/Feature sections — a
+// single lean read, mirroring getVenuePreviewsByIds / getEventPreviewsByIds
+// in src/lib/data/venues.ts and events.ts. Guides carry their own marketSlug
+// per row (unlike venues/events, a saved guide's link never needs an
+// externally-supplied marketId), so one shape serves all call sites without
+// a second "-full" query.
 
 export type SavedGuideCard = {
   id: string;
@@ -512,14 +513,18 @@ export type SavedGuideCard = {
   heroImageUrl: string | null;
   /** Guide's intro/standfirst, for the Saved Guides card. Null if not authored. */
   standfirst: string | null;
+  /** Guide's short editorial teaser (migration 061) — distinct from standfirst/intro. Used by Homepage Feature sections only; null if not authored. */
+  teaser: string | null;
 };
 
 /**
  * Returns published, in-window guides for the given ids, silently dropping
  * any id that is unpublished, deleted, or outside its publish window — the
  * same "stale saved id disappears quietly" behaviour the Saved experience
- * already relies on for venues/events. Reuses isGuidePublicNow so the
- * publish-window rule is never re-implemented here.
+ * already relies on for venues/events, and the same "omit rather than crash"
+ * behaviour the Homepage Preview needs for Guide Collection/Feature sections.
+ * Reuses isGuidePublicNow so the publish-window rule is never re-implemented
+ * here.
  */
 export async function getSavedGuideCardsByIds(ids: string[]): Promise<SavedGuideCard[]> {
   if (ids.length === 0) return [];
@@ -528,7 +533,7 @@ export async function getSavedGuideCardsByIds(ids: string[]): Promise<SavedGuide
   const { data, error } = await supabase
     .from("content_guides")
     .select(
-      "id, guide_type, status, title, slug, intro, hero_image_url, publish_at, expire_at, " +
+      "id, guide_type, status, title, slug, intro, teaser, hero_image_url, publish_at, expire_at, " +
         "markets!inner(slug, name), city:cities(name)"
     )
     .in("id", ids)
@@ -561,6 +566,7 @@ export async function getSavedGuideCardsByIds(ids: string[]): Promise<SavedGuide
         locationLabel: (city?.name as string | undefined) || (market.name as string) || "",
         heroImageUrl: (row.hero_image_url as string | null) ?? null,
         standfirst: (row.intro as string | null) ?? null,
+        teaser: (row.teaser as string | null) ?? null,
       };
     });
 }
