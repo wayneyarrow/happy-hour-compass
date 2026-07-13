@@ -263,6 +263,82 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
   };
 }
 
+/** Everything getPublishedCollectionBySlug returns — CollectionDetail minus the fields that are admin-only and irrelevant to public rendering (Homepage Usage reporting, audit timestamps). */
+export type PublishedCollectionRecord = Omit<CollectionDetail, "usage" | "createdAt" | "updatedAt">;
+
+/**
+ * Published-only Collection lookup, scoped to (marketId, slug) — the public
+ * counterpart to getCollectionById (which is draft-inclusive, for the
+ * Control Panel editor and Preview only). Used exclusively by the public
+ * Collection Landing Page loader (collectionPublic.ts); never by Preview or
+ * the editor, so Draft/archived Collections and Draft-inclusive resolution
+ * behaviour there are completely unaffected by this function's existence.
+ *
+ * Gates on status = 'published' and archived_at IS NULL at the query level
+ * — mirrors getPublishedHomepageByGeography's (homepages.ts) equivalent
+ * gate for Homepages. Geography mismatch is handled simply by scoping the
+ * query to the caller's marketId: a Collection belonging to a different
+ * Market can never match, by construction — no separate mismatch check is
+ * needed.
+ */
+export async function getPublishedCollectionBySlug(
+  marketId: string,
+  slug: string
+): Promise<PublishedCollectionRecord | null> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("collections")
+    .select(
+      "id, name, description, public_intro, slug, collection_type, status, algorithm_key, item_limit, " +
+        "market_id, city_id, archived_at, market:markets(name), city:cities!city_id(name)"
+    )
+    .eq("market_id", marketId)
+    .eq("slug", slug)
+    .eq("status", "published")
+    .is("archived_at", null)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[getPublishedCollectionBySlug]", error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  const row = data as Row;
+  const collectionType = row.collection_type as CollectionType;
+  const id = row.id as string;
+
+  const [venueOverrides, eventOverrides, guideItems] = await Promise.all([
+    collectionType === "venue" ? getCollectionVenueOverrides(id) : Promise.resolve([]),
+    collectionType === "event" ? getCollectionEventOverrides(id) : Promise.resolve([]),
+    collectionType === "guide" ? getCollectionGuideItems(id) : Promise.resolve([]),
+  ]);
+
+  const market = (row.market as Row | null) ?? {};
+  const city = (row.city as Row | null) ?? null;
+
+  return {
+    id,
+    name:           row.name as string,
+    description:    (row.description as string | null) ?? null,
+    publicIntro:    (row.public_intro as string | null) ?? null,
+    slug:           row.slug as string,
+    collectionType,
+    marketId:       row.market_id as string,
+    marketName:     (market.name as string | undefined) ?? "",
+    cityId:         (row.city_id as string | null) ?? null,
+    cityName:       (city?.name as string | undefined) ?? null,
+    status:         normalizeCollectionStatus(row.status as string),
+    algorithmKey:   (row.algorithm_key as AlgorithmKey | null) ?? null,
+    itemLimit:      (row.item_limit as number | null) ?? null,
+    archivedAt:     (row.archived_at as string | null) ?? null,
+    venueOverrides,
+    eventOverrides,
+    guideItems,
+  };
+}
+
 /** Internal — just enough of a Collection to validate a membership write, without the detail query's joins/usage lookup. */
 async function getCollectionForValidation(
   id: string
