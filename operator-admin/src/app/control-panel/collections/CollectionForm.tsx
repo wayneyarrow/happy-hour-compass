@@ -170,6 +170,7 @@ export default function CollectionForm({
 
   const [name, setName] = useState(initialCollection?.name ?? "");
   const [description, setDescription] = useState(initialCollection?.description ?? "");
+  const [publicIntro, setPublicIntro] = useState(initialCollection?.publicIntro ?? "");
   const [collectionType, setCollectionType] = useState<CollectionType | "">(
     initialCollection?.collectionType ?? ""
   );
@@ -196,6 +197,7 @@ export default function CollectionForm({
     if (!state.values) return;
     setName(state.values.name);
     setDescription(state.values.description ?? "");
+    setPublicIntro(state.values.publicIntro ?? "");
     setMarketId(state.values.marketId);
     setCityId(state.values.cityId ?? "");
     setAlgorithmKey((state.values.algorithmKey as AlgorithmKey) ?? "");
@@ -388,6 +390,24 @@ export default function CollectionForm({
             className={inputCls}
           />
           <p className={hintCls}>For administrators only — never shown publicly.</p>
+        </div>
+        <div>
+          <label className={labelCls} htmlFor="public_intro">
+            Public Intro <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="public_intro"
+            name="public_intro"
+            rows={3}
+            value={publicIntro}
+            onChange={(e) => setPublicIntro(e.target.value)}
+            className={inputCls}
+          />
+          <p className={hintCls}>
+            Polished, visitor-facing copy that will appear on this Collection&apos;s future public Landing
+            Page — separate from the Internal Description above. Leave blank for now; there&apos;s no fallback
+            to the Internal Description.
+          </p>
         </div>
         <div>
           <label className={labelCls} htmlFor="collection_type">Collection Type</label>

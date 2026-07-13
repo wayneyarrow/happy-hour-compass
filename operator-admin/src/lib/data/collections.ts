@@ -212,7 +212,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
   const { data, error } = await supabase
     .from("collections")
     .select(
-      "id, name, description, collection_type, status, algorithm_key, item_limit, " +
+      "id, name, description, public_intro, collection_type, status, algorithm_key, item_limit, " +
         "market_id, city_id, created_at, updated_at, archived_at, market:markets(name), city:cities!city_id(name)"
     )
     .eq("id", id)
@@ -241,6 +241,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     id:             row.id as string,
     name:           row.name as string,
     description:    (row.description as string | null) ?? null,
+    publicIntro:    (row.public_intro as string | null) ?? null,
     collectionType,
     marketId:       row.market_id as string,
     marketName:     (market.name as string | undefined) ?? "",
@@ -285,6 +286,7 @@ async function getCollectionForValidation(
 export type CreateCollectionInput = {
   name: string;
   description: string | null;
+  publicIntro: string | null;
   collectionType: CollectionType;
   marketId: string;
   cityId: string | null;
@@ -346,6 +348,7 @@ export async function createCollection(
     .insert({
       name,
       description: input.description?.trim() || null,
+      public_intro: input.publicIntro?.trim() || null,
       collection_type: input.collectionType,
       market_id: input.marketId,
       city_id: input.cityId,
@@ -370,6 +373,7 @@ export async function createCollection(
 export type UpdateCollectionInput = {
   name?: string;
   description?: string | null;
+  publicIntro?: string | null;
   marketId?: string;
   cityId?: string | null;
   status?: CollectionStatus;
@@ -401,6 +405,9 @@ export async function updateCollection(
   }
   if (input.description !== undefined) {
     patch.description = input.description?.trim() || null;
+  }
+  if (input.publicIntro !== undefined) {
+    patch.public_intro = input.publicIntro?.trim() || null;
   }
   if (input.status !== undefined) {
     patch.status = input.status;

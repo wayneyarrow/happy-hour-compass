@@ -224,6 +224,8 @@ export type CollectionDetail = {
   id: string;
   name: string;
   description: string | null;
+  /** Optional, polished visitor-facing copy for future Collection Landing Pages — entirely separate from `description` (internal/editorial only). No fallback to `description`; NULL means no Public Intro yet. */
+  publicIntro: string | null;
   collectionType: CollectionType;
   marketId: string;
   marketName: string;

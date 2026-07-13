@@ -125,6 +125,7 @@ export type CollectionFieldKey =
 export type CollectionFormValues = {
   name: string;
   description: string | null;
+  publicIntro: string | null;
   marketId: string;
   cityId: string | null;
   algorithmKey: string | null;
@@ -254,6 +255,7 @@ export async function createCollectionAction(
 
   const name = str(formData, "name");
   const description = nullableStr(formData, "description");
+  const publicIntro = nullableStr(formData, "public_intro");
   const collectionType = str(formData, "collection_type");
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
@@ -262,7 +264,7 @@ export async function createCollectionAction(
   const status: CollectionStatus = "draft";
   const { value: itemLimit, error: itemLimitError } = parseItemLimit(formData);
 
-  const values: CollectionFormValues = { name, description, marketId, cityId, algorithmKey, itemLimit, status };
+  const values: CollectionFormValues = { name, description, publicIntro, marketId, cityId, algorithmKey, itemLimit, status };
 
   const fieldErrors: CollectionFormState["fieldErrors"] = {};
   if (!name) fieldErrors.name = "Name is required.";
@@ -288,6 +290,7 @@ export async function createCollectionAction(
     {
       name,
       description,
+      publicIntro,
       collectionType: collectionType as CollectionType,
       marketId,
       cityId,
@@ -334,6 +337,7 @@ export async function updateCollectionAction(
 
   const name = str(formData, "name");
   const description = nullableStr(formData, "description");
+  const publicIntro = nullableStr(formData, "public_intro");
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
   const status = str(formData, "status") as CollectionStatus;
@@ -345,7 +349,7 @@ export async function updateCollectionAction(
   const algorithmKey = existing.algorithmKey;
   const itemLimit = existing.itemLimit;
 
-  const values: CollectionFormValues = { name, description, marketId, cityId, algorithmKey, itemLimit, status };
+  const values: CollectionFormValues = { name, description, publicIntro, marketId, cityId, algorithmKey, itemLimit, status };
 
   const fieldErrors: CollectionFormState["fieldErrors"] = {};
   if (!name) fieldErrors.name = "Name is required.";
@@ -422,7 +426,7 @@ export async function updateCollectionAction(
   // above.
   const coreResult = await updateCollection(
     collectionId,
-    { name, description, marketId, cityId, status },
+    { name, description, publicIntro, marketId, cityId, status },
     callerEmail
   );
   if (!coreResult.success) {
