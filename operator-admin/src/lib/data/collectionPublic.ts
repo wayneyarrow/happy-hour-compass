@@ -140,11 +140,11 @@ const COLLECTION_TYPE_NOUN: Record<PublicCollectionModel["kind"], { singular: st
   guide: { singular: "guide", plural: "guides" },
 };
 
-/** "1 venue" / "12 venues" / "3 events" / "1 guide" — correct singular/plural noun for the resolved item count. */
+/** "1 curated venue" / "12 curated venues" / "3 curated events" / "1 curated guide" — correct singular/plural noun for the resolved item count. */
 export function formatCollectionItemCount(model: PublicCollectionModel): string {
   const noun = COLLECTION_TYPE_NOUN[model.kind];
   const word = model.itemCount === 1 ? noun.singular : noun.plural;
-  return `${model.itemCount} ${word}`;
+  return `${model.itemCount} curated ${word}`;
 }
 
 /**

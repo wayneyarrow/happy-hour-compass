@@ -36,11 +36,23 @@ function BreadcrumbChevron() {
 
 type Props = {
   collectionName: string;
+  /**
+   * Trims the standalone-hero vertical padding for embedding inside another
+   * component's own padded container (e.g. the Happy Hour search context
+   * header slot — see CollectionTypeContent.tsx's CollectionSearchContextHeader),
+   * which already provides top/bottom spacing of its own.
+   */
+  compact?: boolean;
 };
 
-export function CollectionBreadcrumb({ collectionName }: Props) {
+export function CollectionBreadcrumb({ collectionName, compact = false }: Props) {
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
+    <nav
+      aria-label="Breadcrumb"
+      className={`flex items-center gap-1.5 text-sm text-gray-500 min-w-0 ${
+        compact ? "pb-1" : "pt-5 pb-4"
+      }`}
+    >
       <Link
         href="/"
         className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"

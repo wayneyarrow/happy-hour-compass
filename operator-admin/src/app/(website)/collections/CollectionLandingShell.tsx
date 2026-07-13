@@ -4,16 +4,19 @@ import { formatCollectionItemCount, type PublicCollectionModel } from "@/lib/dat
 
 /**
  * Shared Collection Landing Page shell (Collection Landing Pages — Shared
- * Public Infrastructure task). Renders everything common to Venue, Event,
- * and Guide Collections — breadcrumb, title, optional Public Intro, and the
- * resolved item count — then hands off to `children` for the type-specific
- * presentation a future task will build (see CollectionTypeContent.tsx).
+ * Public Infrastructure task). Hero placement is type-specific:
  *
- * `children` is rendered completely bare (no wrapping element of its own)
- * so that today's empty type-specific region (every branch of
- * CollectionTypeContent currently returns null) produces zero DOM output
- * and therefore zero visible blank space — there is nothing here for a
- * future task to have to first "undo."
+ *   - Guide Collections keep the standalone editorial hero rendered here —
+ *     breadcrumb, title, optional Public Intro, and the resolved item count,
+ *     above `children` — matching the Content Engine's editorial layout.
+ *   - Venue and (future) Event Collections render no hero at all here.
+ *     Those renderers reuse the existing Happy Hour / Event search
+ *     experience wholesale (see CollectionTypeContent.tsx), including its
+ *     own context/header slot, so the shell simply hands off to `children`
+ *     with zero wrapping — the search experience's filter bar ends up
+ *     directly below the public website header, exactly like the
+ *     unrestricted search pages. This avoids rendering breadcrumb / title /
+ *     Public Intro / count in two places.
  *
  * Public Intro has no fallback to Internal Description: when `publicIntro`
  * is null, the intro paragraph is simply omitted, exactly as the product
@@ -26,6 +29,10 @@ type Props = {
 };
 
 export function CollectionLandingShell({ model, children }: Props) {
+  if (model.kind !== "guide") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="bg-white pb-16">
       <div className="max-w-7xl mx-auto px-6 lg:px-10">

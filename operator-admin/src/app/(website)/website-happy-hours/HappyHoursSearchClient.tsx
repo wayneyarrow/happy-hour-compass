@@ -60,7 +60,8 @@ function formatTimeDisplay(hhMm: string): string {
 
 // ─── Sort options ─────────────────────────────────────────────────────────────
 
-type SortOption = "distance" | "rating" | "az";
+/** "collection" is only offered when `collectionOrder` is passed — it preserves input order. */
+type SortOption = "collection" | "distance" | "rating" | "az";
 
 // ─── Chip button ──────────────────────────────────────────────────────────────
 
@@ -147,18 +148,41 @@ function EmptyState({
 type Props = {
   cards: WebsiteVenueCard[];
   market: Market;
-  /** When provided, replaces the default SearchContextHeader in both desktop and mobile layouts. */
-  contextHeader?: ReactNode;
+  /**
+   * When provided, replaces the default SearchContextHeader in both desktop
+   * and mobile layouts. Pass `null` (as opposed to leaving it `undefined`) to
+   * suppress the header slot — and its wrapping margin/border — entirely,
+   * e.g. when an ancestor (the Collection hero) already renders equivalent
+   * context immediately above and a second heading/divider would read as two
+   * disconnected pages.
+   */
+  contextHeader?: ReactNode | null;
+  /**
+   * When true, `cards` is treated as a pre-resolved, pre-ordered set (e.g. a
+   * Venue Collection) rather than the full market. Adds "Collection Order" as
+   * a selectable — and default — sort, which simply preserves `cards`' input
+   * order. Filtering/other sorts still operate only within `cards`, so the
+   * Collection membership boundary is never widened.
+   */
+  collectionOrder?: boolean;
+  /** Rendered once, full-width, after the results in both desktop and mobile layouts. */
+  footerCta?: ReactNode;
 };
 
-export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) {
+export function HappyHoursSearchClient({
+  cards,
+  market,
+  contextHeader,
+  collectionOrder = false,
+  footerCta,
+}: Props) {
   // ── filter state ──
   const [nearMeActive, setNearMeActive] = useState(false);
   const [onNowActive, setOnNowActive] = useState(false);
   const [topRatedActive, setTopRatedActive] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [filterTime, setFilterTime] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("distance");
+  const [sortBy, setSortBy] = useState<SortOption>(collectionOrder ? "collection" : "distance");
 
   // ── dropdown open state ──
   const [typeOpen, setTypeOpen] = useState(false);
@@ -274,6 +298,9 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
   // sortBy is used directly. "distance" without location returns 0 (stable: preserves
   // server ordering) rather than falling back to rating — this ensures switching
   // between "Nearest" and "Top Rated First" always produces a visibly different result.
+  // "collection" never sorts at all — filteredCards already preserves `cards`' input
+  // order (Array.filter is order-preserving), so this is exactly the resolved
+  // Collection order, restored whenever the visitor switches back to it.
   const sortedCards = useMemo(() => {
     const hasLoc = userLocation !== null;
 
@@ -289,6 +316,8 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
             )
           : null,
     }));
+
+    if (sortBy === "collection") return withDist;
 
     return [...withDist].sort((a, b) => {
       if (sortBy === "distance") {
@@ -387,7 +416,13 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
 
   const hasLoc = userLocation !== null;
   const sortLabel =
-    sortBy === "distance" ? "Nearest" : sortBy === "rating" ? "Top Rated" : "A-Z";
+    sortBy === "collection"
+      ? "Collection Order"
+      : sortBy === "distance"
+      ? "Nearest"
+      : sortBy === "rating"
+      ? "Top Rated"
+      : "A-Z";
   const typeLabel = selectedType ?? "Type";
   const timeLabel = filterTime
     ? `Time: ${formatTimeDisplay(filterTime)}`
@@ -516,6 +551,20 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
             />
             {sortOpen && (
               <div className="absolute top-full mt-2 right-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[200px]">
+                {collectionOrder && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortBy("collection");
+                      setSortOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                      sortBy === "collection" ? "font-semibold text-gray-900" : "text-gray-700"
+                    }`}
+                  >
+                    Collection Order
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -599,11 +648,13 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
       <div className="hidden md:flex">
         {/* Results column — scrolls with the page */}
         <div className="w-1/2 min-h-[calc(100dvh-72px)] border-r border-gray-100 px-5 pt-8 pb-10">
-          <div className="mb-7">
-            {contextHeader ?? (
-              <SearchContextHeader market={market} resultCount={sortedCards.length} />
-            )}
-          </div>
+          {contextHeader !== null && (
+            <div className="mb-7">
+              {contextHeader ?? (
+                <SearchContextHeader market={market} resultCount={sortedCards.length} />
+              )}
+            </div>
+          )}
 
           {sortedCards.length === 0 ? (
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
@@ -649,11 +700,13 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
 
       {/* ── Mobile: stacked layout ────────────────────────────────────────────── */}
       <div className="md:hidden">
-        <div className="px-4 pt-6 pb-5 border-b border-gray-100">
-          {contextHeader ?? (
-            <SearchContextHeader market={market} resultCount={sortedCards.length} />
-          )}
-        </div>
+        {contextHeader !== null && (
+          <div className="px-4 pt-6 pb-5 border-b border-gray-100">
+            {contextHeader ?? (
+              <SearchContextHeader market={market} resultCount={sortedCards.length} />
+            )}
+          </div>
+        )}
 
         <SearchResultsMap
           markers={mapMarkers}
@@ -674,6 +727,8 @@ export function HappyHoursSearchClient({ cards, market, contextHeader }: Props) 
           </div>
         )}
       </div>
+
+      {footerCta}
     </>
   );
 }
