@@ -13,10 +13,12 @@
  * contentGuides.ts / collections.ts.
  *
  * The "public loader" functions at the bottom (getPublishedMarketHomepage,
- * getPublishedCityHomepage, getPublishedHomepageForLocation) are read
- * helpers only — not wired to any route yet. See docs/website/
- * HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md "Homepage Fallback" for the product
- * rule they implement (City Homepage first, Market Homepage fallback).
+ * getPublishedCityHomepage, getPublishedHomepageForLocation) are the
+ * published-only geography resolution used by the public Homepage route
+ * (see homepagePublic.ts, which layers Section-content resolution on top of
+ * what these return). See docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md
+ * "Homepage Fallback" for the product rule they implement (City Homepage
+ * first, Market Homepage fallback).
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
@@ -882,7 +884,7 @@ export async function getAssignableGuidesForFeatureSection(
   });
 }
 
-// ── Public loaders (read-only; not wired to any route yet) ─────────────────
+// ── Public loaders (read-only; geography + publish-status gating only) ─────
 //
 // Every loader here returns only a published Homepage with enabled Sections,
 // and only surfaces a Collection-mode Section's Collection when that
@@ -890,9 +892,10 @@ export async function getAssignableGuidesForFeatureSection(
 // content, mirroring the spec's "an assigned Collection with no eligible
 // members does not render publicly" principle at the publish-status level.
 // Feature-mode Section content eligibility (e.g. a Featured Venue that's
-// since been unpublished) is not filtered here yet — public rendering is a
-// later task; this is a data safety net only, no card resolution or
-// rendering happens here.
+// since been unpublished), Collection algorithm/manual resolution, and card
+// mapping are NOT done here — that's homepagePublic.ts's job, via the same
+// resolveSection() the Preview loader uses. This layer only decides WHICH
+// Homepage (if any) is the public source of truth for a geography.
 
 async function getPublishedHomepageByGeography(
   marketId: string,

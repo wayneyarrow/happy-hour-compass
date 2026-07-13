@@ -6,3 +6,5 @@ operator-admin/venue-tagging-matrix.xlsx
 operator-admin/supabase/.temp/
 # Claude Code local overrides (per-user secrets, e.g. MCP env vars — never commit)
 .claude/settings.local.json
+.vercel
+.env*

@@ -166,6 +166,16 @@ export async function getDefaultCityForMarket(marketId: string): Promise<CityRec
 /**
  * Returns a city by its market slug + city slug.
  * Useful for resolving URL segments like `/greater-vancouver/burnaby`.
+ *
+ * The `markets!market_id!inner(slug)` hint is required, not optional: cities
+ * and markets have TWO FK relationships (cities.market_id -> markets.id, the
+ * one we want, and markets.default_city_id -> cities.id, added in migration
+ * 048's "circular FK" workaround). Without the `!market_id` hint, PostgREST
+ * can't tell which relationship to embed and errors with "Could not embed
+ * because more than one relationship was found for 'cities' and 'markets'"
+ * — silently swallowed by `if (error) return null`, so this function always
+ * returned null, for every market/city pair, until this fix (confirmed live
+ * against the project — see Task 9's root-cause diagnosis).
  */
 export async function getCityBySlug(
   marketSlug: string,
@@ -174,7 +184,7 @@ export async function getCityBySlug(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("cities")
-    .select("*, markets!inner(slug)")
+    .select("*, markets!market_id!inner(slug)")
     .eq("markets.slug", marketSlug)
     .eq("slug", citySlug)
     .single();
