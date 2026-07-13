@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { slugify } from "@/lib/slugify";
 import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import type {
   CollectionDetail,
@@ -169,6 +170,12 @@ export default function CollectionForm({
   const [state, formAction, isPending] = useActionState<CollectionFormState, FormData>(boundAction, {});
 
   const [name, setName] = useState(initialCollection?.name ?? "");
+  const [slug, setSlug] = useState(initialCollection?.slug ?? "");
+  // Edit mode already has a saved slug belonging to a live (future) public
+  // URL — never auto-overwrite it. Create mode auto-fills from Name until
+  // the editor edits Slug directly — mirrors GuideForm.tsx's identical
+  // slugTouched pattern exactly.
+  const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [description, setDescription] = useState(initialCollection?.description ?? "");
   const [publicIntro, setPublicIntro] = useState(initialCollection?.publicIntro ?? "");
   const [collectionType, setCollectionType] = useState<CollectionType | "">(
@@ -196,6 +203,8 @@ export default function CollectionForm({
   useEffect(() => {
     if (!state.values) return;
     setName(state.values.name);
+    setSlug(state.values.slug);
+    setSlugTouched(true);
     setDescription(state.values.description ?? "");
     setPublicIntro(state.values.publicIntro ?? "");
     setMarketId(state.values.marketId);
@@ -207,6 +216,7 @@ export default function CollectionForm({
   }, [state]);
 
   const filteredCities = useMemo(() => cities.filter((c) => c.marketId === marketId), [cities, marketId]);
+  const selectedMarket = markets.find((m) => m.id === marketId) ?? null;
   const isGuideType = collectionType === "guide";
   const algorithmic = !isGuideType && curationMode === "algorithmic";
   const itemLimitNumber = itemLimit.trim() && Number.isFinite(Number(itemLimit)) ? Number(itemLimit) : null;
@@ -245,7 +255,22 @@ export default function CollectionForm({
         ? Boolean(algorithmKey) && itemLimitValid
         : false; // curationMode === null — not yet deliberately chosen
   const canCreate =
-    name.trim() !== "" && collectionType !== "" && marketId !== "" && curationMethodValid;
+    name.trim() !== "" && slug.trim() !== "" && collectionType !== "" && marketId !== "" && curationMethodValid;
+
+  function handleNameChange(value: string) {
+    setName(value);
+    if (!slugTouched) setSlug(slugify(value));
+  }
+
+  function handleSlugChange(value: string) {
+    setSlug(value);
+    setSlugTouched(true);
+  }
+
+  function regenerateSlugFromName() {
+    setSlug(slugify(name));
+    setSlugTouched(true);
+  }
 
   function handleMarketChange(nextMarketId: string) {
     setMarketId(nextMarketId);
@@ -371,11 +396,38 @@ export default function CollectionForm({
             name="name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => handleNameChange(e.target.value)}
             placeholder="e.g. Patio Picks — Kelowna"
             className={inputCls}
           />
           {err.name && <p className={errorCls}>{err.name}</p>}
+        </div>
+        <div>
+          <label className={labelCls} htmlFor="slug">Slug</label>
+          <div className="flex gap-2">
+            <input
+              id="slug"
+              name="slug"
+              type="text"
+              value={slug}
+              onChange={(e) => handleSlugChange(e.target.value)}
+              placeholder="patio-picks-kelowna"
+              className={inputCls}
+            />
+            <button
+              type="button"
+              onClick={regenerateSlugFromName}
+              disabled={!name.trim()}
+              className="shrink-0 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            >
+              Generate from name
+            </button>
+          </div>
+          <p className={hintCls}>
+            /{selectedMarket?.slug ?? "{market}"}/collections/{slug || "{collection-slug}"} — used in the
+            public Collection Landing Page URL.
+          </p>
+          {err.slug && <p className={errorCls}>{err.slug}</p>}
         </div>
         <div>
           <label className={labelCls} htmlFor="description">

@@ -26,6 +26,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { slugify } from "@/lib/slugify";
 import { validateCityBelongsToMarket, getAllMarkets, getCitiesByMarket } from "@/lib/geo/geography";
 import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import { normalizeHomepageStatus } from "@/lib/data/homepagesShared";
@@ -88,6 +89,7 @@ function mapCollectionSummaryRow(row: Row): CollectionSummary {
     id:            row.id as string,
     name:          row.name as string,
     description:   (row.description as string | null) ?? null,
+    slug:          row.slug as string,
     collectionType: row.collection_type as CollectionType,
     status:        normalizeCollectionStatus(row.status as string),
     algorithmKey:  (row.algorithm_key as AlgorithmKey | null) ?? null,
@@ -160,7 +162,7 @@ function mapGuideItemRow(row: Row): CollectionGuideItem {
 // hint, PostgREST can't tell which relationship to embed and errors with
 // "more than one relationship was found for 'collections' and 'cities'".
 const COLLECTION_SUMMARY_COLUMNS =
-  "id, name, description, collection_type, status, algorithm_key, market_id, city_id, updated_at, archived_at, " +
+  "id, name, description, slug, collection_type, status, algorithm_key, market_id, city_id, updated_at, archived_at, " +
   "market:markets(name), city:cities!city_id(name)";
 
 // ── Collection list ──────────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
   const { data, error } = await supabase
     .from("collections")
     .select(
-      "id, name, description, public_intro, collection_type, status, algorithm_key, item_limit, " +
+      "id, name, description, public_intro, slug, collection_type, status, algorithm_key, item_limit, " +
         "market_id, city_id, created_at, updated_at, archived_at, market:markets(name), city:cities!city_id(name)"
     )
     .eq("id", id)
@@ -242,6 +244,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     name:           row.name as string,
     description:    (row.description as string | null) ?? null,
     publicIntro:    (row.public_intro as string | null) ?? null,
+    slug:           row.slug as string,
     collectionType,
     marketId:       row.market_id as string,
     marketName:     (market.name as string | undefined) ?? "",
@@ -287,6 +290,7 @@ export type CreateCollectionInput = {
   name: string;
   description: string | null;
   publicIntro: string | null;
+  slug: string;
   collectionType: CollectionType;
   marketId: string;
   cityId: string | null;
@@ -311,6 +315,12 @@ export async function createCollection(
     return { success: false, error: `Invalid collection type "${input.collectionType}".` };
   }
   if (!input.marketId) return { success: false, error: "Market is required." };
+
+  // Normalized via the shared slugify utility before persistence — never
+  // trusted as already-normalized from the caller (mirrors how description/
+  // publicIntro are trimmed here rather than upstream).
+  const slug = slugify(input.slug);
+  if (!slug) return { success: false, error: "Slug is required." };
 
   const algorithmError = validateAlgorithmKey(input.algorithmKey, input.collectionType);
   if (algorithmError) return { success: false, error: algorithmError };
@@ -349,6 +359,7 @@ export async function createCollection(
       name,
       description: input.description?.trim() || null,
       public_intro: input.publicIntro?.trim() || null,
+      slug,
       collection_type: input.collectionType,
       market_id: input.marketId,
       city_id: input.cityId,
@@ -363,6 +374,9 @@ export async function createCollection(
 
   if (error) {
     console.error("[createCollection]", error.message);
+    if (error.code === "23505") {
+      return { success: false, error: "This slug is already used by another Collection in this market." };
+    }
     return { success: false, error: "Failed to create Collection." };
   }
   return { success: true, id: (data as Row).id as string };
@@ -374,6 +388,7 @@ export type UpdateCollectionInput = {
   name?: string;
   description?: string | null;
   publicIntro?: string | null;
+  slug?: string;
   marketId?: string;
   cityId?: string | null;
   status?: CollectionStatus;
@@ -408,6 +423,11 @@ export async function updateCollection(
   }
   if (input.publicIntro !== undefined) {
     patch.public_intro = input.publicIntro?.trim() || null;
+  }
+  if (input.slug !== undefined) {
+    const slug = slugify(input.slug);
+    if (!slug) return { success: false, error: "Slug is required." };
+    patch.slug = slug;
   }
   if (input.status !== undefined) {
     patch.status = input.status;
@@ -453,6 +473,9 @@ export async function updateCollection(
 
   if (error) {
     console.error("[updateCollection]", error.message);
+    if (error.code === "23505") {
+      return { success: false, error: "This slug is already used by another Collection in this market." };
+    }
     return { success: false, error: "Failed to update Collection." };
   }
   return { success: true };

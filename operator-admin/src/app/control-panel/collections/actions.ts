@@ -119,13 +119,14 @@ async function getCallerEmail(): Promise<string | null> {
 // ── Form state ────────────────────────────────────────────────────────────────
 
 export type CollectionFieldKey =
-  | "name" | "collection_type" | "market_id" | "city_id" | "algorithm_key" | "item_limit" | "status";
+  | "name" | "slug" | "collection_type" | "market_id" | "city_id" | "algorithm_key" | "item_limit" | "status";
 
 /** Echoed back on a failed submit so the form can re-display exactly what was attempted — see module docstring. */
 export type CollectionFormValues = {
   name: string;
   description: string | null;
   publicIntro: string | null;
+  slug: string;
   marketId: string;
   cityId: string | null;
   algorithmKey: string | null;
@@ -140,6 +141,25 @@ export type CollectionFormState = {
 };
 
 const COLLECTION_STATUSES: CollectionStatus[] = ["draft", "published"];
+
+/**
+ * createCollection/updateCollection (collections.ts) return a plain
+ * { success:false, error:string } — no error code passthrough — so a slug
+ * problem is distinguished from any other data-layer failure by matching
+ * against the exact strings those two functions return for slug issues.
+ * Anchoring these under fieldErrors.slug (rather than the generic top-level
+ * error banner) mirrors the Guide editor's identical
+ * `fieldErrors: { slug: "This slug is already used by another guide in
+ * this market." }` pattern (content-engine/actions.ts).
+ */
+const SLUG_DATA_LAYER_ERRORS = [
+  "Slug is required.",
+  "This slug is already used by another Collection in this market.",
+];
+
+function isSlugError(message: string): boolean {
+  return SLUG_DATA_LAYER_ERRORS.includes(message);
+}
 
 // ── Parsing helpers ───────────────────────────────────────────────────────────
 
@@ -256,6 +276,7 @@ export async function createCollectionAction(
   const name = str(formData, "name");
   const description = nullableStr(formData, "description");
   const publicIntro = nullableStr(formData, "public_intro");
+  const slug = str(formData, "slug");
   const collectionType = str(formData, "collection_type");
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
@@ -264,10 +285,11 @@ export async function createCollectionAction(
   const status: CollectionStatus = "draft";
   const { value: itemLimit, error: itemLimitError } = parseItemLimit(formData);
 
-  const values: CollectionFormValues = { name, description, publicIntro, marketId, cityId, algorithmKey, itemLimit, status };
+  const values: CollectionFormValues = { name, description, publicIntro, slug, marketId, cityId, algorithmKey, itemLimit, status };
 
   const fieldErrors: CollectionFormState["fieldErrors"] = {};
   if (!name) fieldErrors.name = "Name is required.";
+  if (!slug) fieldErrors.slug = "Slug is required.";
   if (!isCollectionType(collectionType)) fieldErrors.collection_type = "Select a Collection type.";
   if (!marketId) fieldErrors.market_id = "Market is required.";
   if (itemLimitError) fieldErrors.item_limit = itemLimitError;
@@ -291,6 +313,7 @@ export async function createCollectionAction(
       name,
       description,
       publicIntro,
+      slug,
       collectionType: collectionType as CollectionType,
       marketId,
       cityId,
@@ -302,6 +325,9 @@ export async function createCollectionAction(
   );
 
   if (!result.success) {
+    if (isSlugError(result.error)) {
+      return { error: "Please fix the errors below.", fieldErrors: { slug: result.error }, values };
+    }
     return { error: result.error, values };
   }
 
@@ -338,6 +364,7 @@ export async function updateCollectionAction(
   const name = str(formData, "name");
   const description = nullableStr(formData, "description");
   const publicIntro = nullableStr(formData, "public_intro");
+  const slug = str(formData, "slug");
   const marketId = str(formData, "market_id");
   const cityId = nullableStr(formData, "city_id");
   const status = str(formData, "status") as CollectionStatus;
@@ -349,10 +376,11 @@ export async function updateCollectionAction(
   const algorithmKey = existing.algorithmKey;
   const itemLimit = existing.itemLimit;
 
-  const values: CollectionFormValues = { name, description, publicIntro, marketId, cityId, algorithmKey, itemLimit, status };
+  const values: CollectionFormValues = { name, description, publicIntro, slug, marketId, cityId, algorithmKey, itemLimit, status };
 
   const fieldErrors: CollectionFormState["fieldErrors"] = {};
   if (!name) fieldErrors.name = "Name is required.";
+  if (!slug) fieldErrors.slug = "Slug is required.";
   if (!marketId) fieldErrors.market_id = "Market is required.";
   if (!COLLECTION_STATUSES.includes(status)) fieldErrors.status = "Select a status.";
 
@@ -426,10 +454,13 @@ export async function updateCollectionAction(
   // above.
   const coreResult = await updateCollection(
     collectionId,
-    { name, description, publicIntro, marketId, cityId, status },
+    { name, description, publicIntro, slug, marketId, cityId, status },
     callerEmail
   );
   if (!coreResult.success) {
+    if (isSlugError(coreResult.error)) {
+      return { error: "Please fix the errors below.", fieldErrors: { slug: coreResult.error }, values };
+    }
     return { error: coreResult.error, values };
   }
 
