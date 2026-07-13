@@ -8,30 +8,33 @@ import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
 } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
+import { EventSearchResults } from "@/app/(website)/website-events/EventSearchResults";
 
 /**
- * Type-specific Collection Landing Page content — the clean boundary future
- * tasks build beneath the shared shell (CollectionLandingShell.tsx):
+ * Type-specific Collection Landing Page content — the clean boundary
+ * beneath the shared shell (CollectionLandingShell.tsx):
  *   - VenueCollectionContent  -> Venue results/map presentation
  *   - EventCollectionContent  -> Event results/map presentation
  *   - GuideCollectionContent  -> Guide editorial layout
  *
- * VenueCollectionContent (this task) reuses the exact Happy Hour search/map
- * experience (HappyHoursSearchClient) rather than building new browsing UI —
- * `cards` is constrained to `model.items`, which is already the resolved,
- * ordered Collection membership from getPublicCollectionModel /
- * resolveCollectionPreview. Filters and alternate sorts only ever reorder or
- * narrow that fixed set; they can never introduce venues outside it.
+ * VenueCollectionContent and EventCollectionContent reuse the exact Happy
+ * Hour / Event search-map experiences (HappyHoursSearchClient /
+ * EventSearchResults) rather than building new browsing UI — the `cards` /
+ * `events` each renderer passes in are constrained to `model.items`, which
+ * is already the resolved, ordered Collection membership from
+ * getPublicCollectionModel / resolveCollectionPreview. Filters and
+ * alternate sorts only ever reorder or narrow that fixed set; they can
+ * never introduce items outside it.
  *
- * The shared shell (CollectionLandingShell) renders no hero for Venue
- * Collections — CollectionSearchContextHeader below renders the breadcrumb,
- * title, Public Intro, and curated count *through* HappyHoursSearchClient's
- * own contextHeader slot instead, so it appears only in the left results
- * column, in the exact position the unrestricted page's "Happy Hours"
+ * The shared shell (CollectionLandingShell) renders no hero for Venue or
+ * Event Collections — CollectionSearchContextHeader below renders the
+ * breadcrumb, title, Public Intro, and curated count *through* each search
+ * client's own contextHeader slot instead, so it appears only in the left
+ * results column, in the exact position the unrestricted pages' generic
  * heading/count normally occupies, never above the filter bar.
  *
- * Event and Guide Collection rendering remain out of scope for this task —
- * both branches still render nothing.
+ * Guide Collection rendering remains out of scope for this task — that
+ * branch still renders nothing.
  */
 
 type Props = {
@@ -103,15 +106,15 @@ function CollectionSearchContextHeader({ model }: { model: PublicCollectionModel
   );
 }
 
-/** Exits the Collection context into the existing unrestricted Happy Hour search. */
-function ExploreAllHappyHoursCta() {
+/** Exits the Collection context into the given unrestricted search route. */
+function ExploreAllCta({ href, label }: { href: string; label: string }) {
   return (
     <div className="px-4 md:px-6 py-10 border-t border-gray-100 text-center">
       <Link
-        href="/website-happy-hours"
+        href={href}
         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
       >
-        Explore all Happy Hours
+        {label}
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
         </svg>
@@ -136,16 +139,25 @@ function VenueCollectionContent({ model }: { model: Extract<PublicCollectionMode
       market={market}
       collectionOrder
       contextHeader={<CollectionSearchContextHeader model={model} />}
-      footerCta={<ExploreAllHappyHoursCta />}
+      footerCta={<ExploreAllCta href="/website-happy-hours" label="Explore all Happy Hours" />}
     />
   );
 }
 
 function EventCollectionContent({ model }: { model: Extract<PublicCollectionModel, { kind: "event" }> }) {
-  // Event results/map presentation — future task. `model.items` is already
-  // public-safe WebsiteEventListItem[] in final resolved order, ready to consume.
-  void model;
-  return null;
+  // Same rationale as VenueCollectionContent above: model.marketSlug already
+  // passed the DB market lookup in getPublicCollectionModel.
+  const market = getMarketById(model.marketSlug);
+  if (!market) return null;
+
+  return (
+    <EventSearchResults
+      events={model.items}
+      market={market}
+      contextHeader={<CollectionSearchContextHeader model={model} />}
+      footerCta={<ExploreAllCta href="/website-events" label="Explore all Events" />}
+    />
+  );
 }
 
 function GuideCollectionContent({ model }: { model: Extract<PublicCollectionModel, { kind: "guide" }> }) {

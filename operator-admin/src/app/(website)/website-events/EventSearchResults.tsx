@@ -443,9 +443,11 @@ type Props = {
   market: Market;
   /** When provided, replaces the default EventSearchContextHeader in both desktop and mobile layouts. */
   contextHeader?: ReactNode;
+  /** Rendered once, full-width, after the results in both desktop and mobile layouts. */
+  footerCta?: ReactNode;
 };
 
-export function EventSearchResults({ events, market, contextHeader }: Props) {
+export function EventSearchResults({ events, market, contextHeader, footerCta }: Props) {
   const today = todayLocal();
   const tomorrow = tomorrowLocal();
 
@@ -545,6 +547,11 @@ export function EventSearchResults({ events, market, contextHeader }: Props) {
   }
 
   // ── Filter pipeline ───────────────────────────────────────────────────────
+  // Filter-only, never sorted — `events`' input order always survives into
+  // `filtered` (Array.filter is order-preserving). For a Venue-style
+  // constrained/Collection caller this means "Collection Order" is the
+  // default (and only) order with zero extra code: pass `events` already in
+  // resolved Collection order and it stays that way through every filter.
   const filtered = events
     .filter((e) => {
       if (dateFilter === "today") return eventOccursOnDow(e, today.getDay());
@@ -822,6 +829,8 @@ export function EventSearchResults({ events, market, contextHeader }: Props) {
           </div>
         )}
       </div>
+
+      {footerCta}
     </>
   );
 }
