@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
-import { NumberedStepList } from "@/app/(website)/NumberedStepList";
 import { JourneyTimeline } from "@/app/(website)/JourneyTimeline";
 import { ProductTour } from "@/app/(website)/ProductTour";
 import { FaqAccordion } from "@/app/(website)/FaqAccordion";
-import { BrowserMockFrame } from "@/app/(website)/BrowserMockFrame";
 import { BusinessListVenueButton } from "./BusinessListVenueButton";
 import { BusinessPricingTable } from "./BusinessPricingTable";
-import { HOW_IT_WORKS_STEPS, PILLARS, JOURNEY_MILESTONES, TOUR_SLIDES, BUSINESS_FAQS } from "./content";
+import { HowItWorksPanels } from "./HowItWorksPanels";
+import {
+  HERO_REASSURANCE,
+  HOW_IT_WORKS_INTRO,
+  HOW_IT_WORKS_PANELS,
+  PILLARS,
+  JOURNEY_MILESTONES,
+  TOUR_SLIDES,
+  BUSINESS_FAQS,
+} from "./content";
 
 /**
  * Public "For Businesses" page — the primary sales page for the business
@@ -42,21 +50,32 @@ export default function ForBusinessesPage() {
       <section className="max-w-6xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-16 md:pb-24">
         {/* Two columns only from lg: up — at tablet widths a narrower text
             column makes this headline wrap awkwardly, so tablet gets the
-            full-width stacked treatment instead. */}
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            full-width stacked treatment instead. The 5:3 column ratio (vs.
+            an even split) and the lg:text-3xl step-down give the headline
+            enough room at lg: for each of its three forced lines to fit on
+            one line — verified empirically down to the 1024px lg: edge,
+            not just by eye at typical desktop widths. */}
+        <div className="grid lg:grid-cols-[5fr_3fr] gap-12 items-center">
           <div className="text-center lg:text-left">
-            <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-5">
               For Businesses
             </p>
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight leading-[1.1]">
-              Put your happy hour and events in front of people already looking for
-              somewhere to go.
+            {/* The <br> pair only renders (as a break) at lg: and up — that's
+                what pins the three approved line breaks on desktop while
+                leaving mobile/tablet to wrap the same continuous sentence
+                naturally at whatever width they have. */}
+            <h1 className="text-4xl sm:text-5xl lg:text-3xl font-bold text-gray-900 tracking-tight leading-[1.15]">
+              Put your happy hour and events{" "}
+              <br className="hidden lg:block" />
+              in front of people already looking{" "}
+              <br className="hidden lg:block" />
+              for somewhere to go.
             </h1>
-            <p className="mt-5 text-lg text-gray-500 leading-relaxed max-w-lg mx-auto lg:mx-0">
-              Get discovered by nearby guests searching for happy hours and events —
-              starting with a free venue listing.
+            <p className="mt-6 text-lg text-gray-500 leading-relaxed max-w-lg mx-auto lg:mx-0">
+              Bring more guests through your doors. We help people discover your happy
+              hours and events — starting with a free venue listing.
             </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+            <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <BusinessListVenueButton className={PRIMARY_CTA_CLASS}>
                 List Your Venue Free
               </BusinessListVenueButton>
@@ -64,20 +83,41 @@ export default function ForBusinessesPage() {
                 See How It Works
               </Link>
             </div>
+            <ul
+              role="list"
+              className="mt-6 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 list-none p-0"
+            >
+              {HERO_REASSURANCE.map((item) => (
+                <li key={item} className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-500">
+                  <ReassuranceCheckIcon />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
-          <div>
-            <BrowserMockFrame placeholderLabel="Venue Listing Preview" />
+          <div className="relative aspect-[1/1] w-full rounded-2xl overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.10),0_4px_16px_rgba(0,0,0,0.06)]">
+            <Image
+              src="/images/business/hero-busy-patio.jpg"
+              alt="A lively restaurant patio full of guests enjoying happy hour together over drinks and shared plates"
+              fill
+              priority
+              sizes="(min-width: 1024px) 400px, (min-width: 768px) 700px, 100vw"
+              className="object-cover object-[50%_40%]"
+            />
           </div>
         </div>
       </section>
 
-      {/* ── 2. How It Works ─────────────────────────────────────────────── */}
-      <section id="how-it-works" className="max-w-4xl mx-auto px-6 lg:px-10 py-16 md:py-24 text-center">
+      {/* ── 2. Getting Started is Easy ───────────────────────────────────── */}
+      <section id="how-it-works" className="max-w-6xl mx-auto px-6 lg:px-10 py-16 md:py-24 text-center">
         <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-          How It Works
+          Getting Started is <span className="text-amber-500">Easy</span>
         </h2>
+        <p className="mt-5 max-w-2xl mx-auto text-base md:text-lg text-gray-500 leading-relaxed">
+          {HOW_IT_WORKS_INTRO}
+        </p>
         <div className="mt-14">
-          <NumberedStepList steps={HOW_IT_WORKS_STEPS} />
+          <HowItWorksPanels panels={HOW_IT_WORKS_PANELS} />
         </div>
       </section>
 
@@ -183,5 +223,22 @@ export default function ForBusinessesPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function ReassuranceCheckIcon() {
+  return (
+    <svg
+      className="w-3.5 h-3.5 shrink-0 text-gray-400"
+      fill="currentColor"
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+        clipRule="evenodd"
+      />
+    </svg>
   );
 }

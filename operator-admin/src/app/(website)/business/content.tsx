@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Step } from "@/app/(website)/NumberedStepList";
+import type { HowItWorksPanel } from "./HowItWorksPanels";
 import type { JourneyMilestone } from "@/app/(website)/JourneyTimeline";
 import type { ProductTourSlide } from "@/app/(website)/ProductTour";
 import type { FaqAccordionItem } from "@/app/(website)/FaqAccordion";
@@ -12,23 +12,81 @@ import type { FaqAccordionItem } from "@/app/(website)/FaqAccordion";
  * — check that document before editing copy.
  */
 
-// ── Section 2: How It Works ──────────────────────────────────────────────────
+// ── Section 1: Hero reassurance line ─────────────────────────────────────────
 
-export const HOW_IT_WORKS_STEPS: readonly Step[] = [
+export const HERO_REASSURANCE: readonly string[] = [
+  "Free forever",
+  "No credit card required",
+  "Get started in minutes",
+];
+
+// ── Section 2: Getting Started is Easy ───────────────────────────────────────
+
+export const HOW_IT_WORKS_INTRO =
+  "Claim or create your venue in minutes, keep it up to date from anywhere, " +
+  "and we'll help more guests discover you.";
+
+function HowItWorksIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="w-8 h-8">
+      {children}
+    </svg>
+  );
+}
+
+export const HOW_IT_WORKS_PANELS: readonly HowItWorksPanel[] = [
   {
-    number: 1,
-    title: "Claim or Create Your Venue",
-    description: "Find your venue and claim it, or add a brand-new listing in minutes.",
+    id: "list-your-venue",
+    title: "List Your Venue",
+    description:
+      "Claim an existing venue or create a new listing — you'll be up and running in just a few minutes.",
+    icon: (
+      <HowItWorksIcon>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 10.5 12 4l8 6.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.5V20h13V9.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 20v-6h5v6" />
+      </HowItWorksIcon>
+    ),
   },
   {
-    number: 2,
-    title: "Add Happy Hours & Events",
-    description: "Add your specials, happy hours, and events — you control every detail.",
+    id: "keep-it-fresh",
+    title: "Keep It Fresh",
+    description: (
+      <>
+        Update your happy hours, events, and venue details anytime, from anywhere —{" "}
+        <span className="font-semibold text-gray-700">even from your phone</span>.
+      </>
+    ),
+    icon: (
+      <HowItWorksIcon>
+        <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
+        <path strokeLinecap="round" d="M11 18.2h2" />
+      </HowItWorksIcon>
+    ),
   },
   {
-    number: 3,
-    title: "We Help Customers Discover You",
-    description: "Your venue appears to people nearby who are already looking for somewhere to go.",
+    id: "get-discovered",
+    title: "Get Discovered",
+    description: "We put your venue in front of guests already looking for somewhere to go.",
+    icon: (
+      <HowItWorksIcon>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path strokeLinecap="round" d="M20 20l-4.8-4.8" />
+      </HowItWorksIcon>
+    ),
+  },
+  {
+    id: "welcome-more-guests",
+    title: "Get More Guests",
+    description: "Welcome new guests today — then turn them into regulars.",
+    icon: (
+      <HowItWorksIcon>
+        <circle cx="9" cy="8" r="3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 19c0-3.6 2.7-6 5.5-6s5.5 2.4 5.5 6" />
+        <circle cx="16.5" cy="9" r="2.3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13.2c2.4.3 4.5 2.3 4.5 5.8" />
+      </HowItWorksIcon>
+    ),
   },
 ];
 
