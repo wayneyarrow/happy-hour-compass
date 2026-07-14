@@ -26,6 +26,21 @@ export function normalizeCollectionStatus(status: string): CollectionStatus {
   return status === "published" ? "published" : "draft";
 }
 
+// ── Collection Landing Page route ────────────────────────────────────────────
+
+/**
+ * Builds the public Collection Landing Page URL — /{market}/collections/{slug}
+ * (see (website)/[market]/collections/[slug]/page.tsx and collectionPublic.ts).
+ * The one shared place that knows this route's shape, so no caller (Homepage
+ * rail resolution, future "View All" links elsewhere, etc.) hand-assembles
+ * the path itself. `collectionSlug` is the Collection's own persisted public
+ * slug (CollectionDetail.slug / CollectionSummary.slug) — never derived from
+ * the section title, Collection name, or Collection type.
+ */
+export function buildCollectionLandingHref(marketSlug: string, collectionSlug: string): string {
+  return `/${marketSlug}/collections/${collectionSlug}`;
+}
+
 // ── Algorithm key registry ───────────────────────────────────────────────────
 //
 // algorithm_key is intentionally an application-dispatched named key (see

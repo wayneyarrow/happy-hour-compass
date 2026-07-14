@@ -7,12 +7,14 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 /**
  * Renders a Venue/Event/Guide Collection Section as a horizontal editorial
  * rail — the editor-defined public heading, an automatic "View All" CTA
- * (the destination always already exists — see homepagePreview.ts's
- * VIEW_ALL_HREF — so it's never conditionally omitted here), and the
- * resolved Collection items using the SAME public card components the rest
- * of the website already uses (SearchResultCard, EventSearchCard, GuideCard)
- * — nothing about card rendering is reimplemented or redesigned here, only
- * wrapped in a fixed-width, horizontally-scrollable track.
+ * (the destination always already exists — it's this Section's assigned
+ * Collection's own public Landing Page, built once in
+ * homepagesRendering.ts's resolveCollectionSection() via
+ * buildCollectionLandingHref(), so it's never conditionally omitted here),
+ * and the resolved Collection items using the SAME public card components
+ * the rest of the website already uses (SearchResultCard, EventSearchCard,
+ * GuideCard) — nothing about card rendering is reimplemented or redesigned
+ * here, only wrapped in a fixed-width, horizontally-scrollable track.
  *
  * Collection rails never show a Teaser (that's a Feature-only concept — see
  * FeatureSection.tsx) — these card components simply don't accept one.

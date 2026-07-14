@@ -25,6 +25,7 @@
  */
 
 import type { HomepageSection } from "@/lib/data/homepagesShared";
+import { buildCollectionLandingHref } from "@/lib/data/collectionsShared";
 import { getCollectionById } from "@/lib/data/collections";
 import { resolveCollectionPreview } from "@/lib/data/collectionsPreview";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
@@ -100,11 +101,6 @@ export type HomepagePreviewSection =
 
 // ── Section resolution ───────────────────────────────────────────────────────
 
-const VIEW_ALL_HREF = {
-  venue: "/website-happy-hours",
-  event: "/website-events",
-} as const;
-
 async function resolveCollectionSection(section: HomepageSection, marketSlug: string): Promise<HomepagePreviewSection | null> {
   if (!section.collectionId || !section.collection) return null;
   // Defensive re-check against the Collection's CURRENT status — an assigned
@@ -115,6 +111,11 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
 
   const collection = await getCollectionById(section.collectionId);
   if (!collection || collection.archivedAt) return null;
+
+  // "View All" always opens this Collection's own public Landing Page — the
+  // Collection's persisted slug is the single source of truth for this
+  // route, never inferred from section.title or the Collection's name/type.
+  const viewAllHref = buildCollectionLandingHref(marketSlug, collection.slug);
 
   const preview = await resolveCollectionPreview({
     collectionType: collection.collectionType,
@@ -137,7 +138,7 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
       .filter((v): v is ConsumerVenue => Boolean(v))
       .map((v) => venueToSearchResultCard(v, marketSlug));
     if (items.length === 0) return null;
-    return { id: section.id, kind: "venue_collection", title: section.title, viewAllHref: VIEW_ALL_HREF.venue, items };
+    return { id: section.id, kind: "venue_collection", title: section.title, viewAllHref, items };
   }
 
   if (section.sectionType === "event") {
@@ -145,7 +146,7 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
     const byId = new Map(events.map((e) => [e.id, e]));
     const items = orderedIds.map((id) => byId.get(id)).filter((e): e is WebsiteEventListItem => Boolean(e));
     if (items.length === 0) return null;
-    return { id: section.id, kind: "event_collection", title: section.title, viewAllHref: VIEW_ALL_HREF.event, items };
+    return { id: section.id, kind: "event_collection", title: section.title, viewAllHref, items };
   }
 
   // guide
@@ -153,7 +154,7 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
   const byId = new Map(guides.map((g) => [g.id, g]));
   const items = orderedIds.map((id) => byId.get(id)).filter((g): g is SavedGuideCard => Boolean(g)).map(guideToRailCard);
   if (items.length === 0) return null;
-  return { id: section.id, kind: "guide_collection", title: section.title, viewAllHref: `/${marketSlug}/guides`, items };
+  return { id: section.id, kind: "guide_collection", title: section.title, viewAllHref, items };
 }
 
 async function resolveFeatureSection(section: HomepageSection, marketSlug: string): Promise<HomepagePreviewSection | null> {
