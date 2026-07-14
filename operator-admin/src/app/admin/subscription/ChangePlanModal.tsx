@@ -4,25 +4,18 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { changePlanAction } from "./changePlanAction";
 import { createCheckoutSessionAction } from "./stripeActions";
+import { PLAN_LABELS, maxImages, maxFoodSpecials, maxDrinkSpecials, maxSearchTags, maxUsers, type OperatorPlan } from "@/lib/plans";
 import {
-  PLAN_LABELS,
-  maxImages,
-  maxFoodSpecials,
-  maxDrinkSpecials,
-  maxSearchTags,
-  maxUsers,
-  canUseRecurringEvents,
-  canUseDiscoverPlacement,
-  canUsePromotionalCampaigns,
-  analyticsTier,
-  type OperatorPlan,
-  type AnalyticsTier,
-} from "@/lib/plans";
+  VISIBLE_PLANS,
+  PLAN_SUBTITLES,
+  PLAN_PRICES,
+  PLAN_KEY_BENEFITS,
+  buildFeatureRows,
+  type VisiblePlan,
+  type FeatureRow,
+} from "@/lib/planPresentation";
 
 // ── Visible plans (Enterprise excluded from V1 self-serve UI) ─────────────────
-
-const VISIBLE_PLANS = ["free", "pro", "premium"] as const;
-type VisiblePlan = (typeof VISIBLE_PLANS)[number];
 
 const PLAN_RANK: Record<string, number> = {
   free: 0,
@@ -31,47 +24,7 @@ const PLAN_RANK: Record<string, number> = {
   enterprise: 3,
 };
 
-// ── Plan card metadata ────────────────────────────────────────────────────────
-
-const PLAN_SUBTITLES: Record<VisiblePlan, string> = {
-  free:    "For venues getting started",
-  pro:     "Unlock better visibility and recurring promotions",
-  premium: "Stand out from the competition with maximum visibility",
-};
-
-const PLAN_PRICES: Record<VisiblePlan, string> = {
-  free:    "$0",
-  pro:     "$9.99",
-  premium: "$19.99",
-};
-
-const PLAN_KEY_BENEFITS: Record<VisiblePlan, string[]> = {
-  free: [
-    "Basic venue listing",
-    "5 photos",
-    "3 food and drink specials",
-    "One-time events",
-    "Basic analytics",
-    "1 team member",
-  ],
-  pro: [
-    "Recurring events",
-    "5 search tags",
-    "Expanded analytics",
-    "2 team members",
-    "10 photos",
-    "6 food and drink specials",
-  ],
-  premium: [
-    "Featured Discover placement",
-    "Promotional campaigns",
-    "Advanced analytics",
-    "5 team members",
-    "25 photos",
-    "10 food and drink specials",
-    "10 search tags",
-  ],
-};
+// ── Plan card theming (admin-only — public pricing table doesn't need this) ──
 
 type PlanTheme = {
   nameColor: string;
@@ -124,44 +77,6 @@ const PLAN_THEMES: Record<VisiblePlan, PlanTheme> = {
     tableCellClass:  "bg-blue-50 font-semibold text-gray-800",
   },
 };
-
-// ── Comparison table helpers ──────────────────────────────────────────────────
-
-const ANALYTICS_SHORT: Record<AnalyticsTier, string> = {
-  basic:    "Basic",
-  expanded: "Expanded",
-  advanced: "Advanced",
-};
-
-function formatLimit(n: number): string {
-  if (n === Infinity) return "Unlimited";
-  if (n === 0) return "—";
-  return String(n);
-}
-
-type FeatureRow = { label: string; values: Record<VisiblePlan, string> };
-
-function buildFeatureRows(): FeatureRow[] {
-  function row(label: string, fn: (p: VisiblePlan) => string): FeatureRow {
-    return {
-      label,
-      values: Object.fromEntries(
-        VISIBLE_PLANS.map((p) => [p, fn(p)])
-      ) as Record<VisiblePlan, string>,
-    };
-  }
-  return [
-    row("Users",                          (p) => formatLimit(maxUsers(p))),
-    row("Images",                         (p) => formatLimit(maxImages(p))),
-    row("Food Specials",                  (p) => formatLimit(maxFoodSpecials(p))),
-    row("Drink Specials",                 (p) => formatLimit(maxDrinkSpecials(p))),
-    row("Events",                         (p) => canUseRecurringEvents(p) ? "Recurring events" : "One-time events"),
-    row("Search Tags",                    (p) => formatLimit(maxSearchTags(p))),
-    row("Analytics",                      (p) => ANALYTICS_SHORT[analyticsTier(p)]),
-    row("Featured Placement on Discover", (p) => canUseDiscoverPlacement(p) ? "Included" : "—"),
-    row("Promotional Campaigns",          (p) => canUsePromotionalCampaigns(p) ? "Included" : "—"),
-  ];
-}
 
 // ── Transition content (upgrade gains / downgrade losses + keeps) ─────────────
 

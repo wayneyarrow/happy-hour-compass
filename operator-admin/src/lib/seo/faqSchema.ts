@@ -2,11 +2,13 @@
  * FAQPage JSON-LD structured data (Card 2D — see docs/website/
  * CONTENT_ENGINE_PRODUCT_SPEC.md).
  *
- * Schema.org FAQPage: https://schema.org/FAQPage. Question text comes from
- * the FAQ library; answer text is the guide-specific answer only — the
- * "Read next: {title}" related-guide link is rendered separately in the
- * page markup and is never appended to the schema's answer text.
+ * Schema.org FAQPage: https://schema.org/FAQPage. The "Read next: {title}"
+ * related-guide link (where applicable) is rendered separately in the page
+ * markup and is never appended to the schema's answer text.
  *
+ * Takes any question/answer shape structurally — GuideFaqAnswer[] (guide
+ * FAQs) and FaqAccordionItem[] (e.g. the business page's static FAQs) both
+ * satisfy FaqEntry[] as-is, so neither call site needs to reshape its data.
  * Every GuideFaqAnswer returned by getGuideFaqs() already has a non-empty
  * question and answer (saveGuideFaqs() only ever persists complete rows —
  * see faqLibrary.ts), so no completeness filtering happens here. This is
@@ -14,7 +16,7 @@
  * "Phase 3: JSON-LD structured data" note anticipated it.
  */
 
-import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
+export type FaqEntry = { question: string; answer: string };
 
 export type FaqPageSchema = {
   "@context": "https://schema.org";
@@ -29,8 +31,8 @@ export type FaqPageSchema = {
   }[];
 };
 
-/** Returns FAQPage JSON-LD for a guide's FAQs, or null when there are none to emit. */
-export function buildFaqPageSchema(faqs: GuideFaqAnswer[]): FaqPageSchema | null {
+/** Returns FAQPage JSON-LD for a set of FAQs, or null when there are none to emit. */
+export function buildFaqPageSchema(faqs: FaqEntry[]): FaqPageSchema | null {
   if (faqs.length === 0) return null;
 
   return {

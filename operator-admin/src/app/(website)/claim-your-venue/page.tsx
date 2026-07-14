@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ClaimVenuePageActions } from "./ClaimVenuePageActions";
+import { NumberedStepList } from "@/app/(website)/NumberedStepList";
 
 /**
  * Public "Claim Your Venue" instructional landing page (Business Funnel —
@@ -52,19 +53,8 @@ export default function ClaimYourVenuePage() {
       </p>
 
       {/* Steps */}
-      <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-10 text-left">
-        {STEPS.map((step) => (
-          <div key={step.number}>
-            <div
-              className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 font-bold text-sm flex items-center justify-center mb-4"
-              aria-hidden="true"
-            >
-              {step.number}
-            </div>
-            <h2 className="text-base font-semibold text-gray-900">{step.title}</h2>
-            <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">{step.description}</p>
-          </div>
-        ))}
+      <div className="mt-14">
+        <NumberedStepList steps={STEPS} headingLevel="h2" />
       </div>
 
       {/* Primary CTA */}
