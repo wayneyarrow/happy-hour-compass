@@ -11,15 +11,26 @@ import type { ReactNode } from "react";
  * Blueprint's Visual Asset Types note, this section must eventually use
  * genuine product UI, and a schematic placeholder is honest about not
  * being that yet. Swap in a real `image` once a screenshot is captured.
+ *
+ * The content area is a fixed square — tall enough to show portrait
+ * Operator Admin screenshots (forms, lists) near-native scale via
+ * object-cover, while still being wide enough that a landscape screenshot
+ * (object-contain, `fit: "contain"`) reads as a deliberately framed inset
+ * rather than an awkward sliver. Same frame for every ProductTour slide,
+ * so switching tabs never shifts layout — only `fit` and `image` change.
+ * `children`, when supplied, replaces the single-image content entirely
+ * (used for the multi-screenshot composite slide) but keeps the same
+ * chrome bar and aspect-square footprint.
  */
 
 type Props = {
-  image?: { src: string; alt: string } | null;
-  /** Shown inside the placeholder frame when no image is supplied. */
+  image?: { src: string; alt: string; fit?: "cover" | "contain" } | null;
+  /** Shown inside the placeholder frame when no image and no children are supplied. */
   placeholderLabel?: string;
+  children?: ReactNode;
 };
 
-export function BrowserMockFrame({ image, placeholderLabel }: Props) {
+export function BrowserMockFrame({ image, placeholderLabel, children }: Props) {
   return (
     <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.10),0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden">
       {/* Chrome bar */}
@@ -29,9 +40,16 @@ export function BrowserMockFrame({ image, placeholderLabel }: Props) {
         <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
       </div>
 
-      <div className="relative aspect-[4/3] bg-gradient-to-br from-amber-50 to-gray-50">
-        {image ? (
-          <Image src={image.src} alt={image.alt} fill className="object-cover" />
+      <div className="relative aspect-square bg-gradient-to-br from-amber-50 to-gray-50">
+        {children ? (
+          children
+        ) : image ? (
+          <Image
+            src={image.src}
+            alt={image.alt}
+            fill
+            className={image.fit === "contain" ? "object-contain" : "object-cover"}
+          />
         ) : (
           <PlaceholderContent label={placeholderLabel} />
         )}

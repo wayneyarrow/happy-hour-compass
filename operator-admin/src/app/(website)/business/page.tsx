@@ -231,10 +231,10 @@ export default function ForBusinessesPage() {
       <section className="max-w-6xl mx-auto px-6 lg:px-10 py-16 md:py-24">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-            See Happy Hour Compass in Action
+            See How It Works
           </h2>
           <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">
-            A closer look at what happens after your venue goes live.
+            Keeping your listing fresh is easier than updating your social media.
           </p>
         </div>
         <div className="mt-12">

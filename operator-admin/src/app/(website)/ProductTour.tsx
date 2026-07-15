@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { BrowserMockFrame } from "./BrowserMockFrame";
 
 /**
@@ -22,7 +22,9 @@ export type ProductTourSlide = {
   headline: string;
   copy: string;
   outcome: string;
-  image?: { src: string; alt: string };
+  image?: { src: string; alt: string; fit?: "cover" | "contain" };
+  /** Custom visual content, in place of a single `image` (e.g. a multi-screenshot composite). */
+  visual?: ReactNode;
 };
 
 type Props = {
@@ -113,7 +115,12 @@ export function ProductTour({ slides }: Props) {
           <p className="mt-5 text-sm font-semibold text-amber-600">{active.outcome}</p>
         </div>
         <div className="order-1 md:order-2">
-          <BrowserMockFrame image={active.image} placeholderLabel={active.tabLabel} />
+          <BrowserMockFrame
+            image={active.visual ? undefined : active.image}
+            placeholderLabel={active.tabLabel}
+          >
+            {active.visual}
+          </BrowserMockFrame>
         </div>
       </div>
     </div>

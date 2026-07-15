@@ -3,6 +3,8 @@ import type { HowItWorksPanel } from "./HowItWorksPanels";
 import type { JourneyMilestone } from "@/app/(website)/JourneyTimeline";
 import type { ProductTourSlide } from "@/app/(website)/ProductTour";
 import type { FaqAccordionItem } from "@/app/(website)/FaqAccordion";
+import { ProductTourHappyHourVisual } from "./ProductTourHappyHourVisual";
+import { ProductTourEventsVisual } from "./ProductTourEventsVisual";
 
 /**
  * Static page copy for /business, kept separate from page.tsx so the
@@ -188,36 +190,46 @@ export const JOURNEY_MILESTONES: JourneyMilestone[] = [
   },
 ];
 
-// ── Section 6: See Happy Hour Compass in Action (product tour) ──────────────
+// ── Section 6: See How It Works (product tour) ───────────────────────────────
 
 export const TOUR_SLIDES: ProductTourSlide[] = [
   {
     id: "get-started",
     tabLabel: "Get Started",
-    headline: "Get your venue on Happy Hour Compass.",
-    copy: "Whether you're claiming an existing listing we've already created or adding a brand-new venue, getting started only takes a few minutes. Once approved, you'll have full control over your venue profile, happy hours, events, and business information.",
+    headline: "Get Your Business on Happy Hour Compass",
+    copy: "Claim your existing listing or add your business in just a few minutes. Once you're approved, you can update your happy hours, events, photos, and business information whenever you like.",
     outcome: "Be online in minutes.",
+    image: {
+      src: "/images/business/business-page-venue-detail-1.png",
+      alt: "Business details form in Operator Admin showing venue name, address, and business information fields",
+    },
   },
   {
-    id: "manage-specials",
-    tabLabel: "Manage Specials",
-    headline: "Keep your happy hours and specials up to date.",
-    copy: "Add and edit your food and drink specials whenever they change — no waiting on anyone else to update your listing.",
+    id: "update-happy-hours",
+    tabLabel: "Update Happy Hours",
+    headline: "Keep Your Happy Hours Up to Date",
+    copy: "Update your happy hours, food specials, and drink specials whenever things change—no waiting on anyone else to update your listing.",
     outcome: "Keep your customers informed.",
+    visual: <ProductTourHappyHourVisual />,
   },
   {
-    id: "list-events",
-    tabLabel: "List Events",
-    headline: "List recurring events people can plan around.",
-    copy: "Trivia nights, live music, industry nights — set them up once and let people discover what's on before they ever walk in.",
+    id: "promote-events",
+    tabLabel: "Promote Events",
+    headline: "Promote Events People Can Plan Around",
+    copy: "From trivia nights and live music to wine tastings and industry nights, create recurring events once and let people discover what's happening before they ever walk through your door.",
     outcome: "Turn first-time visitors into regulars.",
+    visual: <ProductTourEventsVisual />,
   },
   {
-    id: "measure-success",
-    tabLabel: "Measure Success",
-    headline: "See how your venue is performing.",
-    copy: "Track views and engagement on your listing so you know what's working and what to adjust.",
+    id: "see-your-results",
+    tabLabel: "See Results",
+    headline: "See How Your Business Is Performing",
+    copy: "See how many people are viewing your listing and engaging with your business, so you know what's working and where you can improve.",
     outcome: "Make informed decisions as you grow.",
+    image: {
+      src: "/images/business/business-page-analytics-1.png",
+      alt: "Operator Admin analytics dashboard showing visibility, engagement, and intent metrics for a business's listing",
+    },
   },
 ];
 
