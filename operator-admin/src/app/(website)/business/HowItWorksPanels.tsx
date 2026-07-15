@@ -5,10 +5,9 @@ import type { ReactNode } from "react";
  * the path from listing a venue to welcoming more guests. Business-page-local
  * (not pulled up to a shared (website)/ component like JourneyTimeline or
  * ProductTour): unlike those, nothing else on the site needs this exact
- * card treatment yet, and NumberedStepList already covers the plain
- * numbered-circle pattern for claim-your-venue/page.tsx — this is a
- * deliberately different visual language (icon + bordered card, no
- * numbers), not a variant of that component.
+ * card treatment yet — this is a deliberately different visual language
+ * (icon + bordered card, no numbers), not a variant of the plain numbered-
+ * circle pattern used by claim-your-venue's ClaimJourneySteps.
  *
  * The progression from step to step is communicated by the left-to-right
  * (then wrapping) card order alone — no connecting line or per-card
