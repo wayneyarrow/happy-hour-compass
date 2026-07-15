@@ -29,6 +29,8 @@ export type FaqAccordionItem = {
 type Props = {
   items: FaqAccordionItem[];
   heading?: string;
+  /** Optional supporting sentence rendered directly beneath the heading. */
+  description?: string;
   /** Set false to skip emitting FAQPage JSON-LD (e.g. if a page already emits its own). */
   includeSchema?: boolean;
 };
@@ -36,6 +38,7 @@ type Props = {
 export function FaqAccordion({
   items,
   heading = "Frequently Asked Questions",
+  description,
   includeSchema = true,
 }: Props) {
   if (items.length === 0) return null;
@@ -47,7 +50,10 @@ export function FaqAccordion({
       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight leading-snug">
         {heading}
       </h2>
-      <div className="mt-6 rounded-2xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+      {description && (
+        <p className="mt-3 text-base text-gray-500 leading-relaxed">{description}</p>
+      )}
+      <div className="mt-8 rounded-2xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
         {items.map((item) => (
           <details key={item.id} className="group px-5 py-4 sm:px-6 sm:py-5">
             <summary

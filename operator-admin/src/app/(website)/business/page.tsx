@@ -249,7 +249,11 @@ export default function ForBusinessesPage() {
 
       {/* ── 8. FAQ ────────────────────────────────────────────────────────*/}
       <section className="max-w-3xl mx-auto px-6 lg:px-10 py-16 md:py-24">
-        <FaqAccordion items={BUSINESS_FAQS} />
+        <FaqAccordion
+          items={BUSINESS_FAQS}
+          heading="Still have questions?"
+          description="Here are answers to the ones we hear most often from restaurant and bar owners."
+        />
       </section>
 
       {/* ── 9. Final CTA ──────────────────────────────────────────────────*/}

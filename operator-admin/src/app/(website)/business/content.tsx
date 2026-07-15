@@ -5,6 +5,7 @@ import type { ProductTourSlide } from "@/app/(website)/ProductTour";
 import type { FaqAccordionItem } from "@/app/(website)/FaqAccordion";
 import { ProductTourHappyHourVisual } from "./ProductTourHappyHourVisual";
 import { ProductTourEventsVisual } from "./ProductTourEventsVisual";
+import { ClaimVsAddFaqLinks } from "./ClaimVsAddFaqLinks";
 
 /**
  * Static page copy for /business, kept separate from page.tsx so the
@@ -237,12 +238,6 @@ export const TOUR_SLIDES: ProductTourSlide[] = [
 
 export const BUSINESS_FAQS: FaqAccordionItem[] = [
   {
-    id: "claim-vs-add",
-    question: "What's the difference between claiming a venue and adding a new one?",
-    answer:
-      "Claiming is for venues that already have a listing on Happy Hour Compass — it hands you control of an existing page. Adding a new venue is for restaurants and bars that aren't listed yet. Either way, you end up with full control over your profile, happy hours, events, and business information.",
-  },
-  {
     id: "approval-time",
     question: "How long does approval take?",
     answer:
@@ -253,6 +248,21 @@ export const BUSINESS_FAQS: FaqAccordionItem[] = [
     question: "Can I update my happy hours and events anytime?",
     answer:
       "Yes. Once your venue is approved, you're in control — update your specials, happy hours, events, and business information whenever they change, as often as you like.",
+  },
+  {
+    id: "free-plan-permanent",
+    question: "Is the Free plan really free?",
+    answer:
+      "Yes. Our Free plan is permanent—not a trial. There's no credit card required, no contracts, and no obligation to upgrade. You can continue using the Free plan for as long as it meets your business's needs, and upgrade at any time if you want additional features.",
+  },
+  {
+    id: "claim-vs-add",
+    question: "What's the difference between claiming a venue and adding a new one?",
+    answer:
+      "If your restaurant or bar is already listed on Happy Hour Compass, you'll claim your venue to take ownership of the existing profile and start managing its information.\n\n" +
+      "If your business isn't listed yet, you'll add your venue and we'll create a new listing for you after it's reviewed.\n\n" +
+      "In either case, once your request is approved, you'll have full control over your venue profile, happy hours, events, photos, and business information.",
+    afterAnswer: <ClaimVsAddFaqLinks />,
   },
   {
     id: "how-do-i-know",
