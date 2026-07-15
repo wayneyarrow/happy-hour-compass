@@ -122,48 +122,96 @@ export default function ForBusinessesPage() {
       </section>
 
       {/* ── 3. Why Happy Hour Compass Exists ────────────────────────────── */}
+      {/* This is the page's mission statement, not a feature section — an
+          editorial image + copy layout (photo anchors the story, prose reads
+          left-to-right) rather than another centered text block, per the
+          Business Funnel Blueprint's Section 3 rethink. Text is left-aligned
+          at every breakpoint (unlike most sections' text-center) because
+          multi-paragraph editorial prose reads better that way than
+          centered — a deliberate departure, not an oversight. */}
       <section className="bg-gray-50">
-        <div className="max-w-3xl mx-auto px-6 lg:px-10 py-16 md:py-24 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-            Why Happy Hour Compass Exists
-          </h2>
-          <p className="mt-6 text-base md:text-lg text-gray-500 leading-relaxed">
-            Restaurants invest heavily in attracting dinner crowds, yet some of the most
-            profitable hours of the day are often the hardest to fill. Happy Hour Compass
-            exists to connect people looking for somewhere to go right now with venues
-            already offering great happy hours, events, patios, and local experiences.
-          </p>
-          <p className="mt-6 text-base md:text-lg font-semibold text-gray-900 leading-relaxed">
-            We&apos;re not asking venues to invent discounts. We&apos;re helping people
-            discover the ones they already offer.
-          </p>
+        <div className="max-w-6xl mx-auto px-6 lg:px-10 py-16 md:py-24">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* w-[88%] (not max-w) scales the photo down ~12% within its
+                existing column so it supports the story rather than
+                dominating it — the grid, gap, and the image's own aspect
+                ratio are untouched. Must be an explicit width, not max-w:
+                mx-auto plus an auto width on a grid item disables the
+                column's default stretch sizing and collapses the box to
+                zero — the same pitfall hit and fixed on the hero image. */}
+            <div className="w-[88%] mx-auto">
+              <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.10),0_4px_16px_rgba(0,0,0,0.06)]">
+                <Image
+                  src="/images/business/business-why-hhc-exists-happy-hour-friends.jpg"
+                  alt="Friends clinking cocktail glasses together over a table of shared plates during happy hour"
+                  fill
+                  sizes="(min-width: 1024px) 445px, (min-width: 768px) 620px, 88vw"
+                  className="object-cover object-center"
+                />
+              </div>
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
+                Our Mission
+              </p>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
+                Why Happy Hour Compass Exists
+              </h2>
+              <p className="mt-6 text-xl md:text-2xl font-semibold text-gray-900 leading-snug">
+                Finding a restaurant is easy. Finding a great happy hour? Not so much.
+              </p>
+              <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">
+                Right now, people jump between Google, social media, restaurant websites, and
+                outdated blog posts, all trying to answer one simple question:{" "}
+                <em className="text-gray-700">
+                  &ldquo;Where can I find a great happy hour tonight?&rdquo;
+                </em>
+              </p>
+              <p className="mt-6 text-base md:text-lg text-gray-500 leading-relaxed">
+                There wasn&apos;t a single place dedicated to helping people discover happy
+                hours, events, patios, and local experiences.
+              </p>
+              <p className="mt-4 text-base md:text-lg font-semibold text-gray-900">
+                So we built one.
+              </p>
+
+              <div className="mt-8 pl-5 border-l-4 border-amber-400">
+                <p className="text-lg md:text-xl font-semibold text-gray-900 leading-snug">
+                  We&apos;re not selling restaurant software. We&apos;re not trying to
+                  convince venues to create more offers. We&apos;re helping more people
+                  discover the ones that already exist.
+                </p>
+              </div>
+
+              <p className="mt-8 text-lg md:text-xl font-bold text-gray-900 tracking-tight leading-snug">
+                <span className="block">More discovery. More guests.</span>
+                <span className="block">More bums on seats.</span>
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── 4. Why Venues Choose Happy Hour Compass ─────────────────────── */}
+      {/* ── 4. Why Choose Happy Hour Compass ──────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-6 lg:px-10 py-16 md:py-24">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-            Why Venues Choose Happy Hour Compass
+            Why Choose Happy Hour Compass
           </h2>
         </div>
-        <div className="mt-14 grid sm:grid-cols-3 gap-10">
+        <div className="mt-14 grid sm:grid-cols-3 gap-6">
           {PILLARS.map((pillar) => (
-            <div key={pillar.id} className="text-center sm:text-left">
-              <div className="inline-flex w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 items-center justify-center mb-5">
+            <div
+              key={pillar.id}
+              className="rounded-2xl border border-gray-200 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)] p-8 md:p-10 text-center"
+            >
+              <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-50 ring-1 ring-amber-200/70 text-amber-700 items-center justify-center mb-6">
                 {pillar.icon}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">{pillar.title}</h3>
-              <p className="mt-2 text-base text-gray-700 font-medium leading-snug">
-                {pillar.headline}
+              <h3 className="text-xl font-bold text-gray-900">{pillar.title}</h3>
+              <p className="mt-3 text-base text-gray-600 leading-relaxed">
+                {pillar.description}
               </p>
-              <ul className="mt-3 space-y-1.5">
-                {pillar.points.map((point) => (
-                  <li key={point} className="text-sm text-gray-500 leading-relaxed">
-                    {point}
-                  </li>
-                ))}
-              </ul>
             </div>
           ))}
         </div>

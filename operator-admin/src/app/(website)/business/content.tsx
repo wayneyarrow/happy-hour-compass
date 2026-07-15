@@ -95,55 +95,55 @@ export const HOW_IT_WORKS_PANELS: readonly HowItWorksPanel[] = [
 export type Pillar = {
   id: string;
   title: string;
-  headline: string;
-  points: string[];
+  description: string;
   icon: ReactNode;
 };
 
+function PillarIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="w-9 h-9">
+      {children}
+    </svg>
+  );
+}
+
 export const PILLARS: Pillar[] = [
   {
-    id: "more-guests",
-    title: "More Guests",
-    headline: "Reach people already searching for somewhere to go.",
-    points: [
-      "Surfaced to nearby customers actively looking for a happy hour",
-      "Local discovery, not interruptive advertising",
-    ],
+    id: "be-found",
+    title: "Be Found When It Matters",
+    description:
+      "Instead of advertising to everyone, reach people already deciding where to go tonight.",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="w-7 h-7">
-        <circle cx="12" cy="12" r="9" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
-      </svg>
+      // Target — being found precisely when someone's looking, not generic reach.
+      <PillarIcon>
+        <circle cx="12" cy="12" r="8.5" />
+        <circle cx="12" cy="12" r="4.5" />
+        <circle cx="12" cy="12" r="0.75" fill="currentColor" />
+      </PillarIcon>
     ),
   },
   {
-    id: "easy-to-manage",
-    title: "Easy to Manage",
-    headline: "Updating your venue should take minutes — not hours.",
-    points: [
-      "Straightforward specials, events, and profile editor",
-      "No training required to keep your listing current",
-    ],
+    id: "stay-current",
+    title: "Stay Current",
+    description:
+      "Keep your happy hours, events, and business information up to date in just a few minutes.",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="w-7 h-7">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2" />
-        <circle cx="12" cy="12" r="9" />
-      </svg>
+      // Refresh — updating, not just the passage of time (a plain clock).
+      <PillarIcon>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 11a8 8 0 1 0-2.5 6.9" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 5v6h-6" />
+      </PillarIcon>
     ),
   },
   {
     id: "in-control",
-    title: "You're in Control",
-    headline: "You control specials, events, branding, and visibility.",
-    points: [
-      "Nothing changes on your listing without you",
-      "Update or pause anything, anytime",
-    ],
+    title: "You're Always in Control",
+    description: "Your listing belongs to you. Update it, pause it, or change it whenever you need.",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="w-7 h-7">
+      <PillarIcon>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-      </svg>
+      </PillarIcon>
     ),
   },
 ];
