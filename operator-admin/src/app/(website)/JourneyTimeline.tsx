@@ -25,14 +25,18 @@ export type JourneyMilestone = {
 type Props = {
   heading: string;
   intro?: string;
+  /** A short second line beneath intro that bridges into the milestones below — more assertive than intro, but still not competing with the heading. */
+  bridge?: string;
   milestones: JourneyMilestone[];
 };
 
-export function JourneyTimeline({ heading, intro, milestones }: Props) {
+export function JourneyTimeline({ heading, intro, bridge, milestones }: Props) {
   // Each marker sits at the center of its column; half a column's width
   // inset on each side lines the connector up with the first/last marker
   // regardless of how many milestones are passed in.
   const lineInset = `${100 / (milestones.length * 2)}%`;
+
+  const lastIndex = milestones.length - 1;
 
   return (
     <section aria-label={heading} className="max-w-6xl mx-auto px-6 lg:px-10 py-16 md:py-24">
@@ -41,21 +45,30 @@ export function JourneyTimeline({ heading, intro, milestones }: Props) {
         {intro && (
           <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">{intro}</p>
         )}
+        {bridge && (
+          <p className="mt-6 text-base md:text-lg font-semibold text-gray-900 leading-relaxed">
+            {bridge}
+          </p>
+        )}
       </div>
 
       {/* Desktop: horizontal journey with a single connecting line */}
       <div
-        className="hidden md:grid relative mt-16"
+        className="hidden md:grid relative mt-20"
         style={{ gridTemplateColumns: `repeat(${milestones.length}, minmax(0, 1fr))` }}
       >
         <div
-          className="absolute top-6 h-px bg-amber-200"
+          className="absolute top-6 h-[2px] bg-amber-300"
           style={{ left: lineInset, right: lineInset }}
           aria-hidden="true"
         />
-        {milestones.map((milestone) => (
+        {milestones.map((milestone, i) => (
           <div key={milestone.id} className="relative flex flex-col items-center text-center px-4">
-            <div className="relative z-10 w-12 h-12 rounded-full bg-white border-2 border-amber-200 flex items-center justify-center mb-5 shadow-sm">
+            <div
+              className={`relative z-10 w-12 h-12 rounded-full border-2 flex items-center justify-center mb-5 shadow-sm ${
+                i === lastIndex ? "bg-amber-50 border-amber-300" : "bg-white border-amber-200"
+              }`}
+            >
               {milestone.icon ?? <DefaultMarker />}
             </div>
             <h3 className="text-lg font-semibold text-gray-900">{milestone.title}</h3>
@@ -65,15 +78,19 @@ export function JourneyTimeline({ heading, intro, milestones }: Props) {
       </div>
 
       {/* Mobile: vertical stacked journey with a connecting line */}
-      <div className="md:hidden mt-12">
+      <div className="md:hidden mt-14">
         {milestones.map((milestone, i) => (
           <div key={milestone.id} className="relative flex gap-5 pb-10 last:pb-0">
             <div className="flex flex-col items-center shrink-0">
-              <div className="w-10 h-10 rounded-full bg-white border-2 border-amber-200 flex items-center justify-center shadow-sm z-10">
+              <div
+                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-sm z-10 ${
+                  i === lastIndex ? "bg-amber-50 border-amber-300" : "bg-white border-amber-200"
+                }`}
+              >
                 {milestone.icon ?? <DefaultMarker />}
               </div>
-              {i < milestones.length - 1 && (
-                <div className="w-px flex-1 bg-amber-200 mt-1" aria-hidden="true" />
+              {i < lastIndex && (
+                <div className="w-[2px] flex-1 bg-amber-300 mt-1" aria-hidden="true" />
               )}
             </div>
             <div className="pt-1.5">

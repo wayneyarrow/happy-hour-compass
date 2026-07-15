@@ -161,8 +161,8 @@ function MilestoneIcon({ d }: { d: string }) {
 export const JOURNEY_MILESTONES: JourneyMilestone[] = [
   {
     id: "get-on-hhc",
-    title: "Get Your Venue on Happy Hour Compass",
-    detail: "Claim or create your listing.",
+    title: "List Your Business",
+    detail: "Claim or create your business listing.",
     icon: <MilestoneIcon d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />,
   },
   {
@@ -174,14 +174,17 @@ export const JOURNEY_MILESTONES: JourneyMilestone[] = [
   {
     id: "help-people-discover-you",
     title: "We'll Help People Discover You",
-    detail: "A beautiful consumer experience, local discovery, and SEO for your happy hours and events.",
+    detail: "We put your happy hours and events in front of people already deciding where to go.",
     icon: <MilestoneIcon d="M21 21l-4.35-4.35M18 11a7 7 0 11-14 0 7 7 0 0114 0z" />,
   },
   {
     id: "welcome-more-guests",
     title: "Welcome More Guests",
     detail: "More people finding their way to your door.",
-    icon: <MilestoneIcon d="M12 21c-4-3-7-6-7-10a7 7 0 0114 0c0 4-3 7-7 10z" />,
+    // Dollar sign — a subtle cue that the journey ends in a business result,
+    // not another discovery/product step. Same MilestoneIcon treatment
+    // (size, colour, stroke) as every other marker, just a different path.
+    icon: <MilestoneIcon d="M12 4v16M16 8.5c-.8-1-2.2-1.7-4-1.7-2.4 0-4 1.3-4 3s1.6 2.6 4 3.2c2.4.6 4 1.3 4 3s-1.6 3-4 3c-1.8 0-3.2-.7-4-1.7" />,
   },
 ];
 

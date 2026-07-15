@@ -221,7 +221,8 @@ export default function ForBusinessesPage() {
       <div className="bg-gray-50">
         <JourneyTimeline
           heading="More Guests Starts Here"
-          intro="Only a few simple milestones separate you from reaching more local customers."
+          intro="From creating your listing to your next new customer, we'll help every step of the way."
+          bridge="Four simple steps. One important result: more guests through your door."
           milestones={JOURNEY_MILESTONES}
         />
       </div>
