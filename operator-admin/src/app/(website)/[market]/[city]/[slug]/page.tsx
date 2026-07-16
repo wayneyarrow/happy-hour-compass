@@ -1,7 +1,10 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
+import {
+  getVenueWithEventsForConsumerById,
+  getVenueByHistoricalSlug,
+} from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getMarketById } from "@/lib/markets";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
@@ -117,6 +120,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 export default async function VenueDetailPage({ params }: PageProps) {
   const { market, city, slug } = await params;
+  const requestedPath = `/${market}/${city}/${slug}`;
 
   // Venue lookup is slug-first with a raw-UUID fallback (see
   // getVenueWithEventsForConsumerById) and does not depend on the market/city
@@ -125,7 +129,27 @@ export default async function VenueDetailPage({ params }: PageProps) {
   // are validated below against the venue's own stored geography, never
   // trusted on their own.
   const venue = await getVenueWithEventsForConsumerById(slug);
-  if (!venue) notFound();
+
+  if (!venue) {
+    // No current venue matches — only now check whether `slug` is a
+    // retired alias in venue_slug_history (migration 065). This runs once
+    // per miss, never on a normal current-slug request.
+    const historicalVenue = await getVenueByHistoricalSlug(slug);
+    if (!historicalVenue) notFound();
+
+    const historicalCanonicalPath = buildVenuePublicPath({
+      marketSlug: historicalVenue.marketSlug,
+      citySlug: historicalVenue.citySlug,
+      slug: historicalVenue.id,
+    });
+    // No assigned market/city — no canonical URL exists to redirect to.
+    if (!historicalCanonicalPath) notFound();
+    // Defensive redirect-loop guard — should be unreachable since a
+    // retired slug can't also be the venue's live canonical path.
+    if (historicalCanonicalPath === requestedPath) notFound();
+
+    permanentRedirect(historicalCanonicalPath);
+  }
 
   // A venue with no assigned market/city (nullable by design — see
   // ConsumerVenue.marketSlug/citySlug) has no canonical public URL yet and
@@ -142,7 +166,6 @@ export default async function VenueDetailPage({ params }: PageProps) {
   // market, or a raw UUID/legacy slug in the [slug] segment — any mismatch
   // against the venue's own stored market+city+slug redirects to the
   // canonical URL instead of rendering a second copy of the page.
-  const requestedPath = `/${market}/${city}/${slug}`;
   if (requestedPath !== canonicalPath) permanentRedirect(canonicalPath);
 
   const marketConfig = getMarketById(market);

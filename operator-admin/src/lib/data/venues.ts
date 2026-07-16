@@ -797,6 +797,42 @@ export async function getVenueWithEventsForConsumerById(
   }
 }
 
+/**
+ * Resolves a retired venue slug (venue_slug_history.old_slug) to that
+ * venue's CURRENT ConsumerVenue record, for the canonical venue route's
+ * permanent-redirect fallback (see (website)/[market]/[city]/[slug]/page.tsx).
+ *
+ * History resolves to venue_id only, never a "new slug" — the venue's live
+ * slug/market/city are always read fresh via
+ * getVenueWithEventsForConsumerById, which also enforces the same
+ * is_published visibility rule the canonical route already relies on. A null
+ * return means "no redirect": the old slug is unknown, or its venue no
+ * longer exists / isn't publicly visible.
+ */
+export async function getVenueByHistoricalSlug(
+  oldSlug: string
+): Promise<ConsumerVenue | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("venue_slug_history")
+      .select("venue_id")
+      .eq("old_slug", oldSlug)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[getVenueByHistoricalSlug] Supabase error:", error);
+      return null;
+    }
+    if (!data) return null;
+
+    return await getVenueWithEventsForConsumerById(data.venue_id as string);
+  } catch (err) {
+    console.error("[getVenueByHistoricalSlug] Unexpected error:", err);
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Saved items preview
 // ─────────────────────────────────────────────────────────────────────────────
