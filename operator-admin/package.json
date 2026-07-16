@@ -22,6 +22,7 @@
     "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts"
   },
   "dependencies": {
+    "@next/third-parties": "15.5.19",
     "@sentry/nextjs": "^10.57.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.0",

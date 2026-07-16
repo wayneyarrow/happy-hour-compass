@@ -34,13 +34,17 @@ HHC is a single product engine with multiple separate presentation layers. The e
 - Must NOT use or modify `ConsumerLayout` (phone frame + `ConsumerNav`) as its shell
 
 **Current implementation** (`app/(website)/`) includes:
-- Homepage with hero section (`page.tsx`, `HeroSection.tsx`)
+- Homepage with hero section, plus assembled-Homepage rendering driven by the Collections/Homepages admin (`page.tsx`, `HeroSection.tsx`, `homepage/HomepageDiscoveryShell.tsx`, `HomepageSectionsRenderer.tsx`, `FeatureSection.tsx`, `CollectionRail.tsx`)
 - Website header/footer, including location switching across markets/cities (`WebsiteHeader.tsx`, `WebsiteFooter.tsx`, `WebsiteLocationSwitcher.tsx`)
-- Happy hour and event search, with results maps (`website-happy-hours/`, `website-events/`, `SearchResultsMap.tsx`)
+- Happy hour and event search, with results maps (`website-happy-hours/`, `website-events/`, `SearchResultsMap.tsx`), including market-aware homepage venue search
 - Venue and event detail pages (`[market]/venue/[slug]/`, `website-events/[id]/`)
 - Consumer accounts, saved venues/events, and save actions (`ConsumerAuthProvider.tsx`, `account/`, `saved/`, `SaveVenueButton.tsx`, `SaveEventButton.tsx`)
-- Acquisition flows — claim venue, suggest venue, add venue, contact us (`acquisition/`)
+- Acquisition flows — suggest venue, add venue, contact us modals (`acquisition/`), plus a standalone guided Claim Your Venue onboarding flow (`claim-your-venue/`)
 - Public guides with FAQ sections and schema markup (`[market]/guides/`, `[market]/guides/[slug]/`)
+- Collection landing pages for venue, event, and editorial-guide collections (`collections/`)
+- For Businesses landing page — hero, product tour, pricing, comparison table, funnel narrative (`business/`)
+- About Us page (`about/`) and Careers page (`careers/`)
+- Shared public 404 experience
 
 #### 2. Consumer App — `app/(consumer)/`
 - App-like experience: 375px phone frame on desktop, full-screen on mobile, bottom nav
@@ -84,8 +88,10 @@ HHC is a single product engine with multiple separate presentation layers. The e
 ### Current status and next steps
 
 - Content Engine (guide publishing) Phase 1 and the public Guide Experience V2 (editorial layout, FAQ sections with schema markup) are complete.
-- Collections Management V1 (control-panel CRUD for Collections, resolved/preview tables, guide picker) is the most recently completed feature.
-- Homepage management — the control-panel admin UI for assembling Collections into Homepages — has a database foundation and data layer in place but **no admin UI yet**; this is the next major implementation area. See `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md`.
+- Collections Management V1 (control-panel CRUD for Collections, resolved/preview tables, guide picker) is complete, including the algorithmic collection workflow and resolved-collection UX.
+- Homepage Management is complete: the control-panel admin UI for assembling Collections into Homepages (creation flow, sections editor, content/guide pickers, preview) is built (`app/control-panel/homepages/`), and the public site renders assembled Homepages and Collection landing pages. See `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md`.
+- Several new public-facing pages have shipped since Homepage Management: For Businesses landing page, About Us, Careers, and a standalone guided Claim Your Venue onboarding flow.
+- Next major implementation area is not yet defined in this doc — confirm with the user/product docs before starting new large website work.
 
 ---
 

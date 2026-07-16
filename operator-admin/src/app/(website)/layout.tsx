@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import WebsiteHeader from "./WebsiteHeader";
 import { WebsiteFooter } from "./WebsiteFooter";
 import type { ConsumerUser } from "./WebsiteHeader";
@@ -11,6 +12,12 @@ import {
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
+
+// Public-website-only, additive to the existing first-party analytics
+// pipeline (src/lib/analytics.ts, @vercel/analytics, /api/track/*).
+// Deliberately scoped to this layout rather than the root layout so
+// Operator Admin and Founder Control Panel activity is never sent to GA4.
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default async function WebsiteLayout({ children }: { children: ReactNode }) {
   const { market } = await getActiveMarket();
@@ -78,6 +85,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
 
         <WebsiteFooter />
       </div>
+      {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </ConsumerAuthProvider>
   );
 }
