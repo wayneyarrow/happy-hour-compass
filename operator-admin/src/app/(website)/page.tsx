@@ -50,10 +50,26 @@ export async function generateMetadata(): Promise<Metadata> {
   const ogTitle = homepage.ogTitle ?? title ?? undefined;
   const ogDescription = homepage.ogDescription ?? description;
 
+  // Auto-generated canonical path for this geography — same shape as
+  // generateHomepageSeo()'s own canonical_url generation
+  // (src/lib/seo/homepageSeo.ts): /{market-slug}/{city-slug} for a City
+  // Homepage, /{market-slug} for a Market Homepage. Reuses market/citySlug
+  // already resolved above; no new geography lookup, no hardcoded values.
+  const generatedCanonicalPath = citySlug ? `/${market.id}/${citySlug}` : `/${market.id}`;
+
+  // Only trust a manual canonicalUrl if it looks like a path — a malformed
+  // override should never break the canonical tag, just fall back to the
+  // generated canonical instead. Same guard as the guide page's
+  // canonical_url handling ((website)/[market]/guides/[slug]/page.tsx).
+  const canonicalUrl =
+    homepage.canonicalUrl && homepage.canonicalUrl.startsWith("/")
+      ? homepage.canonicalUrl
+      : generatedCanonicalPath;
+
   return {
     title: title ? { absolute: title } : DEFAULT_METADATA.title,
     description: description ?? DEFAULT_METADATA.description,
-    ...(homepage.canonicalUrl ? { alternates: { canonical: homepage.canonicalUrl } } : {}),
+    alternates: { canonical: canonicalUrl },
     ...(ogTitle || ogDescription ? { openGraph: { title: ogTitle, description: ogDescription } } : {}),
   };
 }
