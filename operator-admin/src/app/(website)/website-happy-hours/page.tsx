@@ -4,6 +4,7 @@ import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { toMarketConfig } from "@/lib/markets";
 import { computeHhStatus } from "@/lib/happyHourStatus";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
@@ -47,25 +48,35 @@ export default async function HappyHoursSearchPage() {
   // distanceKm starts null and is computed client-side once geolocation is granted.
   // latitude, longitude, and happyHourWeekly are passed through so the client
   // component can compute real distances and apply live filter logic.
-  const cards: WebsiteVenueCard[] = venues.map((venue) => ({
-    id: venue.id,
-    venueUuid: venue.venueUuid,
-    // Website venue URL: /[market]/venue/[slug] — matches the agreed Phase 1D routing.
-    href: `/${market.id}/venue/${venue.id}`,
-    name: venue.name,
-    image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
-    isVerified: venue.isVerified,
-    googleRating: venue.googleRating,
-    hhStatus: computeHhStatus(venue.happyHourWeekly),
-    distanceKm: null,
-    establishmentType: venue.establishmentType,
-    foodSpecial: venue.specialsFood[0] ?? undefined,
-    drinkSpecial: venue.specialsDrinks[0] ?? undefined,
-    // Client-side filter / distance data
-    latitude: venue.latitude,
-    longitude: venue.longitude,
-    happyHourWeekly: venue.happyHourWeekly,
-  }));
+  // Venues with no assigned market/city (nullable by design, see
+  // ConsumerVenue.marketSlug/citySlug) have no canonical public URL yet and
+  // are omitted rather than linked with a fabricated href.
+  const cards: WebsiteVenueCard[] = venues.flatMap((venue) => {
+    const href = buildVenuePublicPath({
+      marketSlug: venue.marketSlug,
+      citySlug: venue.citySlug,
+      slug: venue.id,
+    });
+    if (!href) return [];
+    return [{
+      id: venue.id,
+      venueUuid: venue.venueUuid,
+      href,
+      name: venue.name,
+      image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+      isVerified: venue.isVerified,
+      googleRating: venue.googleRating,
+      hhStatus: computeHhStatus(venue.happyHourWeekly),
+      distanceKm: null,
+      establishmentType: venue.establishmentType,
+      foodSpecial: venue.specialsFood[0] ?? undefined,
+      drinkSpecial: venue.specialsDrinks[0] ?? undefined,
+      // Client-side filter / distance data
+      latitude: venue.latitude,
+      longitude: venue.longitude,
+      happyHourWeekly: venue.happyHourWeekly,
+    }];
+  });
 
   return <HappyHoursSearchClient cards={cards} market={market} />;
 }

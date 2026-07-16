@@ -32,6 +32,7 @@ import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
 import { computeHhStatus } from "@/lib/happyHourStatus";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/lib/geo/geography";
 import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
@@ -50,11 +51,15 @@ function fallbackVenueImage(establishmentType: string): string {
   return "/images/casual-dining-1.jpg";
 }
 
-function venueToSearchResultCard(v: ConsumerVenue, marketSlug: string): SearchResultCardData {
+// Returns null when the venue has no assigned market/city yet (see
+// buildVenuePublicPath) — no canonical URL exists to link to.
+function venueToSearchResultCard(v: ConsumerVenue): SearchResultCardData | null {
+  const href = buildVenuePublicPath({ marketSlug: v.marketSlug, citySlug: v.citySlug, slug: v.id });
+  if (!href) return null;
   return {
     id: v.id,
     venueUuid: v.venueUuid,
-    href: `/${marketSlug}/venue/${v.id}`,
+    href,
     name: v.name,
     image: fallbackVenueImage(v.establishmentType),
     isVerified: v.isVerified,
@@ -136,7 +141,8 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
     const items = orderedIds
       .map((id) => byUuid.get(id))
       .filter((v): v is ConsumerVenue => Boolean(v))
-      .map((v) => venueToSearchResultCard(v, marketSlug));
+      .map((v) => venueToSearchResultCard(v))
+      .filter((c): c is SearchResultCardData => c !== null);
     if (items.length === 0) return null;
     return { id: section.id, kind: "venue_collection", title: section.title, viewAllHref, items };
   }
@@ -157,11 +163,15 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
   return { id: section.id, kind: "guide_collection", title: section.title, viewAllHref, items };
 }
 
-async function resolveFeatureSection(section: HomepageSection, marketSlug: string): Promise<HomepagePreviewSection | null> {
+async function resolveFeatureSection(section: HomepageSection): Promise<HomepagePreviewSection | null> {
   if (section.sectionType === "venue") {
     if (!section.venueId) return null;
     const [venue] = await getPublishedVenuesByUuids([section.venueId]);
     if (!venue) return null;
+    // No assigned market/city yet (see buildVenuePublicPath) — no canonical
+    // URL to feature this venue at.
+    const ctaHref = buildVenuePublicPath({ marketSlug: venue.marketSlug, citySlug: venue.citySlug, slug: venue.id });
+    if (!ctaHref) return null;
     return {
       id: section.id,
       kind: "venue_feature",
@@ -173,7 +183,7 @@ async function resolveFeatureSection(section: HomepageSection, marketSlug: strin
         imageUrl: venue.images[0]?.url ?? fallbackVenueImage(venue.establishmentType),
         teaser: venue.teaser,
         ctaLabel: "View Venue",
-        ctaHref: `/${marketSlug}/venue/${venue.id}`,
+        ctaHref,
       },
     };
   }
@@ -229,7 +239,7 @@ export async function resolveSection(section: HomepageSection, marketSlug: strin
   if (!section.isEnabled) return null;
   return section.contentMode === "collection"
     ? resolveCollectionSection(section, marketSlug)
-    : resolveFeatureSection(section, marketSlug);
+    : resolveFeatureSection(section);
 }
 
 // ── Discovery Shell geography ────────────────────────────────────────────────

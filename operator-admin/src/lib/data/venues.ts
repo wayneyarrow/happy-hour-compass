@@ -87,6 +87,17 @@ export type ConsumerVenue = {
    */
   isVerified: boolean;
   /**
+   * Canonical market slug, joined from venues.market_id -> markets.slug.
+   * Null when the venue has no assigned market (see migration
+   * 048_geography_foundation_v1.sql — market_id/city_id are nullable by
+   * design; backfillVenueGeography.ts only assigns venues whose `city` text
+   * field matches a seeded city). A null value means this venue has no
+   * canonical public URL under /{market}/{city}/{slug} yet.
+   */
+  marketSlug: string | null;
+  /** Canonical city slug, joined from venues.city_id -> cities.slug. Null under the same conditions as marketSlug. */
+  citySlug: string | null;
+  /**
    * Operator-selected search tags from the controlled catalog (paid feature).
    * Empty array for free-plan venues and all seeded/imported venues.
    * Powers keyword search matching and the future Discover Page.
@@ -560,6 +571,8 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     googleReviewCount: typeof row.google_review_count === "number" ? row.google_review_count : null,
     placeId: typeof row.place_id === "string" ? row.place_id : null,
     isVerified: row.is_verified === true,
+    marketSlug: (row.market_geo as { slug?: string } | null)?.slug ?? null,
+    citySlug: (row.city_geo as { slug?: string } | null)?.slug ?? null,
     searchTags: Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
     seededTags: Array.isArray(row.seeded_tags) ? (row.seeded_tags as string[]) : [],
     aboutYourVenue: typeof row.about_your_venue === "string" && row.about_your_venue.trim()
@@ -606,7 +619,11 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
           "internal_boost, spotlight_eligible, exclude_from_discover, " +
           // Join operator plan — used by Discover Engine for plan-based weighting.
           // created_by_operator_id is null for seeded/imported venues; operators will be null for those rows.
-          "operators!created_by_operator_id(plan)"
+          "operators!created_by_operator_id(plan), " +
+          // Canonical market/city slugs for the public /{market}/{city}/{slug}
+          // venue URL. Aliased (market_geo/city_geo) to avoid colliding with
+          // the plain `city` text column already selected above.
+          "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"
       )
       .eq("is_published", true)
       .order("name", { ascending: true });
@@ -697,7 +714,10 @@ const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
   "establishment_type, claimed_at, google_rating, google_review_count, place_id, is_verified, " +
-  "search_tags, about_your_venue, updated_at";
+  "search_tags, about_your_venue, updated_at, " +
+  // Canonical market/city slugs for the public /{market}/{city}/{slug} venue
+  // URL — see ConsumerVenue.marketSlug/citySlug.
+  "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)";
 
 /**
  * Fetches a single venue by route param from Supabase, with optional preview.
@@ -785,11 +805,15 @@ export async function getVenueWithEventsForConsumerById(
 export type VenuePreview = {
   /** Venue UUID — matches the ID stored by savedItems.ts. */
   id: string;
-  /** Venue slug — used to build the public URL /{market}/venue/{slug}. */
+  /** Venue slug — used to build the public URL /{market}/{city}/{slug}. */
   slug: string;
   name: string;
   city: string;
   imageUrl: string | null;
+  /** Canonical market slug for the public venue URL. Null if unassigned — see ConsumerVenue.marketSlug. */
+  marketSlug: string | null;
+  /** Canonical city slug for the public venue URL. Null if unassigned — see ConsumerVenue.citySlug. */
+  citySlug: string | null;
 };
 
 const UUID_PATTERN =
@@ -817,10 +841,13 @@ export async function getVenuePreviewsByIds(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRows: Record<string, any>[] = [];
 
+    const PREVIEW_SELECT =
+      "id, slug, name, city, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)";
+
     if (uuidIds.length > 0) {
       const { data } = await supabase
         .from("venues")
-        .select("id, slug, name, city")
+        .select(PREVIEW_SELECT)
         .in("id", uuidIds)
         .eq("is_published", true);
       if (data) allRows.push(...data);
@@ -829,7 +856,7 @@ export async function getVenuePreviewsByIds(
     if (slugIds.length > 0) {
       const { data } = await supabase
         .from("venues")
-        .select("id, slug, name, city")
+        .select(PREVIEW_SELECT)
         .in("slug", slugIds)
         .eq("is_published", true);
       if (data) allRows.push(...data);
@@ -863,6 +890,8 @@ export async function getVenuePreviewsByIds(
       name: r.name as string,
       city: r.city as string,
       imageUrl: imageByUuid[r.id as string] ?? null,
+      marketSlug: (r.market_geo as { slug?: string } | null)?.slug ?? null,
+      citySlug: (r.city_geo as { slug?: string } | null)?.slug ?? null,
     }));
   } catch (err) {
     console.error("[getVenuePreviewsByIds] Unexpected error:", err);
@@ -890,7 +919,8 @@ export async function getPublishedVenuesByUuids(
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
           "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, teaser, " +
-          "operators!created_by_operator_id(plan)"
+          "operators!created_by_operator_id(plan), " +
+          "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"
       )
       .eq("is_published", true)
       .in("id", uuids);

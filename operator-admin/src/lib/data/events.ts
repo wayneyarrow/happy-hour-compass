@@ -940,6 +940,10 @@ export type WebsiteEventDetail = {
   // Venue context
   venueId: string;
   venueSlug: string;
+  /** Canonical market slug for the venue's public URL. Null if the venue has no assigned market — see ConsumerVenue.marketSlug. */
+  venueMarketSlug: string | null;
+  /** Canonical city slug for the venue's public URL. Null if the venue has no assigned city — see ConsumerVenue.citySlug. */
+  venueCitySlug: string | null;
   venueName: string;
   venueAddress: string;
   venuePhone: string;
@@ -1019,7 +1023,8 @@ export async function getEventForWebsite(
           "id, slug, name, address_line1, phone, website_url, menu_url, " +
             "payment_types, business_hours, lat, lng, establishment_type, " +
             "about_your_venue, google_rating, google_review_count, hh_tagline, " +
-            "hh_times, hh_food_details, hh_drink_details"
+            "hh_times, hh_food_details, hh_drink_details, " +
+            "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"
         )
         .eq("id", venueId)
         .maybeSingle(),
@@ -1086,6 +1091,8 @@ export async function getEventForWebsite(
       accessibilityNotes: (row.accessibility_notes as string | null) ?? null,
       venueId,
       venueSlug: (vr.slug as string) ?? "",
+      venueMarketSlug: (vr.market_geo as { slug?: string } | null)?.slug ?? null,
+      venueCitySlug: (vr.city_geo as { slug?: string } | null)?.slug ?? null,
       venueName: (vr.name as string) ?? "",
       venueAddress: (vr.address_line1 as string) ?? "",
       venuePhone: (vr.phone as string) ?? "",

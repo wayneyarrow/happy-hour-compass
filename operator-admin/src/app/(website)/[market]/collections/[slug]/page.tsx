@@ -18,7 +18,7 @@ import { CollectionTypeContent } from "@/app/(website)/collections/CollectionTyp
  * presentation lives beneath CollectionTypeContent's per-kind components.
  * This route file only wires those three together and handles the 404
  * case — the same shape as the existing venue and guide detail pages
- * ((website)/[market]/venue/[slug]/page.tsx,
+ * ((website)/[market]/[city]/[slug]/page.tsx,
  * (website)/[market]/guides/[slug]/page.tsx), which is also why there's no
  * header/footer here: (website)/layout.tsx already supplies both.
  */

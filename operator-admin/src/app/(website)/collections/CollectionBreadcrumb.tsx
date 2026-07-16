@@ -3,7 +3,7 @@ import Link from "next/link";
 /**
  * Collection Landing Page breadcrumb: Home > Collections > {Collection Name}.
  * Ports the exact inline breadcrumb markup already used by the venue detail
- * page ((website)/[market]/venue/[slug]/page.tsx) and the Guide detail view
+ * page ((website)/[market]/[city]/[slug]/page.tsx) and the Guide detail view
  * (GuideDetailView.tsx) rather than inventing new styling — same wrapper
  * classes, same hand-drawn chevron SVG, same truncation on the final
  * (current-page) segment so long Collection names don't wrap on narrow

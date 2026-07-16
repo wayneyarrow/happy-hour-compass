@@ -13,7 +13,7 @@ export type SearchResultCardData = {
   id: string;
   /** Venue UUID — used as the durable saved identifier in localStorage. */
   venueUuid: string;
-  /** Destination URL for the Venue Detail page, e.g. /[market]/venue/[slug]. */
+  /** Destination URL for the Venue Detail page, e.g. /[market]/[city]/[slug]. */
   href: string;
   name: string;
   image: string;

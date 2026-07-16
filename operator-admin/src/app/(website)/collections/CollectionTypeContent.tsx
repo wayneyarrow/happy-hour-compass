@@ -5,6 +5,7 @@ import type { ConsumerVenue } from "@/lib/data/venues";
 import type { SavedGuideCard } from "@/lib/data/contentGuides";
 import { computeHhStatus } from "@/lib/happyHourStatus";
 import { getMarketById } from "@/lib/markets";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
@@ -73,11 +74,15 @@ function fallbackVenueImage(establishmentType: string): string {
   return "/images/casual-dining-1.jpg";
 }
 
-function venueToWebsiteVenueCard(v: ConsumerVenue, marketSlug: string): WebsiteVenueCard {
+// Returns null when the venue has no assigned market/city yet (see
+// buildVenuePublicPath) — no canonical URL exists to link to.
+function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
+  const href = buildVenuePublicPath({ marketSlug: v.marketSlug, citySlug: v.citySlug, slug: v.id });
+  if (!href) return null;
   return {
     id: v.id,
     venueUuid: v.venueUuid,
-    href: `/${marketSlug}/venue/${v.id}`,
+    href,
     name: v.name,
     image: v.images[0]?.url ?? fallbackVenueImage(v.establishmentType),
     isVerified: v.isVerified,
@@ -139,7 +144,9 @@ function VenueCollectionContent({ model }: { model: Extract<PublicCollectionMode
   const market = getMarketById(model.marketSlug);
   if (!market) return null;
 
-  const cards = model.items.map((venue) => venueToWebsiteVenueCard(venue, model.marketSlug));
+  const cards = model.items
+    .map((venue) => venueToWebsiteVenueCard(venue))
+    .filter((c): c is WebsiteVenueCard => c !== null);
 
   return (
     <HappyHoursSearchClient

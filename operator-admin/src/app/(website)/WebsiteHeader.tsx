@@ -193,7 +193,6 @@ export default function WebsiteHeader({
               </button>
 
               <SavedDropdown
-                marketId={marketId}
                 open={savedOpen}
                 onClose={() => setSavedOpen(false)}
               />
@@ -276,7 +275,6 @@ export default function WebsiteHeader({
         {savedOpen && (
           <div ref={mobileDropdownRef} className="md:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
             <SavedDropdown
-              marketId={marketId}
               open={savedOpen}
               onClose={() => setSavedOpen(false)}
             />

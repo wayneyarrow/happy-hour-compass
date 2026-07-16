@@ -1,6 +1,7 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { isNearMarket, scoreVenueForDiscover } from "@/lib/discover/discoverEngine";
 import { toMarketConfig, type Market } from "@/lib/markets";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 
 /**
  * Homepage venue-suggestion search — powers the autocomplete dropdown under
@@ -79,12 +80,22 @@ export async function searchVenueSuggestions(
     })
     .slice(0, limit);
 
-  return ranked.map(({ venue }) => ({
-    id: venue.id,
-    name: venue.name,
-    city: venue.city,
-    area: venue.area,
-    address: venue.address,
-    href: `/${market.id}/venue/${venue.id}`,
-  }));
+  // Venues with no assigned market/city yet (see buildVenuePublicPath) have
+  // no canonical URL and are omitted rather than linked with a fabricated href.
+  return ranked.flatMap(({ venue }) => {
+    const href = buildVenuePublicPath({
+      marketSlug: venue.marketSlug,
+      citySlug: venue.citySlug,
+      slug: venue.id,
+    });
+    if (!href) return [];
+    return [{
+      id: venue.id,
+      name: venue.name,
+      city: venue.city,
+      area: venue.area,
+      address: venue.address,
+      href,
+    }];
+  });
 }

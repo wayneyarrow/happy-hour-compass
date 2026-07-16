@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getEventForWebsite } from "@/lib/data/events";
-import { getActiveMarket } from "@/lib/activeMarket";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
-import { VenueDetailMap } from "@/app/(website)/[market]/venue/[slug]/VenueDetailMap";
-import { StickyNav } from "@/app/(website)/[market]/venue/[slug]/StickyNav";
+import { VenueDetailMap } from "@/app/(website)/[market]/[city]/[slug]/VenueDetailMap";
+import { StickyNav } from "@/app/(website)/[market]/[city]/[slug]/StickyNav";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { SaveEventButton } from "@/app/(website)/SaveEventButton";
 import { EventActionCard } from "./EventActionCard";
 import { EventMobileActionBar } from "./EventMobileActionBar";
@@ -177,10 +177,7 @@ function EventHeroImage({
 export default async function WebsiteEventDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  const [event, { market }] = await Promise.all([
-    getEventForWebsite(id),
-    getActiveMarket(),
-  ]);
+  const event = await getEventForWebsite(id);
 
   if (!event) notFound();
 
@@ -194,9 +191,13 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
       )}`
     : null;
 
-  const venueUrl = event.venueSlug
-    ? `/${market.id}/venue/${event.venueSlug}`
-    : null;
+  // Derived from the venue's own stored market/city relationship (not the
+  // visitor's ambient active-market cookie) — see buildVenuePublicPath.
+  const venueUrl = buildVenuePublicPath({
+    marketSlug: event.venueMarketSlug,
+    citySlug: event.venueCitySlug,
+    slug: event.venueSlug,
+  });
 
   const websiteUrl = event.venueWebsiteUrl || null;
   const menuUrl = event.venueMenuUrl || null;

@@ -12,6 +12,7 @@ import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { computeHhStatus } from "@/lib/happyHourStatus";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
@@ -150,23 +151,29 @@ export default async function GuideDetailPage({ params }: PageProps) {
   if (isVenueGuide && orderedIds.length > 0) {
     const venues = await getPublishedVenuesByUuids(orderedIds);
     const byId = new Map(venues.map((v) => [v.venueUuid, v]));
+    // Venues with no assigned market/city yet (see buildVenuePublicPath)
+    // have no canonical URL and are omitted from the attached list.
     venueCards = orderedIds
       .map((id) => byId.get(id))
       .filter((v): v is ConsumerVenue => Boolean(v))
-      .map((v) => ({
-        id: v.id,
-        venueUuid: v.venueUuid,
-        href: `/${guide.marketSlug}/venue/${v.id}`,
-        name: v.name,
-        image: v.images[0]?.url ?? fallbackImage(v.establishmentType),
-        isVerified: v.isVerified,
-        googleRating: v.googleRating,
-        hhStatus: computeHhStatus(v.happyHourWeekly),
-        distanceKm: null,
-        establishmentType: v.establishmentType,
-        foodSpecial: v.specialsFood[0] ?? undefined,
-        drinkSpecial: v.specialsDrinks[0] ?? undefined,
-      }));
+      .flatMap((v) => {
+        const href = buildVenuePublicPath({ marketSlug: v.marketSlug, citySlug: v.citySlug, slug: v.id });
+        if (!href) return [];
+        return [{
+          id: v.id,
+          venueUuid: v.venueUuid,
+          href,
+          name: v.name,
+          image: v.images[0]?.url ?? fallbackImage(v.establishmentType),
+          isVerified: v.isVerified,
+          googleRating: v.googleRating,
+          hhStatus: computeHhStatus(v.happyHourWeekly),
+          distanceKm: null,
+          establishmentType: v.establishmentType,
+          foodSpecial: v.specialsFood[0] ?? undefined,
+          drinkSpecial: v.specialsDrinks[0] ?? undefined,
+        }];
+      });
   } else if (!isVenueGuide && orderedIds.length > 0) {
     const events = await getPublishedEventsByIds(orderedIds);
     const byId = new Map(events.map((e) => [e.id, e]));

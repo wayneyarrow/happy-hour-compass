@@ -16,6 +16,7 @@ import { useConsumerId } from "./ConsumerAuthProvider";
 import type { VenuePreview } from "@/lib/data/venues";
 import type { EventPreview } from "@/lib/data/events";
 import type { SavedGuideCard } from "@/lib/data/contentGuides";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,15 +36,13 @@ const HEART_PATH =
 // ─── SavedDropdown ────────────────────────────────────────────────────────────
 
 type Props = {
-  /** Active market slug — used to build /[market]/venue/[slug] links. */
-  marketId: string;
   open: boolean;
   onClose: () => void;
 };
 
 const MAX_PREVIEW = 5;
 
-export function SavedDropdown({ marketId, open, onClose }: Props) {
+export function SavedDropdown({ open, onClose }: Props) {
   const consumerId = useConsumerId();
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
 
@@ -252,7 +251,6 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
                         <VenueDropdownRow
                           key={v.storedId}
                           venue={v}
-                          marketId={marketId}
                           onClose={onClose}
                           onUnsave={(storedId) => {
                             unsaveVenue(storedId);
@@ -406,44 +404,62 @@ export function SavedDropdown({ marketId, open, onClose }: Props) {
 
 function VenueDropdownRow({
   venue,
-  marketId,
   onClose,
   onUnsave,
 }: {
   venue: VenueRow;
-  marketId: string;
   onClose: () => void;
   onUnsave: (id: string) => void;
 }) {
+  // Derived from the venue's own stored market/city relationship — null when
+  // the venue has no assigned market/city yet (no canonical URL exists).
+  const href = buildVenuePublicPath({
+    marketSlug: venue.marketSlug,
+    citySlug: venue.citySlug,
+    slug: venue.slug,
+  });
+
+  const content = (
+    <>
+      <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+        {venue.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={venue.imageUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-amber-50 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "none", stroke: "#d97706", strokeWidth: 2 }} aria-hidden="true">
+              <path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><rect x="9" y="12" width="6" height="9" />
+            </svg>
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 leading-snug truncate">
+          {venue.name}
+        </p>
+        {venue.city && (
+          <p className="text-[11px] text-gray-400 leading-tight truncate">{venue.city}</p>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex items-center px-4 py-2 hover:bg-gray-50 group transition-colors">
-      {/* Thumbnail + text inside Link so the whole content area navigates */}
-      <Link
-        href={`/${marketId}/venue/${venue.slug}`}
-        onClick={onClose}
-        className="flex flex-1 min-w-0 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
-      >
-        <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-gray-100">
-          {venue.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={venue.imageUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-amber-50 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "none", stroke: "#d97706", strokeWidth: 2 }} aria-hidden="true">
-                <path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><rect x="9" y="12" width="6" height="9" />
-              </svg>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 leading-snug truncate">
-            {venue.name}
-          </p>
-          {venue.city && (
-            <p className="text-[11px] text-gray-400 leading-tight truncate">{venue.city}</p>
-          )}
-        </div>
-      </Link>
+      {/* Thumbnail + text inside Link so the whole content area navigates —
+          falls back to a non-interactive row when the venue has no
+          canonical URL yet (see buildVenuePublicPath). */}
+      {href ? (
+        <Link
+          href={href}
+          onClick={onClose}
+          className="flex flex-1 min-w-0 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
+        >
+          {content}
+        </Link>
+      ) : (
+        <div className="flex flex-1 min-w-0 items-center gap-2.5">{content}</div>
+      )}
 
       {/* Unsave button — sibling of Link, not nested inside it */}
       <button

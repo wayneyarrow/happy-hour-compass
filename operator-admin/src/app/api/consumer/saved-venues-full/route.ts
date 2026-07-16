@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPublishedVenuesByUuids } from "@/lib/data/venues";
 import { computeHhStatus } from "@/lib/happyHourStatus";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import type { WebsiteVenueCard } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
 
 function fallbackImage(establishmentType: string): string {
@@ -31,23 +32,34 @@ export async function POST(req: NextRequest) {
 
     const venues = await getPublishedVenuesByUuids(ids);
 
-    const cards: WebsiteVenueCard[] = venues.map((venue) => ({
-      id: venue.id,
-      venueUuid: venue.venueUuid,
-      href: `/${marketId}/venue/${venue.id}`,
-      name: venue.name,
-      image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
-      isVerified: venue.isVerified,
-      googleRating: venue.googleRating,
-      hhStatus: computeHhStatus(venue.happyHourWeekly),
-      distanceKm: null,
-      establishmentType: venue.establishmentType,
-      foodSpecial: venue.specialsFood[0] ?? undefined,
-      drinkSpecial: venue.specialsDrinks[0] ?? undefined,
-      latitude: venue.latitude,
-      longitude: venue.longitude,
-      happyHourWeekly: venue.happyHourWeekly,
-    }));
+    // Venues with no assigned market/city have no canonical public URL yet
+    // (see buildVenuePublicPath) — omit them rather than fabricate a broken
+    // href for the Saved page to link to.
+    const cards: WebsiteVenueCard[] = venues.flatMap((venue) => {
+      const href = buildVenuePublicPath({
+        marketSlug: venue.marketSlug,
+        citySlug: venue.citySlug,
+        slug: venue.id,
+      });
+      if (!href) return [];
+      return [{
+        id: venue.id,
+        venueUuid: venue.venueUuid,
+        href,
+        name: venue.name,
+        image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+        isVerified: venue.isVerified,
+        googleRating: venue.googleRating,
+        hhStatus: computeHhStatus(venue.happyHourWeekly),
+        distanceKm: null,
+        establishmentType: venue.establishmentType,
+        foodSpecial: venue.specialsFood[0] ?? undefined,
+        drinkSpecial: venue.specialsDrinks[0] ?? undefined,
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        happyHourWeekly: venue.happyHourWeekly,
+      }];
+    });
 
     return NextResponse.json(cards);
   } catch {

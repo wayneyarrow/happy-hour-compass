@@ -12,7 +12,7 @@
  *   export const metadata = buildPageMetadata({
  *     title: "The Keg — Happy Hour in Vancouver",
  *     description: "Weekday happy hour at The Keg: $9 cocktails, half-price apps.",
- *     path: "/venue/vancouver-the-keg",
+ *     path: "/greater-vancouver/vancouver/the-keg-vancouver",
  *   });
  *
  * Phases and what to build next:
@@ -24,13 +24,14 @@
 
 import type { Metadata } from "next";
 import { absoluteUrl, shouldNoIndex } from "@/lib/siteUrl";
+import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 
 export interface PageMetadataOptions {
   /** Page title — used in <title>, OG title, Twitter title. Do NOT include " — Happy Hour Compass" suffix; the root layout template adds it. */
   title: string;
   /** Page description — used in meta description, OG description, Twitter description. 120–160 characters recommended. */
   description: string;
-  /** Canonical path, e.g. "/venue/the-keg-vancouver". Defaults to "/". */
+  /** Canonical path, e.g. "/greater-vancouver/vancouver/the-keg-vancouver". Defaults to "/". */
   path?: string;
   /**
    * OG image path or absolute URL.
@@ -110,7 +111,14 @@ export function buildPageMetadata({
 }
 
 /**
- * Venue page metadata builder.
+ * Venue page metadata builder — not yet wired up to the venue detail route
+ * ((website)/[market]/[city]/[slug]/page.tsx builds its own metadata inline
+ * today; adopting this helper there is the broader venue metadata task that
+ * follows the route migration, not part of it).
+ *
+ * Canonical path is /{marketSlug}/{citySlug}/{slug} — see
+ * src/lib/publicVenueUrl.ts. Returns Phase-1 defaults (no canonical/OG image
+ * override) when the venue has no assigned market/city yet.
  *
  * Phase 2: wire in OG image from the venue's primary photo.
  * Phase 3: add LocalBusiness + FoodEstablishment JSON-LD via a separate helper.
@@ -118,18 +126,23 @@ export function buildPageMetadata({
 export function buildVenueMetadata({
   venueName,
   description,
+  marketSlug,
+  citySlug,
   slug,
   ogImage,
 }: {
   venueName: string;
   description: string;
+  marketSlug: string | null;
+  citySlug: string | null;
   slug: string;
   ogImage?: string;
 }): Metadata {
+  const path = buildVenuePublicPath({ marketSlug, citySlug, slug }) ?? undefined;
   return buildPageMetadata({
     title: venueName,
     description,
-    path: `/venue/${slug}`,
+    path,
     ogImage,
   });
 }
