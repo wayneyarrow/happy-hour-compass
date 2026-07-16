@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { absoluteUrl, shouldNoIndex } from "@/lib/siteUrl";
+import { absoluteUrl } from "@/lib/siteUrl";
 import { MARKETS } from "@/lib/markets";
 import { getAllMarkets } from "@/lib/geo/geography";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
@@ -24,6 +24,19 @@ export const dynamic = "force-dynamic";
  * pages with no such source (static marketing pages) omit it rather than
  * inventing one.
  *
+ * Deliberately NOT gated on shouldNoIndex()/NEXT_PUBLIC_NOINDEX — that flag
+ * only controls crawl PERMISSION (robots.txt's Disallow, and each page's own
+ * <meta name="robots"> tag), which already fully blocks staging from being
+ * crawled regardless of what this file returns. Every URL listed here is
+ * already public (same is_published/status='published' data a visitor can
+ * load directly), so there is nothing extra to protect by also emptying the
+ * sitemap — doing so only broke the ability to verify the real sitemap
+ * output on staging before launch.
+ *
+ * Each data source is fetched via Promise.allSettled, not Promise.all, so a
+ * single failing source (e.g. a transient Supabase error) can never wipe out
+ * the static pages or the other, healthy sources — see settled() below.
+ *
  * Deliberately excluded: admin/operator/control-panel routes, auth/account/
  * saved pages, the /website-events and /website-happy-hours search-results
  * pages (both already noindex'd at the page level via their own metadata),
@@ -34,18 +47,29 @@ export const dynamic = "force-dynamic";
  * map each row to { url, lastModified? }, and flatten it into the returned
  * array.
  */
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (shouldNoIndex()) {
-    return [];
-  }
 
-  const [venues, events, collections, guides, dbMarkets] = await Promise.all([
-    getPublishedVenuesForConsumer(),
-    getPublishedEventsForConsumer(),
-    getCollections({ status: "published", lifecycle: "active" }),
-    getAllPublicGuidesForSitemap(),
-    getAllMarkets(),
-  ]);
+/** Unwraps a settled data-fetch result, logging and defaulting to [] on failure so one bad source never takes down the rest of the sitemap. */
+function settled<T>(result: PromiseSettledResult<T[]>, label: string): T[] {
+  if (result.status === "fulfilled") return result.value;
+  console.error(`[sitemap] ${label} failed — omitting from this run:`, result.reason);
+  return [];
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [venuesResult, eventsResult, collectionsResult, guidesResult, marketsResult] =
+    await Promise.allSettled([
+      getPublishedVenuesForConsumer(),
+      getPublishedEventsForConsumer(),
+      getCollections({ status: "published", lifecycle: "active" }),
+      getAllPublicGuidesForSitemap(),
+      getAllMarkets(),
+    ]);
+
+  const venues = settled(venuesResult, "getPublishedVenuesForConsumer");
+  const events = settled(eventsResult, "getPublishedEventsForConsumer");
+  const collections = settled(collectionsResult, "getCollections");
+  const guides = settled(guidesResult, "getAllPublicGuidesForSitemap");
+  const dbMarkets = settled(marketsResult, "getAllMarkets");
 
   // Collections carry a DB market_id (UUID), not a slug — resolve via the
   // same DB markets table venues/guides already join against.
