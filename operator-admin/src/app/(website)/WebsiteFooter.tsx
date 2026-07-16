@@ -47,12 +47,11 @@ import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
  * page explaining the existing venue-specific claim flow, not a new claim
  * workflow.
  *
- * "For Businesses", "About", and "Careers" point at routes that don't
- * exist yet (/business, /about, /careers) — the same forward-looking
- * treatment this task's own brief gives "For Businesses" ("will become
- * the landing page for the business side of the platform, to be built
- * next"). This footer is the permanent structure; those pages are future
- * Business Funnel work, not part of this task.
+ * "For Businesses" (/business) and "Careers" (/careers) now point at real
+ * pages. "About" (/about) still doesn't exist yet — same forward-looking
+ * treatment this task's own brief originally gave every one of these links
+ * ("will become the landing page ... to be built next"). This footer is
+ * the permanent structure; /about is future work, not part of this task.
  */
 
 function FooterColumnHeading({ children }: { children: ReactNode }) {
