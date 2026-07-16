@@ -121,6 +121,14 @@ export function WebsiteFooter() {
     startTransition(async () => {
       await setMarketAction(marketId);
       router.push("/");
+      // The homepage renders off the hhc_market cookie we just set, but a
+      // push to "/" when already on "/" (or within the client Router
+      // Cache's staleTime for a recent visit) can serve the previously
+      // cached RSC payload instead of refetching — same issue
+      // WebsiteLocationSwitcher solves with refresh(). Calling both
+      // unconditionally covers every starting route without needing to
+      // special-case "already on the homepage".
+      router.refresh();
     });
   }
 
