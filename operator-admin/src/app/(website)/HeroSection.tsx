@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Market } from "@/lib/markets";
 import { findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
+import { HeroVenueSearch } from "./HeroVenueSearch";
 
 type ContentType = "happy-hours" | "events";
 
@@ -142,40 +143,12 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
         </Link>
       </div>
 
-      {/* Search pill — secondary action */}
-      <div className="mt-3 w-full max-w-xl">
-        <button
-          type="button"
-          aria-label={`Search ${contentType === "happy-hours" ? "happy hours" : "events"}`}
-          className="
-            w-full flex items-center gap-3 pl-5 pr-5 py-[14px]
-            bg-white border border-gray-200 rounded-full text-left cursor-pointer
-            shadow-[0_2px_12px_rgba(0,0,0,0.07),0_1px_4px_rgba(0,0,0,0.04)]
-            hover:shadow-[0_4px_20px_rgba(0,0,0,0.10),0_2px_8px_rgba(0,0,0,0.06)]
-            hover:border-gray-300
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2
-            transition-all duration-200
-          "
-        >
-          <svg
-            className="w-4 h-4 text-gray-400 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <span className="flex-1 text-[14px] text-gray-400">
-            {searchPlaceholder}
-          </span>
-        </button>
-      </div>
+      {/* Search pill — secondary action, wired to live venue suggestions */}
+      <HeroVenueSearch
+        market={market}
+        placeholder={searchPlaceholder}
+        ariaLabel={`Search ${contentType === "happy-hours" ? "happy hours" : "events"}`}
+      />
 
     </section>
   );
