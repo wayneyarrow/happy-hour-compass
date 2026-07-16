@@ -553,6 +553,8 @@ export type ConsumerEventListItem = {
   firstDate: string | null;
   /** Recurrence pattern — recurring events pass all date filters. */
   recurrence: string | null;
+  /** ISO timestamp when the event row was last updated in Supabase. Optional — only populated by getPublishedEventsForConsumer(); other constructors of this shape (e.g. Discover Engine rail mapping) have no equivalent source. */
+  updatedAt?: string;
 };
 
 /**
@@ -593,7 +595,7 @@ export async function getPublishedEventsForConsumer(): Promise<
       .select(
         "id, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, " +
+          "event_time, event_frequency, updated_at, " +
           "venues(name)"
       )
       .eq("is_published", true)
@@ -657,6 +659,7 @@ export async function getPublishedEventsForConsumer(): Promise<
         ((row.venues as Record<string, any> | null)?.name as string) ?? "",
       firstDate: (row.first_date as string | null) ?? null,
       recurrence: (row.recurrence as string | null) ?? null,
+      updatedAt: (row.updated_at as string) ?? "",
     }));
   } catch (err) {
     console.error("[getPublishedEventsForConsumer] Unexpected error:", err);

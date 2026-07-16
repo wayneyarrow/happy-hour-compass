@@ -414,6 +414,50 @@ export async function getPublicGuideByMarketAndSlug(
   return mapGuideDetailRow(row, marketSlug);
 }
 
+/** Minimal shape needed to list every publicly-reachable guide URL — used by the sitemap. */
+export type PublicGuideSitemapEntry = {
+  id: string;
+  slug: string;
+  marketSlug: string;
+  updatedAt: string;
+};
+
+/**
+ * Every guide currently reachable at its canonical /{market}/guides/{slug}
+ * URL — published and inside its publish/expire window, via the same
+ * isGuidePublicNow() gate getPublicGuideByMarketAndSlug uses. Deliberately
+ * NOT scoped to any distribution channel/placement (contentGuideDistribution.ts):
+ * a guide's own detail page is reachable regardless of whether it's
+ * currently merchandised in the guides_library channel or a Homepage rail,
+ * so the sitemap must not under-list guides that are live but unmerchandised.
+ */
+export async function getAllPublicGuidesForSitemap(): Promise<PublicGuideSitemapEntry[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("content_guides")
+    .select("id, slug, status, publish_at, expire_at, updated_at, markets!inner(slug)")
+    .eq("status", "published");
+
+  if (error) {
+    console.error("[getAllPublicGuidesForSitemap]", error.message);
+    return [];
+  }
+
+  return (data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((row: Record<string, any>) =>
+      isGuidePublicNow(row.status as string, (row.publish_at as string | null) ?? null, (row.expire_at as string | null) ?? null)
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: Record<string, any>) => ({
+      id: row.id as string,
+      slug: row.slug as string,
+      marketSlug: (row.markets as { slug: string }).slug,
+      updatedAt: row.updated_at as string,
+    }));
+}
+
 /**
  * Admin-safe guide read for the Control Panel preview route (Card 2A) —
  * looked up by id (not slug), and deliberately does NOT gate on status or

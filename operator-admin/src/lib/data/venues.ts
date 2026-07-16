@@ -615,7 +615,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
+          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, updated_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, " +
           // Join operator plan — used by Discover Engine for plan-based weighting.
           // created_by_operator_id is null for seeded/imported venues; operators will be null for those rows.
