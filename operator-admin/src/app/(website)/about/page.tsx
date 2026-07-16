@@ -38,11 +38,7 @@ import { PRINCIPLES } from "./content";
  * third person / singular "they" — deliberately never named, no photo,
  * no dates — then hands off to "Happy Hour Compass" by name only at the
  * very end (the pull quote), so the story has one consistent narrator
- * throughout instead of drifting between "the founder" and "we". Each
- * paragraph also ends by pointing at the next (consulting → "that same
- * instinct... led into software too"; software → "the same question kept
- * finding them" → travel) so the section reads as one continuous story
- * across the paragraph breaks rather than four separate topics.
+ * throughout instead of drifting between "the founder" and "we".
  *
  * A plain server component — nothing on this page is interactive, so
  * unlike /business and /careers there's no client-component split.
@@ -143,7 +139,7 @@ export default function AboutPage() {
           row. The amber-accent pull-quote reuses business/page.tsx
           Section 3's exact treatment (pl-5 border-l-4 border-amber-400). */}
       <section className="bg-gray-50">
-        <div className="max-w-3xl mx-auto px-6 lg:px-10 py-16 md:py-24 text-center">
+        <div className="max-w-3xl mx-auto px-6 lg:px-10 pt-20 md:pt-28 pb-16 md:pb-24 text-center">
           <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
             The Turning Point
           </p>
@@ -161,19 +157,14 @@ export default function AboutPage() {
             </p>
             <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">
               That same instinct for solving problems eventually led into
-              software too &mdash; years spent building tools for customers
-              and working directly with them in Customer Success, learning
-              firsthand what makes software genuinely useful, and what just
-              gets in the way. And somewhere along the way, on the road for
-              work as often as for fun, the same question kept finding them.
+              software too &mdash; years spent building tools for customers,
+              working in Customer Success, and learning firsthand what makes
+              software genuinely useful.
             </p>
             <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">
-              Somewhere unfamiliar &mdash; a new city, a different
-              neighbourhood &mdash; wanting one simple thing: a good happy
-              hour, somewhere real, happening tonight. And instead, the same
-              dead end every time: outdated hours, abandoned social pages, a
-              patchwork of searches that still didn&rsquo;t answer the
-              question.
+              And somewhere along the way, on the road for work as often as
+              for fun, the same simple question kept finding them:
+              &ldquo;Where should we go tonight?&rdquo;
             </p>
             <p className="mt-4 text-base md:text-lg text-gray-500 leading-relaxed">
               That frustration pointed to something bigger than a bad night
@@ -231,7 +222,7 @@ export default function AboutPage() {
       <section className="bg-gray-50">
         <div className="max-w-2xl mx-auto px-6 lg:px-10 py-16 md:py-24 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-            Today
+            How We&rsquo;re Changing It
           </h2>
           <p className="mt-6 text-base md:text-lg text-gray-500 leading-relaxed">
             Happy Hour Compass is focused on one thing: connecting people
