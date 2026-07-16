@@ -111,14 +111,12 @@ export function buildPageMetadata({
 }
 
 /**
- * Venue page metadata builder — not yet wired up to the venue detail route
- * ((website)/[market]/[city]/[slug]/page.tsx builds its own metadata inline
- * today; adopting this helper there is the broader venue metadata task that
- * follows the route migration, not part of it).
+ * Venue page metadata builder — used by
+ * (website)/[market]/[city]/[slug]/page.tsx's generateMetadata().
  *
  * Canonical path is /{marketSlug}/{citySlug}/{slug} — see
- * src/lib/publicVenueUrl.ts. Returns Phase-1 defaults (no canonical/OG image
- * override) when the venue has no assigned market/city yet.
+ * src/lib/publicVenueUrl.ts. Returns title/description only (no canonical/OG
+ * image override) when the venue has no assigned market/city yet.
  *
  * Phase 2: wire in OG image from the venue's primary photo.
  * Phase 3: add LocalBusiness + FoodEstablishment JSON-LD via a separate helper.
@@ -138,7 +136,14 @@ export function buildVenueMetadata({
   slug: string;
   ogImage?: string;
 }): Metadata {
-  const path = buildVenuePublicPath({ marketSlug, citySlug, slug }) ?? undefined;
+  const path = buildVenuePublicPath({ marketSlug, citySlug, slug });
+  if (!path) {
+    // No assigned market/city — no canonical public URL exists yet. Return
+    // title/description only rather than letting buildPageMetadata's own
+    // path default ("/") produce a canonical/OG url pointing at the
+    // homepage, which would be wrong for a venue that isn't the homepage.
+    return { title: venueName, description };
+  }
   return buildPageMetadata({
     title: venueName,
     description,
@@ -148,7 +153,9 @@ export function buildVenueMetadata({
 }
 
 /**
- * Event page metadata builder.
+ * Event page metadata builder — used by
+ * (website)/website-events/[id]/page.tsx's generateMetadata(). Canonical
+ * path is /website-events/{eventId}, matching that route exactly.
  *
  * Phase 2: wire in OG image from the event/venue photo.
  * Phase 3: add Event JSON-LD via a separate helper.
@@ -167,7 +174,7 @@ export function buildEventMetadata({
   return buildPageMetadata({
     title: eventName,
     description,
-    path: `/event/${eventId}`,
+    path: `/website-events/${eventId}`,
     ogImage,
   });
 }

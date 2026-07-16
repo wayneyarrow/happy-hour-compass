@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getEventForWebsite } from "@/lib/data/events";
+import { buildEventMetadata } from "@/lib/seo/metadata";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
@@ -29,15 +30,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { id } = await params;
   const event = await getEventForWebsite(id);
   if (!event) return { title: "Event | Happy Hour Compass" };
-  return {
-    title: `${event.title} at ${event.venueName} | Happy Hour Compass`,
+  return buildEventMetadata({
+    eventName: `${event.title} at ${event.venueName} | Happy Hour Compass`,
     description:
       event.description?.slice(0, 160) ||
       `${event.title} at ${event.venueName}. ${event.nextOccurrenceLabel}.`.trim(),
-    openGraph: event.imageUrl
-      ? { images: [{ url: event.imageUrl }] }
-      : undefined,
-  };
+    eventId: id,
+    ogImage: event.imageUrl ?? undefined,
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

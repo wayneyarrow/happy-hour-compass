@@ -6,6 +6,7 @@ import {
   getVenueByHistoricalSlug,
 } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { buildVenueMetadata } from "@/lib/seo/metadata";
 import { getMarketById } from "@/lib/markets";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
@@ -57,12 +58,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const venue = await getVenueWithEventsForConsumerById(slug);
   const marketConfig = getMarketById(market);
   if (!venue) return { title: "Venue | Happy Hour Compass" };
-  return {
-    title: `${venue.name} Happy Hour | ${marketConfig?.name ?? "Happy Hour Compass"}`,
+  return buildVenueMetadata({
+    venueName: `${venue.name} Happy Hour | ${marketConfig?.name ?? "Happy Hour Compass"}`,
     description:
       venue.happyHourTagline ||
       `Happy hour deals at ${venue.name} in ${venue.city}. See the full schedule, specials, and info.`,
-  };
+    marketSlug: venue.marketSlug,
+    citySlug: venue.citySlug,
+    slug: venue.id,
+    ogImage: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+  });
 }
 
 // ─── Info row helper ──────────────────────────────────────────────────────────
