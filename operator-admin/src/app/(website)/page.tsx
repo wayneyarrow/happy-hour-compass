@@ -5,6 +5,7 @@ import { getActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
 import { getPublicHomepageForLocation } from "@/lib/data/homepagePublic";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 // Resolves the consumer-facing city name (and slug, for public Homepage
 // geography resolution — Task 8) for the hero's search placeholder. Mirrors
@@ -24,54 +25,75 @@ async function getHeroCityContext(market: Market): Promise<{ cityName: string; c
   return { cityName: market.name, citySlug: null };
 }
 
-const DEFAULT_METADATA: Metadata = {
-  title: { absolute: "Happy Hour Compass — Find the best happy hours near you" },
-  description:
-    "Discover curated happy hour deals at bars and restaurants near you. Real menus, real prices, real hours — updated by the venues themselves.",
-};
+const DEFAULT_TITLE = "Happy Hour Compass — Find the best happy hours near you";
+const DEFAULT_DESCRIPTION =
+  "Discover curated happy hour deals at bars and restaurants near you. Real menus, real prices, real hours — updated by the venues themselves.";
 
 /**
- * Public Homepage SEO (Task 8 — Publishing and Public Homepage Integration).
+ * Sitewide brand asset used as the homepage's Open Graph / Twitter image —
+ * the same fallback the Guide detail page already uses
+ * ((website)/[market]/guides/[slug]/page.tsx) and the asset
+ * src/lib/seo/schema/organization.ts documents as "the" standalone brand
+ * logo in every other external-facing context. Deliberately NOT
+ * buildPageMetadata's own DEFAULT_OG_IMAGE ("/og-default.png") — that path
+ * has no real file behind it in /public today.
+ */
+const HOMEPAGE_OG_IMAGE = "/logo.png";
+
+/**
+ * Public Homepage SEO (Task 8 — Publishing and Public Homepage Integration;
+ * canonical/OG/Twitter behavior revised per the Homepage Metadata
+ * Investigation).
+ *
  * Uses the SEO metadata belonging to the Homepage that is ACTUALLY
  * rendered — when a city falls back to its parent market Homepage, that
  * means the market Homepage's own SEO fields, never fabricated
  * city-specific metadata. Falls back to the site-wide defaults above for
- * any field the editor left empty, and to the defaults entirely when no
- * Homepage is published for this geography.
+ * any field the editor left empty, and when no Homepage is published for
+ * this geography at all.
+ *
+ * Canonical is always "/" — deliberately NOT the per-geography
+ * /{market-slug}/{city-slug} (or /{market-slug}) path
+ * generateHomepageSeo() computes and the Homepage CMS's own canonicalUrl
+ * field stores (src/lib/seo/homepageSeo.ts,
+ * control-panel/homepages/HomepageForm.tsx). That path shape matches the
+ * target Geographic Information Architecture documented in
+ * WEBSITE_PRODUCT_PLAYBOOK.md, but no /{market} or /{market}/{city} route
+ * exists yet anywhere in the app — the public homepage is only ever
+ * reachable at "/", with the active market/city resolved server-side from
+ * a cookie (getActiveMarket()), never from the URL. A canonical tag must
+ * point at a URL that actually resolves today; the per-geography path
+ * 404s for every visitor and every crawler regardless of which Homepage
+ * record is live. This is a sequencing gap between the SEO layer and the
+ * routing layer, not a reason to change the CMS's forward-looking
+ * canonicalUrl field itself — once dedicated market/city routes ship,
+ * this is the one place that needs to start using them.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const { market } = await getActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
   const homepage = await getPublicHomepageForLocation(market.id, citySlug);
-  if (!homepage) return DEFAULT_METADATA;
 
-  const title = homepage.metaTitle ?? homepage.pageTitle;
-  const description = homepage.metaDescription ?? undefined;
-  const ogTitle = homepage.ogTitle ?? title ?? undefined;
-  const ogDescription = homepage.ogDescription ?? description;
+  const title = homepage?.metaTitle ?? homepage?.pageTitle ?? DEFAULT_TITLE;
+  const description = homepage?.metaDescription ?? DEFAULT_DESCRIPTION;
 
-  // Auto-generated canonical path for this geography — same shape as
-  // generateHomepageSeo()'s own canonical_url generation
-  // (src/lib/seo/homepageSeo.ts): /{market-slug}/{city-slug} for a City
-  // Homepage, /{market-slug} for a Market Homepage. Reuses market/citySlug
-  // already resolved above; no new geography lookup, no hardcoded values.
-  const generatedCanonicalPath = citySlug ? `/${market.id}/${citySlug}` : `/${market.id}`;
+  // path/canonicalPath deliberately omitted — buildPageMetadata defaults
+  // both to "/", which is exactly the live route this metadata is for.
+  const base = buildPageMetadata({
+    title,
+    description,
+    ogImage: HOMEPAGE_OG_IMAGE,
+    ogTitle: homepage?.ogTitle ?? undefined,
+    ogDescription: homepage?.ogDescription ?? undefined,
+  });
 
-  // Only trust a manual canonicalUrl if it looks like a path — a malformed
-  // override should never break the canonical tag, just fall back to the
-  // generated canonical instead. Same guard as the guide page's
-  // canonical_url handling ((website)/[market]/guides/[slug]/page.tsx).
-  const canonicalUrl =
-    homepage.canonicalUrl && homepage.canonicalUrl.startsWith("/")
-      ? homepage.canonicalUrl
-      : generatedCanonicalPath;
-
-  return {
-    title: title ? { absolute: title } : DEFAULT_METADATA.title,
-    description: description ?? DEFAULT_METADATA.description,
-    alternates: { canonical: canonicalUrl },
-    ...(ogTitle || ogDescription ? { openGraph: { title: ogTitle, description: ogDescription } } : {}),
-  };
+  // buildPageMetadata() returns a plain-string `title`, which the root
+  // layout's "%s — Happy Hour Compass" template (src/app/layout.tsx) would
+  // wrap and double-brand. `title: { absolute }` bypasses that template —
+  // the same fix already applied on the Guide detail page
+  // ((website)/[market]/guides/[slug]/page.tsx). Title templating itself is
+  // otherwise unchanged by this task.
+  return { ...base, title: { absolute: title } };
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
