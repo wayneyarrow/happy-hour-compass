@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { PRINCIPLES } from "./content";
+import { buildAboutPageNode } from "@/lib/seo/schema/aboutPage";
+import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
  * Public About Us page — first editorial draft. Tells the Happy Hour
@@ -61,8 +63,26 @@ const SECONDARY_CTA_DARK_CLASS =
   "inline-flex items-center justify-center px-8 py-3.5 border border-gray-700 text-white hover:bg-gray-800 font-semibold rounded-full text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900";
 
 export default function AboutPage() {
+  // Page-specific AboutPage structured data. name/description repeat the
+  // same literal values as the `metadata` export above ("About Us" / the
+  // approved SEO description) rather than reading `metadata.title` /
+  // `metadata.description` at runtime — Next.js's Metadata["title"] type
+  // is a union (string | template object | null), not a plain string, and
+  // there's no generateMetadata() function here to call a second time the
+  // way venue/guide/collection schema does; this is a static metadata
+  // object with two literal strings, so they're repeated once here rather
+  // than restructuring the metadata export to share them.
+  const aboutPageNode = buildAboutPageNode({
+    canonicalPath: "/about",
+    name: "About Us",
+    description:
+      "Happy Hour Compass helps people discover great local happy hours and events, while helping the businesses that host them get discovered.",
+  });
+
   return (
-    <div>
+    <>
+      <JsonLd nodes={[aboutPageNode]} />
+      <div>
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-16 md:pb-24 text-center">
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
@@ -261,6 +281,7 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
