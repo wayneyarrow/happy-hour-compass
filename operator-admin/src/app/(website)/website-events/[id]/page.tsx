@@ -31,9 +31,9 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const event = await getEventForWebsite(id);
-  if (!event) return { title: "Event | Happy Hour Compass" };
+  if (!event) return { title: "Event" };
   return buildEventMetadata({
-    eventName: `${event.title} at ${event.venueName} | Happy Hour Compass`,
+    eventName: `${event.title} at ${event.venueName}`,
     description:
       event.description?.slice(0, 160) ||
       `${event.title} at ${event.venueName}. ${event.nextOccurrenceLabel}.`.trim(),

@@ -58,7 +58,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { market, slug } = await params;
   const guide = await getPublicGuideByMarketAndSlug(market, slug);
-  if (!guide) return { title: "Guide | Happy Hour Compass" };
+  if (!guide) return { title: "Guide" };
 
   // Same generator the CP editor uses for live suggestions — reused here as
   // the fallback for any manual SEO field the admin left empty, so public

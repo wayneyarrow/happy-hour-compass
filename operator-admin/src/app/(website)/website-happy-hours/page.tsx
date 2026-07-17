@@ -11,7 +11,7 @@ import {
 } from "./HappyHoursSearchClient";
 
 export const metadata: Metadata = {
-  title: "Happy Hours — Happy Hour Compass",
+  title: "Happy Hours",
   robots: { index: false },
 };
 

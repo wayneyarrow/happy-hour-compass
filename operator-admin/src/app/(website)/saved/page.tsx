@@ -3,7 +3,7 @@ import { getActiveMarket } from "@/lib/activeMarket";
 import { SavedPageClient } from "./SavedPageClient";
 
 export const metadata: Metadata = {
-  title: "Saved — Happy Hour Compass",
+  title: "Saved",
   robots: { index: false },
 };
 

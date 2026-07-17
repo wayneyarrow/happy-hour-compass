@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AccountProfileForm from "./AccountProfileForm";
 
-export const metadata = { title: "My Account — Happy Hour Compass" };
+export const metadata = { title: "My Account" };
 
 export default async function AccountPage() {
   const supabase = await createClient();

@@ -6,7 +6,7 @@ import { EventSearchResults } from "./EventSearchResults";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Events — Happy Hour Compass",
+  title: "Events",
   robots: { index: false },
 };
 

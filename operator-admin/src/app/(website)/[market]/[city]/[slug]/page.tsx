@@ -60,9 +60,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug, market } = await params;
   const venue = await getVenueWithEventsForConsumerById(slug);
   const marketConfig = getMarketById(market);
-  if (!venue) return { title: "Venue | Happy Hour Compass" };
+  if (!venue) return { title: "Venue" };
   return buildVenueMetadata({
-    venueName: `${venue.name} Happy Hour | ${marketConfig?.name ?? "Happy Hour Compass"}`,
+    // No brand-suffix fallback when marketConfig is missing (e.g. a stale
+    // /{market}/... URL whose market segment no longer resolves) — a plain
+    // string title is wrapped once by the root layout's "%s — Happy Hour
+    // Compass" template, so appending the brand name here would double it.
+    venueName: marketConfig
+      ? `${venue.name} Happy Hour | ${marketConfig.name}`
+      : `${venue.name} Happy Hour`,
     description:
       venue.happyHourTagline ||
       `Happy hour deals at ${venue.name} in ${venue.city}. See the full schedule, specials, and info.`,

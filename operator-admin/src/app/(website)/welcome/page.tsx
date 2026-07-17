@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Welcome — Happy Hour Compass" };
+export const metadata = { title: "Welcome" };
 
 export default async function WelcomePage() {
   const supabase = await createClient();

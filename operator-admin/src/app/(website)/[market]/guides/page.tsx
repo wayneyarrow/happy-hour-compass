@@ -28,7 +28,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { market } = await params;
   const marketConfig = getMarketById(market);
-  if (!marketConfig) return { title: "Guides | Happy Hour Compass" };
+  if (!marketConfig) return { title: "Guides" };
 
   return {
     title: `Guides | ${marketConfig.name}`,
