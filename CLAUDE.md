@@ -91,6 +91,7 @@ HHC is a single product engine with multiple separate presentation layers. The e
 - Collections Management V1 (control-panel CRUD for Collections, resolved/preview tables, guide picker) is complete, including the algorithmic collection workflow and resolved-collection UX.
 - Homepage Management is complete: the control-panel admin UI for assembling Collections into Homepages (creation flow, sections editor, content/guide pickers, preview) is built (`app/control-panel/homepages/`), and the public site renders assembled Homepages and Collection landing pages. See `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md`.
 - Several new public-facing pages have shipped since Homepage Management: For Businesses landing page, About Us, Careers, and a standalone guided Claim Your Venue onboarding flow.
+- SEO/metadata implementation (canonical URLs, Open Graph/Twitter, structured data, sitemap, robots, environment-aware indexing) is complete for launch, with one known pre-launch gap around market-status gating in the sitemap. See the **SEO & Metadata** section below and `docs/website/SEO_ROADMAP.md`.
 - Next major implementation area is not yet defined in this doc — confirm with the user/product docs before starting new large website work.
 
 ---
@@ -125,6 +126,63 @@ Key principles from these documents to carry into every website task:
 - Preserve separation between Public Website, Consumer App, Operator Admin, and Founder Control Panel.
 - The Content Engine is the long-term publishing engine for the public website — not a traditional CMS or blogging platform. Follow `docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md` before introducing new Content Engine functionality or architecture; surface conflicts before writing code.
 - Homepages assemble Collections; Collections own editorial curation; content never knows where it's displayed. Follow `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md` before introducing new Homepage, Collection, or editorial merchandising functionality or architecture; surface conflicts before writing code.
+
+---
+
+## SEO & Metadata
+
+The public website's SEO/metadata implementation is complete for launch (see `docs/website/SEO_ROADMAP.md` for full status, deferrals, and the launch-day checklist). The rules below are load-bearing — follow them for any new public page rather than re-deriving the pattern.
+
+### Architecture
+
+- `operator-admin/src/lib/siteUrl.ts` — single source of truth for absolute URLs and noindex logic (`getSiteUrl()`, `shouldNoIndex()`, `absoluteUrl()`). Every other SEO file reads through these three functions; nothing else reads `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_NOINDEX` directly.
+- `operator-admin/src/lib/seo/metadata.ts` — `buildPageMetadata()`, the shared metadata helper, plus `buildVenueMetadata()` / `buildEventMetadata()` (thin wrappers for those two route shapes).
+- `operator-admin/src/lib/seo/schema/` — JSON-LD structured-data builders, one per entity type, rendered through the shared `<JsonLd>` component (`(website)/JsonLd.tsx`).
+- `operator-admin/src/app/sitemap.ts` / `robots.ts` — sitemap and robots generation, reusing the same visibility rules (`is_published`, `status='published'`, etc.) the pages themselves already use to decide whether to render or 404.
+
+### buildPageMetadata() — use it for every new public page
+
+Call `buildPageMetadata({ title, description, path, ogImage?, ogTitle?, ogDescription?, ogType? })` rather than hand-writing a `metadata` object. It generates canonical, Open Graph, and Twitter Card metadata together and applies environment-aware `noindex` automatically. Static pages assign it directly (`export const metadata = buildPageMetadata({...})`); dynamic pages call it from `generateMetadata()`. Every current public page (Homepage, venue, event, guide, guide index, collection, About, Business, Careers, Claim Your Venue, Privacy, Terms) goes through this helper — do not hand-roll a competing canonical/OG/Twitter implementation for a new one.
+
+### Title template convention
+
+The root layout (`operator-admin/src/app/layout.tsx`) sets `title: { template: "%s — Happy Hour Compass", default: "Happy Hour Compass" }`.
+- **Default:** return a plain-string title with no brand suffix — the template appends "— Happy Hour Compass" exactly once. This is what `buildPageMetadata()` expects.
+- **Exception:** use `title: { absolute: "..." }` only when the title is already fully composed elsewhere (CMS/admin-authored — currently only Homepage and Guide detail, where the stored `page_title` may already include the brand). This bypasses the template. Don't reach for it as a shortcut on a new page.
+- Never hardcode "Happy Hour Compass" into a plain-string title — it will render twice.
+
+### Canonical URL conventions
+
+- Every indexable public page sets a self-referencing canonical via `buildPageMetadata()`'s `path` (or `canonicalPath` for a CMS-driven override, e.g. a guide's admin-entered `canonical_url`).
+- A canonical must always point at a URL that actually resolves to a real route — never assert one for a path with no corresponding `page.tsx`.
+- **Homepage canonical is always `/`, regardless of resolved market/city.** `WEBSITE_PRODUCT_PLAYBOOK.md`'s Geographic Information Architecture documents a future `/{market}/{city}` canonical shape, and the Homepage CMS's `canonicalUrl` field (`homepageSeo.ts`, `control-panel/homepages/HomepageForm.tsx`) is already built against it — but no `/{market}` or `/{market}/{city}` route exists yet. Until those routes ship, `(website)/page.tsx`'s `generateMetadata()` intentionally ignores the CMS-stored value and always resolves to `/`. Do not wire the CMS canonical back into the live tag without first shipping the routes it depends on.
+
+### Open Graph / Twitter conventions
+
+- `buildPageMetadata()` sets `openGraph` and `twitter` together, always, for every caller. Don't add a page-specific OG/Twitter block outside the helper.
+- **Default Open Graph image:** `DEFAULT_OG_IMAGE` in `metadata.ts` is `/logo.png` — the sitewide brand asset already used elsewhere (Organization JSON-LD, email templates, auth pages). It's used automatically whenever a page doesn't pass its own `ogImage`. Never reference `/og-default.png` — that path was never a real file and has been fully removed from the codebase.
+- Pages with a real content image (venue photo, event photo, guide hero image) should pass it as `ogImage`; everything else correctly falls through to the shared default.
+
+### Structured data (JSON-LD)
+
+- Builders live in `src/lib/seo/schema/` — one per entity (`organization.ts`, `website.ts`, `breadcrumb.ts`, `venue.ts`, `article.ts` for guides, `collection.ts`, `aboutPage.ts`, `faq.ts`). Each returns a plain `SchemaNode | null`; never include `@context`/`@graph` inside a builder — that envelope belongs solely to `<JsonLd>`.
+- Organization + WebSite render once, sitewide, from `(website)/layout.tsx`. Every other node is page-specific.
+- Governing rule for every builder: never mark up a fact the data model can't stand behind — omit a property entirely (never a guessed or placeholder value) when the underlying data isn't reliably available at scale.
+- **Event structured data (`schema.org/Event`) is intentionally deferred.** The current event data model cannot produce a truthful, timezone-aware occurrence datetime, which `Event` schema requires. Do not add it until that gap is actually resolved — see `docs/website/SEO_ROADMAP.md`.
+
+### Environment-aware indexing
+
+- `shouldNoIndex()` drives both `robots.txt` (full `Disallow: /` on staging) and each page's `<meta name="robots">`. Controlled by `NEXT_PUBLIC_NOINDEX=true`, set in Vercel project settings for the staging/preview environment only — **never set it on Production.**
+- `NEXT_PUBLIC_*` env vars are inlined at build time, not read at request time. Changing this value requires a new build/deploy — a runtime-only restart will not pick up the change.
+
+### Implementation rules for future contributors
+
+- Use `buildPageMetadata()` for every new public page; don't hand-write canonical/OG/Twitter.
+- Never hardcode the brand suffix into a plain-string title.
+- Never reference `/og-default.png`.
+- Never add a canonical pointing at a route that doesn't exist yet.
+- Before adding Event structured data, confirm the timezone/occurrence-datetime gap is actually closed.
+- See `docs/website/SEO_ROADMAP.md` for completed work, intentional deferrals, known gaps, and the launch-day checklist.
 
 ---
 
