@@ -15,6 +15,8 @@ import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
+import { buildGuideArticleNode } from "@/lib/seo/schema/article";
+import { JsonLd } from "@/app/(website)/JsonLd";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "./GuideDetailView";
 
@@ -132,6 +134,41 @@ export default async function GuideDetailPage({ params }: PageProps) {
   const guide = await getPublicGuideByMarketAndSlug(market, slug);
   if (!guide) notFound();
 
+  // Same canonical-path cascade generateMetadata() above resolves for its
+  // <link rel="canonical"> tag (manual canonical_url override when it looks
+  // like a path, else generateGuideSeo()'s generated value) — recomputed
+  // here via the same shared, pure generateGuideSeo(), the same pattern the
+  // venue page already uses for buildVenuePublicPath() across its own
+  // generateMetadata/page-component split. Article's url/@id must agree
+  // with the canonical tag, so this can't drift into its own resolution.
+  const canonicalFallback = generateGuideSeo({
+    guideType: guide.guide_type,
+    marketName: guide.marketName,
+    marketSlug: guide.marketSlug,
+    cityName: guide.cityName ?? "",
+    neighbourhoodName: guide.neighbourhoodName,
+    title: guide.title,
+    slug: guide.slug,
+    primaryKeyword: guide.primary_keyword,
+    secondaryKeywords: guide.secondary_keywords,
+    intro: guide.intro,
+    editorialSection1Body: guide.editorial_section_1_body,
+    body: guide.body,
+  });
+  const canonicalPath =
+    guide.canonical_url && guide.canonical_url.startsWith("/")
+      ? guide.canonical_url
+      : canonicalFallback.canonical_url.value;
+
+  const articleNode = buildGuideArticleNode({
+    canonicalPath,
+    headline: guide.title,
+    description: guide.meta_description,
+    heroImageUrl: guide.hero_image_url,
+    publishAt: guide.publish_at,
+    updatedAt: guide.updated_at,
+  });
+
   const isVenueGuide = guide.guide_type === "venue_guide";
 
   const [attachments, relatedGuides, faqs] = await Promise.all([
@@ -183,13 +220,16 @@ export default async function GuideDetailPage({ params }: PageProps) {
   }
 
   return (
-    <GuideDetailView
-      guide={guide}
-      isVenueGuide={isVenueGuide}
-      venueCards={venueCards}
-      eventItems={eventItems}
-      relatedGuides={relatedGuides}
-      faqs={faqs}
-    />
+    <>
+      <JsonLd nodes={[articleNode]} />
+      <GuideDetailView
+        guide={guide}
+        isVenueGuide={isVenueGuide}
+        venueCards={venueCards}
+        eventItems={eventItems}
+        relatedGuides={relatedGuides}
+        faqs={faqs}
+      />
+    </>
   );
 }
