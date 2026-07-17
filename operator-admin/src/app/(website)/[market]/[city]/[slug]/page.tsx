@@ -7,6 +7,8 @@ import {
 } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildVenueMetadata } from "@/lib/seo/metadata";
+import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
+import { JsonLd } from "@/app/(website)/JsonLd";
 import { getMarketById } from "@/lib/markets";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
@@ -176,6 +178,26 @@ export default async function VenueDetailPage({ params }: PageProps) {
   const marketConfig = getMarketById(market);
   if (!marketConfig) notFound();
 
+  // Page-specific venue structured data — built from the raw venue.images
+  // (never the type-based fallbackImage() used for gallery display below;
+  // a stock photo is not a fact about this venue). Returns null (and
+  // renders nothing) when the minimum required identity isn't met — see
+  // buildVenueLocalBusinessNode's own docstring for the omission rules.
+  const venueNode = buildVenueLocalBusinessNode({
+    name: venue.name,
+    establishmentType: venue.establishmentType,
+    marketSlug: venue.marketSlug,
+    citySlug: venue.citySlug,
+    slug: venue.id,
+    address: venue.address,
+    city: venue.city,
+    phone: venue.phone,
+    latitude: venue.latitude,
+    longitude: venue.longitude,
+    images: venue.images,
+    aboutYourVenue: venue.aboutYourVenue,
+  });
+
   // Images: real uploaded images or type-based fallback.
   const images =
     venue.images.length > 0
@@ -216,6 +238,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
+      <JsonLd nodes={[venueNode]} />
 
       {/* ── Gallery ──────────────────────────────────────────────────────────── */}
       <VenueGallery images={images} venueName={venue.name} />
