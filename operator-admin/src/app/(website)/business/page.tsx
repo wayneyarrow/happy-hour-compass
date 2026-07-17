@@ -6,6 +6,7 @@ import { ProductTour } from "@/app/(website)/ProductTour";
 import { FaqAccordion } from "@/app/(website)/FaqAccordion";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 import { BusinessListVenueButton } from "./BusinessListVenueButton";
 import { BusinessPricingTable } from "./BusinessPricingTable";
 import { HowItWorksPanels } from "./HowItWorksPanels";
@@ -33,11 +34,12 @@ import {
  * pattern as claim-your-venue/page.tsx.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "For Businesses",
   description:
     "Put your happy hour and events in front of people already looking for somewhere to go. List your venue on Happy Hour Compass for free.",
-};
+  path: "/business",
+});
 
 const PRIMARY_CTA_CLASS =
   "inline-flex items-center justify-center px-8 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2";

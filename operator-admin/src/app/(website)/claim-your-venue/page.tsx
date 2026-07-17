@@ -5,6 +5,7 @@ import { AddVenueFallback } from "./AddVenueFallback";
 import { JOURNEY_STEPS } from "./content";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 /**
  * Public "Claim Your Venue" guided onboarding page (Business Funnel —
@@ -29,11 +30,12 @@ import { JsonLd } from "@/app/(website)/JsonLd";
  * /business.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "Claim Your Venue",
   description:
     "Own or manage a venue listed on Happy Hour Compass? Here's exactly what to expect when you claim your listing.",
-};
+  path: "/claim-your-venue",
+});
 
 export default function ClaimYourVenuePage() {
   const breadcrumbNode = buildBreadcrumbListNode({

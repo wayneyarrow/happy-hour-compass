@@ -4,6 +4,7 @@ import { ContactUsTrigger } from "./ContactUsTrigger";
 import { OPEN_POSITIONS, FUTURE_TEAMS } from "./content";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 /**
  * Public Careers page. Deliberately simpler than /business: no product
@@ -18,11 +19,12 @@ import { JsonLd } from "@/app/(website)/JsonLd";
  * /claim-your-venue.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "Careers",
   description:
     "Join the Happy Hour Compass team. See our current openings and where we're planning to grow.",
-};
+  path: "/careers",
+});
 
 export default function CareersPage() {
   const breadcrumbNode = buildBreadcrumbListNode({

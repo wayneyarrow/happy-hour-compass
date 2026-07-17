@@ -5,6 +5,7 @@ import { getGuideLibraryForMarket } from "@/lib/data/contentGuideDistribution";
 import { GuideCard } from "@/app/(website)/GuideCard";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 /**
  * Public Guides Library (Card 6B Part 4). Canonical URL: /{market}/guides —
@@ -28,12 +29,17 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { market } = await params;
   const marketConfig = getMarketById(market);
+  // Invalid market — the page body itself calls notFound() for this same
+  // condition, so this fallback title is a defensive value, not the tag an
+  // indexable page needs; no canonical is meaningful for a route that
+  // doesn't resolve, so this intentionally stays outside buildPageMetadata.
   if (!marketConfig) return { title: "Guides" };
 
-  return {
+  return buildPageMetadata({
     title: `Guides | ${marketConfig.name}`,
     description: `Editorial guides to the best happy hours and events in ${marketConfig.name}, curated by Happy Hour Compass.`,
-  };
+    path: `/${market}/guides`,
+  });
 }
 
 export default async function GuidesLibraryPage({ params }: PageProps) {
@@ -45,12 +51,11 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
 
   // Home → Guides. This page IS the "Guides" destination guide detail
   // pages' own breadcrumb links to, so its own breadcrumb ends with
-  // itself, same shape as the About page's Home → About Us. No explicit
-  // canonical tag exists on this route (generateMetadata() above sets no
-  // alternates.canonical, the same gap already reported for /about) — the
-  // route is fixed and unambiguous per the {market} param, so the same
-  // precedent applies: use it directly rather than inventing a competing
-  // canonical system.
+  // itself, same shape as the About page's Home → About Us. Matches the
+  // same /{market}/guides path generateMetadata() above passes to
+  // buildPageMetadata() as its canonical — built directly here rather than
+  // threading a shared constant through, since it's a one-line template
+  // with only these two call sites.
   const breadcrumbCanonicalPath = `/${market}/guides`;
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath: breadcrumbCanonicalPath,

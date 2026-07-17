@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "Terms of Service",
   description: "Terms of Service for Happy Hour Compass, operated by Yellow Lab Software.",
-};
+  path: "/terms",
+});
 
 const EFFECTIVE_DATE = "June 19, 2026";
 const LAST_UPDATED   = "June 19, 2026";

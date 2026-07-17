@@ -5,6 +5,7 @@ import { PRINCIPLES } from "./content";
 import { buildAboutPageNode } from "@/lib/seo/schema/aboutPage";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 /**
  * Public About Us page — first editorial draft. Tells the Happy Hour
@@ -51,11 +52,12 @@ import { JsonLd } from "@/app/(website)/JsonLd";
  * areas flagged for a second pass.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "About Us",
   description:
     "Happy Hour Compass helps people discover great local happy hours and events, while helping the businesses that host them get discovered.",
-};
+  path: "/about",
+});
 
 const PRIMARY_CTA_CLASS =
   "inline-flex items-center justify-center px-8 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2";
