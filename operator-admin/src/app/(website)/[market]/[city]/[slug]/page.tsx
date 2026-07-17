@@ -8,6 +8,7 @@ import {
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildVenueMetadata } from "@/lib/seo/metadata";
 import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import { getMarketById } from "@/lib/markets";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
@@ -198,6 +199,21 @@ export default async function VenueDetailPage({ params }: PageProps) {
     aboutYourVenue: venue.aboutYourVenue,
   });
 
+  // Home → Venue Name only — no Market or City breadcrumb level, because
+  // no /{market} or /{market}/{city} landing page route exists anywhere
+  // in this app (confirmed against the route tree: only
+  // [market]/[city]/[slug], [market]/guides, and [market]/collections
+  // exist under [market]/). The venue page's own visible breadcrumb
+  // already reflects this — Market/City render as plain, non-linked text
+  // there for the same reason (see this page's breadcrumb <nav> below).
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath,
+    items: [
+      { name: "Home", path: "/" },
+      { name: venue.name, path: canonicalPath },
+    ],
+  });
+
   // Images: real uploaded images or type-based fallback.
   const images =
     venue.images.length > 0
@@ -238,7 +254,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
-      <JsonLd nodes={[venueNode]} />
+      <JsonLd nodes={[venueNode, breadcrumbNode]} />
 
       {/* ── Gallery ──────────────────────────────────────────────────────────── */}
       <VenueGallery images={images} venueName={venue.name} />

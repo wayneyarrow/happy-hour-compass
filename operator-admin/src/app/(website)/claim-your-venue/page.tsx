@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ClaimJourneySteps } from "./ClaimJourneySteps";
 import { AddVenueFallback } from "./AddVenueFallback";
 import { JOURNEY_STEPS } from "./content";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
+import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
  * Public "Claim Your Venue" guided onboarding page (Business Funnel —
@@ -34,8 +36,18 @@ export const metadata: Metadata = {
 };
 
 export default function ClaimYourVenuePage() {
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: "/claim-your-venue",
+    items: [
+      { name: "Home", path: "/" },
+      { name: "Claim Your Venue", path: "/claim-your-venue" },
+    ],
+  });
+
   return (
-    <div>
+    <>
+      <JsonLd nodes={[breadcrumbNode]} />
+      <div>
       {/* ── 1. Hero ───────────────────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-8 md:pb-12 text-center">
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
@@ -74,6 +86,7 @@ export default function ClaimYourVenuePage() {
         {/* Secondary path — venue not listed yet */}
         <AddVenueFallback />
       </section>
-    </div>
+      </div>
+    </>
   );
 }

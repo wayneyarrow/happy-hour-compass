@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getEventForWebsite } from "@/lib/data/events";
 import { buildEventMetadata } from "@/lib/seo/metadata";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
+import { JsonLd } from "@/app/(website)/JsonLd";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
@@ -181,6 +183,25 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
 
   if (!event) notFound();
 
+  // Home → Event Title only — deliberately not Home → Events → Title. The
+  // visible page breadcrumb (below) does link "Events" to /website-events,
+  // but that route is explicitly robots: { index: false } (see
+  // (website)/website-events/page.tsx) and excluded from the sitemap — it
+  // fails "appropriate for indexing" / "stable, crawlable, canonical
+  // public page," so it cannot be a valid intermediate breadcrumb level
+  // here even though it's a real, linkable route. Same canonical path
+  // template buildEventMetadata() (metadata.ts) already builds for its
+  // <link rel="canonical"> tag. Event structured data itself remains
+  // deferred and is not reintroduced by this breadcrumb.
+  const eventCanonicalPath = `/website-events/${id}`;
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: eventCanonicalPath,
+    items: [
+      { name: "Home", path: "/" },
+      { name: event.title, path: eventCanonicalPath },
+    ],
+  });
+
   // ── Derived values ─────────────────────────────────────────────────────────
 
   const heroImageUrl = event.imageUrl ?? event.venueImages[0]?.url ?? null;
@@ -266,6 +287,7 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <EventViewTracker eventId={event.id} />
+      <JsonLd nodes={[breadcrumbNode]} />
 
       {/* ── Hero: event identity + compact image ──────────────────────────── */}
       <div className="border-b border-gray-100">

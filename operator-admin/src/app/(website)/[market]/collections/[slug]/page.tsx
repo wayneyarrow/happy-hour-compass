@@ -8,6 +8,7 @@ import {
 import { CollectionLandingShell } from "@/app/(website)/collections/CollectionLandingShell";
 import { CollectionTypeContent } from "@/app/(website)/collections/CollectionTypeContent";
 import { buildCollectionPageNode } from "@/lib/seo/schema/collection";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
@@ -62,9 +63,22 @@ export default async function CollectionLandingPage({ params }: PageProps) {
     publicIntro: model.publicIntro,
   });
 
+  // Home → Collection Name only — no "Collections" level. Confirmed via
+  // CollectionBreadcrumb.tsx's own doc comment: "'Collections' stays a
+  // plain, non-linked label until a general Collections index page
+  // exists, per product spec" — no such route exists, so there is no
+  // real canonical URL a "Collections" breadcrumb level could point to.
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath,
+    items: [
+      { name: "Home", path: "/" },
+      { name: model.name, path: canonicalPath },
+    ],
+  });
+
   return (
     <>
-      <JsonLd nodes={[collectionNode]} />
+      <JsonLd nodes={[collectionNode, breadcrumbNode]} />
       <CollectionLandingShell model={model}>
         <CollectionTypeContent model={model} />
       </CollectionLandingShell>

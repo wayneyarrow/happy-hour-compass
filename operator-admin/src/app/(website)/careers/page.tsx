@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { CurrentOpenings } from "./CurrentOpenings";
 import { ContactUsTrigger } from "./ContactUsTrigger";
 import { OPEN_POSITIONS, FUTURE_TEAMS } from "./content";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
+import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
  * Public Careers page. Deliberately simpler than /business: no product
@@ -23,8 +25,18 @@ export const metadata: Metadata = {
 };
 
 export default function CareersPage() {
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: "/careers",
+    items: [
+      { name: "Home", path: "/" },
+      { name: "Careers", path: "/careers" },
+    ],
+  });
+
   return (
-    <div>
+    <>
+      <JsonLd nodes={[breadcrumbNode]} />
+      <div>
       {/* ── 1. Hero ───────────────────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-16 md:pb-24 text-center">
         <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-4">
@@ -99,6 +111,7 @@ export default function CareersPage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

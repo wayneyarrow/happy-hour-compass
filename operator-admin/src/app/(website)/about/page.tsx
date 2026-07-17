@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { PRINCIPLES } from "./content";
 import { buildAboutPageNode } from "@/lib/seo/schema/aboutPage";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
@@ -79,9 +80,17 @@ export default function AboutPage() {
       "Happy Hour Compass helps people discover great local happy hours and events, while helping the businesses that host them get discovered.",
   });
 
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: "/about",
+    items: [
+      { name: "Home", path: "/" },
+      { name: "About Us", path: "/about" },
+    ],
+  });
+
   return (
     <>
-      <JsonLd nodes={[aboutPageNode]} />
+      <JsonLd nodes={[aboutPageNode, breadcrumbNode]} />
       <div>
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-16 md:pb-24 text-center">

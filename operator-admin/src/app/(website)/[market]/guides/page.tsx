@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { getMarketById } from "@/lib/markets";
 import { getGuideLibraryForMarket } from "@/lib/data/contentGuideDistribution";
 import { GuideCard } from "@/app/(website)/GuideCard";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
+import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
  * Public Guides Library (Card 6B Part 4). Canonical URL: /{market}/guides —
@@ -41,8 +43,27 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
 
   const guides = await getGuideLibraryForMarket(market);
 
+  // Home → Guides. This page IS the "Guides" destination guide detail
+  // pages' own breadcrumb links to, so its own breadcrumb ends with
+  // itself, same shape as the About page's Home → About Us. No explicit
+  // canonical tag exists on this route (generateMetadata() above sets no
+  // alternates.canonical, the same gap already reported for /about) — the
+  // route is fixed and unambiguous per the {market} param, so the same
+  // precedent applies: use it directly rather than inventing a competing
+  // canonical system.
+  const breadcrumbCanonicalPath = `/${market}/guides`;
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: breadcrumbCanonicalPath,
+    items: [
+      { name: "Home", path: "/" },
+      { name: "Guides", path: breadcrumbCanonicalPath },
+    ],
+  });
+
   return (
-    <div className="max-w-6xl mx-auto px-6 lg:px-10 py-10">
+    <>
+      <JsonLd nodes={[breadcrumbNode]} />
+      <div className="max-w-6xl mx-auto px-6 lg:px-10 py-10">
       <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">
         {marketConfig.name} Guides
       </h1>
@@ -68,6 +89,7 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

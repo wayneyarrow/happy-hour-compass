@@ -4,6 +4,8 @@ import Link from "next/link";
 import { JourneyTimeline } from "@/app/(website)/JourneyTimeline";
 import { ProductTour } from "@/app/(website)/ProductTour";
 import { FaqAccordion } from "@/app/(website)/FaqAccordion";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
+import { JsonLd } from "@/app/(website)/JsonLd";
 import { BusinessListVenueButton } from "./BusinessListVenueButton";
 import { BusinessPricingTable } from "./BusinessPricingTable";
 import { HowItWorksPanels } from "./HowItWorksPanels";
@@ -44,8 +46,18 @@ const SECONDARY_CTA_CLASS =
   "inline-flex items-center justify-center px-8 py-3.5 border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold rounded-full text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2";
 
 export default function ForBusinessesPage() {
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath: "/business",
+    items: [
+      { name: "Home", path: "/" },
+      { name: "For Businesses", path: "/business" },
+    ],
+  });
+
   return (
-    <div>
+    <>
+      <JsonLd nodes={[breadcrumbNode]} />
+      <div>
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-6 lg:px-10 pt-16 md:pt-24 pb-16 md:pb-24">
         {/* Two columns only from lg: up — at tablet widths a narrower text
@@ -275,7 +287,8 @@ export default function ForBusinessesPage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
 

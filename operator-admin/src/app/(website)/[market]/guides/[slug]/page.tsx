@@ -16,6 +16,7 @@ import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
 import { buildGuideArticleNode } from "@/lib/seo/schema/article";
+import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "./GuideDetailView";
@@ -169,6 +170,23 @@ export default async function GuideDetailPage({ params }: PageProps) {
     updatedAt: guide.updated_at,
   });
 
+  // Home → Guides → Guide Title. "Guides" links to the market-specific
+  // guide-library index (/{market}/guides) — a real, canonical, sitemap-
+  // included public page (see (website)/[market]/guides/page.tsx), unlike
+  // Market/City for venues, which have no such landing page. The guide's
+  // own visible breadcrumb (below) only shows Home → Title — this JSON-LD
+  // is intentionally more complete than that shorter visual breadcrumb,
+  // since the intermediate route genuinely exists and is accurate to
+  // include, not merely mirroring what's rendered on-page.
+  const breadcrumbNode = buildBreadcrumbListNode({
+    canonicalPath,
+    items: [
+      { name: "Home", path: "/" },
+      { name: "Guides", path: `/${guide.marketSlug}/guides` },
+      { name: guide.title, path: canonicalPath },
+    ],
+  });
+
   const isVenueGuide = guide.guide_type === "venue_guide";
 
   const [attachments, relatedGuides, faqs] = await Promise.all([
@@ -221,7 +239,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
 
   return (
     <>
-      <JsonLd nodes={[articleNode]} />
+      <JsonLd nodes={[articleNode, breadcrumbNode]} />
       <GuideDetailView
         guide={guide}
         isVenueGuide={isVenueGuide}
