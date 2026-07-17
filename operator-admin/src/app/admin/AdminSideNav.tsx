@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV_ITEMS = [
+// Exported so AdminMobileNav's drawer can reuse the exact same route list
+// and active-route logic rather than duplicating it.
+export const NAV_ITEMS = [
   { label: "Home",         href: "/admin/home" },
   { label: "Venue",        href: "/admin/venue" },
   { label: "Happy Hours",  href: "/admin/happy-hours" },
@@ -14,14 +16,21 @@ const NAV_ITEMS = [
   { label: "Help",         href: "/admin/help" },
 ] as const;
 
+export function isNavItemActive(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+// Permanent desktop sidebar — hidden below md: (AdminMobileNav's drawer
+// takes over there). Width, styling, route structure, and active-state
+// treatment are unchanged from before the mobile nav was added.
 export default function AdminSideNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="w-52 shrink-0 bg-slate-100 border-r border-slate-200 overflow-y-auto py-4">
+    <nav className="hidden md:block w-52 shrink-0 bg-slate-100 border-r border-slate-200 overflow-y-auto py-4">
       <ul className="space-y-0.5 px-3">
         {NAV_ITEMS.map(({ label, href }) => {
-          const isActive = pathname === href || pathname.startsWith(href + "/");
+          const isActive = isNavItemActive(pathname, href);
           return (
             <li key={href}>
               <Link

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Image from "next/image";
 import AdminSideNav from "./AdminSideNav";
+import AdminMobileNav from "./AdminMobileNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
 import ImpersonationBanner from "./ImpersonationBanner";
 import { IMP_COOKIE_NAME, getValidImpersonationSession } from "@/lib/impersonation";
@@ -123,8 +124,10 @@ export default async function AdminLayout({
       )}
 
       {/* ── Top header ─────────────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-slate-200 shadow-sm px-6 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center">
+      <header className="bg-white border-b border-slate-200 shadow-sm px-4 md:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center min-w-0 gap-3">
+          {/* Hamburger — desktop AdminSideNav takes over at md: */}
+          <AdminMobileNav />
           <Image
             src="/hhc-icon.png"
             alt="Happy Hour Compass logo"
@@ -132,12 +135,12 @@ export default async function AdminLayout({
             height={32}
             className="h-8 w-auto shrink-0"
           />
-          <div className="ml-3 flex flex-col leading-tight">
-            <span className="text-lg font-semibold text-slate-900">Happy Hour Compass</span>
-            <span className="text-xs text-slate-500">Operator Admin</span>
+          <div className="min-w-0 flex flex-col leading-tight">
+            <span className="text-lg font-semibold text-slate-900 truncate">Happy Hour Compass</span>
+            <span className="text-xs text-slate-500 truncate">Operator Admin</span>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 shrink-0">
           <span className="text-sm text-gray-600 hidden sm:block">
             {user.email}
           </span>
