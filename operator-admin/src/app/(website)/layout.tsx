@@ -4,6 +4,8 @@ import WebsiteHeader from "./WebsiteHeader";
 import { WebsiteFooter } from "./WebsiteFooter";
 import type { ConsumerUser } from "./WebsiteHeader";
 import { ConsumerAuthProvider } from "./ConsumerAuthProvider";
+import { JsonLd } from "./JsonLd";
+import { buildOrganizationNode } from "@/lib/seo/schema/organization";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -70,6 +72,10 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
     // (hhc_market) continues to function unchanged.
   }
 
+  // Sitewide Organization JSON-LD — rendered once here so it appears on
+  // every public website page without each page emitting its own copy.
+  const organizationNode = buildOrganizationNode();
+
   return (
     <ConsumerAuthProvider consumerId={consumerId}>
       <div className="min-h-screen bg-white flex flex-col">
@@ -85,6 +91,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
 
         <WebsiteFooter />
       </div>
+      <JsonLd nodes={[organizationNode]} />
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </ConsumerAuthProvider>
   );
