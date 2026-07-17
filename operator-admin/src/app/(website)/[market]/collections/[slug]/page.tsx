@@ -7,6 +7,8 @@ import {
 } from "@/lib/data/collectionPublic";
 import { CollectionLandingShell } from "@/app/(website)/collections/CollectionLandingShell";
 import { CollectionTypeContent } from "@/app/(website)/collections/CollectionTypeContent";
+import { buildCollectionPageNode } from "@/lib/seo/schema/collection";
+import { JsonLd } from "@/app/(website)/JsonLd";
 
 /**
  * Public Collection Landing Page — /{market}/collections/{collection-slug}
@@ -47,9 +49,25 @@ export default async function CollectionLandingPage({ params }: PageProps) {
   const model = await getPublicCollectionModel(market, slug);
   if (!model) notFound();
 
+  // Same canonical path template generateMetadata() above builds inline for
+  // its <link rel="canonical"> tag — collections have no admin-editable
+  // canonical override field, so this is a direct template, not a cascade;
+  // kept identical here rather than introducing a new shared helper for a
+  // template with only this one caller pair.
+  const canonicalPath = `/${model.marketSlug}/collections/${model.slug}`;
+
+  const collectionNode = buildCollectionPageNode({
+    canonicalPath,
+    name: model.name,
+    publicIntro: model.publicIntro,
+  });
+
   return (
-    <CollectionLandingShell model={model}>
-      <CollectionTypeContent model={model} />
-    </CollectionLandingShell>
+    <>
+      <JsonLd nodes={[collectionNode]} />
+      <CollectionLandingShell model={model}>
+        <CollectionTypeContent model={model} />
+      </CollectionLandingShell>
+    </>
   );
 }
