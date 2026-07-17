@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { buildFaqPageSchema } from "@/lib/seo/faqSchema";
+import { buildFaqPageSchema } from "@/lib/seo/schema/faq";
 
 /**
  * Generalized public FAQ accordion (Card 2D — see docs/website/
