@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Welcome" };
+export const metadata: Metadata = { title: "Welcome", robots: { index: false } };
 
 export default async function WelcomePage() {
   const supabase = await createClient();

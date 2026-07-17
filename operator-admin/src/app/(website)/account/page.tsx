@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AccountProfileForm from "./AccountProfileForm";
 
-export const metadata = { title: "My Account" };
+export const metadata: Metadata = { title: "My Account", robots: { index: false } };
 
 export default async function AccountPage() {
   const supabase = await createClient();
