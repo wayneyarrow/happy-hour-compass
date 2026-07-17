@@ -30,17 +30,6 @@ const DEFAULT_DESCRIPTION =
   "Discover curated happy hour deals at bars and restaurants near you. Real menus, real prices, real hours — updated by the venues themselves.";
 
 /**
- * Sitewide brand asset used as the homepage's Open Graph / Twitter image —
- * the same fallback the Guide detail page already uses
- * ((website)/[market]/guides/[slug]/page.tsx) and the asset
- * src/lib/seo/schema/organization.ts documents as "the" standalone brand
- * logo in every other external-facing context. Deliberately NOT
- * buildPageMetadata's own DEFAULT_OG_IMAGE ("/og-default.png") — that path
- * has no real file behind it in /public today.
- */
-const HOMEPAGE_OG_IMAGE = "/logo.png";
-
-/**
  * Public Homepage SEO (Task 8 — Publishing and Public Homepage Integration;
  * canonical/OG/Twitter behavior revised per the Homepage Metadata
  * Investigation).
@@ -79,10 +68,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
   // path/canonicalPath deliberately omitted — buildPageMetadata defaults
   // both to "/", which is exactly the live route this metadata is for.
+  // ogImage also omitted — the Homepage CMS has no image field of its own
+  // (see HomepagePublicData), so this falls through to buildPageMetadata's
+  // own DEFAULT_OG_IMAGE, the same sitewide brand asset every other
+  // image-less page already falls back to.
   const base = buildPageMetadata({
     title,
     description,
-    ogImage: HOMEPAGE_OG_IMAGE,
     ogTitle: homepage?.ogTitle ?? undefined,
     ogDescription: homepage?.ogDescription ?? undefined,
   });

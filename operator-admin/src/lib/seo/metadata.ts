@@ -35,7 +35,8 @@ export interface PageMetadataOptions {
   path?: string;
   /**
    * OG image path or absolute URL.
-   * Phase 1 default: /og-default.png (static asset — add this file before launch).
+   * Phase 1 default: DEFAULT_OG_IMAGE (see below) — a real, existing sitewide
+   * brand asset, used whenever a caller has no page-specific image.
    * Phase 2: switch to dynamic ImageResponse via /opengraph-image.tsx routes.
    */
   ogImage?: string;
@@ -58,7 +59,22 @@ export interface PageMetadataOptions {
   canonicalPath?: string;
 }
 
-const DEFAULT_OG_IMAGE = "/og-default.png";
+/**
+ * Sitewide fallback OG/Twitter image for any caller that has no
+ * page-specific image of its own (e.g. a Collection landing page, which has
+ * no image field at all, or an Event with no uploaded photo). Must always
+ * point at a real file in /public — this previously pointed at
+ * "/og-default.png", which was never actually added, producing a broken
+ * image URL in every social preview that fell through to it (see the SEO
+ * Metadata Consistency Audit). /logo.png is the existing asset this
+ * codebase already treats as "the" standalone brand logo in every other
+ * external-facing context — email templates, auth-flow pages, the
+ * Organization JSON-LD node (src/lib/seo/schema/organization.ts), and the
+ * Guide detail page's own hero-image fallback — so reusing it here keeps
+ * one single fallback image sitewide instead of introducing a second,
+ * OG-specific asset.
+ */
+const DEFAULT_OG_IMAGE = "/logo.png";
 const SITE_NAME = "Happy Hour Compass";
 const LOCALE = "en_CA";
 
