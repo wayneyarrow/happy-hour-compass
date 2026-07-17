@@ -6,6 +6,7 @@ import type { ConsumerUser } from "./WebsiteHeader";
 import { ConsumerAuthProvider } from "./ConsumerAuthProvider";
 import { JsonLd } from "./JsonLd";
 import { buildOrganizationNode } from "@/lib/seo/schema/organization";
+import { buildWebSiteNode } from "@/lib/seo/schema/website";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -72,9 +73,13 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
     // (hhc_market) continues to function unchanged.
   }
 
-  // Sitewide Organization JSON-LD — rendered once here so it appears on
-  // every public website page without each page emitting its own copy.
+  // Sitewide Organization + WebSite JSON-LD — rendered once here, in one
+  // shared graph, so both appear on every public website page without each
+  // page emitting its own copy. Organization stays first: WebSite's
+  // `publisher` references it by @id, so defining it first in the graph
+  // reads in the same order the reference resolves.
   const organizationNode = buildOrganizationNode();
+  const websiteNode = buildWebSiteNode();
 
   return (
     <ConsumerAuthProvider consumerId={consumerId}>
@@ -91,7 +96,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
 
         <WebsiteFooter />
       </div>
-      <JsonLd nodes={[organizationNode]} />
+      <JsonLd nodes={[organizationNode, websiteNode]} />
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </ConsumerAuthProvider>
   );
