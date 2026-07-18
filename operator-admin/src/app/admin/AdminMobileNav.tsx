@@ -127,8 +127,12 @@ export default function AdminMobileNav() {
         </svg>
       </button>
 
-      {/* Backdrop — always mounted so the opacity transition can animate;
-          pointer-events-none when closed so it never blocks clicks. */}
+      {/* Backdrop (z-40) / drawer panel (z-50, below) — deliberate stacking
+          tier for the mobile nav drawer. Modals (ChangePlanModal.tsx,
+          UsersClient.tsx invite modal) intentionally use a higher z-60/z-70
+          tier so they always stack above the drawer regardless of DOM order.
+          Always mounted so the opacity transition can animate; pointer-
+          events-none when closed so it never blocks clicks. */}
       <div
         className={`md:hidden fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ${
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none"

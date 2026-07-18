@@ -105,15 +105,17 @@ function InviteModal({
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — z-60, deliberately above the mobile nav drawer's z-40/
+          z-50 (AdminMobileNav.tsx) so this modal always stacks above the
+          drawer regardless of DOM order. */}
       <div
-        className="fixed inset-0 z-40 bg-black/50"
+        className="fixed inset-0 z-[60] bg-black/50"
         aria-hidden="true"
         onClick={() => { if (!isPending) onClose(); }}
       />
       {/* Dialog */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-[70] flex items-center justify-center p-4"
         role="dialog"
         aria-modal="true"
         aria-label="Invite user"

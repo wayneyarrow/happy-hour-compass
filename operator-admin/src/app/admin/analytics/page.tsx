@@ -292,7 +292,7 @@ export default async function AdminAnalyticsPage() {
             title="Visibility"
             description="How often consumers are seeing your venue, last 30 days."
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard label="Venue Views" value={data.venueViews} />
               <StatCard label="Event Views" value={data.eventViews} />
 
@@ -333,7 +333,7 @@ export default async function AdminAnalyticsPage() {
             title="Engagement"
             description="How consumers are interacting with your venue and events, last 30 days."
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard label="Saves" value={data.saves} />
               <MostViewedEventCard event={data.mostViewedEvent} />
 
@@ -382,7 +382,7 @@ export default async function AdminAnalyticsPage() {
             title="Intent"
             description="Actions consumers take when they are interested, last 30 days."
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard label="Website Clicks" value={data.websiteClicks} />
               <StatCard label="Menu Clicks" value={data.menuClicks} />
               <StatCard

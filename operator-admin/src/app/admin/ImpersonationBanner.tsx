@@ -30,7 +30,15 @@ export default function ImpersonationBanner({
   const label = isOrphanVenue ? "Exit support mode" : "Exit impersonation";
 
   return (
-    <div className="bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between gap-4 text-sm font-medium shrink-0">
+    // relative + z-[55]: sits intentionally above the mobile nav drawer's
+    // backdrop/panel (z-40/z-50 in AdminMobileNav.tsx). The banner is
+    // normal-flow (not fixed) while the drawer is a fixed, viewport-height
+    // overlay starting at the physical top of the page — without a
+    // positioned stacking context of its own, the banner would be painted
+    // *underneath* that fixed overlay and get visually covered while the
+    // drawer is open. This keeps the banner (and its Exit button) visible
+    // and above the drawer at all times, without moving or resizing anything.
+    <div className="relative z-[55] bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between gap-4 text-sm font-medium shrink-0">
       <span className="min-w-0">
         {isOrphanVenue ? (
           <>

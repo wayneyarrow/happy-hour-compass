@@ -808,19 +808,22 @@ export default function ChangePlanModal({
         Change Plan
       </button>
 
-      {/* Modal */}
+      {/* Modal — z-60/z-70, deliberately above the mobile nav drawer's
+          z-40/z-50 (AdminMobileNav.tsx) so a modal always stacks above the
+          drawer regardless of DOM order, on the rare chance both are ever
+          triggered in the same session. */}
       {isOpen && (
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 z-[60] bg-black/50"
             aria-hidden="true"
             onClick={closeModal}
           />
 
           {/* Scroll container */}
           <div
-            className="fixed inset-0 z-50 overflow-y-auto"
+            className="fixed inset-0 z-[70] overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-label={modalTitle}

@@ -334,8 +334,11 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
                 )}
               </div>
 
-              {/* Controls */}
-              <div className="px-2 py-2 flex items-center gap-1">
+              {/* Controls — flex-wrap so the button group drops to its own
+                  row rather than being clipped by the card's overflow-hidden
+                  when both "Set primary" and the (now larger) action buttons
+                  don't fit on one line at narrow widths (2-col grid). */}
+              <div className="px-2 py-2 flex flex-wrap items-center gap-1.5">
                 {i > 0 ? (
                   <button
                     type="button"
@@ -347,13 +350,13 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
                 ) : (
                   <span className="mr-auto" />
                 )}
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleMoveLeft(i)}
                     disabled={i === 0}
                     aria-label="Move left"
-                    className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                    className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
                   >
                     ←
                   </button>
@@ -362,7 +365,7 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
                     onClick={() => handleMoveRight(i)}
                     disabled={i === images.length - 1}
                     aria-label="Move right"
-                    className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                    className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-xs"
                   >
                     →
                   </button>
@@ -370,7 +373,7 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
                     type="button"
                     onClick={() => handleDelete(img)}
                     aria-label="Delete image"
-                    className="w-6 h-6 flex items-center justify-center rounded border border-red-200 text-red-500 hover:bg-red-50 text-xs"
+                    className="w-8 h-8 flex items-center justify-center rounded border border-red-200 text-red-500 hover:bg-red-50 text-xs ml-1"
                   >
                     ×
                   </button>
