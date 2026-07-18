@@ -238,6 +238,12 @@ export default function BusinessHoursForm({ venueId, initialHours }: Props) {
         </div>
       )}
 
+      <p className="text-xs text-gray-400 mb-3">
+        Depending on your browser or device, times may appear in either
+        12-hour (5:00 PM) or 24-hour (17:00) format. Both display the same
+        saved time.
+      </p>
+
       {/* Day rows — keyed on activeHours so DayRow states remount on new data */}
       <DaysList
         key={JSON.stringify(activeHours)}

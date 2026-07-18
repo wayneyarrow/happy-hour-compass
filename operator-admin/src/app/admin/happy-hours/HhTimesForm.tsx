@@ -876,6 +876,11 @@ export default function HhTimesForm({
           Set your happy hour times for each day. You can add up to two time
           ranges per day.
         </p>
+        <p className="text-xs text-gray-400 mb-3">
+          Depending on your browser or device, times may appear in either
+          12-hour (5:00 PM) or 24-hour (17:00) format. Both display the same
+          saved time.
+        </p>
 
         <BulkApplyPanel onApply={applyToDays} isPending={isPending} />
 
