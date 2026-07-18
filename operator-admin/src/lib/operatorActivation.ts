@@ -521,7 +521,7 @@ export async function completeOperatorAccountActivation({
     });
   }
 
-  await sendSlackAlert({
+  const activationSlackResult = await sendSlackAlert({
     channel:  "ops-alerts",
     severity: "success",
     title:    "Operator Account Activated",
@@ -534,4 +534,18 @@ export async function completeOperatorAccountActivation({
       "Operator ID": operatorId,
     },
   });
+
+  // sendSlackAlert never throws, so a missing/misconfigured
+  // SLACK_OPS_ALERTS_WEBHOOK_URL previously failed completely silently —
+  // this makes that outcome visible in logs. Deliberately does NOT escalate
+  // via another Slack call on failure (that would be a Slack alert about a
+  // Slack failure) — logging is the ceiling here, matching the same
+  // check-and-log pattern already applied to the #venue-claims and
+  // #venue-submissions more-info notifications.
+  if (activationSlackResult !== "delivered") {
+    console.error(
+      "[completeOperatorAccountActivation] Slack notification not delivered.",
+      { operatorId, channel: "ops-alerts", result: activationSlackResult }
+    );
+  }
 }
