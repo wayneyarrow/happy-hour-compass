@@ -423,7 +423,6 @@ export default async function AdminHomePage() {
     return (
       <HomepageV2
         venueName={venueName}
-        venueSlug={venue?.slug ?? null}
         venueId={venue!.id}
         introSeen={introSeen}
         suggestions={suggestions}
@@ -519,7 +518,7 @@ export default async function AdminHomePage() {
             {isPublished && venue.id && (
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <a
-                  href={`/venue/${venue.slug ?? venue.id}?preview=true`}
+                  href={`/api/preview/venue/${venue.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"

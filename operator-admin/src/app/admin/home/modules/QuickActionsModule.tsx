@@ -8,7 +8,6 @@ type Action = {
 };
 
 type Props = {
-  venueSlug: string | null;
   venueId: string;
 };
 
@@ -38,8 +37,8 @@ const ExternalIcon = () => (
   </svg>
 );
 
-export default function QuickActionsModule({ venueSlug, venueId }: Props) {
-  const publicHref = `/venue/${venueSlug ?? venueId}?preview=true`;
+export default function QuickActionsModule({ venueId }: Props) {
+  const publicHref = `/api/preview/venue/${venueId}`;
 
   const internalActions: Action[] = [
     { label: "Edit happy hours",    icon: "🍹", href: "/admin/happy-hours?section=times#times" },

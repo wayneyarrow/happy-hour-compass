@@ -8,7 +8,6 @@ import QuickActionsModule from "./modules/QuickActionsModule";
 
 type Props = {
   venueName: string;
-  venueSlug: string | null;
   venueId: string;
   /** True when the operator has already dismissed the intro banner (DB-persisted). */
   introSeen: boolean;
@@ -21,7 +20,6 @@ type Props = {
 
 export default function HomepageV2({
   venueName,
-  venueSlug,
   venueId,
   introSeen,
   suggestions,
@@ -30,7 +28,7 @@ export default function HomepageV2({
   completion,
   updatedAt,
 }: Props) {
-  const publicHref = `/venue/${venueSlug ?? venueId}?preview=true`;
+  const publicHref = `/api/preview/venue/${venueId}`;
 
   return (
     <div className="max-w-3xl">
@@ -82,7 +80,7 @@ export default function HomepageV2({
           completion={completion}
           updatedAt={updatedAt}
         />
-        <QuickActionsModule venueSlug={venueSlug} venueId={venueId} />
+        <QuickActionsModule venueId={venueId} />
       </div>
     </div>
   );

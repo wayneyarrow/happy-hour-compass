@@ -11,6 +11,7 @@ import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import { getMarketById } from "@/lib/markets";
+import { canPreviewVenue } from "@/lib/venuePreviewAccess";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
 import { ShareButton } from "@/app/(consumer)/event/[id]/ShareButton";
@@ -54,6 +55,7 @@ const DAY_ORDER = [
 
 type PageProps = {
   params: Promise<{ market: string; city: string; slug: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -132,9 +134,20 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function VenueDetailPage({ params }: PageProps) {
+export default async function VenueDetailPage({ params, searchParams }: PageProps) {
   const { market, city, slug } = await params;
+  const resolvedSearchParams = await searchParams;
   const requestedPath = `/${market}/${city}/${slug}`;
+
+  // Operator Admin's Preview button (via /api/preview/venue/[id]) is the only
+  // legitimate source of ?preview=true — it always redirects here already
+  // carrying the flag. A visitor who merely copies a preview URL cannot use
+  // it unless they are also independently re-authorized below for THIS
+  // venue, so this flag alone never grants access to unpublished data.
+  const isPreviewRequested =
+    resolvedSearchParams.preview === "true" ||
+    (Array.isArray(resolvedSearchParams.preview) &&
+      resolvedSearchParams.preview.includes("true"));
 
   // Venue lookup is slug-first with a raw-UUID fallback (see
   // getVenueWithEventsForConsumerById) and does not depend on the market/city
@@ -142,7 +155,23 @@ export default async function VenueDetailPage({ params }: PageProps) {
   // NULL constraint, migration 001_initial_schema.sql). The route segments
   // are validated below against the venue's own stored geography, never
   // trusted on their own.
-  const venue = await getVenueWithEventsForConsumerById(slug);
+  let venue = await getVenueWithEventsForConsumerById(slug);
+  let isPreviewAuthorized = false;
+
+  // Unpublished (or nonexistent-under-normal-rules) venue + preview
+  // requested — re-fetch including unpublished rows and only use it once the
+  // requester is independently confirmed authorized to manage this exact
+  // venue (see canPreviewVenue). Falls through to the normal 404/redirect
+  // handling below when unauthorized, so this never weakens the public path.
+  if (!venue && isPreviewRequested) {
+    const previewCandidate = await getVenueWithEventsForConsumerById(slug, {
+      includeUnpublished: true,
+    });
+    if (previewCandidate && (await canPreviewVenue(previewCandidate.venueUuid))) {
+      venue = previewCandidate;
+      isPreviewAuthorized = true;
+    }
+  }
 
   if (!venue) {
     // No current venue matches — only now check whether `slug` is a
@@ -163,6 +192,14 @@ export default async function VenueDetailPage({ params }: PageProps) {
     if (historicalCanonicalPath === requestedPath) notFound();
 
     permanentRedirect(historicalCanonicalPath);
+  }
+
+  // A published venue reached normally, but still requested with
+  // ?preview=true (e.g. the operator previewing an already-live venue) —
+  // authorize separately so the banner only ever renders for the operator
+  // who manages it, never for a visitor who stumbled on the same query param.
+  if (isPreviewRequested && !isPreviewAuthorized) {
+    isPreviewAuthorized = await canPreviewVenue(venue.venueUuid);
   }
 
   // A venue with no assigned market/city (nullable by design — see
@@ -261,6 +298,12 @@ export default async function VenueDetailPage({ params }: PageProps) {
     <div className="bg-white pb-20 lg:pb-0">
       <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
       <JsonLd nodes={[venueNode, breadcrumbNode]} />
+
+      {isPreviewAuthorized && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 lg:px-10 py-2.5 text-center text-sm font-medium text-amber-800">
+          Preview mode — this is how your listing will look to guests.
+        </div>
+      )}
 
       {/* ── Gallery ──────────────────────────────────────────────────────────── */}
       <VenueGallery images={images} venueName={venue.name} />
