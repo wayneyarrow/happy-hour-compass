@@ -1,12 +1,21 @@
 "use server";
 
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { DAYS_OF_WEEK, to24h } from "../../_shared/hoursUtils";
+import { DAYS_OF_WEEK, TIME_24H_RE } from "../../_shared/hoursUtils";
 import type {
   BusinessHours,
   BusinessHoursFormState,
   DayOfWeek,
 } from "../../_shared/types";
+
+const DEFAULT_OPEN = "09:00";
+const DEFAULT_CLOSE = "22:00";
+
+/** Returns the submitted value only when it's a well-formed 24-hour "HH:MM" string, else the given default — defensive against a malformed/non-browser submission, since a native <input type="time"> always posts this shape on a normal submit. */
+function readTime(formData: FormData, name: string, fallback: string): string {
+  const raw = formData.get(name) as string | null;
+  return raw && TIME_24H_RE.test(raw) ? raw : fallback;
+}
 
 export type UpdateBusinessHoursState = BusinessHoursFormState;
 
@@ -37,15 +46,8 @@ export async function updateBusinessHoursAction(
       continue;
     }
 
-    const openHour   = (formData.get(`${day}_open_hour`)    as string | null) ?? "9";
-    const openMinute = (formData.get(`${day}_open_minute`)  as string | null) ?? "00";
-    const openPeriod = (formData.get(`${day}_open_period`)  as string | null) ?? "AM";
-    const closeHour   = (formData.get(`${day}_close_hour`)   as string | null) ?? "10";
-    const closeMinute = (formData.get(`${day}_close_minute`) as string | null) ?? "00";
-    const closePeriod = (formData.get(`${day}_close_period`) as string | null) ?? "PM";
-
-    const open  = to24h(openHour,  openMinute,  openPeriod);
-    const close = to24h(closeHour, closeMinute, closePeriod);
+    const open  = readTime(formData, `${day}_open`,  DEFAULT_OPEN);
+    const close = readTime(formData, `${day}_close`, DEFAULT_CLOSE);
 
     if (open === close) {
       errors[day] = "Opening and closing times cannot be the same.";

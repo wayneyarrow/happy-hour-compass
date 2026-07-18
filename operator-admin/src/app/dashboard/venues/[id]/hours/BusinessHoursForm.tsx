@@ -6,7 +6,7 @@ import {
   updateBusinessHoursAction,
   type UpdateBusinessHoursState,
 } from "./actions";
-import { DAYS_OF_WEEK, DAY_LABELS, to12h } from "../../_shared/hoursUtils";
+import { DAYS_OF_WEEK, DAY_LABELS, HOURS_STEP_SECONDS } from "../../_shared/hoursUtils";
 import type { BusinessHours, DayHours, DayOfWeek } from "../../_shared/types";
 
 type Props = {
@@ -18,80 +18,78 @@ type Props = {
 const initialState: UpdateBusinessHoursState = {};
 
 // ── Styling constants ──────────────────────────────────────────────────────
-const selectCls =
-  "px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white " +
+// Matches the native time-input treatment established in HhTimesForm.tsx
+// (Happy Hours) — same breakpoint, same input styling, same responsive
+// day-row shape — reused here as a pattern, not as shared imported code
+// (this file has no dependency on HhTimesForm.tsx; see hoursUtils.ts for why
+// the step constant is intentionally its own copy, not a shared import).
+const timeInputCls =
+  "w-full px-2.5 py-2.5 border border-gray-300 rounded-md text-sm bg-white " +
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
-const HOURS   = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
-const MINUTES = ["00", "15", "30", "45"];
-const PERIODS = ["AM", "PM"] as const;
-
 // ── TimeInputs ─────────────────────────────────────────────────────────────
 /**
- * Renders the hour / minute / period select trio for one slot (open or close).
- * Uncontrolled — uses defaultValue so React doesn't fight native form reset.
+ * Native Open / Close time-entry pair for one day. Uncontrolled — uses
+ * defaultValue, matching the form's existing "read raw fields from FormData
+ * on submit" architecture (there is no client-side generated JSON payload
+ * here, unlike Happy Hours' HhTimesForm). Replaces the previous three-select
+ * (hour/minute/AM-PM) trio per slot with one <input type="time"> per slot —
+ * the stored value is already a 24-hour "HH:MM" string, exactly what a
+ * native time input's value already is, so no 12h/24h conversion is needed
+ * anywhere in this component anymore.
  */
 function TimeInputs({
   day,
-  slot,
-  defaultHour,
-  defaultMinute,
-  defaultPeriod,
+  openDefault,
+  closeDefault,
   disabled,
 }: {
   day: DayOfWeek;
-  slot: "open" | "close";
-  defaultHour: string;
-  defaultMinute: string;
-  defaultPeriod: "AM" | "PM";
+  openDefault: string;
+  closeDefault: string;
   disabled: boolean;
 }) {
+  const openId = `${day}-open`;
+  const closeId = `${day}-close`;
+
   return (
-    <div className="flex items-center gap-1">
-      <select
-        name={`${day}_${slot}_hour`}
-        defaultValue={defaultHour}
-        disabled={disabled}
-        className={selectCls}
-        aria-label={`${DAY_LABELS[day]} ${slot} hour`}
-      >
-        {HOURS.map((h) => (
-          <option key={h} value={h}>
-            {h}
-          </option>
-        ))}
-      </select>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end sm:min-w-0 sm:flex-1">
+      <div>
+        <label htmlFor={openId} className="block text-xs font-medium text-gray-500 mb-1">
+          Open
+        </label>
+        <input
+          id={openId}
+          type="time"
+          name={`${day}_open`}
+          step={HOURS_STEP_SECONDS}
+          defaultValue={openDefault}
+          disabled={disabled}
+          aria-label={`${DAY_LABELS[day]} open time`}
+          className={timeInputCls}
+        />
+      </div>
 
-      <span className="text-gray-400 text-sm font-medium">:</span>
+      <div className="text-gray-400 text-sm text-center sm:pb-2.5" aria-hidden="true">
+        –
+      </div>
 
-      <select
-        name={`${day}_${slot}_minute`}
-        defaultValue={defaultMinute}
-        disabled={disabled}
-        className={selectCls}
-        aria-label={`${DAY_LABELS[day]} ${slot} minute`}
-      >
-        {MINUTES.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-
-      <select
-        name={`${day}_${slot}_period`}
-        defaultValue={defaultPeriod}
-        disabled={disabled}
-        className={selectCls}
-        aria-label={`${DAY_LABELS[day]} ${slot} AM/PM`}
-      >
-        {PERIODS.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
-        ))}
-      </select>
+      <div>
+        <label htmlFor={closeId} className="block text-xs font-medium text-gray-500 mb-1">
+          Close
+        </label>
+        <input
+          id={closeId}
+          type="time"
+          name={`${day}_close`}
+          step={HOURS_STEP_SECONDS}
+          defaultValue={closeDefault}
+          disabled={disabled}
+          aria-label={`${DAY_LABELS[day]} close time`}
+          className={timeInputCls}
+        />
+      </div>
     </div>
   );
 }
@@ -104,6 +102,15 @@ function TimeInputs({
  * Because this component owns its own `useState`, it should be remounted
  * (via a parent `key` change) whenever the data source changes — e.g. after
  * a failed server action returns updated hours.
+ *
+ * Responsive layout matches HhTimesForm.tsx's HhDayRow exactly (same
+ * breakpoint, same technique): below sm:, the day label + "Closed" control
+ * render as their own real top row, and the time-entry group gets a full
+ * width row of its own beneath them, since it's a plain flex-column at that
+ * width with no flex-grow/shrink involved. At sm: and up, the day-label +
+ * "Closed" wrapper switches to `sm:contents`, removing it from the box
+ * model so its two children rejoin the outer row as direct flex items —
+ * reproducing the original single-row desktop layout exactly.
  */
 function DayRow({
   day,
@@ -120,73 +127,46 @@ function DayRow({
   const isClosed = defaultDayHours == null;
   const [closed, setClosed] = useState(isClosed);
 
-  // Determine initial time select defaults.
-  const openDefaults = defaultDayHours?.open
-    ? to12h(defaultDayHours.open)
-    : { hour: "9", minute: "00", period: "AM" as const };
-
-  const closeDefaults = defaultDayHours?.close
-    ? to12h(defaultDayHours.close)
-    : { hour: "10", minute: "00", period: "PM" as const };
+  const openDefault = defaultDayHours?.open ?? "09:00";
+  const closeDefault = defaultDayHours?.close ?? "22:00";
 
   return (
     <div className="py-3 border-b border-gray-100 last:border-0">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {/* Day label */}
-        <span className="w-24 shrink-0 text-sm font-medium text-gray-700">
-          {DAY_LABELS[day]}
-        </span>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-4 sm:gap-y-2">
+        {/* Day label + "Closed" — grouped together on mobile; this wrapper
+            disappears from layout at sm: (see comment above DayRow). */}
+        <div className="flex items-center gap-4 sm:contents">
+          <span className="w-24 shrink-0 text-sm font-medium text-gray-700">
+            {DAY_LABELS[day]}
+          </span>
 
-        {/* Closed toggle */}
-        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none shrink-0">
-          <input
-            type="checkbox"
-            name={`${day}_closed`}
-            checked={closed}
-            onChange={(e) => setClosed(e.target.checked)}
-            disabled={isPending}
-            className="h-4 w-4 rounded border-gray-300 accent-amber-500"
-          />
-          Closed
-        </label>
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none shrink-0">
+            <input
+              type="checkbox"
+              name={`${day}_closed`}
+              checked={closed}
+              onChange={(e) => setClosed(e.target.checked)}
+              disabled={isPending}
+              className="h-4 w-4 rounded border-gray-300 accent-amber-500"
+            />
+            Closed
+          </label>
+        </div>
 
         {/* Time inputs — removed from DOM (and FormData) when closed */}
         {!closed && (
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide px-1">
-                Open
-              </span>
-              <TimeInputs
-                day={day}
-                slot="open"
-                defaultHour={openDefaults.hour}
-                defaultMinute={openDefaults.minute}
-                defaultPeriod={openDefaults.period}
-                disabled={isPending}
-              />
-            </div>
-            <span className="text-gray-400 text-sm pb-1.5">–</span>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide px-1">
-                Close
-              </span>
-              <TimeInputs
-                day={day}
-                slot="close"
-                defaultHour={closeDefaults.hour}
-                defaultMinute={closeDefaults.minute}
-                defaultPeriod={closeDefaults.period}
-                disabled={isPending}
-              />
-            </div>
-          </div>
+          <TimeInputs
+            day={day}
+            openDefault={openDefault}
+            closeDefault={closeDefault}
+            disabled={isPending}
+          />
         )}
       </div>
 
       {/* Per-day validation error */}
       {error && !closed && (
-        <p className="mt-1 ml-28 text-xs text-red-600" role="alert">
+        <p className="mt-1 sm:ml-28 text-xs text-red-600" role="alert">
           {error}
         </p>
       )}

@@ -23,39 +23,16 @@ export const DAY_LABELS: Record<DayOfWeek, string> = {
 };
 
 /**
- * Converts 12-hour UI components to a 24-hour "HH:MM" string.
- *
- * @param hour   "1"–"12"
- * @param minute "00" | "15" | "30" | "45"
- * @param period "AM" | "PM"
+ * Time-entry step (minutes) for the native <input type="time"> controls in
+ * BusinessHoursForm — matches the previous hour/minute/period select trio's
+ * granularity (minute options were "00" | "15" | "30" | "45") exactly, so
+ * this UI change doesn't silently narrow what operators can already select.
+ * Deliberately not shared with the Happy Hours time editor (HhTimesForm.tsx)
+ * even though it happens to use the same value today — these are two
+ * independent business rules that could diverge, not one shared constant.
  */
-export function to24h(hour: string, minute: string, period: string): string {
-  let h = parseInt(hour, 10);
-  if (period === "AM") {
-    // 12 AM  →  00:xx
-    if (h === 12) h = 0;
-  } else {
-    // 12 PM stays 12; 1–11 PM → 13–23
-    if (h !== 12) h += 12;
-  }
-  return `${String(h).padStart(2, "0")}:${minute}`;
-}
+export const HOURS_STEP_MINUTES = 15;
+export const HOURS_STEP_SECONDS = HOURS_STEP_MINUTES * 60;
 
-/**
- * Converts a 24-hour "HH:MM" string to 12-hour UI components.
- *
- * @param time24 e.g. "14:30"
- * @returns { hour: "2", minute: "30", period: "PM" }
- */
-export function to12h(time24: string): {
-  hour: string;
-  minute: string;
-  period: "AM" | "PM";
-} {
-  const [hStr, mStr] = time24.split(":");
-  let h = parseInt(hStr, 10);
-  const period: "AM" | "PM" = h < 12 ? "AM" : "PM";
-  if (h === 0) h = 12;       // 00:xx → 12 AM
-  else if (h > 12) h -= 12;  // 13–23 → 1–11 PM
-  return { hour: String(h), minute: mStr, period };
-}
+/** Matches a valid 24-hour "HH:MM" string, e.g. "09:00" or "22:30". */
+export const TIME_24H_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
