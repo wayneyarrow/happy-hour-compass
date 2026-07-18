@@ -139,3 +139,58 @@ export async function getRelatedSubmissionNotesForVenue(
 
   return { notes };
 }
+
+/**
+ * Fetches Claim Your Venue lifecycle notes for claims linked to this venue
+ * (venue_claims.venue_id), for display alongside the venue's own notes on the
+ * venue detail page. Mirrors getRelatedSubmissionNotesForVenue exactly.
+ *
+ * Read-only cross-reference via the existing venue_id relationship — the
+ * canonical record stays in venue_claim_notes; this does not duplicate
+ * storage. A venue can have more than one claim over time (e.g. a rejected
+ * claim followed by a later approved one), so this picks up notes from all
+ * of them.
+ *
+ * Each note is prefixed to make its origin clear without requiring a new
+ * "source" affordance in the shared NoteEntry UI.
+ */
+export async function getRelatedClaimNotesForVenue(
+  venueId: string
+): Promise<{ notes: VenueNote[] }> {
+  const supabase = createAdminClient();
+
+  const { data: claims, error: claimsError } = await supabase
+    .from("venue_claims")
+    .select("id")
+    .eq("venue_id", venueId);
+
+  if (claimsError) {
+    console.error("[getRelatedClaimNotesForVenue]", claimsError.message);
+    return { notes: [] };
+  }
+
+  const claimIds = (claims ?? []).map((row) => row.id as string);
+  if (claimIds.length === 0) return { notes: [] };
+
+  const { data, error } = await supabase
+    .from("venue_claim_notes")
+    .select("id, claim_id, note, created_by, created_by_email, created_at")
+    .in("claim_id", claimIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getRelatedClaimNotesForVenue]", error.message);
+    return { notes: [] };
+  }
+
+  const notes: VenueNote[] = (data ?? []).map((row) => ({
+    id:               row.id as string,
+    venue_id:         venueId,
+    note:             `(via venue claim) ${row.note as string}`,
+    created_by:       row.created_by as string | null,
+    created_by_email: row.created_by_email as string | null,
+    created_at:       row.created_at as string,
+  }));
+
+  return { notes };
+}

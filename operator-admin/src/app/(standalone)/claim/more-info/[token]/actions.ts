@@ -187,10 +187,21 @@ export async function submitClaimMoreInfoAction(
   // #venue-claims channel already used for new-claim notifications.
   // Intentionally omits phone/socials/verification details sent by the
   // claimant; only enough context to identify the claim for review.
-  await sendSlackAcquisitionNotification({
+  const slackResult = await sendSlackAcquisitionNotification({
     channel: "venue-claims",
     text: `Additional info submitted for *${venueName}* (claim ${claimId})\nClaimant: ${firstName} ${lastName} <${claimantEmail}>\n<${getAppUrl()}/control-panel/claims/${claimId}|Review claim →>`,
   });
+
+  // sendSlackAcquisitionNotification never throws, so a missing/misconfigured
+  // SLACK_VENUE_CLAIMS_WEBHOOK_URL previously failed completely silently —
+  // this makes that outcome visible in logs rather than indistinguishable
+  // from a successful send.
+  if (slackResult !== "delivered") {
+    console.error(
+      "[submitClaimMoreInfoAction] Slack notification not delivered.",
+      { claimId, result: slackResult }
+    );
+  }
 
   return { success: true };
 }

@@ -109,8 +109,20 @@ export default function CreatePasswordPage() {
     // notification (no-ops on password resets — see completeAccountSetupAction).
     // Awaited so the request isn't aborted by the navigation below, but its
     // outcome must never block the operator from reaching their dashboard.
+    //
+    // The access token is read explicitly from this same browser client's
+    // in-memory session and passed to the server action, which asks Supabase
+    // Auth to verify it — rather than having the server action derive
+    // identity from the cookie-based session on its own. The cookie write
+    // from the setSession()/updateUser() calls above is not guaranteed to
+    // have propagated by the time this request is dispatched; relying on it
+    // was causing the server action to silently see no user and skip the
+    // activation notification entirely.
     try {
-      await completeAccountSetupAction();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await completeAccountSetupAction(session.access_token);
+      }
     } catch {
       // Non-blocking — notification failure must not block account setup.
     }

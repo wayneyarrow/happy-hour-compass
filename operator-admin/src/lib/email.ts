@@ -42,16 +42,24 @@ const DEFAULT_FROM = "Happy Hour Compass <hello@happyhourcompass.com>";
  * Single source of truth for the internal recipient of every founder/ops
  * lifecycle notification (claims, submissions, activations). Every internal
  * notification email must read through this function rather than inlining
- * process.env.FOUNDER_NOTIFICATION_EMAIL separately — a duplicated inline
- * fallback is how a stale/incorrect override (e.g. a personal address left
- * over from early testing) silently diverges between call sites.
+ * an address separately.
  *
- * Falls back to hello@happyhourcompass.com — the monitored HHC inbox already
- * used as the sender and support address everywhere else — when
- * FOUNDER_NOTIFICATION_EMAIL is not set for the current environment.
+ * Intentionally hardcoded — NOT read from process.env.FOUNDER_NOTIFICATION_EMAIL.
+ * A hosted production test confirmed this env var was set to a personal
+ * address (left over from early testing) in Vercel, silently overriding the
+ * correct default and routing real claim/submission notifications to a
+ * personal inbox instead of hello@happyhourcompass.com. There is no
+ * dashboard access from this codebase to correct that env var directly, and
+ * an overridable value defeats the purpose of a single, guaranteed-correct
+ * internal recipient — so this now always returns the monitored HHC inbox,
+ * matching the sender/support address already hardcoded everywhere else in
+ * this file (DEFAULT_FROM, emailSpamCallout, emailLayout's footer).
+ *
+ * If the FOUNDER_NOTIFICATION_EMAIL env var still exists in any Vercel
+ * environment, it is now dead configuration and can be safely removed.
  */
 function getFounderNotificationEmail(): string {
-  return process.env.FOUNDER_NOTIFICATION_EMAIL ?? "hello@happyhourcompass.com";
+  return "hello@happyhourcompass.com";
 }
 
 // ── Centralized transactional email sender ────────────────────────────────────
