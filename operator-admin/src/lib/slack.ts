@@ -5,16 +5,22 @@
  * fall back to console.error so primary workflows are never interrupted.
  *
  * Required env vars (optional per channel — alerts silently skipped if unset):
- *   SLACK_OPS_CRITICAL_WEBHOOK_URL        Webhook URL for #ops-critical
- *   SLACK_OPS_ALERTS_WEBHOOK_URL          Webhook URL for #ops-alerts
- *   SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL   Webhook URL for #venue-suggestions
- *   SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL   Webhook URL for #venue-submissions
- *   SLACK_VENUE_CLAIMS_WEBHOOK_URL        Webhook URL for #venue-claims
- *   SLACK_WEBSITE_CONTACT_WEBHOOK_URL     Webhook URL for #website-contact
+ *   SLACK_OPS_CRITICAL_WEBHOOK_URL              Webhook URL for #ops-critical
+ *   SLACK_OPS_ALERTS_WEBHOOK_URL                Webhook URL for #ops-alerts
+ *   SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL         Webhook URL for #venue-suggestions
+ *   SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL         Webhook URL for #venue-submissions
+ *   SLACK_VENUE_CLAIMS_WEBHOOK_URL              Webhook URL for #venue-claims
+ *   SLACK_VENUE_INFO_SUBMISSIONS_WEBHOOK_URL    Webhook URL for #venue-info-submissions
+ *   SLACK_WEBSITE_CONTACT_WEBHOOK_URL           Webhook URL for #website-contact
  */
 
 export type SlackChannel = "ops-critical" | "ops-alerts";
-export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact";
+export type AcquisitionChannel =
+  | "venue-suggestions"
+  | "venue-submissions"
+  | "venue-claims"
+  | "venue-info-submissions"
+  | "website-contact";
 export type SlackSeverity = "critical" | "warning" | "info" | "success";
 
 type SlackAlertParams = {
@@ -38,10 +44,11 @@ const WEBHOOK_ENV: Record<SlackChannel, string> = {
 };
 
 const ACQUISITION_WEBHOOK_ENV: Record<AcquisitionChannel, string> = {
-  "venue-suggestions": "SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL",
-  "venue-submissions": "SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL",
-  "venue-claims":      "SLACK_VENUE_CLAIMS_WEBHOOK_URL",
-  "website-contact":   "SLACK_WEBSITE_CONTACT_WEBHOOK_URL",
+  "venue-suggestions":      "SLACK_VENUE_SUGGESTIONS_WEBHOOK_URL",
+  "venue-submissions":      "SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL",
+  "venue-claims":           "SLACK_VENUE_CLAIMS_WEBHOOK_URL",
+  "venue-info-submissions": "SLACK_VENUE_INFO_SUBMISSIONS_WEBHOOK_URL",
+  "website-contact":        "SLACK_WEBSITE_CONTACT_WEBHOOK_URL",
 };
 
 function getWebhookUrl(channel: SlackChannel): string | null {

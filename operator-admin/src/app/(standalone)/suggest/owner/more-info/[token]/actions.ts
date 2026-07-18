@@ -182,20 +182,21 @@ export async function submitMoreInfoAction(
   }
 
   // Success Slack notification — mirrors the email above but on the
-  // #venue-submissions channel already used for new-submission notifications.
+  // dedicated #venue-info-submissions channel (separate from
+  // #venue-submissions, which is reserved for new-submission notifications).
   // Intentionally omits phone/socials/verification details from the
   // submitter; only enough context to identify the submission for review.
   const submitterName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
   const slackResult = await sendSlackAcquisitionNotification({
-    channel: "venue-submissions",
+    channel: "venue-info-submissions",
     text: `Additional info submitted for *${venueName}* (submission ${row.id})\nSubmitter: ${submitterName} <${row.email}>\n<${getSiteUrl()}/control-panel/operator-submissions/${row.id}|Review submission →>`,
   });
 
   // sendSlackAcquisitionNotification never throws, so a missing/misconfigured
-  // SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL previously failed completely silently —
-  // this makes that outcome visible in logs rather than indistinguishable
-  // from a successful send. Mirrors the same check already added to
-  // submitClaimMoreInfoAction for the #venue-claims path.
+  // SLACK_VENUE_INFO_SUBMISSIONS_WEBHOOK_URL previously failed completely
+  // silently — this makes that outcome visible in logs rather than
+  // indistinguishable from a successful send. Mirrors the same check already
+  // added to submitClaimMoreInfoAction for the #venue-info-submissions path.
   if (slackResult !== "delivered") {
     console.error(
       "[submitMoreInfoAction] Slack notification not delivered.",
