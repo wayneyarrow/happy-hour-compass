@@ -34,7 +34,14 @@ import { useEffect } from "react";
  * ──────────────────────────────────────────────────
  * Add these URLs to Auth → URL Configuration → Additional Redirect URLs:
  *   http://localhost:3000/operator/create-password
- *   https://<your-production-domain>/operator/create-password
+ *   https://staging.happyhourcompass.com/operator/create-password
+ *   https://happyhourcompass.com/operator/create-password
+ *
+ * Also confirm Auth → URL Configuration → Site URL is not left at the
+ * Supabase default (http://localhost:3000) — that default is exactly what a
+ * hosted operator gets redirected to when the app's requested redirectTo
+ * isn't in the allowlist above, which strands them on an unreachable
+ * address instead of merely landing on this component's safety net.
  *
  * Once those are added, Supabase will redirect directly to
  * /operator/create-password and this component becomes a harmless no-op.
