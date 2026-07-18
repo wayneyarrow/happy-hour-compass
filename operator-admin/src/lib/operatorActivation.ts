@@ -376,6 +376,11 @@ export async function completeOperatorAccountActivation({
   let venueId: string | null = null;
   let venueName: string | null = null;
   let sourceFlow = "Unknown";
+  // Which entity's own lifecycle note trail this activation belongs to —
+  // resolved from the same lookups as sourceFlow, reused below to write the
+  // note into the correct table rather than a parallel history mechanism.
+  let claimId: string | null = null;
+  let submissionId: string | null = null;
 
   try {
     const { data: venueRow } = await supabase
@@ -397,14 +402,16 @@ export async function completeOperatorAccountActivation({
 
       if (claimRow) {
         sourceFlow = "Claim Your Venue";
+        claimId = claimRow.id as string;
       } else {
         const { data: submissionRow } = await supabase
           .from("operator_submissions")
-          .select("status")
+          .select("id, status")
           .eq("operator_id", operatorId)
           .maybeSingle();
 
         if (submissionRow) {
+          submissionId = submissionRow.id as string;
           sourceFlow =
             (submissionRow.status as string) === "confirmed_auto"
               ? "Add Your Venue (auto-confirmed)"
@@ -421,6 +428,65 @@ export async function completeOperatorAccountActivation({
     venueId,
     sourceFlow,
   });
+
+  // ── Lifecycle note — reuses the same claim/submission notes tables and
+  // system-note convention (created_by/created_by_email left null) already
+  // used elsewhere, rather than a second activation-history mechanism.
+  // Written regardless of email/Slack outcome below — the event itself
+  // (the operator can now sign in) is true independent of notification
+  // delivery. Skipped when neither a claim nor a submission was found —
+  // nothing to attach it to, and this must not invent a source.
+  const activationNote = `Operator account setup completed — ${operatorName} (${operatorEmail}) can now sign in to Operator Admin.`;
+  let noteError: string | null = null;
+  try {
+    if (claimId) {
+      const { error } = await supabase.from("venue_claim_notes").insert({
+        claim_id:         claimId,
+        note:             activationNote,
+        created_by:       null,
+        created_by_email: null,
+      });
+      if (error) noteError = error.message;
+    } else if (submissionId) {
+      const { error } = await supabase.from("operator_submission_notes").insert({
+        submission_id:    submissionId,
+        note:             activationNote,
+        created_by:       null,
+        created_by_email: null,
+      });
+      if (error) noteError = error.message;
+    }
+  } catch (err) {
+    noteError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (noteError) {
+    console.error(
+      "[completeOperatorAccountActivation] Note insert failed.",
+      { operatorId, claimId, submissionId, error: noteError }
+    );
+    // account_activated_at is already committed above (the idempotency gate
+    // has fired), so — exactly like the email-failure case below — this note
+    // can never be automatically retried. Reuses the same ops-critical
+    // pattern already established in this file rather than a queue/outbox:
+    // a specific, context-rich alert for a human to add the note manually.
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Account Activated — Lifecycle Note Failed",
+      message:  "An operator completed account setup, but the internal lifecycle note could not be recorded on the linked claim/submission. This will not be retried automatically — the activation is already recorded. Manual follow-up (adding the note by hand) may be needed.",
+      metadata: {
+        Operator:        operatorName,
+        Email:           operatorEmail,
+        Venue:           venueName ?? "Unknown",
+        Source:          sourceFlow,
+        "Operator ID":   operatorId,
+        "Claim ID":      claimId ?? "n/a",
+        "Submission ID": submissionId ?? "n/a",
+        Error:           noteError,
+      },
+    });
+  }
 
   const emailResult = await sendOperatorAccountActivatedNotificationEmail({
     operatorEmail,

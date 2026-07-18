@@ -105,7 +105,7 @@ export async function reviewSubmissionAction(
   // ── Fetch submission (need email + name for emails) ─────────────────────────
   const { data: submissionRow, error: fetchError } = await supabase
     .from("operator_submissions")
-    .select("email, first_name, venue_name, status")
+    .select("email, first_name, venue_name, status, more_info_requested_at")
     .eq("id", submissionId)
     .single();
 
@@ -114,13 +114,32 @@ export async function reviewSubmissionAction(
     return { error: "Submission not found. Please refresh and try again." };
   }
 
-  const submitterEmail = submissionRow.email as string;
-  const firstName      = (submissionRow.first_name as string | null)?.trim() || "there";
-  const venueName      = submissionRow.venue_name as string;
-  const now            = new Date().toISOString();
+  const submitterEmail  = submissionRow.email as string;
+  const firstName       = (submissionRow.first_name as string | null)?.trim() || "there";
+  const venueName       = submissionRow.venue_name as string;
+  const currentStatus   = submissionRow.status as string;
+  const lastRequestedAt = submissionRow.more_info_requested_at as string | null;
+  const now             = new Date().toISOString();
 
   // ── needs_more_info ────────────────────────────────────────────────────────
   if (action === "needs_more_info") {
+    // Guard against an accidental double-submit or network-level retry of the
+    // same click re-running the whole side-effect chain (new token, new
+    // email, new note) a second time. A genuine, deliberate re-request (e.g.
+    // resending after the submitter hasn't replied) is still allowed — the
+    // CPanel UI does not disable this button based on current status — so
+    // this only short-circuits requests arriving within seconds of the last
+    // one, well inside any realistic double-click/retry window and well
+    // short of any legitimate distinct re-request.
+    const RETRY_WINDOW_MS = 10_000;
+    if (lastRequestedAt && Date.now() - new Date(lastRequestedAt).getTime() < RETRY_WINDOW_MS) {
+      console.warn(
+        "[reviewSubmissionAction] needs_more_info — duplicate request suppressed (retry window).",
+        { submissionId }
+      );
+      return { success: true, successAction: ACTION_LABELS.needs_more_info };
+    }
+
     // Generate a secure 64-char hex token (32 random bytes). This IS the
     // credential for the public more-info form — never log the token value.
     const token     = randomBytes(32).toString("hex");
@@ -172,6 +191,14 @@ export async function reviewSubmissionAction(
       };
     }
 
+    // Append internal note — mirrors reviewClaimAction's needs_more_info note.
+    await supabase.from("operator_submission_notes").insert({
+      submission_id:    submissionId,
+      note:             `More info requested — structured verification form emailed to ${submitterEmail}. Token expires in 72 h.`,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
+
     await logAuditEvent({
       actorEmail: user.email ?? "unknown",
       action:     "submission_more_info_requested",
@@ -191,6 +218,17 @@ export async function reviewSubmissionAction(
   }
 
   // ── close ──────────────────────────────────────────────────────────────────
+  // Guard against retrying/resubmitting an already-closed submission. The
+  // CPanel UI itself disables both action buttons once closed (see
+  // SubmissionReviewPanel's isClosed check) — this enforces the same
+  // assumption server-side so a stale page, replayed request, or double
+  // submit cannot resend the closure email or duplicate the lifecycle note.
+  // Mirrors reviewClaimAction's existing "already approved" guard for the
+  // same class of terminal-state re-submission.
+  if (currentStatus === "closed") {
+    return { error: "This submission has already been closed." };
+  }
+
   const { error: updateError } = await supabase
     .from("operator_submissions")
     .update({
@@ -224,6 +262,17 @@ export async function reviewSubmissionAction(
       { submissionId, submitterEmail, error: emailResult.error }
     );
   }
+
+  // Append internal note — mirrors the note already written by the sibling
+  // needs_more_info/approve actions in this file.
+  await supabase.from("operator_submission_notes").insert({
+    submission_id:    submissionId,
+    note:             emailResult.ok
+      ? `Submission closed by founder. Closure email sent to ${submitterEmail}.`
+      : `Submission closed by founder. Closure email to ${submitterEmail} failed to send.`,
+    created_by:       user.id,
+    created_by_email: user.email ?? null,
+  });
 
   await logAuditEvent({
     actorEmail: user.email ?? "unknown",

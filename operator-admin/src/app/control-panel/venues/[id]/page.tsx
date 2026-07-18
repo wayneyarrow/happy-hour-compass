@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getVenueNotes } from "@/lib/data/venueNotes";
+import { getVenueNotes, getRelatedSubmissionNotesForVenue } from "@/lib/data/venueNotes";
 import { getVenueHealthData } from "@/lib/data/venueHealth";
 import { getVenueFeaturedContent } from "@/lib/data/contentGuideAttachments";
 import ImpersonateButton from "./ImpersonateButton";
@@ -115,7 +115,7 @@ export default async function ControlPanelVenueDetailPage({
   const { id } = await params;
   const supabase = createAdminClient();
 
-  const [{ data, error }, { notes }, featuredContent] = await Promise.all([
+  const [{ data, error }, { notes }, featuredContent, { notes: submissionNotes }] = await Promise.all([
     supabase
       .from("venues")
       .select(
@@ -131,7 +131,15 @@ export default async function ControlPanelVenueDetailPage({
       .maybeSingle(),
     getVenueNotes(id),
     getVenueFeaturedContent(id),
+    getRelatedSubmissionNotesForVenue(id),
   ]);
+
+  // Merge the venue's own notes with lifecycle notes from any linked Add Your
+  // Venue submission, newest first — one merged, chronologically ordered feed
+  // through the existing VenueNotesSection UI, with no duplicate storage.
+  const mergedNotes = [...notes, ...submissionNotes].sort((a, b) =>
+    a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0
+  );
 
   if (error) {
     return (
@@ -466,7 +474,7 @@ export default async function ControlPanelVenueDetailPage({
         <FeaturedInContentSection data={featuredContent} />
 
         {/* F. Internal notes */}
-        <VenueNotesSection venueId={venue.id} initialNotes={notes} />
+        <VenueNotesSection venueId={venue.id} initialNotes={mergedNotes} />
       </div>
 
         {/* Right column: Health Panel */}

@@ -458,6 +458,51 @@ export async function lookupBusinessAction(
   return { match: candidate };
 }
 
+// ── System note: submission received / auto-routing outcome ─────────────────
+//
+// Mirrors the system-note pattern already used for claims (e.g.
+// submitClaimMoreInfoAction's "Claimant submitted additional verification
+// info…" note) — a single, retrospective, descriptive note written once per
+// submission, with created_by/created_by_email left null to mark it as
+// system-generated (matches the existing convention in this codebase).
+//
+// Covers only outcomes that actually occurred in this call — no step is
+// invented or assumed for a status this function did not itself produce.
+
+function buildSubmissionReceivedNote({
+  matchStatus,
+  routedStatus,
+  match,
+  businessName,
+  email,
+}: {
+  matchStatus: string;
+  routedStatus: string;
+  match: GoogleMatch | null;
+  businessName: string;
+  email: string;
+}): string {
+  const matchedName = match?.name ?? businessName;
+
+  if (matchStatus === "no_match") {
+    return "Venue submission received. No matching Google Business found — routed for manual review.";
+  }
+  if (matchStatus === "rejected") {
+    return "Venue submission received. Operator indicated the suggested Google Business match was incorrect — corrected details submitted for manual review.";
+  }
+  // matchStatus === "confirmed" from here — routedStatus determines the outcome.
+  if (routedStatus === "confirmed_auto") {
+    return `Venue submission received. Google Business match confirmed by the operator (${matchedName}) — submission automatically confirmed. New venue created and linked; operator account provisioned and setup email sent to ${email}.`;
+  }
+  if (routedStatus === "pending_review") {
+    return `Venue submission received. Google Business match confirmed by the operator (${matchedName}), but the matched venue already exists and is unclaimed — routed for manual review before confirming ownership.`;
+  }
+  if (routedStatus === "double_claim") {
+    return `Venue submission received. Google Business match confirmed by the operator (${matchedName}), but the matched venue is already claimed by another operator — flagged as a potential double claim for manual review.`;
+  }
+  return "Venue submission received.";
+}
+
 /**
  * Persists the operator submission to operator_submissions.
  *
@@ -722,6 +767,28 @@ export async function saveOperatorSubmissionAction(
     routedStatus,
     businessName: formValues.businessName,
   });
+
+  // ── System note: submission received + auto-routing outcome ──────────────
+  // Best-effort — a note-write failure must not fail the submission, which
+  // has already succeeded at this point. Matches the fire-and-forget
+  // convention already used for note inserts elsewhere in this codebase.
+  if (insertedSubmission?.id) {
+    const { error: noteError } = await supabase.from("operator_submission_notes").insert({
+      submission_id: insertedSubmission.id,
+      note: buildSubmissionReceivedNote({
+        matchStatus,
+        routedStatus,
+        match,
+        businessName: formValues.businessName,
+        email: formValues.email,
+      }),
+      created_by: null,
+      created_by_email: null,
+    });
+    if (noteError) {
+      console.error("[saveOperatorSubmissionAction] Note insert failed:", noteError.message);
+    }
+  }
 
   // ── Notify founder ────────────────────────────────────────────────────────
   // Awaited directly so the email executes before this Server Action returns.

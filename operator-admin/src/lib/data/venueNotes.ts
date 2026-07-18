@@ -83,3 +83,59 @@ export async function getVenueNotes(venueId: string): Promise<{ notes: VenueNote
 
   return { notes };
 }
+
+/**
+ * Fetches Add Your Venue submission lifecycle notes for submissions linked to
+ * this venue (operator_submissions.venue_id), for display alongside the
+ * venue's own notes on the venue detail page.
+ *
+ * Read-only cross-reference via the existing venue_id relationship — the
+ * canonical record stays in operator_submission_notes; this does not
+ * duplicate storage. A submission can be linked to a venue at different
+ * points (auto-confirmed at submit time, or manually approved later), so
+ * this naturally picks up notes whenever that link exists, with no separate
+ * backfill needed.
+ *
+ * Each note is prefixed to make its origin clear without requiring a new
+ * "source" affordance in the shared NoteEntry UI.
+ */
+export async function getRelatedSubmissionNotesForVenue(
+  venueId: string
+): Promise<{ notes: VenueNote[] }> {
+  const supabase = createAdminClient();
+
+  const { data: submissions, error: submissionsError } = await supabase
+    .from("operator_submissions")
+    .select("id")
+    .eq("venue_id", venueId);
+
+  if (submissionsError) {
+    console.error("[getRelatedSubmissionNotesForVenue]", submissionsError.message);
+    return { notes: [] };
+  }
+
+  const submissionIds = (submissions ?? []).map((row) => row.id as string);
+  if (submissionIds.length === 0) return { notes: [] };
+
+  const { data, error } = await supabase
+    .from("operator_submission_notes")
+    .select("id, submission_id, note, created_by, created_by_email, created_at")
+    .in("submission_id", submissionIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getRelatedSubmissionNotesForVenue]", error.message);
+    return { notes: [] };
+  }
+
+  const notes: VenueNote[] = (data ?? []).map((row) => ({
+    id:               row.id as string,
+    venue_id:         venueId,
+    note:             `(via Add Your Venue submission) ${row.note as string}`,
+    created_by:       row.created_by as string | null,
+    created_by_email: row.created_by_email as string | null,
+    created_at:       row.created_at as string,
+  }));
+
+  return { notes };
+}
