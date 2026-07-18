@@ -3,12 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendClaimInfoSubmittedNotificationEmail } from "@/lib/email";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -189,7 +184,7 @@ export async function submitClaimMoreInfoAction(
   // claimant; only enough context to identify the claim for review.
   const slackResult = await sendSlackAcquisitionNotification({
     channel: "venue-claims",
-    text: `Additional info submitted for *${venueName}* (claim ${claimId})\nClaimant: ${firstName} ${lastName} <${claimantEmail}>\n<${getAppUrl()}/control-panel/claims/${claimId}|Review claim →>`,
+    text: `Additional info submitted for *${venueName}* (claim ${claimId})\nClaimant: ${firstName} ${lastName} <${claimantEmail}>\n<${getSiteUrl()}/control-panel/claims/${claimId}|Review claim →>`,
   });
 
   // sendSlackAcquisitionNotification never throws, so a missing/misconfigured

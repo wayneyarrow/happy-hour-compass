@@ -7,6 +7,7 @@ import { sendPasswordSetupEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,14 +37,6 @@ const STATUS_MAP: Record<ReviewAction, string> = {
   needs_more_info: "needs_more_info",
   reject:          "rejected",
 };
-
-// ── App URL helper ─────────────────────────────────────────────────────────────
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
 
 // ── Action ────────────────────────────────────────────────────────────────────
 
@@ -174,7 +167,7 @@ export async function reviewClaimAction(
       return { error: "Failed to save review decision. Please try again." };
     }
 
-    const appUrl     = getAppUrl();
+    const appUrl     = getSiteUrl();
     const moreInfoUrl = `${appUrl}/claim/more-info/${token}`;
 
     // Email is required — the claimant needs the link.
@@ -417,7 +410,7 @@ export async function resendClaimSetupEmailAction(
   }
 
   // ── Generate fresh recovery link ──────────────────────────────────────────
-  const appUrl     = getAppUrl();
+  const appUrl     = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({

@@ -3,12 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOperatorSubmissionInfoSubmittedNotificationEmail } from "@/lib/email";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -193,7 +188,7 @@ export async function submitMoreInfoAction(
   const submitterName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
   const slackResult = await sendSlackAcquisitionNotification({
     channel: "venue-submissions",
-    text: `Additional info submitted for *${venueName}* (submission ${row.id})\nSubmitter: ${submitterName} <${row.email}>\n<${getAppUrl()}/control-panel/operator-submissions/${row.id}|Review submission →>`,
+    text: `Additional info submitted for *${venueName}* (submission ${row.id})\nSubmitter: ${submitterName} <${row.email}>\n<${getSiteUrl()}/control-panel/operator-submissions/${row.id}|Review submission →>`,
   });
 
   // sendSlackAcquisitionNotification never throws, so a missing/misconfigured

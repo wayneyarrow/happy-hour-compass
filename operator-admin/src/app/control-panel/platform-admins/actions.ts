@@ -8,6 +8,7 @@ import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { getPlatformAdminByEmail, hasOtherActivePlatformAdmin } from "@/lib/platformAdmins";
 import { sendPlatformAdminInviteEmail } from "@/lib/email";
 import { logAuditEvent } from "@/lib/auditLog";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,12 +34,6 @@ async function getCallerEmail(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
 }
 
 // ── Invite action ─────────────────────────────────────────────────────────────
@@ -81,7 +76,7 @@ export async function invitePlatformAdminAction(
   // ── Generate token ────────────────────────────────────────────────────────────
   const token      = randomBytes(32).toString("hex");
   const expiresAt  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const inviteUrl  = `${getAppUrl()}/cp-invite/${token}`;
+  const inviteUrl  = `${getSiteUrl()}/cp-invite/${token}`;
 
   // ── Upsert platform_admins row ────────────────────────────────────────────────
   const supabase = createAdminClient();

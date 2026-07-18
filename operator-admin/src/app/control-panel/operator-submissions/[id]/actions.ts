@@ -12,12 +12,7 @@ import {
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -164,7 +159,7 @@ export async function reviewSubmissionAction(
       return { error: "Failed to save review. Please try again." };
     }
 
-    const appUrl     = getAppUrl();
+    const appUrl     = getSiteUrl();
     const moreInfoUrl = `${appUrl}/suggest/owner/more-info/${token}`;
 
     // Email is required for this action. If it fails, the token is stored but
@@ -596,7 +591,7 @@ export async function resendSubmissionSetupEmailAction(
   }
 
   // ── Generate fresh recovery link ──────────────────────────────────────────
-  const appUrl     = getAppUrl();
+  const appUrl     = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({

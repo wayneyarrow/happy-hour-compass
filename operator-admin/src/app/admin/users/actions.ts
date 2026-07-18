@@ -9,14 +9,7 @@ import { sendMemberInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
 import { logAuditEvent } from "@/lib/auditLog";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { getSiteUrl } from "@/lib/siteUrl";
 
 async function assertOwner(operatorId: string): Promise<
   | { ok: true; ctx: Awaited<ReturnType<typeof resolveOperatorContext>> }
@@ -150,7 +143,7 @@ export async function inviteUserAction(
   }
 
   // Send invite email (shared path for both new INSERT and cancelled-row reuse).
-  const inviteUrl = `${getAppUrl()}/operator/invite/${token}`;
+  const inviteUrl = `${getSiteUrl()}/operator/invite/${token}`;
   const firstName = fullName?.trim().split(/\s+/)[0] ?? "there";
 
   const emailResult = await sendMemberInviteEmail({

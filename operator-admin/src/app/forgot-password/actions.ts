@@ -3,18 +3,13 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export type ForgotPasswordState = {
   success?: true;
   error?: string;
   fieldError?: string;
 };
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
 
 /**
  * Sends a password reset email to an operator if an account exists for the
@@ -63,7 +58,7 @@ export async function forgotPasswordAction(
   const firstName = ((operatorRow.first_name as string | null) ?? "").trim() || undefined;
 
   // ── Generate a Supabase recovery link ─────────────────────────────────────
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({

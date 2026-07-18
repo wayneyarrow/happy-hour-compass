@@ -1,12 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
 import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { getSiteUrl } from "@/lib/siteUrl";
 
 /**
  * Provisions an operator account for a venue and sends an activation email.
@@ -238,7 +233,7 @@ export async function provisionOperatorForVenue({
   // Points directly to /operator/create-password. Supabase appends
   // #access_token=...&type=recovery to this URL so the page can call setSession().
 
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({

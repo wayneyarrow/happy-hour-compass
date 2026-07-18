@@ -6,9 +6,14 @@
  * Required env vars:
  *   RESEND_API_KEY   — from your Resend dashboard (resend.com/api-keys)
  *
- * Optional env var (for the activation link base URL):
- *   APP_URL          — e.g. "https://happyhourcompass.com"
- *                      Falls back to VERCEL_URL (auto-set by Vercel) or localhost.
+ * Link base URL: resolved via getSiteUrl() (src/lib/siteUrl.ts) — the same
+ * environment-aware canonical helper already used for SEO/metadata. This
+ * used to be a separate, locally-duplicated getAppUrl() reading APP_URL
+ * first; APP_URL was found (via hosted testing) to be configured with a
+ * single fixed value across all Vercel environments, which sent Preview
+ * (staging) email links to the unrelated legacy production deployment
+ * instead of staging.happyhourcompass.com. getSiteUrl() resolves per
+ * environment instead of to one fixed value.
  *
  * Sender: hello@happyhourcompass.com (verified domain).
  *
@@ -17,14 +22,9 @@
 
 import { Resend } from "resend";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-
-function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
 
 function getResend(): Resend {
   const key = process.env.RESEND_API_KEY;
@@ -155,7 +155,7 @@ async function escalateEmailFailure({
  * Every email function calls this and passes its inner HTML + a footer note.
  */
 function emailLayout(content: string, footerNote: string): string {
-  const logoUrl = `${getAppUrl()}/logo.png`;
+  const logoUrl = `${getSiteUrl()}/logo.png`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -336,7 +336,7 @@ export async function sendClaimNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = getFounderNotificationEmail();
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
 
   const html = emailLayout(`
@@ -767,7 +767,7 @@ export async function sendOperatorSubmissionNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = getFounderNotificationEmail();
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
 
   const matchBadgeColor =
@@ -1213,7 +1213,7 @@ export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to      = getFounderNotificationEmail();
-  const appUrl  = getAppUrl();
+  const appUrl  = getSiteUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
   const fullName  = [submitterFirstName, submitterLastName].filter(Boolean).join(" ") || submitterEmail;
 
@@ -1427,7 +1427,7 @@ export async function sendClaimInfoSubmittedNotificationEmail({
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to       = getFounderNotificationEmail();
-  const appUrl   = getAppUrl();
+  const appUrl   = getSiteUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
   const fullName  = [claimantFirstName, claimantLastName].filter(Boolean).join(" ") || claimantEmail;
 
@@ -1515,7 +1515,7 @@ export async function sendOperatorAccountActivatedNotificationEmail({
   sourceFlow: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = getFounderNotificationEmail();
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
   const reviewUrl = venueId ? `${appUrl}/control-panel/venues/${venueId}` : null;
 
   const html = emailLayout(`
@@ -1779,7 +1779,7 @@ export async function sendVenueCancellationFounderEmail({
   venueId:       string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to      = getFounderNotificationEmail();
-  const appUrl  = getAppUrl();
+  const appUrl  = getSiteUrl();
   const venueUrl = `${appUrl}/control-panel/venues/${venueId}`;
   const reasonLabel = CANCELLATION_REASON_LABELS[reason] ?? reason;
 
