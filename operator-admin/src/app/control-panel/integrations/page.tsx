@@ -4,6 +4,17 @@ export const metadata = { title: "Integrations" };
 import { SlackTestPanel } from "@/app/control-panel/settings/SlackTestPanel";
 
 export default function ControlPanelIntegrationsPage() {
+  // TEMPORARY — diagnosing a reported "no-webhook" result despite the
+  // SLACK_OPS_ALERTS_WEBHOOK_URL var being confirmed present in the Vercel
+  // dashboard. Read server-side, at request time, in this exact serverless
+  // instance — booleans only, never the value itself. Remove once resolved.
+  const envDiagnostic = {
+    nodeEnv:               process.env.NODE_ENV ?? "unknown",
+    vercelEnv:             process.env.VERCEL_ENV ?? "unknown",
+    opsAlertsConfigured:   Boolean(process.env.SLACK_OPS_ALERTS_WEBHOOK_URL),
+    opsCriticalConfigured: Boolean(process.env.SLACK_OPS_CRITICAL_WEBHOOK_URL),
+  };
+
   return (
     <div className="max-w-3xl">
       <div className="mb-8">
@@ -20,7 +31,7 @@ export default function ControlPanelIntegrationsPage() {
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">
             Slack
           </h2>
-          <SlackTestPanel />
+          <SlackTestPanel envDiagnostic={envDiagnostic} />
         </div>
 
         {/* ── Coming soon ───────────────────────────────────────────────────── */}

@@ -10,7 +10,15 @@ const ENV_VAR: Record<string, string> = {
   "ops-critical": "SLACK_OPS_CRITICAL_WEBHOOK_URL",
 };
 
-export function SlackTestPanel() {
+/** TEMPORARY diagnostic — remove once the "no-webhook" investigation is resolved. */
+export type EnvDiagnostic = {
+  nodeEnv: string;
+  vercelEnv: string;
+  opsAlertsConfigured: boolean;
+  opsCriticalConfigured: boolean;
+};
+
+export function SlackTestPanel({ envDiagnostic }: { envDiagnostic?: EnvDiagnostic }) {
   const [state, formAction, pending] = useActionState(slackTestAction, INITIAL_STATE);
 
   return (
@@ -22,6 +30,19 @@ export function SlackTestPanel() {
         Send a test notification to confirm webhook configuration and channel delivery.
         Webhook URLs are never shown here.
       </p>
+
+      {/* TEMPORARY — server-side env diagnostic. No secret values, booleans only. */}
+      {envDiagnostic && (
+        <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 space-y-0.5">
+          <p className="font-sans font-semibold text-slate-500 mb-1">
+            Temporary diagnostic (this instance, this request)
+          </p>
+          <p>NODE_ENV: {envDiagnostic.nodeEnv}</p>
+          <p>VERCEL_ENV: {envDiagnostic.vercelEnv}</p>
+          <p>SLACK_OPS_ALERTS_WEBHOOK_URL defined: {String(envDiagnostic.opsAlertsConfigured)}</p>
+          <p>SLACK_OPS_CRITICAL_WEBHOOK_URL defined: {String(envDiagnostic.opsCriticalConfigured)}</p>
+        </div>
+      )}
 
       <form action={formAction} className="flex items-center gap-3">
         <button
