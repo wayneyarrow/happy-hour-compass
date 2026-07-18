@@ -38,6 +38,22 @@ function getResend(): Resend {
 
 const DEFAULT_FROM = "Happy Hour Compass <hello@happyhourcompass.com>";
 
+/**
+ * Single source of truth for the internal recipient of every founder/ops
+ * lifecycle notification (claims, submissions, activations). Every internal
+ * notification email must read through this function rather than inlining
+ * process.env.FOUNDER_NOTIFICATION_EMAIL separately — a duplicated inline
+ * fallback is how a stale/incorrect override (e.g. a personal address left
+ * over from early testing) silently diverges between call sites.
+ *
+ * Falls back to hello@happyhourcompass.com — the monitored HHC inbox already
+ * used as the sender and support address everywhere else — when
+ * FOUNDER_NOTIFICATION_EMAIL is not set for the current environment.
+ */
+function getFounderNotificationEmail(): string {
+  return process.env.FOUNDER_NOTIFICATION_EMAIL ?? "hello@happyhourcompass.com";
+}
+
 // ── Centralized transactional email sender ────────────────────────────────────
 
 export type EmailCriticality = "critical" | "important" | "standard";
@@ -186,6 +202,12 @@ function emailCta(href: string, label: string): string {
  * Prominent spam/junk callout. Add to emails where the recipient is waiting
  * for a future HHC response. Beta feedback confirmed some HHC emails land in spam.
  * Do NOT add to password resets, invitations, or activation emails.
+ *
+ * Do NOT add to an email that pairs 1:1 with an on-screen success modal
+ * (claim/submission confirmation emails) — the modal already carries this
+ * reminder, and repeating it in an email the recipient has just opened is
+ * redundant. It still belongs in later, out-of-band correspondence with no
+ * preceding modal (e.g. sendClaimMoreInfoEmail, sendRequestMoreInfoEmail).
  */
 function emailSpamCallout(): string {
   return `<table cellpadding="0" cellspacing="0" style="width:100%;margin:20px 0 0;">
@@ -283,7 +305,7 @@ Happy Hour Compass`;
  *   RESEND_API_KEY
  *
  * Optional env var:
- *   FOUNDER_NOTIFICATION_EMAIL — defaults to ops@happyhourcompass.com
+ *   FOUNDER_NOTIFICATION_EMAIL — defaults to hello@happyhourcompass.com
  *   APP_URL                    — used to build the review link
  */
 export async function sendClaimNotificationEmail({
@@ -305,8 +327,7 @@ export async function sendClaimNotificationEmail({
   phone: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to =
-    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to = getFounderNotificationEmail();
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
 
@@ -401,7 +422,6 @@ export async function sendClaimSubmissionConfirmationEmail({
             "If we need anything else, we&rsquo;ll reach out to you at this email address.",
             "Once approved, you&rsquo;ll receive a link to set up your operator account.",
           ])}
-          ${emailSpamCallout()}
           <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
           <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
@@ -418,8 +438,6 @@ What happens next?
 1. We review your ownership claim (usually within 1–2 business days).
 2. If we need anything else, we'll reach out to you at this email address.
 3. Once approved, you'll receive a link to set up your operator account.
-
-Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Cheers,
 Wayne
@@ -531,7 +549,7 @@ Founder, Happy Hour Compass`;
  * state. Caller is responsible for not awaiting this in a blocking way.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to hello@happyhourcompass.com)
  */
 export async function sendSuggestionNotificationEmail({
   suggestionId,
@@ -552,8 +570,7 @@ export async function sendSuggestionNotificationEmail({
   marketingOptIn?: boolean;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to =
-    process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to = getFounderNotificationEmail();
   const notesRow = notes
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Notes</td>
@@ -716,7 +733,7 @@ Happy Hour Compass`;
  * match_status (confirmed / rejected / no_match) or Google Places availability.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to hello@happyhourcompass.com)
  */
 export async function sendOperatorSubmissionNotificationEmail({
   submissionId,
@@ -741,7 +758,7 @@ export async function sendOperatorSubmissionNotificationEmail({
   routedStatus: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to = getFounderNotificationEmail();
   const appUrl = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
 
@@ -831,7 +848,7 @@ Happy Hour Compass Control Panel`;
  * to the caller. If it fails, the caller should return an error to the user.
  *
  * Required env var: RESEND_API_KEY
- * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com)
+ * Optional env var: FOUNDER_NOTIFICATION_EMAIL (defaults to hello@happyhourcompass.com)
  */
 export async function sendContactFounderNotificationEmail({
   messageId,
@@ -846,7 +863,7 @@ export async function sendContactFounderNotificationEmail({
   message: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to = getFounderNotificationEmail();
   const nameRow = name
     ? `<tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Name</td>
@@ -1128,7 +1145,6 @@ export async function sendOperatorSubmissionConfirmationEmail({
             "If we need anything else, we&rsquo;ll reach out to you at this email address.",
             "Once verified, you&rsquo;ll receive a link to set up your operator account.",
           ])}
-          ${emailSpamCallout()}
           <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
           <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
@@ -1145,8 +1161,6 @@ What happens next?
 1. We review your submission (usually within 1–2 business days).
 2. If we need anything else, we'll reach out to you at this email address.
 3. Once verified, you'll receive a link to set up your operator account.
-
-Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Cheers,
 Wayne
@@ -1190,7 +1204,7 @@ export async function sendOperatorSubmissionInfoSubmittedNotificationEmail({
   submitterEmail: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to      = getFounderNotificationEmail();
   const appUrl  = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/operator-submissions/${submissionId}`;
   const fullName  = [submitterFirstName, submitterLastName].filter(Boolean).join(" ") || submitterEmail;
@@ -1404,7 +1418,7 @@ export async function sendClaimInfoSubmittedNotificationEmail({
   claimantEmail: string;
   submittedAt: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to       = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to       = getFounderNotificationEmail();
   const appUrl   = getAppUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
   const fullName  = [claimantFirstName, claimantLastName].filter(Boolean).join(" ") || claimantEmail;
@@ -1464,6 +1478,85 @@ Happy Hour Compass Control Panel`;
     html,
     text,
     criticality: "important",
+  });
+}
+
+// ── Operator account activated founder notification ────────────────────────────
+
+/**
+ * Notifies Happy Hour Compass internally the first time an operator
+ * completes account setup (sets their password) — regardless of whether the
+ * account originated from a claim approval, an auto-confirmed Add Your Venue
+ * submission, or a manually approved Add Your Venue submission.
+ *
+ * Called at most once per operator by completeOperatorAccountActivation()'s
+ * idempotency gate (operators.account_activated_at) — never re-sent on a
+ * later self-service password reset.
+ */
+export async function sendOperatorAccountActivatedNotificationEmail({
+  operatorEmail,
+  operatorName,
+  venueId,
+  venueName,
+  sourceFlow,
+}: {
+  operatorEmail: string;
+  operatorName: string;
+  venueId: string | null;
+  venueName: string | null;
+  sourceFlow: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to = getFounderNotificationEmail();
+  const appUrl = getAppUrl();
+  const reviewUrl = venueId ? `${appUrl}/control-panel/venues/${venueId}` : null;
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Operator account activated</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Operator</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${operatorName}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${operatorEmail}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Venue</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${venueName ?? "Unknown"}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Source</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${sourceFlow}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6;">
+            This operator has set their password and can now sign in to Operator Admin.
+          </p>
+          ${reviewUrl ? emailCta(reviewUrl, "View venue &rarr;") : ""}
+          ${reviewUrl ? `<p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${reviewUrl}</p>` : ""}`,
+    "Happy Hour Compass &middot; Operator lifecycle notification"
+  );
+
+  const text = `Operator account activated — Happy Hour Compass
+
+Operator: ${operatorName}
+Email:    ${operatorEmail}
+Venue:    ${venueName ?? "Unknown"}
+Source:   ${sourceFlow}
+
+This operator has set their password and can now sign in to Operator Admin.
+${reviewUrl ? `\n${reviewUrl}\n` : ""}
+—
+Happy Hour Compass Control Panel`;
+
+  return sendTransactionalEmail({
+    type:        "operator_account_activated",
+    to,
+    subject:     `Operator account activated: ${operatorName}`,
+    html,
+    text,
+    criticality: "standard",
   });
 }
 
@@ -1663,7 +1756,7 @@ const CANCELLATION_REASON_LABELS: Record<string, string> = {
 /**
  * Notifies the founder when an operator cancels management of their venue.
  *
- * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to ops@happyhourcompass.com).
+ * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to hello@happyhourcompass.com).
  * Includes a direct link to the venue in the Control Panel.
  */
 export async function sendVenueCancellationFounderEmail({
@@ -1677,7 +1770,7 @@ export async function sendVenueCancellationFounderEmail({
   reason:        string;
   venueId:       string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const to      = process.env.FOUNDER_NOTIFICATION_EMAIL ?? "ops@happyhourcompass.com";
+  const to      = getFounderNotificationEmail();
   const appUrl  = getAppUrl();
   const venueUrl = `${appUrl}/control-panel/venues/${venueId}`;
   const reasonLabel = CANCELLATION_REASON_LABELS[reason] ?? reason;

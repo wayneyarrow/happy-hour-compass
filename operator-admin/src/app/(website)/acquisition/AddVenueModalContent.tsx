@@ -12,6 +12,7 @@ import {
 } from "@/app/(consumer)/suggest/owner/actions";
 import type { OwnerFormValues, GoogleMatch } from "@/app/(consumer)/suggest/owner/types";
 import { trackEvent } from "@/lib/analytics";
+import { EmailConfirmationNote } from "./emailConfirmationCopy";
 
 type Props = {
   onDone: () => void;
@@ -23,8 +24,11 @@ type Step =
   | "match"
   | "no-match"
   | "reject-form"
+  // Google business match confirmed — venue auto-provisioned, account email sent.
   | "confirmed"
-  | "rejected";
+  // No Google match, or submitter flagged the match as wrong — details
+  // submitted for manual review (no account is provisioned yet).
+  | "submitted";
 
 const INPUT_CLASS =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 " +
@@ -234,7 +238,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           setGeneralError(result.error);
           return;
         }
-        setStep("rejected");
+        setStep("submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");
       }
@@ -254,7 +258,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           setGeneralError(result.error);
           return;
         }
-        setStep("confirmed");
+        setStep("submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");
       }
@@ -493,8 +497,45 @@ export function AddVenueModalContent({ onDone }: Props) {
     );
   }
 
-  // ── Step: confirmed / rejected ─────────────────────────────────────────────
-  if (step === "confirmed" || step === "rejected") {
+  // ── Step: confirmed — Google business match confirmed, auto-provisioned ────
+  if (step === "confirmed") {
+    return (
+      <div className="px-6 py-10 flex flex-col items-center text-center">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-6">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#d97706"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-8 h-8"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <h3 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
+          Your venue is on Happy Hour Compass
+        </h3>
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-6 max-w-[290px]">
+          We matched your business automatically — no manual review needed.
+        </p>
+        <div className="mb-10">
+          <EmailConfirmationNote lead="We&rsquo;ve sent you an account setup email." />
+        </div>
+        <button
+          type="button"
+          onClick={onDone}
+          className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-[15px] transition-colors"
+        >
+          Continue Browsing
+        </button>
+      </div>
+    );
+  }
+
+  // ── Step: submitted — no Google match, or match flagged wrong; manual review ─
+  if (step === "submitted") {
     return (
       <div className="px-6 py-10 flex flex-col items-center text-center">
         <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-6">
@@ -513,10 +554,13 @@ export function AddVenueModalContent({ onDone }: Props) {
         <h3 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
           Thanks&nbsp;&mdash; we&rsquo;ve got your details
         </h3>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-10 max-w-[290px]">
-          We&rsquo;ve received your submission and will be in touch to continue
-          setting things up. Keep an eye on your inbox.
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-6 max-w-[290px]">
+          We&rsquo;ll review your submission and get back to you within 2
+          business days.
         </p>
+        <div className="mb-10">
+          <EmailConfirmationNote lead="We&rsquo;ve also sent a confirmation email to your inbox." />
+        </div>
         <button
           type="button"
           onClick={onDone}

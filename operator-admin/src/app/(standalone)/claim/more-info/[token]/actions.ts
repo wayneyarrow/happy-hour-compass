@@ -2,7 +2,13 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendClaimInfoSubmittedNotificationEmail } from "@/lib/email";
-import { sendSlackAlert } from "@/lib/slack";
+import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
+
+function getAppUrl(): string {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +182,15 @@ export async function submitClaimMoreInfoAction(
       metadata: { "Claim ID": claimId, Email: claimantEmail, Venue: venueName, Error: notifyResult.error ?? "unknown" },
     });
   }
+
+  // Success Slack notification — mirrors the email above but on the
+  // #venue-claims channel already used for new-claim notifications.
+  // Intentionally omits phone/socials/verification details sent by the
+  // claimant; only enough context to identify the claim for review.
+  await sendSlackAcquisitionNotification({
+    channel: "venue-claims",
+    text: `Additional info submitted for *${venueName}* (claim ${claimId})\nClaimant: ${firstName} ${lastName} <${claimantEmail}>\n<${getAppUrl()}/control-panel/claims/${claimId}|Review claim →>`,
+  });
 
   return { success: true };
 }

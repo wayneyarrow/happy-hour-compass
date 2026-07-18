@@ -2,7 +2,13 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOperatorSubmissionInfoSubmittedNotificationEmail } from "@/lib/email";
-import { sendSlackAlert } from "@/lib/slack";
+import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
+
+function getAppUrl(): string {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -179,6 +185,16 @@ export async function submitMoreInfoAction(
       metadata: { "Submission ID": row.id as string, Email: row.email as string, Business: venueName, Error: notifyResult.error ?? "unknown" },
     });
   }
+
+  // Success Slack notification — mirrors the email above but on the
+  // #venue-submissions channel already used for new-submission notifications.
+  // Intentionally omits phone/socials/verification details from the
+  // submitter; only enough context to identify the submission for review.
+  const submitterName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
+  await sendSlackAcquisitionNotification({
+    channel: "venue-submissions",
+    text: `Additional info submitted for *${venueName}* (submission ${row.id})\nSubmitter: ${submitterName} <${row.email}>\n<${getAppUrl()}/control-panel/operator-submissions/${row.id}|Review submission →>`,
+  });
 
   return { success: true };
 }

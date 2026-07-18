@@ -3,6 +3,7 @@
 import { useState, useActionState, useEffect } from "react";
 import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[id]/claim/actions";
 import { trackEvent } from "@/lib/analytics";
+import { EmailConfirmationNote } from "./emailConfirmationCopy";
 
 type Props = {
   venueRouteParam: string;
@@ -71,9 +72,13 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
           We just need to verify that you&rsquo;re associated with this venue
           before granting access.
         </p>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-10">
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-6">
           This usually takes less than 24 hours.
         </p>
+
+        <div className="mb-10">
+          <EmailConfirmationNote lead="We&rsquo;ve sent a confirmation email to your inbox." />
+        </div>
 
         <button
           type="button"

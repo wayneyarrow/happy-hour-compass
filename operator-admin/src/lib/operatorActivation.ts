@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
+import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
 
 function getAppUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
@@ -294,4 +295,182 @@ export async function provisionOperatorForVenue({
     metadata: { Email: email, "Venue ID": venueId, "Auth User": authUserId, Flow: logTag },
   });
   return { ok: true, authUserId };
+}
+
+/**
+ * Shared account-completion boundary — called once an operator has
+ * successfully set their password on /operator/create-password, regardless
+ * of whether the account originated from a claim approval, an auto-confirmed
+ * Add Your Venue submission, or a manually approved Add Your Venue submission.
+ *
+ * That page is also reused for self-service password resets (see
+ * /forgot-password), so this function gates on operators.account_activated_at
+ * (migration 067) rather than firing on every password update:
+ *
+ *   UPDATE operators SET account_activated_at = now()
+ *   WHERE id = $1 AND account_activated_at IS NULL
+ *
+ * The atomic WHERE clause means only the first successful call for a given
+ * operator ever proceeds past it — concurrent retries and later password
+ * resets are all safe no-ops. Never throws; failures are logged (and, where
+ * the failure means the notification is now unrecoverable, escalated to
+ * #ops-critical) since this must never block the operator's own
+ * account-setup flow.
+ *
+ * Trade-off: the row is claimed (account_activated_at set) *before*
+ * notification delivery is attempted, not after. This keeps the idempotency
+ * gate a single atomic statement — the same duplicate-prevention guarantee
+ * the rest of this file relies on — rather than a check-then-act pair that
+ * would let a genuine concurrent retry send the notification twice. The cost
+ * is that a delivery failure *after* the gate fires cannot be automatically
+ * retried; that gap is covered by the critical Slack alerts below rather
+ * than by weakening the gate or adding a queue/outbox.
+ */
+export async function completeOperatorAccountActivation({
+  operatorId,
+}: {
+  operatorId: string;
+}): Promise<void> {
+  const supabase = createAdminClient();
+
+  const { data: activatedRow, error: updateError } = await supabase
+    .from("operators")
+    .update({ account_activated_at: new Date().toISOString() })
+    .eq("id", operatorId)
+    .is("account_activated_at", null)
+    .select("id, email, first_name, last_name, name")
+    .maybeSingle();
+
+  if (updateError) {
+    console.error(
+      "[completeOperatorAccountActivation] Update error:",
+      updateError.message
+    );
+    // Covers both a genuine DB error and migration 067 not yet being applied
+    // (missing column) — either way, no activation was recorded and no
+    // notification was sent, so this must be loud rather than log-only.
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Account Activation — DB Update Failed",
+      message:  "An operator completed account setup, but recording the activation failed (e.g. migration 067 not applied, or a DB error). No internal notification was sent for this activation. The operator's own account setup was not affected.",
+      metadata: { "Operator ID": operatorId, Error: updateError.message },
+    });
+    return;
+  }
+
+  if (!activatedRow) {
+    // Already activated (retry, race, or a later password reset) — no-op.
+    return;
+  }
+
+  const operatorEmail = activatedRow.email as string;
+  const operatorName =
+    (activatedRow.name as string | null) ||
+    [activatedRow.first_name as string | null, activatedRow.last_name as string | null]
+      .filter(Boolean)
+      .join(" ") ||
+    operatorEmail;
+
+  // Best-effort venue + source-flow context — never blocks the notification.
+  let venueId: string | null = null;
+  let venueName: string | null = null;
+  let sourceFlow = "Unknown";
+
+  try {
+    const { data: venueRow } = await supabase
+      .from("venues")
+      .select("id, name")
+      .eq("claimed_by", operatorId)
+      .maybeSingle();
+
+    if (venueRow) {
+      venueId = venueRow.id as string;
+      venueName = venueRow.name as string;
+
+      const { data: claimRow } = await supabase
+        .from("venue_claims")
+        .select("id")
+        .eq("venue_id", venueId)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (claimRow) {
+        sourceFlow = "Claim Your Venue";
+      } else {
+        const { data: submissionRow } = await supabase
+          .from("operator_submissions")
+          .select("status")
+          .eq("operator_id", operatorId)
+          .maybeSingle();
+
+        if (submissionRow) {
+          sourceFlow =
+            (submissionRow.status as string) === "confirmed_auto"
+              ? "Add Your Venue (auto-confirmed)"
+              : "Add Your Venue (manual review)";
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[completeOperatorAccountActivation] Context lookup failed:", err);
+  }
+
+  console.log("[completeOperatorAccountActivation] First-time activation.", {
+    operatorId,
+    venueId,
+    sourceFlow,
+  });
+
+  const emailResult = await sendOperatorAccountActivatedNotificationEmail({
+    operatorEmail,
+    operatorName,
+    venueId,
+    venueName,
+    sourceFlow,
+  });
+
+  if (!emailResult.ok) {
+    console.error(
+      "[completeOperatorAccountActivation] Notification email failed.",
+      { operatorId, error: emailResult.error }
+    );
+    // account_activated_at is already committed above (the idempotency gate
+    // has fired), so this is the only remaining signal that the notification
+    // did not reach anyone — there is no automatic retry path once the gate
+    // has fired. Mirrors the existing "committed but downstream step failed"
+    // pattern used elsewhere in this file (see rbAuthUser/rbOperator/
+    // rbVenueLink and reviewClaimAction's post-provisioning claim-update
+    // failure): a specific, context-rich critical alert for manual follow-up,
+    // richer than the generic escalateEmailFailure path (which only knows
+    // type/to/error, not which operator or venue this was).
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Operator Account Activated — Notification Email Failed",
+      message:  "An operator completed account setup, but the internal notification email failed to send. This will not be retried automatically — the activation is already recorded. Manual follow-up may be needed.",
+      metadata: {
+        Operator:      operatorName,
+        Email:         operatorEmail,
+        Venue:         venueName ?? "Unknown",
+        Source:        sourceFlow,
+        "Operator ID": operatorId,
+        Error:         emailResult.error ?? "unknown",
+      },
+    });
+  }
+
+  await sendSlackAlert({
+    channel:  "ops-alerts",
+    severity: "success",
+    title:    "Operator Account Activated",
+    message:  "An operator has completed account setup and can now sign in to Operator Admin.",
+    metadata: {
+      Operator:      operatorName,
+      Email:         operatorEmail,
+      Venue:         venueName ?? "Unknown",
+      Source:        sourceFlow,
+      "Operator ID": operatorId,
+    },
+  });
 }

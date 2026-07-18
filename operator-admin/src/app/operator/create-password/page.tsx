@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import PasswordInput from "@/components/PasswordInput";
+import { completeAccountSetupAction } from "./actions";
 
 /**
  * /operator/create-password
@@ -103,6 +104,17 @@ export default function CreatePasswordPage() {
     }
 
     setDone(true);
+
+    // Fires the shared one-time "operator account activated" internal
+    // notification (no-ops on password resets — see completeAccountSetupAction).
+    // Awaited so the request isn't aborted by the navigation below, but its
+    // outcome must never block the operator from reaching their dashboard.
+    try {
+      await completeAccountSetupAction();
+    } catch {
+      // Non-blocking — notification failure must not block account setup.
+    }
+
     router.push("/admin/home");
     router.refresh();
   }
