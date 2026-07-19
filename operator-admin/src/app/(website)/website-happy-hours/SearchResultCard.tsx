@@ -1,12 +1,15 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
-import type { HhStatus } from "@/lib/happyHourStatus";
+import { computeHhStatus, type HhStatus } from "@/lib/happyHourStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type { HhStatus };
+
+type HHSlot = { start: string; end: string };
 
 export type SearchResultCardData = {
   /** Venue slug — used for the card key and href routing. */
@@ -19,7 +22,15 @@ export type SearchResultCardData = {
   image: string;
   isVerified: boolean;
   googleRating: number | null;
-  hhStatus: HhStatus;
+  /**
+   * Raw weekly schedule — the HH status is computed client-side (see
+   * HhStatusDisplay below) rather than passed pre-computed, so it always
+   * reflects the viewer's actual wall-clock time instead of the
+   * server/deployment timezone. Mirrors the Venue Detail page's
+   * calculateHappyHourStatus() pattern (HappyHourTimesCard.tsx /
+   * VenueActionCard.tsx / VenueIdentityStatus.tsx).
+   */
+  happyHourWeekly: Record<string, HHSlot[]>;
   /** Distance from user in km. Null until client-side geolocation is available. */
   distanceKm: number | null;
   establishmentType: string;
@@ -93,8 +104,21 @@ function StarRating({ rating }: { rating: number }) {
 
 // ─── Happy Hour Status ────────────────────────────────────────────────────────
 
-function HhStatusDisplay({ status }: { status: HhStatus }) {
-  if (status.type === "none") return null;
+/**
+ * Computes status client-side on mount (rather than accepting a pre-computed
+ * prop) so the result always uses the viewer's actual wall-clock time — a
+ * server-computed value would reflect the deployment server's timezone
+ * instead. Renders nothing until mounted, matching VenueIdentityStatus.tsx's
+ * pattern on the Venue Detail page.
+ */
+function HhStatusDisplay({ happyHourWeekly }: { happyHourWeekly: Record<string, HHSlot[]> }) {
+  const [status, setStatus] = useState<HhStatus | null>(null);
+
+  useEffect(() => {
+    setStatus(computeHhStatus(happyHourWeekly));
+  }, [happyHourWeekly]);
+
+  if (!status || status.type === "none") return null;
 
   if (status.type === "active") {
     return (
@@ -226,7 +250,7 @@ export function SearchResultCard({ data }: Props) {
           )}
 
           {/* 3. Happy Hour status — time-sensitive decision signal */}
-          <HhStatusDisplay status={data.hhStatus} />
+          <HhStatusDisplay happyHourWeekly={data.happyHourWeekly} />
 
           {/* 4. Distance + establishment type — convenience signal */}
           {(data.distanceKm !== null || data.establishmentType) && (

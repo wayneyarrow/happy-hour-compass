@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPublishedVenuesByUuids } from "@/lib/data/venues";
-import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import type { WebsiteVenueCard } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
 
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
         image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
         isVerified: venue.isVerified,
         googleRating: venue.googleRating,
-        hhStatus: computeHhStatus(venue.happyHourWeekly),
         distanceKm: null,
         establishmentType: venue.establishmentType,
         foodSpecial: venue.specialsFood[0] ?? undefined,

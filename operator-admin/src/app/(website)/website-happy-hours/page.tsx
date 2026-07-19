@@ -3,7 +3,6 @@ import { getActiveMarket } from "@/lib/activeMarket";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { toMarketConfig } from "@/lib/markets";
-import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import {
   HappyHoursSearchClient,
@@ -66,7 +65,6 @@ export default async function HappyHoursSearchPage() {
       image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
       isVerified: venue.isVerified,
       googleRating: venue.googleRating,
-      hhStatus: computeHhStatus(venue.happyHourWeekly),
       distanceKm: null,
       establishmentType: venue.establishmentType,
       foodSpecial: venue.specialsFood[0] ?? undefined,

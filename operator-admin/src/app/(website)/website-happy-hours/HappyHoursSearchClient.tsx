@@ -18,7 +18,6 @@ import type { Market } from "@/lib/markets";
 export type WebsiteVenueCard = SearchResultCardData & {
   latitude: number | null;
   longitude: number | null;
-  happyHourWeekly: Record<string, Array<{ start: string; end: string }>>;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -363,17 +362,22 @@ export function HappyHoursSearchClient({
           let subtitle: string | undefined;
           let subtitleColor: MapMarker["subtitleColor"] = "gray";
 
-          if (c.hhStatus.type === "active") {
-            subtitle = `On Now · ${c.hhStatus.endsIn}`;
+          // Computed client-side (this component is "use client") so it
+          // reflects the viewer's actual wall-clock time — see
+          // SearchResultCardData.happyHourWeekly.
+          const hh = computeHhStatus(c.happyHourWeekly);
+
+          if (hh.type === "active") {
+            subtitle = `On Now · ${hh.endsIn}`;
             subtitleColor = "green";
-          } else if (c.hhStatus.type === "upcoming") {
+          } else if (hh.type === "upcoming") {
             const day =
-              c.hhStatus.day === "Today"
+              hh.day === "Today"
                 ? "Today"
-                : c.hhStatus.day === "Tomorrow"
+                : hh.day === "Tomorrow"
                 ? "Tomorrow"
-                : c.hhStatus.day;
-            subtitle = `${day} · Starts ${c.hhStatus.startsAt}`;
+                : hh.day;
+            subtitle = `${day} · Starts ${hh.startsAt}`;
             subtitleColor = "amber";
           } else {
             subtitle = c.establishmentType || undefined;

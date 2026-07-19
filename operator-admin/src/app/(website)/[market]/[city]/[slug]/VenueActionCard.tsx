@@ -144,6 +144,13 @@ export function VenueActionCard({
   const [openStatus, setOpenStatus] = useState<string | null>(null);
   const [nextOpen, setNextOpen] = useState<string | null>(null);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  // Computed client-side on mount (rather than during render) so it always
+  // uses the viewer's actual wall-clock time — computing it directly in the
+  // render body would run once during SSR (server timezone) and again on
+  // client hydration (browser timezone), producing mismatched HTML and a
+  // React hydration-mismatch error whenever the two differ. Mirrors the
+  // mounted-gate pattern VenueIdentityStatus.tsx already uses.
+  const [hh, setHh] = useState<ReturnType<typeof hhStatusLabel> | null>(null);
 
   useEffect(() => {
     const status = getOpenStatus(hoursWeekly);
@@ -162,7 +169,9 @@ export function VenueActionCard({
     );
   }, [lat, lng]);
 
-  const hh = hhStatusLabel(happyHourWeekly);
+  useEffect(() => {
+    setHh(hhStatusLabel(happyHourWeekly));
+  }, [happyHourWeekly]);
 
   const hasSecondary = Boolean(menuUrl || websiteUrl || phone);
 
@@ -172,7 +181,7 @@ export function VenueActionCard({
       {/* Status header — amber gradient when HH is active, clean white when not */}
       <div
         className={`px-5 pt-5 pb-4 border-b border-gray-100 transition-colors ${
-          hh.isActive
+          hh?.isActive
             ? "bg-gradient-to-br from-amber-50 to-orange-50/60"
             : "bg-white"
         }`}
@@ -180,22 +189,22 @@ export function VenueActionCard({
         {/* HH status — primary signal */}
         <div className="mb-3">
           <div className="flex items-center gap-2">
-            {hh.isActive && (
+            {hh?.isActive && (
               <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
             )}
             <p
               className={`text-sm leading-snug ${
-                hh.isActive
+                hh?.isActive
                   ? "font-bold text-amber-800"
-                  : hh.isNone
+                  : hh?.isNone
                   ? "font-normal text-gray-400"
                   : "font-bold text-gray-900"
               }`}
             >
-              {hh.line1}
+              {hh?.line1 ?? ""}
             </p>
           </div>
-          {hh.line2 && (
+          {hh?.line2 && (
             <p
               className={`text-xs mt-0.5 ${
                 hh.isActive ? "text-amber-700/80 ml-4" : "text-gray-500"

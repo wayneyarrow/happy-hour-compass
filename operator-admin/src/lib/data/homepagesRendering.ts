@@ -31,7 +31,6 @@ import { resolveCollectionPreview } from "@/lib/data/collectionsPreview";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
-import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/lib/geo/geography";
 import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
@@ -64,7 +63,7 @@ function venueToSearchResultCard(v: ConsumerVenue): SearchResultCardData | null 
     image: fallbackVenueImage(v.establishmentType),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
-    hhStatus: computeHhStatus(v.happyHourWeekly),
+    happyHourWeekly: v.happyHourWeekly,
     distanceKm: null,
     establishmentType: v.establishmentType,
     foodSpecial: v.specialsFood[0] ?? undefined,

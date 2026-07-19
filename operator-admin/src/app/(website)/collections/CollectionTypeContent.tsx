@@ -3,7 +3,6 @@ import { CollectionBreadcrumb } from "./CollectionBreadcrumb";
 import { formatCollectionItemCount, type PublicCollectionModel } from "@/lib/data/collectionPublic";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import type { SavedGuideCard } from "@/lib/data/contentGuides";
-import { computeHhStatus } from "@/lib/happyHourStatus";
 import { getMarketById } from "@/lib/markets";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import {
@@ -87,14 +86,13 @@ function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
     image: v.images[0]?.url ?? fallbackVenueImage(v.establishmentType),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
-    hhStatus: computeHhStatus(v.happyHourWeekly),
+    happyHourWeekly: v.happyHourWeekly,
     distanceKm: null,
     establishmentType: v.establishmentType,
     foodSpecial: v.specialsFood[0] ?? undefined,
     drinkSpecial: v.specialsDrinks[0] ?? undefined,
     latitude: v.latitude,
     longitude: v.longitude,
-    happyHourWeekly: v.happyHourWeekly,
   };
 }
 

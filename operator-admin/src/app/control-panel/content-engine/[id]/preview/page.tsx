@@ -9,7 +9,6 @@ import {
 import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
-import { computeHhStatus } from "@/lib/happyHourStatus";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "@/app/(website)/[market]/guides/[slug]/GuideDetailView";
@@ -101,7 +100,7 @@ export default async function GuidePreviewPage({
           image: v.images[0]?.url ?? fallbackImage(v.establishmentType),
           isVerified: v.isVerified,
           googleRating: v.googleRating,
-          hhStatus: computeHhStatus(v.happyHourWeekly),
+          happyHourWeekly: v.happyHourWeekly,
           distanceKm: null,
           establishmentType: v.establishmentType,
           foodSpecial: v.specialsFood[0] ?? undefined,
