@@ -110,6 +110,142 @@ function ChipButton({
   );
 }
 
+// ─── Dropdown panel contents ──────────────────────────────────────────────────
+// Shared between the desktop absolute popover and the mobile inline panel (see
+// render note above the chip bar for why mobile needs its own non-absolute copy).
+
+function TimeFilterFields({
+  filterTime,
+  onChange,
+  onClear,
+}: {
+  filterTime: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        Happy hour at
+      </p>
+      <input
+        type="time"
+        value={filterTime}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none"
+      />
+      <p className="mt-2 text-xs text-gray-400 leading-tight">
+        Shows venues with happy hour at this time on any day
+      </p>
+      {filterTime && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline"
+        >
+          Clear
+        </button>
+      )}
+    </>
+  );
+}
+
+function TypeFilterOptions({
+  establishmentTypes,
+  selectedType,
+  onSelect,
+}: {
+  establishmentTypes: string[];
+  selectedType: string | null;
+  onSelect: (type: string | null) => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+          !selectedType ? "font-semibold text-gray-900" : "text-gray-700"
+        }`}
+      >
+        All Types
+      </button>
+      {establishmentTypes.map((type) => (
+        <button
+          key={type}
+          type="button"
+          onClick={() => onSelect(type)}
+          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+            selectedType === type ? "font-semibold text-gray-900" : "text-gray-700"
+          }`}
+        >
+          {type}
+        </button>
+      ))}
+    </>
+  );
+}
+
+function SortOptions({
+  sortBy,
+  collectionOrder,
+  hasLoc,
+  onSelect,
+}: {
+  sortBy: SortOption;
+  collectionOrder: boolean;
+  hasLoc: boolean;
+  onSelect: (sort: SortOption) => void;
+}) {
+  return (
+    <>
+      {collectionOrder && (
+        <button
+          type="button"
+          onClick={() => onSelect("collection")}
+          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+            sortBy === "collection" ? "font-semibold text-gray-900" : "text-gray-700"
+          }`}
+        >
+          Collection Order
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onSelect("distance")}
+        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+          sortBy === "distance" ? "font-semibold text-gray-900" : "text-gray-700"
+        }`}
+      >
+        <span>Nearest First</span>
+        {!hasLoc && (
+          <span className="block text-xs text-gray-400 font-normal mt-0.5">
+            Enable location to activate
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect("rating")}
+        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+          sortBy === "rating" ? "font-semibold text-gray-900" : "text-gray-700"
+        }`}
+      >
+        Top Rated First
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect("az")}
+        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+          sortBy === "az" ? "font-semibold text-gray-900" : "text-gray-700"
+        }`}
+      >
+        A – Z
+      </button>
+    </>
+  );
+}
+
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({
@@ -204,9 +340,15 @@ export function HappyHoursSearchClient({
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   // ── dropdown refs for click-outside ──
+  // *Ref covers the chip button + desktop popover. *PanelRef additionally covers
+  // the mobile inline panel (rendered outside the chip row — see below), so
+  // interacting with it isn't mistaken for an outside click.
   const typeRef = useRef<HTMLDivElement>(null);
   const sortRef = useRef<HTMLDivElement>(null);
   const timeRef = useRef<HTMLDivElement>(null);
+  const typePanelRef = useRef<HTMLDivElement>(null);
+  const sortPanelRef = useRef<HTMLDivElement>(null);
+  const timePanelRef = useRef<HTMLDivElement>(null);
 
   // Request geolocation on mount — same auto-request pattern as VenueList.tsx.
   // When granted, the default "distance" sort activates and cards are sorted nearest-first.
@@ -230,11 +372,23 @@ export function HappyHoursSearchClient({
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       const t = e.target as Node;
-      if (typeOpen && typeRef.current && !typeRef.current.contains(t))
+      if (
+        typeOpen &&
+        typeRef.current && !typeRef.current.contains(t) &&
+        (!typePanelRef.current || !typePanelRef.current.contains(t))
+      )
         setTypeOpen(false);
-      if (sortOpen && sortRef.current && !sortRef.current.contains(t))
+      if (
+        sortOpen &&
+        sortRef.current && !sortRef.current.contains(t) &&
+        (!sortPanelRef.current || !sortPanelRef.current.contains(t))
+      )
         setSortOpen(false);
-      if (timeOpen && timeRef.current && !timeRef.current.contains(t))
+      if (
+        timeOpen &&
+        timeRef.current && !timeRef.current.contains(t) &&
+        (!timePanelRef.current || !timePanelRef.current.contains(t))
+      )
         setTimeOpen(false);
     }
     document.addEventListener("mousedown", onMouseDown);
@@ -465,42 +619,26 @@ export function HappyHoursSearchClient({
               onClick={() => setTimeOpen((v) => !v)}
               hasArrow
             />
+            {/* Desktop: absolute popover anchored below the chip */}
             {timeOpen && (
-              <div className="absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 w-56">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Happy hour at
-                </p>
-                <input
-                  type="time"
-                  value={filterTime}
-                  onChange={(e) => setFilterTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none"
+              <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 w-56">
+                <TimeFilterFields
+                  filterTime={filterTime}
+                  onChange={setFilterTime}
+                  onClear={() => {
+                    setFilterTime("");
+                    setTimeOpen(false);
+                  }}
                 />
-                <p className="mt-2 text-xs text-gray-400 leading-tight">
-                  Shows venues with happy hour at this time on any day
-                </p>
-                {filterTime && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilterTime("");
-                      setTimeOpen(false);
-                    }}
-                    className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline"
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
             )}
           </div>
 
-          {/* Top Rated */}
-          <ChipButton
-            label="Top Rated"
-            active={topRatedActive}
-            onClick={() => setTopRatedActive((v) => !v)}
-          />
+          {/* TODO (post-launch):
+              Reintroduce this filter once the venue dataset contains a broader
+              distribution of ratings. When restored, consider renaming the chip
+              to "Rated 4.0+" to better communicate that it is a threshold filter
+              rather than a sort option. */}
 
           {/* Type */}
           <div ref={typeRef} className="relative flex-shrink-0">
@@ -510,37 +648,17 @@ export function HappyHoursSearchClient({
               onClick={() => setTypeOpen((v) => !v)}
               hasArrow
             />
+            {/* Desktop: absolute popover anchored below the chip */}
             {typeOpen && (
-              <div className="absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[180px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedType(null);
+              <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[180px]">
+                <TypeFilterOptions
+                  establishmentTypes={establishmentTypes}
+                  selectedType={selectedType}
+                  onSelect={(type) => {
+                    setSelectedType(type);
                     setTypeOpen(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                    !selectedType ? "font-semibold text-gray-900" : "text-gray-700"
-                  }`}
-                >
-                  All Types
-                </button>
-                {establishmentTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => {
-                      setSelectedType(type);
-                      setTypeOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                      selectedType === type
-                        ? "font-semibold text-gray-900"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
+                />
               </div>
             )}
           </div>
@@ -553,63 +671,18 @@ export function HappyHoursSearchClient({
               onClick={() => setSortOpen((v) => !v)}
               hasArrow
             />
+            {/* Desktop: absolute popover anchored below the chip */}
             {sortOpen && (
-              <div className="absolute top-full mt-2 right-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[200px]">
-                {collectionOrder && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortBy("collection");
-                      setSortOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                      sortBy === "collection" ? "font-semibold text-gray-900" : "text-gray-700"
-                    }`}
-                  >
-                    Collection Order
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSortBy("distance");
+              <div className="hidden md:block absolute top-full mt-2 right-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[200px]">
+                <SortOptions
+                  sortBy={sortBy}
+                  collectionOrder={collectionOrder}
+                  hasLoc={hasLoc}
+                  onSelect={(s) => {
+                    setSortBy(s);
                     setSortOpen(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                    sortBy === "distance" ? "font-semibold text-gray-900" : "text-gray-700"
-                  }`}
-                >
-                  <span>Nearest First</span>
-                  {!hasLoc && (
-                    <span className="block text-xs text-gray-400 font-normal mt-0.5">
-                      Enable location to activate
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSortBy("rating");
-                    setSortOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                    sortBy === "rating" ? "font-semibold text-gray-900" : "text-gray-700"
-                  }`}
-                >
-                  Top Rated First
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSortBy("az");
-                    setSortOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                    sortBy === "az" ? "font-semibold text-gray-900" : "text-gray-700"
-                  }`}
-                >
-                  A – Z
-                </button>
+                />
               </div>
             )}
           </div>
@@ -639,6 +712,48 @@ export function HappyHoursSearchClient({
             </button>
           )}
         </div>
+
+        {/* Mobile: dropdown panels render full-width below the chip row instead of as
+            an absolute popover, because the chip row scrolls horizontally on mobile
+            (overflow-x-auto) which clips/traps an absolutely-positioned child — the
+            same pattern EventSearchResults.tsx uses for its mobile calendar panel. */}
+        {timeOpen && (
+          <div ref={timePanelRef} className="md:hidden border-t border-gray-100 bg-white px-4 py-4">
+            <TimeFilterFields
+              filterTime={filterTime}
+              onChange={setFilterTime}
+              onClear={() => {
+                setFilterTime("");
+                setTimeOpen(false);
+              }}
+            />
+          </div>
+        )}
+        {typeOpen && (
+          <div ref={typePanelRef} className="md:hidden border-t border-gray-100 bg-white px-2 py-2">
+            <TypeFilterOptions
+              establishmentTypes={establishmentTypes}
+              selectedType={selectedType}
+              onSelect={(type) => {
+                setSelectedType(type);
+                setTypeOpen(false);
+              }}
+            />
+          </div>
+        )}
+        {sortOpen && (
+          <div ref={sortPanelRef} className="md:hidden border-t border-gray-100 bg-white px-2 py-2">
+            <SortOptions
+              sortBy={sortBy}
+              collectionOrder={collectionOrder}
+              hasLoc={hasLoc}
+              onSelect={(s) => {
+                setSortBy(s);
+                setSortOpen(false);
+              }}
+            />
+          </div>
+        )}
 
         {/* Location denied hint — only shown when Near Me was activated but denied */}
         {nearMeActive && locationStatus === "denied" && (
