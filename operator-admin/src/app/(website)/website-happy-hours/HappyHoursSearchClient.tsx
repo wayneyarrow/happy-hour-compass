@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { haversineKm } from "@/lib/geo";
 import { computeHhStatus } from "@/lib/happyHourStatus";
+import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
@@ -14,16 +16,47 @@ import type { Market } from "@/lib/markets";
 /**
  * SearchResultCardData extended with fields needed for client-side filtering
  * and distance calculation. Page.tsx constructs this from ConsumerVenue.
+ *
+ * city/seededTags/searchTags/specialsFood/specialsDrinks power free-text
+ * search (see matchVenueSearchTier, src/lib/data/venueSearch.ts) and are
+ * optional: only website-happy-hours/page.tsx (enableSearch=true) supplies
+ * them today. Other WebsiteVenueCard construction sites (Collections,
+ * Saved) are unaffected — a card missing these just never matches on those
+ * tiers, which is moot anyway since search is off for those callers.
  */
 export type WebsiteVenueCard = SearchResultCardData & {
   latitude: number | null;
   longitude: number | null;
+  city?: string;
+  seededTags?: string[];
+  searchTags?: string[];
+  specialsFood?: string[];
+  specialsDrinks?: string[];
 };
+
+/** True when `card` matches `query` via the shared venue search helper. */
+function matchesSearchQuery(card: WebsiteVenueCard, query: string): boolean {
+  return (
+    matchVenueSearchTier(query, {
+      name: card.name,
+      city: card.city ?? "",
+      establishmentType: card.establishmentType,
+      seededTags: card.seededTags ?? [],
+      searchTags: card.searchTags ?? [],
+      specialsFood: card.specialsFood ?? [],
+      specialsDrinks: card.specialsDrinks ?? [],
+    }) !== null
+  );
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NEAR_ME_RADIUS_KM = 25;
 const TOP_RATED_MIN = 4.0;
+// Matches the debounce already established for the homepage's autocomplete
+// (HeroVenueSearch.tsx) — used here only to debounce the ?q= URL sync since
+// the actual filtering is client-side/instant (no network round trip).
+const SEARCH_URL_SYNC_DEBOUNCE_MS = 200;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -246,6 +279,69 @@ function SortOptions({
   );
 }
 
+// ─── Search input ─────────────────────────────────────────────────────────────
+// Same pill visual language as the homepage's HeroVenueSearch (border,
+// rounded-full, shadow, amber focus ring, search icon) — kept consistent
+// with the existing consumer experience rather than introducing a new style.
+
+function VenueSearchInput({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      className="
+        flex items-center gap-2.5 pl-4 pr-3 py-2.5
+        bg-white border border-gray-200 rounded-full
+        shadow-[0_1px_2px_rgba(0,0,0,0.04)]
+        focus-within:ring-2 focus-within:ring-amber-400
+        transition-all
+      "
+    >
+      <svg
+        className="w-4 h-4 text-gray-400 flex-shrink-0"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search by name, type, or specials…"
+        aria-label="Search happy hours"
+        autoComplete="off"
+        className="flex-1 min-w-0 text-sm text-gray-900 placeholder:text-gray-400 bg-transparent outline-none"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear search"
+          className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({
@@ -302,6 +398,14 @@ type Props = {
   collectionOrder?: boolean;
   /** Rendered once, full-width, after the results in both desktop and mobile layouts. */
   footerCta?: ReactNode;
+  /**
+   * Enables the free-text search input and its ?q= URL sync. Off by default
+   * so other callers of this component (Collections, Saved) are unaffected —
+   * only website-happy-hours/page.tsx opts in today.
+   */
+  enableSearch?: boolean;
+  /** Initial search value, read server-side from ?q=. Only meaningful when enableSearch is true. */
+  initialQuery?: string;
 };
 
 export function HappyHoursSearchClient({
@@ -310,7 +414,38 @@ export function HappyHoursSearchClient({
   contextHeader,
   collectionOrder = false,
   footerCta,
+  enableSearch = false,
+  initialQuery = "",
 }: Props) {
+  const pathname = usePathname();
+
+  // ── search state ──
+  const [searchQuery, setSearchQuery] = useState(enableSearch ? initialQuery : "");
+
+  // Debounced ?q= URL sync — filtering itself is instant/client-side (no
+  // network round trip), so only the URL write is debounced, matching the
+  // homepage autocomplete's existing debounce value.
+  //
+  // Uses history.replaceState() rather than next/navigation's router.replace().
+  // This page is `force-dynamic` and reads `searchParams` to compute
+  // initialQuery — router.replace() would re-render the server component on
+  // every debounce tick, re-running getPublishedVenuesForConsumer() as the
+  // user types, which is both an unnecessary DB round trip and the source of
+  // update latency/raciness. history.replaceState() updates the address bar
+  // and history entry directly, with no server involvement — filtering
+  // already happens entirely client-side, so nothing server-rendered
+  // actually depends on this URL update except a future hard reload/deep
+  // link, which reads it correctly regardless of how it got there.
+  useEffect(() => {
+    if (!enableSearch) return;
+    const trimmed = searchQuery.trim();
+    const timer = setTimeout(() => {
+      const url = trimmed ? `${pathname}?q=${encodeURIComponent(trimmed)}` : pathname;
+      window.history.replaceState(null, "", url);
+    }, SEARCH_URL_SYNC_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery, enableSearch, pathname]);
+
   // ── filter state ──
   const [nearMeActive, setNearMeActive] = useState(false);
   const [onNowActive, setOnNowActive] = useState(false);
@@ -408,7 +543,9 @@ export function HappyHoursSearchClient({
   // ── filter (live: On Now uses computeHhStatus so it reflects actual wall-clock time) ──
   const filteredCards = useMemo(() => {
     const hasLoc = userLocation !== null;
+    const trimmedQuery = searchQuery.trim();
     return cards.filter((card) => {
+      if (trimmedQuery && !matchesSearchQuery(card, trimmedQuery)) return false;
       if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
         return false;
       if (
@@ -439,6 +576,7 @@ export function HappyHoursSearchClient({
     });
   }, [
     cards,
+    searchQuery,
     onNowActive,
     nearMeActive,
     userLocation,
@@ -500,6 +638,7 @@ export function HappyHoursSearchClient({
   }
 
   function clearAllFilters() {
+    setSearchQuery("");
     setNearMeActive(false);
     setOnNowActive(false);
     setTopRatedActive(false);
@@ -587,7 +726,12 @@ export function HappyHoursSearchClient({
     : "Time";
 
   const anyFilter =
-    nearMeActive || onNowActive || topRatedActive || !!selectedType || !!filterTime;
+    !!searchQuery.trim() ||
+    nearMeActive ||
+    onNowActive ||
+    topRatedActive ||
+    !!selectedType ||
+    !!filterTime;
 
   // ─── render ──────────────────────────────────────────────────────────────
 
@@ -595,6 +739,15 @@ export function HappyHoursSearchClient({
     <>
       {/* ── Sticky filter chip bar ─────────────────────────────────────────── */}
       <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        {enableSearch && (
+          <div className="px-4 md:px-6 pt-3">
+            <VenueSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              onClear={() => setSearchQuery("")}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-2 px-4 md:px-6 py-3 overflow-x-auto md:overflow-visible [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
 
           {/* Near Me */}

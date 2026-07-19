@@ -31,9 +31,15 @@ function fallbackImage(establishmentType: string): string {
   return "/images/casual-dining-1.jpg";
 }
 
-export default async function HappyHoursSearchPage() {
+export default async function HappyHoursSearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   const { market } = await getActiveMarket();
   const marketConfig = toMarketConfig(market);
+  const { q } = await searchParams;
+  const initialQuery = typeof q === "string" ? q : "";
 
   // Fetch all published venues then gate to the active market.
   // isNearMarket() is the canonical geo filter used by the Discover Engine;
@@ -73,8 +79,23 @@ export default async function HappyHoursSearchPage() {
       latitude: venue.latitude,
       longitude: venue.longitude,
       happyHourWeekly: venue.happyHourWeekly,
+      // Client-side text search data (see matchVenueSearchTier) — already
+      // loaded on `venue` by getPublishedVenuesForConsumer(), so forwarding
+      // it here adds no additional query.
+      city: venue.city,
+      seededTags: venue.seededTags,
+      searchTags: venue.searchTags,
+      specialsFood: venue.specialsFood,
+      specialsDrinks: venue.specialsDrinks,
     }];
   });
 
-  return <HappyHoursSearchClient cards={cards} market={market} />;
+  return (
+    <HappyHoursSearchClient
+      cards={cards}
+      market={market}
+      enableSearch
+      initialQuery={initialQuery}
+    />
+  );
 }

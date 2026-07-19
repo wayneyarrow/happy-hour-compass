@@ -29,6 +29,23 @@ export type VenueSearchMatch = {
   tier: VenueSearchTier;
 };
 
+/**
+ * The minimal field set matchVenueSearchTier() needs. Any full ConsumerVenue
+ * already satisfies this structurally — callers that only have a lighter
+ * card shape (e.g. the venue search results page's WebsiteVenueCard) can
+ * still reuse the exact same matcher without depending on the full type.
+ */
+export type VenueSearchFields = Pick<
+  ConsumerVenue,
+  | "name"
+  | "city"
+  | "establishmentType"
+  | "seededTags"
+  | "searchTags"
+  | "specialsFood"
+  | "specialsDrinks"
+>;
+
 function includesQuery(value: string, query: string): boolean {
   return value.toLowerCase().includes(query);
 }
@@ -52,7 +69,7 @@ function anyIncludesQuery(values: string[], query: string): boolean {
  */
 export function matchVenueSearchTier(
   rawQuery: string,
-  venue: ConsumerVenue
+  venue: VenueSearchFields
 ): VenueSearchTier | null {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return null;
