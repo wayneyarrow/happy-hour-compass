@@ -740,7 +740,12 @@ export function HappyHoursSearchClient({
       {/* ── Sticky filter chip bar ─────────────────────────────────────────── */}
       <div className="sticky top-16 md:top-[72px] z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         {enableSearch && (
-          <div className="px-4 md:px-6 pt-3">
+          /* Desktop: constrained to the left results column's width/padding
+             (matches the w-1/2 + px-5 results column below) rather than the
+             full sticky-bar width, so the field reads as belonging to the
+             venue list it filters instead of stretching across the map
+             column too. Mobile is unaffected (single stacked column). */
+          <div className="px-4 pt-3 md:w-1/2 md:px-5">
             <VenueSearchInput
               value={searchQuery}
               onChange={setSearchQuery}

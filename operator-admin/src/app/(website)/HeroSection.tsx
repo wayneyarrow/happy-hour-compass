@@ -50,7 +50,7 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
   const showMeHref = contentType === "happy-hours" ? "/website-happy-hours" : "/website-events";
   const searchPlaceholder =
     contentType === "happy-hours"
-      ? `Search ${cityName} venues or neighbourhoods...`
+      ? "Search venues, food and drink specials..."
       : `Search ${cityName} events or venues...`;
 
   return (
@@ -130,7 +130,7 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
             transition-all duration-200
           "
         >
-          {contentType === "happy-hours" ? "Show Me Happy Hours" : "Show Me Events"}
+          {contentType === "happy-hours" ? "Browse Happy Hours" : "Show Me Events"}
           <svg
             className="w-4 h-4"
             fill="none"

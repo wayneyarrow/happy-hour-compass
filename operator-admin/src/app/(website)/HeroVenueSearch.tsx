@@ -105,10 +105,15 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
   // only makes sense once we know at least one venue actually matched the
   // query, using the exact same request/response already fetched above
   // (no separate "does anything match" query).
+  //
+  // Rendered first (index 0) so users see "browse everything matching this"
+  // before the specific-venue suggestions — venue options shift down by
+  // venueStartIndex to keep a single contiguous keyboard-navigable range.
   const showDiscoveryAction =
     !!discoveryHref && !isLoading && hasSearched && results.length > 0;
   const totalOptions = results.length + (showDiscoveryAction ? 1 : 0);
-  const discoveryIndex = results.length;
+  const discoveryIndex = 0;
+  const venueStartIndex = showDiscoveryAction ? 1 : 0;
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
@@ -126,9 +131,12 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
         if (showDiscoveryAction && activeIndex === discoveryIndex) {
           e.preventDefault();
           selectDiscovery();
-        } else if (results[activeIndex]) {
-          e.preventDefault();
-          selectVenue(results[activeIndex]);
+        } else {
+          const venue = results[activeIndex - venueStartIndex];
+          if (venue) {
+            e.preventDefault();
+            selectVenue(venue);
+          }
         }
       }
     } else if (e.key === "Escape") {
@@ -201,35 +209,14 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
             <p className="px-5 py-4 text-sm text-gray-400">Searching…</p>
           ) : results.length > 0 ? (
             <>
-              <ul className="max-h-80 overflow-y-auto py-1">
-                {results.map((venue, i) => (
-                  <li key={venue.id} role="option" aria-selected={i === activeIndex}>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selectVenue(venue)}
-                      onMouseEnter={() => setActiveIndex(i)}
-                      className={`w-full text-left px-5 py-3 flex flex-col gap-0.5 transition-colors ${
-                        i === activeIndex ? "bg-amber-50" : "hover:bg-gray-50"
-                      }`}
-                    >
-                      <span className="text-sm font-semibold text-gray-900">{venue.name}</span>
-                      <span className="text-xs text-gray-500">
-                        {[venue.area, venue.city].filter(Boolean).join(" · ")}
-                        {venue.address ? ` — ${venue.address}` : ""}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-
               {/* Discovery action — its own single-item list (valid <li>-in-<ul>
-                  nesting, matching the venue items' markup shape) pinned below
-                  the scrollable venue list rather than inside its
-                  max-h-80/overflow-y-auto, so it's always reachable without
-                  scrolling through results first, on desktop and mobile alike. */}
+                  nesting, matching the venue items' markup shape), shown first
+                  so users see "browse everything matching this" before the
+                  specific-venue suggestions below. Kept outside the venue
+                  list's max-h-80/overflow-y-auto so it's always visible
+                  without scrolling, on desktop and mobile alike. */}
               {showDiscoveryAction && (
-                <ul className="border-t border-gray-100 py-1">
+                <ul className="border-b border-gray-100 py-1">
                   <li role="option" aria-selected={activeIndex === discoveryIndex}>
                     <button
                       type="button"
@@ -262,6 +249,31 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
                   </li>
                 </ul>
               )}
+
+              <ul className="max-h-80 overflow-y-auto py-1">
+                {results.map((venue, i) => {
+                  const optionIndex = venueStartIndex + i;
+                  return (
+                    <li key={venue.id} role="option" aria-selected={optionIndex === activeIndex}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectVenue(venue)}
+                        onMouseEnter={() => setActiveIndex(optionIndex)}
+                        className={`w-full text-left px-5 py-3 flex flex-col gap-0.5 transition-colors ${
+                          optionIndex === activeIndex ? "bg-amber-50" : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-sm font-semibold text-gray-900">{venue.name}</span>
+                        <span className="text-xs text-gray-500">
+                          {[venue.area, venue.city].filter(Boolean).join(" · ")}
+                          {venue.address ? ` — ${venue.address}` : ""}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </>
           ) : hasSearched ? (
             <p className="px-5 py-4 text-sm text-gray-400">No venues found.</p>
