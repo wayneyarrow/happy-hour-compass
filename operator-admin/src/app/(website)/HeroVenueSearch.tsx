@@ -10,6 +10,14 @@ type Props = {
   market: Market;
   placeholder: string;
   ariaLabel: string;
+  /**
+   * Base path for the "See all happy hours matching …" discovery action
+   * (e.g. "/website-happy-hours"). The action is appended with
+   * `?q=<query>` and only rendered when this is provided — omit it to keep
+   * this instance venue-suggestions-only (e.g. the homepage's Events mode,
+   * which has no query-aware search results page to send users to yet).
+   */
+  discoveryHref?: string;
 };
 
 const DEBOUNCE_MS = 200;
@@ -23,8 +31,15 @@ const DEBOUNCE_MS = 200;
  * same padding, border, rounded-full, shadow, and hover states — the only
  * structural difference is a real <input> in place of a <span>, which is
  * what "fully functional" requires).
+ *
+ * Two distinct navigation outcomes, both driven by the same suggestion
+ * request — no second query:
+ *   - Selecting a venue suggestion navigates directly to that venue's page.
+ *   - Selecting the discovery action (shown only when discoveryHref is set
+ *     and at least one venue matches) navigates to the Happy Hour search
+ *     results page with the same query applied via ?q=.
  */
-export function HeroVenueSearch({ market, placeholder, ariaLabel }: Props) {
+export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref }: Props) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
@@ -79,21 +94,42 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel }: Props) {
     router.push(venue.href);
   }
 
+  function selectDiscovery() {
+    const trimmed = query.trim();
+    if (!discoveryHref || !trimmed) return;
+    setIsOpen(false);
+    router.push(`${discoveryHref}?q=${encodeURIComponent(trimmed)}`);
+  }
+
+  // The discovery action is a match option like any venue suggestion — it
+  // only makes sense once we know at least one venue actually matched the
+  // query, using the exact same request/response already fetched above
+  // (no separate "does anything match" query).
+  const showDiscoveryAction =
+    !!discoveryHref && !isLoading && hasSearched && results.length > 0;
+  const totalOptions = results.length + (showDiscoveryAction ? 1 : 0);
+  const discoveryIndex = results.length;
+
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (results.length === 0) return;
+      if (totalOptions === 0) return;
       setIsOpen(true);
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, totalOptions - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (results.length === 0) return;
+      if (totalOptions === 0) return;
       setIsOpen(true);
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
-      if (isOpen && activeIndex >= 0 && results[activeIndex]) {
-        e.preventDefault();
-        selectVenue(results[activeIndex]);
+      if (isOpen && activeIndex >= 0) {
+        if (showDiscoveryAction && activeIndex === discoveryIndex) {
+          e.preventDefault();
+          selectDiscovery();
+        } else if (results[activeIndex]) {
+          e.preventDefault();
+          selectVenue(results[activeIndex]);
+        }
       }
     } else if (e.key === "Escape") {
       if (isOpen) {
@@ -164,27 +200,69 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel }: Props) {
           {isLoading ? (
             <p className="px-5 py-4 text-sm text-gray-400">Searching…</p>
           ) : results.length > 0 ? (
-            <ul className="max-h-80 overflow-y-auto py-1">
-              {results.map((venue, i) => (
-                <li key={venue.id} role="option" aria-selected={i === activeIndex}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => selectVenue(venue)}
-                    onMouseEnter={() => setActiveIndex(i)}
-                    className={`w-full text-left px-5 py-3 flex flex-col gap-0.5 transition-colors ${
-                      i === activeIndex ? "bg-amber-50" : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="text-sm font-semibold text-gray-900">{venue.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {[venue.area, venue.city].filter(Boolean).join(" · ")}
-                      {venue.address ? ` — ${venue.address}` : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="max-h-80 overflow-y-auto py-1">
+                {results.map((venue, i) => (
+                  <li key={venue.id} role="option" aria-selected={i === activeIndex}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectVenue(venue)}
+                      onMouseEnter={() => setActiveIndex(i)}
+                      className={`w-full text-left px-5 py-3 flex flex-col gap-0.5 transition-colors ${
+                        i === activeIndex ? "bg-amber-50" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="text-sm font-semibold text-gray-900">{venue.name}</span>
+                      <span className="text-xs text-gray-500">
+                        {[venue.area, venue.city].filter(Boolean).join(" · ")}
+                        {venue.address ? ` — ${venue.address}` : ""}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Discovery action — its own single-item list (valid <li>-in-<ul>
+                  nesting, matching the venue items' markup shape) pinned below
+                  the scrollable venue list rather than inside its
+                  max-h-80/overflow-y-auto, so it's always reachable without
+                  scrolling through results first, on desktop and mobile alike. */}
+              {showDiscoveryAction && (
+                <ul className="border-t border-gray-100 py-1">
+                  <li role="option" aria-selected={activeIndex === discoveryIndex}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={selectDiscovery}
+                      onMouseEnter={() => setActiveIndex(discoveryIndex)}
+                      aria-label={`See all happy hours matching "${query.trim()}"`}
+                      className={`w-full flex items-center gap-2 text-left px-5 py-3 transition-colors ${
+                        activeIndex === discoveryIndex ? "bg-amber-50" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <svg
+                        className="w-3.5 h-3.5 text-amber-500 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
+                      </svg>
+                      <span className="text-sm font-semibold text-amber-700">
+                        See all happy hours matching &ldquo;{query.trim()}&rdquo;
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </>
           ) : hasSearched ? (
             <p className="px-5 py-4 text-sm text-gray-400">No venues found.</p>
           ) : null}

@@ -143,11 +143,16 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
         </Link>
       </div>
 
-      {/* Search pill — secondary action, wired to live venue suggestions */}
+      {/* Search pill — secondary action, wired to live venue suggestions.
+          discoveryHref is only set for Happy Hours: /website-events has no
+          ?q=-aware search results page yet, so Events mode stays
+          venue-suggestions-only rather than linking somewhere that can't
+          apply the query. */}
       <HeroVenueSearch
         market={market}
         placeholder={searchPlaceholder}
         ariaLabel={`Search ${contentType === "happy-hours" ? "happy hours" : "events"}`}
+        discoveryHref={contentType === "happy-hours" ? "/website-happy-hours" : undefined}
       />
 
     </section>

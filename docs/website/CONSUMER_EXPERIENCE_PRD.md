@@ -114,7 +114,7 @@ The homepage search should:
 - Provide intelligent suggestions
 - Transition users into the Search Results experience
 
-The search interaction may be inspired by Apple Spotlight. However, the search destination is a dedicated Search Results page rather than an expanding homepage search interface.
+The search interaction may be inspired by Apple Spotlight. However, the search destination is a dedicated page rather than an expanding homepage search interface — specifically, a venue suggestion navigates directly to that venue's page, while a broader/discovery query navigates to the Search Results page with the query applied (see "Decision: Search Experience" → Search Interaction, updated below).
 
 ---
 
@@ -702,7 +702,7 @@ The search interaction should remain lightweight and responsive.
 - Search opens an autocomplete suggestion list anchored to the search field.
 - The experience should feel fast and unobtrusive.
 - It should not require a full-screen search page or complex Spotlight-style interface.
-- Selecting a suggestion immediately transitions the user into the Search Results experience with the appropriate context already applied.
+- **Updated decision:** selecting a specific venue suggestion navigates directly to that venue's page — not the Search Results experience. A distinct "See all happy hours matching…" discovery action, shown alongside venue suggestions whenever the query matches at least one venue, is what transitions the user into the Search Results experience with the query applied. This supersedes this section's original single-outcome wording above.
 
 ### Homepage Search
 
@@ -729,7 +729,7 @@ Additional searchable content (specials, Search Tags, etc.) should only be intro
 - Exploration is the primary experience.
 - Search should feel fast, lightweight, and intelligent.
 - Search should rely on structured, high-quality data.
-- Users should transition directly into the Search Results experience rather than a separate search interface.
+- Selecting a suggestion should transition the user directly into a result — either the specific venue selected, or (via the discovery action) the Search Results experience — rather than a separate search interface.
 - Reuse and strengthen the existing product engine rather than introducing search capabilities unsupported by the data.
 
 ---
