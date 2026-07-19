@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
@@ -81,13 +82,34 @@ function buildDateBadge(
 
 // ─── DateBadge ────────────────────────────────────────────────────────────────
 
+/**
+ * Computes the badge client-side on mount (rather than during render) so it
+ * always uses the viewer's actual wall-clock time — computing TODAY/TOMORROW
+ * directly in the render body would run once during SSR (server timezone,
+ * UTC on the deployment host) and again on client hydration (browser
+ * timezone), producing mismatched HTML and a React hydration-mismatch error
+ * whenever the two differ. Mirrors the mount-gated pattern used for the
+ * venue-card happy-hour status (SearchResultCard.tsx / VenueActionCard.tsx).
+ * Only the badge itself withholds rendering pre-mount — the rest of the
+ * event card (image, title, save button, etc.) is unaffected.
+ */
 function DateBadge({
-  top,
-  bottom,
+  firstDate,
+  recurrence,
+  startTime,
 }: {
-  top: string;
-  bottom: string | null;
+  firstDate: string | null;
+  recurrence: string | null;
+  startTime: string | null;
 }) {
+  const [badge, setBadge] = useState<{ top: string; bottom: string | null } | null>(null);
+
+  useEffect(() => {
+    setBadge(buildDateBadge(firstDate, recurrence, startTime));
+  }, [firstDate, recurrence, startTime]);
+
+  if (!badge) return null;
+
   return (
     <div
       className="
@@ -98,10 +120,10 @@ function DateBadge({
         leading-none
       "
     >
-      <span className="text-[10px] font-bold text-gray-900 tracking-wider">{top}</span>
-      {bottom && (
+      <span className="text-[10px] font-bold text-gray-900 tracking-wider">{badge.top}</span>
+      {badge.bottom && (
         <span className="text-[10px] font-semibold text-amber-600 tracking-wide mt-0.5">
-          {bottom}
+          {badge.bottom}
         </span>
       )}
     </div>
@@ -141,7 +163,6 @@ type Props = {
 };
 
 export function EventSearchCard({ event }: Props) {
-  const badge = buildDateBadge(event.firstDate, event.recurrence, event.startTime);
   const typeLabel = getEventTypeLabel(event.eventType);
   const typeEmoji = getEventTypeEmoji(event.eventType);
   const showType = typeLabel && event.eventType !== "other";
@@ -185,7 +206,11 @@ export function EventSearchCard({ event }: Props) {
         )}
 
         {/* Date badge — top-left */}
-        <DateBadge top={badge.top} bottom={badge.bottom} />
+        <DateBadge
+          firstDate={event.firstDate}
+          recurrence={event.recurrence}
+          startTime={event.startTime}
+        />
 
         {/* Save button — top-right, frosted circle */}
         <div
