@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
 
 export type ForgotPasswordState = {
   success?: true;
@@ -18,10 +19,15 @@ export type ForgotPasswordState = {
  * Security invariants:
  *   - Always returns { success: true } regardless of whether an account was
  *     found or whether delivery succeeded — prevents account enumeration.
- *   - Only generates recovery links for emails that exist in the operators
- *     table — not for any arbitrary Supabase auth user.
+ *   - Only generates recovery links for emails that resolve to a known
+ *     account — either an owner (a row in `operators`) or an active,
+ *     invited team member (a `role='member'` row in `operator_memberships`)
+ *     — not for any arbitrary Supabase auth user. Both are real, independent
+ *     Supabase Auth users; only owners get their own `operators` row, so a
+ *     team member's email is never found there and must be checked
+ *     separately (see getActiveMemberMembershipByEmail below).
  *   - Email is normalised to lowercase before any lookup.
- *   - Slack alerts fire only for known-operator failures (generateLink or
+ *   - Slack alerts fire only for known-account failures (generateLink or
  *     email delivery). Unknown emails never alert.
  */
 export async function forgotPasswordAction(
@@ -41,7 +47,7 @@ export async function forgotPasswordAction(
 
   const supabase = createAdminClient();
 
-  // ── Check for an operator account ──────────────────────────────────────────
+  // ── Check for an operator account (owner) ────────────────────────────────
   // Uses maybeSingle() — no row found is not an error, just a no-op.
   const { data: operatorRow } = await supabase
     .from("operators")
@@ -49,13 +55,27 @@ export async function forgotPasswordAction(
     .eq("email", email)
     .maybeSingle();
 
-  if (!operatorRow?.id) {
-    // No operator found — return success silently.
-    // No Slack alert, no indication to the user.
-    return { success: true };
-  }
+  let firstName: string | undefined;
 
-  const firstName = ((operatorRow.first_name as string | null) ?? "").trim() || undefined;
+  if (operatorRow?.id) {
+    firstName = ((operatorRow.first_name as string | null) ?? "").trim() || undefined;
+  } else {
+    // ── Fall back to an active team-member account ─────────────────────────
+    // Invited team members (operator_memberships.role='member') are real,
+    // independent Supabase Auth users created by acceptInviteAction, but they
+    // never get their own `operators` row — only the account owner does. Without
+    // this fallback, every non-owner team member's reset request matched
+    // nothing above and the function returned success without ever generating
+    // a recovery link or sending an email — this was the root cause of
+    // "reports success but no email received" for team-member accounts.
+    const membership = await getActiveMemberMembershipByEmail(email);
+    if (!membership) {
+      // No operator and no active team member found — return success silently.
+      // No Slack alert, no indication to the user.
+      return { success: true };
+    }
+    firstName = undefined;
+  }
 
   // ── Generate a Supabase recovery link ─────────────────────────────────────
   const appUrl = getSiteUrl();
