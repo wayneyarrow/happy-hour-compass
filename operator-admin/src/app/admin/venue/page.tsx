@@ -358,6 +358,7 @@ export default async function AdminVenuePage({
               venueId={venue.id}
               operatorId={operator.id}
               currentPlan={operatorPlan}
+              isOwner={isOwner}
             />
           )}
 

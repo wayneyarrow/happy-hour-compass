@@ -373,7 +373,7 @@ export default async function AdminSubscriptionPage({
             </p>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-2">
-            {isStripeBilled && <ManageBillingButton />}
+            {isStripeBilled && <ManageBillingButton isOwner={isOwner} />}
             <ChangePlanModal
               currentPlan={plan}
               operatorId={operator?.id ?? null}
@@ -481,6 +481,7 @@ export default async function AdminSubscriptionPage({
             venueId={venue.id}
             operatorId={operator.id}
             currentPlan={plan}
+            isOwner={isOwner}
           />
         </div>
       )}

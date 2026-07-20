@@ -113,6 +113,13 @@ export async function createCheckoutSessionAction(
 /**
  * Creates a Stripe Customer Portal session for the current operator.
  *
+ * Billing management is owner-only — same rule as plan changes
+ * (createCheckoutSessionAction above, changePlanAction). Members may view
+ * the subscription page but cannot open the billing portal, where they
+ * could change payment methods or cancel the subscription directly with
+ * Stripe. Impersonation sessions bypass this check, matching every other
+ * owner-only action in this file.
+ *
  * Requires billing_provider_customer_id to be set on the subscription row.
  * Returns { ok: true, url } — caller redirects to url for self-serve billing management.
  */
@@ -125,6 +132,15 @@ export async function createPortalSessionAction(): Promise<{ ok: boolean; url?: 
 
   const operatorId = ctx.operator?.id;
   if (!operatorId) return { ok: false, error: "Could not resolve operator." };
+
+  if (!ctx.isImpersonating) {
+    const userEmail = ctx.user?.email;
+    if (!userEmail) return { ok: false, error: "Could not determine current user." };
+    const role = await getMembershipRole(operatorId, userEmail);
+    if (role !== "owner") {
+      return { ok: false, error: "Only the account owner can manage billing." };
+    }
+  }
 
   const subscription = await getOperatorSubscription(operatorId);
   const customerId = subscription?.billing_provider_customer_id ?? null;

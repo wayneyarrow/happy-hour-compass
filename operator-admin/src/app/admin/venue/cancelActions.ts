@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/auditLog";
 import { getOperatorSubscription, updateOperatorPlan } from "@/lib/subscriptions";
 import { logPlanChangeEvent } from "@/lib/planChangeEvents";
 import { sendVenueCancellationFounderEmail } from "@/lib/email";
+import { getMembershipRole } from "@/lib/memberships";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,23 @@ export async function cancelVenueAction(
 
   if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return { error: ctx.operatorError ?? "Could not resolve operator context." };
+  }
+
+  // Cancelling the venue is owner-only — same rule as plan changes
+  // (changePlanAction) and billing management (createPortalSessionAction).
+  // Members may view the subscription page but cannot cancel the venue.
+  // Impersonation sessions bypass this check, matching every other
+  // owner-only action; the Cancel Venue UI is already hidden during
+  // impersonation (see admin/subscription/page.tsx), so this only affects
+  // non-owner operator members submitting a real request.
+  if (!ctx.isImpersonating) {
+    const userEmail = ctx.user?.email;
+    if (!userEmail) return { error: "Could not determine current user." };
+    if (!ctx.operator) return { error: "Could not resolve operator." };
+    const role = await getMembershipRole(ctx.operator.id, userEmail);
+    if (role !== "owner") {
+      return { error: "Only the account owner can cancel the venue." };
+    }
   }
 
   const venueId = formData.get("venue_id") as string | null;

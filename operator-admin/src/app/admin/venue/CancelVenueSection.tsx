@@ -28,10 +28,12 @@ export default function CancelVenueSection({
   venueId,
   operatorId,
   currentPlan,
+  isOwner,
 }: {
   venueId:     string;
   operatorId:  string;
   currentPlan: OperatorPlan;
+  isOwner:     boolean;
 }) {
   const router = useRouter();
   const isPaidPlan = PAID_PLANS.includes(currentPlan);
@@ -50,6 +52,7 @@ export default function CancelVenueSection({
   );
 
   function handleCancelClick() {
+    if (!isOwner) return;
     if (isPaidPlan) {
       setStep("paid-save-path");
     } else {
@@ -102,11 +105,18 @@ export default function CancelVenueSection({
             <p className="text-xs text-gray-500 mt-0.5">
               End this venue&rsquo;s relationship with Happy Hour Compass.
             </p>
+            {!isOwner && (
+              <p className="text-xs text-gray-400 mt-1">
+                Only the account owner can cancel the venue.
+              </p>
+            )}
           </div>
           <button
             type="button"
             onClick={handleCancelClick}
-            className="px-4 py-2 rounded-lg border border-red-200 bg-white text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            disabled={!isOwner}
+            title={!isOwner ? "Only the account owner can cancel the venue." : undefined}
+            className="px-4 py-2 rounded-lg border border-red-200 bg-white text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
             Cancel venue account
           </button>
