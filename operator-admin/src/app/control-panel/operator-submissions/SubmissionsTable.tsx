@@ -20,6 +20,7 @@ const DEFAULT_SORT: SortCol = "submitted_at";
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed_auto:       { label: "Confirmed auto",   classes: "bg-green-100 text-green-700" },
   double_claim:         { label: "Double claim",     classes: "bg-red-100 text-red-700" },
+  pending_review:       { label: "Pending review",   classes: "bg-amber-100 text-amber-700" },
   rejected_by_user:     { label: "Rejected by user", classes: "bg-orange-100 text-orange-700" },
   no_match:             { label: "No match",         classes: "bg-gray-100 text-gray-600" },
   new:                  { label: "New",              classes: "bg-amber-100 text-amber-700" },

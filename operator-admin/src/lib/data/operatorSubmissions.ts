@@ -96,7 +96,7 @@ export type OperatorSubmissionDetail = {
 
 // ── Tab → status filter ───────────────────────────────────────────────────────
 
-const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match", "needs_more_info", "info_submitted"];
+const NEEDS_REVIEW_STATUSES = ["double_claim", "pending_review", "rejected_by_user", "no_match", "needs_more_info", "info_submitted"];
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ const NEEDS_REVIEW_STATUSES = ["double_claim", "rejected_by_user", "no_match", "
  * Fetches operator submissions for the list view, filtered by tab.
  *
  * tab values:
- *   "needs_review"   → double_claim | rejected_by_user | no_match
+ *   "needs_review"   → double_claim | pending_review | rejected_by_user | no_match | needs_more_info | info_submitted
  *   "confirmed_auto" → confirmed_auto
  *   "all"            → no filter (every row)
  */

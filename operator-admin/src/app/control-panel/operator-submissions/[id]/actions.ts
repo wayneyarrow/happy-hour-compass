@@ -550,6 +550,277 @@ export async function approveAndCreateVenueAction(
   };
 }
 
+// ── Existing Venue Match Resolution (pending_review / double_claim) ──────────
+//
+// Resolves an Add Your Venue submission that matched an existing venue
+// instead of requiring a new one. Handles both routing outcomes:
+//
+//   pending_review — confirmed Google match against an existing venue that
+//                    was UNCLAIMED at submission time.
+//   double_claim   — confirmed Google match against an existing venue that
+//                    was already claimed/owned at submission time.
+//
+// Both statuses land here with venue_id already set (no venue is ever
+// created by this action — see saveOperatorSubmissionAction Case B/C).
+// Eligibility to approve is driven by the venue's CURRENT claim state,
+// re-checked fresh at submit time — not by which of the two stored statuses
+// the submission happens to carry. A submission stored as "double_claim" can
+// still be approved if the conflicting claim has since been resolved and the
+// venue is unclaimed again; a "pending_review" submission is blocked if the
+// venue was claimed by someone else in the meantime. The stored status is
+// preserved as-is (reflects the routing decision at submission time) and is
+// never rewritten except to its terminal outcome (approved / closed).
+
+export type ResolveExistingVenueMatchState = {
+  success?: true;
+  successAction?: string;
+  error?: string;
+};
+
+// The only two routing statuses this action resolves. Intentionally
+// disjoint from APPROVE_ELIGIBLE_STATUSES (new-venue creation) — a
+// pending_review/double_claim submission always already has venue_id set,
+// so it must never become eligible for "Approve & Create Venue" (which
+// would attempt to create a duplicate venue; that action already guards on
+// venue_id being NULL, but this action is the correct, intentional path).
+const EXISTING_VENUE_MATCH_STATUSES = new Set(["pending_review", "double_claim"]);
+
+/**
+ * Approves an operator submission that matched an existing venue, linking
+ * the submitter to that venue via the same provisioning path used by new
+ * Add Your Venue venues and venue claims. Never creates a venue.
+ *
+ * Steps:
+ *  1. Re-fetch the submission fresh; verify status is still pending_review
+ *     or double_claim, and no operator has been provisioned for it yet.
+ *  2. Re-fetch the linked venue fresh; verify it is CURRENTLY unclaimed
+ *     (claimed_by AND created_by_operator_id both NULL) — this is the live
+ *     state check, independent of the submission's stored status.
+ *  3. Check for a conflicting active/approved venue_claims row on the same
+ *     venue (the separate Claim Your Venue flow) — block if found.
+ *  4. Check for another unresolved operator_submissions row targeting the
+ *     same venue — block if found, to avoid two founder decisions racing.
+ *  5. Call provisionOperatorForVenue() — creates/reuses the auth user,
+ *     inserts the operator row, links the venue, sends the activation email.
+ *     Handles its own internal rollback on failure.
+ *  6. Update submission: status → approved, operator_id, reviewed_by/at.
+ *  7. Append an internal note and audit log entry.
+ *
+ * All checks in steps 1-4 re-read the database immediately before acting —
+ * a stale client render (e.g. the founder had the page open while the venue
+ * was claimed by someone else) cannot bypass them.
+ *
+ * submissionId is bound via .bind(null, submissionId).
+ */
+export async function resolveExistingVenueMatchAction(
+  submissionId: string,
+  _prevState: ResolveExistingVenueMatchState,
+  _formData: FormData
+): Promise<ResolveExistingVenueMatchState> {
+  // ── Authenticate ───────────────────────────────────────────────────────────
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user || !await isControlPanelAdmin(user.email)) {
+    return { error: "Unauthorized." };
+  }
+
+  const supabase = createAdminClient();
+
+  // ── Fetch submission fresh ─────────────────────────────────────────────────
+  const { data: subRaw, error: fetchError } = await supabase
+    .from("operator_submissions")
+    .select("id, email, first_name, last_name, status, venue_id, operator_id")
+    .eq("id", submissionId)
+    .single();
+
+  if (fetchError || !subRaw) {
+    console.error("[resolveExistingVenueMatchAction] Fetch failed:", fetchError?.message);
+    return { error: "Submission not found. Please refresh and try again." };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sub = subRaw as any as Record<string, unknown>;
+
+  // ── Server-side eligibility (re-checked, never trusts the client) ─────────
+  if (!EXISTING_VENUE_MATCH_STATUSES.has(sub.status as string)) {
+    return {
+      error:
+        `Cannot resolve a submission with status "${sub.status}". This action is only ` +
+        `available for submissions matched to an existing venue awaiting review ` +
+        `(pending_review or double_claim). Refresh to see the current state.`,
+    };
+  }
+  if (sub.operator_id) {
+    return {
+      error: "An operator account has already been provisioned for this submission.",
+    };
+  }
+
+  const venueId = sub.venue_id as string | null;
+  if (!venueId) {
+    return {
+      error: "This submission has no linked venue — cannot resolve as an existing-venue match.",
+    };
+  }
+
+  // ── Re-fetch the matched venue fresh — live claim state ────────────────────
+  const { data: venueRow, error: venueFetchError } = await supabase
+    .from("venues")
+    .select("id, name, claimed_by, created_by_operator_id")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (venueFetchError || !venueRow) {
+    console.error("[resolveExistingVenueMatchAction] Venue fetch failed:", venueFetchError?.message);
+    return { error: "The matched venue could not be found. It may have been removed." };
+  }
+
+  if (venueRow.claimed_by != null || venueRow.created_by_operator_id != null) {
+    return {
+      error:
+        "This venue is already claimed by another operator. Approving would reassign an " +
+        "active listing, so this action is blocked. Reject / close this submission instead " +
+        "— resolving ownership disputes requires a separate, deliberate manual step.",
+    };
+  }
+
+  // ── Conflicting claim check (Claim Your Venue flow) ────────────────────────
+  const { data: conflictingClaim } = await supabase
+    .from("venue_claims")
+    .select("id, status")
+    .eq("venue_id", venueId)
+    .in("status", ["pending", "needs_more_info", "approved"])
+    .maybeSingle();
+
+  if (conflictingClaim) {
+    return {
+      error:
+        `This venue has an active claim (status: "${conflictingClaim.status}") through the ` +
+        `Claim Your Venue flow. Resolve that claim first before approving this submission.`,
+    };
+  }
+
+  // ── Conflicting submission check (another unresolved submission, same venue) ─
+  const { data: conflictingSubmission } = await supabase
+    .from("operator_submissions")
+    .select("id, status")
+    .eq("venue_id", venueId)
+    .neq("id", submissionId)
+    .in("status", ["pending_review", "double_claim", "needs_more_info", "info_submitted"])
+    .maybeSingle();
+
+  if (conflictingSubmission) {
+    return {
+      error:
+        `Another submission (id: ${conflictingSubmission.id}, status: ` +
+        `"${conflictingSubmission.status}") is also unresolved for this venue. Resolve that ` +
+        `one first to avoid conflicting decisions.`,
+    };
+  }
+
+  // ── Provision operator (reuses the same shared path as the other two ──────
+  // Add Your Venue approve actions and the venue-claim approve flow) ────────
+  const firstName = ((sub.first_name as string | null) ?? "").trim();
+  const lastName  = ((sub.last_name  as string | null) ?? "").trim();
+  const email     = sub.email as string;
+  const venueName = venueRow.name as string;
+
+  if (!email) {
+    return { error: "Submission has no email address — cannot provision operator." };
+  }
+
+  const provisionResult = await provisionOperatorForVenue({
+    email,
+    firstName,
+    lastName,
+    venueId,
+    logTag: "[resolveExistingVenueMatchAction]",
+    sendEmail: (setupLink) =>
+      sendOperatorActivationEmail({
+        to:        email,
+        firstName: firstName || "there",
+        setupLink,
+      }),
+  });
+
+  if (!provisionResult.ok) {
+    return { error: provisionResult.error };
+  }
+
+  // ── Update submission ──────────────────────────────────────────────────────
+  const now = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("operator_submissions")
+    .update({
+      status:      "approved",
+      operator_id: provisionResult.authUserId,
+      reviewed_by: user.id,
+      reviewed_at: now,
+    })
+    .eq("id", submissionId);
+
+  if (updateError) {
+    // Provisioning succeeded and the activation email was sent — the operator
+    // account is live and linked to the venue. Log a critical alert for
+    // manual fix but do not fail (mirrors approveAndCreateVenueAction).
+    console.error(
+      "[resolveExistingVenueMatchAction] CRITICAL: provisioning succeeded but submission " +
+      "update failed. Manual fix required: " +
+      `operator_submissions.status='approved', operator_id='${provisionResult.authUserId}' ` +
+      `for id='${submissionId}'.`,
+      { dbError: updateError.message }
+    );
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "CRITICAL: Submission Not Marked Approved — Operator Is Live",
+      message:  "Provisioning succeeded and activation email sent, but operator_submissions row could not be updated to 'approved'. Manual DB fix required.",
+      metadata: {
+        "Submission ID": submissionId,
+        Email:           email,
+        "Venue ID":      venueId,
+        "Auth User":     provisionResult.authUserId,
+        "DB Error":      updateError.message,
+      },
+    });
+  }
+
+  // ── Append internal note ───────────────────────────────────────────────────
+  await supabase.from("operator_submission_notes").insert({
+    submission_id:    submissionId,
+    note:
+      `Founder approved — linked to existing venue "${venueName}" (id: ${venueId}). ` +
+      `No new venue was created. Operator account provisioned for ${email}. Status → approved.`,
+    created_by:       user.id,
+    created_by_email: user.email ?? null,
+  });
+
+  await logAuditEvent({
+    actorEmail: user.email ?? "unknown",
+    action:     "submission_existing_venue_approved",
+    entityType: "operator_submission",
+    entityId:   submissionId,
+    entityName: venueName,
+  });
+
+  console.log("[resolveExistingVenueMatchAction] Complete.", {
+    submissionId,
+    venueId,
+    authUserId: provisionResult.authUserId,
+  });
+
+  revalidatePath("/control-panel/operator-submissions");
+  revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  return {
+    success:       true,
+    successAction: "Approved — linked to existing venue, activation email sent",
+  };
+}
+
 // ── Resend operator setup email ───────────────────────────────────────────────
 
 export type ResendSetupEmailState = {

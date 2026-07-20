@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getOperatorSubmissionById, getSubmissionNotes } from "@/lib/data/operatorSubmissions";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
+import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
 
@@ -31,6 +32,7 @@ function na(value: string | null | undefined): React.ReactNode {
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed_auto:        { label: "Confirmed auto",   classes: "bg-green-100 text-green-700" },
   double_claim:          { label: "Double claim",     classes: "bg-red-100 text-red-700" },
+  pending_review:        { label: "Pending review",   classes: "bg-amber-100 text-amber-700" },
   rejected_by_user:      { label: "Rejected by user", classes: "bg-orange-100 text-orange-700" },
   no_match:              { label: "No match",         classes: "bg-gray-100 text-gray-600" },
   needs_more_info:       { label: "Needs more info",  classes: "bg-blue-100 text-blue-700" },
@@ -44,6 +46,11 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
 
 // Statuses that warrant founder review actions
 const ACTIONABLE_STATUSES = new Set(["no_match", "rejected_by_user", "needs_more_info", "info_submitted", "closed"]);
+
+// Statuses where the submission matched an existing venue rather than
+// requiring a new one — resolved via ExistingVenueMatchPanel, not
+// SubmissionReviewPanel (mutually exclusive with ACTIONABLE_STATUSES above).
+const EXISTING_VENUE_MATCH_STATUSES = new Set(["pending_review", "double_claim"]);
 
 const MATCH_STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed: { label: "Confirmed", classes: "bg-green-100 text-green-700" },
@@ -346,6 +353,16 @@ export default async function OperatorSubmissionDetailPage({
             <SubmissionReviewPanel
               submissionId={submission.id}
               currentStatus={submission.status}
+            />
+          )}
+
+          {/* Existing Venue Match Resolution — shown for pending_review / double_claim */}
+          {EXISTING_VENUE_MATCH_STATUSES.has(submission.status) && venue && (
+            <ExistingVenueMatchPanel
+              submissionId={submission.id}
+              currentStatus={submission.status}
+              venueName={venue.name}
+              venueClaimed={!!venueClaimed}
             />
           )}
 
