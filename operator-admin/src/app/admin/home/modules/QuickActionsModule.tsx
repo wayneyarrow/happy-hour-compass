@@ -41,11 +41,12 @@ export default function QuickActionsModule({ venueId }: Props) {
   const publicHref = `/api/preview/venue/${venueId}`;
 
   const internalActions: Action[] = [
-    { label: "Edit happy hours",    icon: "🍹", href: "/admin/happy-hours?section=times#times" },
-    { label: "Update your photos",  icon: "📸", href: "/admin/images" },
-    { label: "Manage specials",     icon: "🍽️", href: "/admin/happy-hours?section=food#food" },
-    { label: "Manage events",       icon: "🎉", href: "/admin/events" },
-    { label: "Update your details", icon: "✏️", href: "/admin/venue" },
+    { label: "Edit Happy Hour Times",           icon: "🍹", href: "/admin/happy-hours?section=times#times" },
+    { label: "Manage Happy Hour Food Specials",  icon: "🍽️", href: "/admin/happy-hours?section=food#food" },
+    { label: "Manage Happy Hour Drink Specials", icon: "🍸", href: "/admin/happy-hours?section=drink#drink" },
+    { label: "Update your photos",              icon: "📸", href: "/admin/venue?section=images#images" },
+    { label: "Manage events",                   icon: "🎉", href: "/admin/events" },
+    { label: "Update Your Venue Details",       icon: "✏️", href: "/admin/venue?section=business-details#business-details" },
   ];
 
   const externalActions: Action[] = [
