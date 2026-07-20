@@ -16,6 +16,7 @@ import {
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { slugify } from "@/lib/slugify";
+import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import type {
   GoogleMatch,
   LookupResult,
@@ -634,6 +635,26 @@ export async function saveOperatorSubmissionAction(
         ? `${baseSlug.slice(0, 86)}-${Math.random().toString(36).slice(2, 6)}`
         : baseSlug;
 
+      // ── Resolve canonical geography (market_id/city_id) ──────────────────
+      // Uses the Google match's structured city/province — more reliable
+      // than submitter-typed text since this is a confirmed, high-confidence
+      // match. Never guessed: geography() returns null when the city text
+      // doesn't confidently match a seeded city, in which case the venue is
+      // still created (unpublished, as today) with market_id/city_id left
+      // NULL — the publish-readiness gate then blocks it until a founder
+      // resolves geography, instead of it silently going live unassigned.
+      const geography = await resolveVenueGeography(supabase, {
+        city:     match.city ?? formValues.city,
+        province: match.provinceShort ?? match.province ?? formValues.province,
+      });
+      if (!geography) {
+        console.warn(
+          "[saveOperatorSubmissionAction] Could not resolve market/city for venue — " +
+            "leaving market_id/city_id NULL. Venue will remain unpublishable until resolved.",
+          { businessName: venueName, city: match.city ?? formValues.city }
+        );
+      }
+
       const { data: newVenue, error: createError } = await supabase
         .from("venues")
         .insert({
@@ -649,6 +670,8 @@ export async function saveOperatorSubmissionAction(
           phone:         formatPhoneForStorage(match.phone),
           website_url:   match.website ?? null,
           place_id:      placeId,
+          market_id:     geography?.marketId ?? null,
+          city_id:       geography?.cityId ?? null,
           is_published:  false,
           source:        "operator_submission",
         })

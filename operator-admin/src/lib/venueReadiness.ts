@@ -45,6 +45,10 @@ export type VenueReadinessInput = {
   website_url?: string | null;
   menu_url?: string | null;
   establishment_type?: string | null;
+  /** Canonical market FK. Required (with city_id) to publish — see hasMarketAndCity. */
+  market_id?: string | null;
+  /** Canonical city FK. Required (with market_id) to publish — see hasMarketAndCity. */
+  city_id?: string | null;
   hh_times?: string | null;
   hh_tagline?: string | null;
   /** JSON array string — e.g. '[{"name":"Wings","price":"$5"}]' */
@@ -91,6 +95,8 @@ export type VenueReadinessSignals = {
   hasAddressLine1: boolean;
   hasCity: boolean;
   hasProvinceOrState: boolean;
+  /** True when both market_id and city_id (canonical geography FKs) are set. */
+  hasMarketAndCity: boolean;
   hasHappyHourTimes: boolean;
   hasAnyVenueImage: boolean;
   hasOperatorVenueImage: boolean;
@@ -185,6 +191,7 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   const hasAddressLine1     = hasContent(input.address_line1);
   const hasCity             = hasContent(input.city);
   const hasProvinceOrState  = hasContent(input.region);
+  const hasMarketAndCity    = !!input.market_id && !!input.city_id;
   const hasHappyHourTimes   = hasContent(input.hh_times);
   const hasAnyVenueImage    = input.imageCount > 0;
   const hasOperatorVenueImage = input.operatorImageCount > 0;
@@ -205,7 +212,7 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   const hasSearchTags       = Array.isArray(input.search_tags) && input.search_tags.length > 0;
 
   const signals: VenueReadinessSignals = {
-    hasVenueName, hasAddressLine1, hasCity, hasProvinceOrState, hasHappyHourTimes,
+    hasVenueName, hasAddressLine1, hasCity, hasProvinceOrState, hasMarketAndCity, hasHappyHourTimes,
     hasAnyVenueImage, hasOperatorVenueImage, isUsingGenericSeededImage,
     hasConfirmedVenueType, hasFoodSpecials, hasDrinkSpecials, hasBusinessHours,
     hasMenuLink, hasPhone, hasWebsite, hasTagline, hasPaymentTypes, hasPostalCode,
@@ -245,6 +252,12 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
       label: "Province / State",
       description: "Required for location search and market filtering.",
       completed: hasProvinceOrState,
+    },
+    {
+      key: "hasMarketAndCity",
+      label: "Market & city assignment",
+      description: "This venue must be assigned to a supported market and city before it can be published.",
+      completed: hasMarketAndCity,
     },
     {
       key: "hasHappyHourTimes",

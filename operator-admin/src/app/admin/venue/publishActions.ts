@@ -18,6 +18,8 @@ type VenueForReadiness = {
   website_url: string | null;
   menu_url: string | null;
   establishment_type: string | null;
+  market_id: string | null;
+  city_id: string | null;
   hh_times: string | null;
   hh_tagline: string | null;
   hh_food_details: string | null;
@@ -54,7 +56,7 @@ export async function updatePublishStatusAction(
       .select(
         "name, address_line1, city, region, postal_code, phone, website_url, menu_url, " +
           "establishment_type, hh_times, hh_tagline, hh_food_details, hh_drink_details, " +
-          "business_hours, payment_types, claimed_at"
+          "business_hours, payment_types, claimed_at, market_id, city_id"
       )
       .eq("id", venueId);
 

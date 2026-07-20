@@ -13,6 +13,7 @@ import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -386,6 +387,28 @@ export async function approveAndCreateVenueAction(
       : rawPhone;
   }
 
+  // Prefer the stored Google match's structured city/province; fall back to
+  // the submitter-provided (mandatory form fields) city/province.
+  const resolvedCity     = (gm?.city          as string | null) ?? (sub.city           as string | null) ?? null;
+  const resolvedProvince = (gm?.provinceShort as string | null) ?? (gm?.province as string | null) ?? (sub.province as string | null) ?? null;
+
+  // ── Resolve canonical geography (market_id/city_id) ─────────────────────────
+  // Never guessed: returns null when the city text doesn't confidently match
+  // a seeded city. The venue is still created (unpublished, as today) with
+  // market_id/city_id left NULL in that case — the publish-readiness gate
+  // then blocks it clearly until a founder resolves geography.
+  const geography = await resolveVenueGeography(supabase, {
+    city:     resolvedCity,
+    province: resolvedProvince,
+  });
+  if (!geography) {
+    console.warn(
+      "[approveAndCreateVenueAction] Could not resolve market/city for venue — " +
+        "leaving market_id/city_id NULL. Venue will remain unpublishable until resolved.",
+      { submissionId, venueName, city: resolvedCity }
+    );
+  }
+
   // ── Create unpublished venue ───────────────────────────────────────────────
   const { data: newVenue, error: venueError } = await supabase
     .from("venues")
@@ -393,8 +416,8 @@ export async function approveAndCreateVenueAction(
       name:                 venueName,
       slug:                 slugBase,
       address_line1:        (gm?.streetAddress as string | null) ?? (sub.street_address as string | null) ?? null,
-      city:                 (gm?.city          as string | null) ?? (sub.city           as string | null) ?? null,
-      region:               (gm?.provinceShort as string | null) ?? (gm?.province as string | null) ?? (sub.province as string | null) ?? null,
+      city:                 resolvedCity,
+      region:               resolvedProvince,
       postal_code:          (gm?.postalCode    as string | null) ?? null,
       country:              (gm?.country       as string | null) ?? null,
       lat:                  (gm?.lat           as number | null) ?? null,
@@ -402,6 +425,8 @@ export async function approveAndCreateVenueAction(
       phone,
       website_url:          (gm?.website       as string | null) ?? (sub.website as string | null) ?? null,
       place_id:             placeId,
+      market_id:            geography?.marketId ?? null,
+      city_id:              geography?.cityId ?? null,
       is_published:         false,
       source:               "operator_submission",
       source_submission_id: submissionId,

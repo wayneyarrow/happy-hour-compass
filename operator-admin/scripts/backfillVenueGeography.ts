@@ -8,7 +8,11 @@
  * This script does NOT write neighbourhood_id — that column will remain NULL
  * for all venues until neighbourhood data is seeded in a future card.
  *
- * Matching strategy:
+ * Matching strategy — delegated to src/lib/geo/venueGeographyResolver.ts,
+ * the shared resolver also used by the live Add Your Venue venue-creation
+ * paths ((consumer)/suggest/owner/actions.ts and
+ * control-panel/operator-submissions/[id]/actions.ts), so this script and
+ * the app can never drift onto two different matching rules:
  *   • Normalize venue.city to lowercase + trimmed string.
  *   • Apply known alias map to handle legacy text variations
  *     (e.g. "langley township" → "langley", "kelowna" lowercase → "kelowna").
@@ -16,6 +20,11 @@
  *   • Set market_id automatically from the matched city's market_id.
  *   • Venues whose city does not match any seeded city (Seattle, Toronto,
  *     blank, etc.) are left unchanged — see UNASSIGNABLE list printed at end.
+ *   • This script intentionally does NOT pass venue.region into the resolver
+ *     (matches its original city-only matching exactly — no behaviour change
+ *     for already-verified results). The resolver's optional province veto
+ *     is only exercised by the live app insert paths, which supply
+ *     province/region text from a fresh submission.
  *
  * This script is safe to rerun. It only updates rows where both market_id AND
  * city_id are still NULL (does not overwrite previously assigned venues).
@@ -33,6 +42,7 @@
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { buildCityGeographyLookup, resolveCityGeography } from "../src/lib/geo/venueGeographyResolver";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -51,20 +61,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
 const APPLY = process.argv.includes("--apply");
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Known text aliases from legacy seeded data → canonical city slug
-// ─────────────────────────────────────────────────────────────────────────────
-const CITY_ALIASES: Record<string, string> = {
-  "langley township": "langley",
-  "district of west vancouver": "west-vancouver",
-  "district of north vancouver": "north-vancouver",
-  "city of north vancouver": "north-vancouver",
-};
-
-function normalize(s: string | null | undefined): string {
-  return (s ?? "").trim().toLowerCase();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,7 +69,7 @@ async function main() {
   console.log(`\n=== backfillVenueGeography.ts [${mode}] ===\n`);
   if (!APPLY) console.log("Pass --apply to write to Supabase.\n");
 
-  // ── 1. Load all seeded cities ─────────────────────────────────────────────
+  // ── 1. Load all seeded cities + markets, build the shared lookup ─────────
   const { data: cityRows, error: cityErr } = await supabase
     .from("cities")
     .select("id, slug, name, market_id");
@@ -83,33 +79,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Build lookup: normalized city name → { cityId, marketId, canonicalName }
-  type CityEntry = { cityId: string; marketId: string; canonicalName: string };
-  const cityLookup = new Map<string, CityEntry>();
-
-  for (const c of cityRows!) {
-    const key = normalize(c.name);
-    cityLookup.set(key, { cityId: c.id, marketId: c.market_id, canonicalName: c.name });
-    // Also register slug as an alternate key so "langley-township" (if it
-    // ever appears as a slug variant) would resolve too.
-    cityLookup.set(normalize(c.slug.replace(/-/g, " ")), {
-      cityId: c.id,
-      marketId: c.market_id,
-      canonicalName: c.name,
-    });
-  }
-
-  // Apply explicit alias overrides (highest priority).
-  for (const [alias, targetSlug] of Object.entries(CITY_ALIASES)) {
-    const target = cityRows!.find(c => c.slug === targetSlug);
-    if (target) {
-      cityLookup.set(normalize(alias), {
-        cityId: target.id,
-        marketId: target.market_id,
-        canonicalName: target.name,
-      });
-    }
-  }
+  // Markets are only needed for the resolver's optional province veto, which
+  // this script does not exercise (see header note) — an empty array keeps
+  // matching scoped to city text alone, identical to this script's original
+  // behaviour.
+  const cityLookup = buildCityGeographyLookup(cityRows ?? [], []);
 
   // ── 2. Load unassigned venues ─────────────────────────────────────────────
   // Only process venues where both FK columns are still NULL. Re-running the
@@ -156,10 +130,11 @@ async function main() {
       continue;
     }
 
-    const normalized = normalize(rawCity);
-    const entry = cityLookup.get(normalized);
+    // No province passed — see header note; preserves this script's
+    // original city-only matching exactly.
+    const resolution = resolveCityGeography({ city: rawCity }, cityLookup);
 
-    if (!entry) {
+    if (!resolution) {
       unassignable.push({ id: v.id, name: v.name, city: rawCity, region: v.region, country: v.country, reason: "city not in seeded geography" });
       continue;
     }
@@ -168,9 +143,9 @@ async function main() {
       id: v.id,
       name: v.name,
       city: rawCity,
-      cityId: entry.cityId,
-      marketId: entry.marketId,
-      matchedAs: entry.canonicalName,
+      cityId: resolution.cityId,
+      marketId: resolution.marketId,
+      matchedAs: resolution.matchedCityName,
     });
   }
 
