@@ -1753,7 +1753,7 @@ Happy Hour Compass`;
 
 // ── Venue cancellation founder notification ───────────────────────────────────
 
-const CANCELLATION_REASON_LABELS: Record<string, string> = {
+export const CANCELLATION_REASON_LABELS: Record<string, string> = {
   business_closed:   "Business closed",
   not_interested:    "Not interested right now",
   duplicate_listing: "Duplicate or incorrect listing",

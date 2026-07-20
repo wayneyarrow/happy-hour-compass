@@ -5,8 +5,10 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auditLog";
 import { getOperatorSubscription, updateOperatorPlan } from "@/lib/subscriptions";
 import { logPlanChangeEvent } from "@/lib/planChangeEvents";
-import { sendVenueCancellationFounderEmail } from "@/lib/email";
+import { sendVenueCancellationFounderEmail, CANCELLATION_REASON_LABELS } from "@/lib/email";
 import { getMembershipRole } from "@/lib/memberships";
+import { sendSlackAcquisitionNotification } from "@/lib/slack";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,7 @@ type VenueRow = {
   name: string;
   created_by_operator_id: string | null;
   cancelled_at: string | null;
+  is_published: boolean | null;
 };
 
 // ── Action ─────────────────────────────────────────────────────────────────────
@@ -68,7 +71,7 @@ export async function cancelVenueAction(
   // ── Verify ownership ───────────────────────────────────────────────────────
   let venueQuery = adminClient
     .from("venues")
-    .select("id, name, created_by_operator_id, cancelled_at")
+    .select("id, name, created_by_operator_id, cancelled_at, is_published")
     .eq("id", venueId);
 
   if (ctx.operator) {
@@ -116,16 +119,19 @@ export async function cancelVenueAction(
   });
 
   // ── Billing: downgrade to free if on a paid plan ───────────────────────────
+  // previousPlan is hoisted to this scope (rather than re-fetched) so the
+  // #venue-churn Slack notification below can report it.
+  let previousPlan = "free";
   if (operatorId) {
     const subscription = await getOperatorSubscription(operatorId);
-    const currentPlan  = subscription?.plan_code ?? "free";
+    previousPlan = subscription?.plan_code ?? "free";
 
-    if (currentPlan !== "free") {
+    if (previousPlan !== "free") {
       const { ok } = await updateOperatorPlan(operatorId, "free");
       if (ok) {
         await logPlanChangeEvent({
           operatorId,
-          fromPlan:       currentPlan,
+          fromPlan:       previousPlan,
           toPlan:         "free",
           changedByEmail: actorEmail,
           trigger:        "operator_venue_cancellation",
@@ -152,6 +158,31 @@ export async function cancelVenueAction(
     venueId,
   }).catch(err =>
     console.error("[cancelVenueAction] Founder notification failed:", err)
+  );
+
+  // ── Notify #venue-churn Slack channel (fire-and-forget, best-effort) ──────
+  const venueUrl     = `${getSiteUrl()}/control-panel/venues/${venueId}`;
+  const reasonLabel  = CANCELLATION_REASON_LABELS[reason] ?? reason;
+  const environment  = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown";
+  const operatorName = ctx.operator?.name ?? null;
+
+  const churnLines = [
+    `*${venue.name}* — venue management cancelled`,
+    `*Venue ID:* ${venueId}`,
+    `*Operator:* ${operatorName ? `${operatorName} (${actorEmail})` : actorEmail}`,
+    `*Reason:* ${reasonLabel}`,
+    `*Previous plan:* ${previousPlan}`,
+    `*Was published:* ${venue.is_published ? "Yes" : "No"}`,
+    `*Cancelled:* ${new Date(now).toUTCString()}`,
+    `<${venueUrl}|Open in Control Panel →>`,
+  ];
+  if (environment !== "production") churnLines.unshift(`⚠️ *[${environment}]*`);
+
+  sendSlackAcquisitionNotification({
+    channel: "venue-churn",
+    text:    churnLines.join("\n"),
+  }).catch(err =>
+    console.error("[cancelVenueAction] Slack churn notification failed:", err)
   );
 
   return { success: true };

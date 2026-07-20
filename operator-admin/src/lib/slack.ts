@@ -11,10 +11,11 @@
  *   SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL   Webhook URL for #venue-submissions
  *   SLACK_VENUE_CLAIMS_WEBHOOK_URL        Webhook URL for #venue-claims
  *   SLACK_WEBSITE_CONTACT_WEBHOOK_URL     Webhook URL for #website-contact
+ *   SLACK_VENUE_CHURN_WEBHOOK_URL         Webhook URL for #venue-churn
  */
 
 export type SlackChannel = "ops-critical" | "ops-alerts";
-export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact";
+export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact" | "venue-churn";
 export type SlackSeverity = "critical" | "warning" | "info" | "success";
 
 type SlackAlertParams = {
@@ -42,6 +43,7 @@ const ACQUISITION_WEBHOOK_ENV: Record<AcquisitionChannel, string> = {
   "venue-submissions": "SLACK_VENUE_SUBMISSIONS_WEBHOOK_URL",
   "venue-claims":      "SLACK_VENUE_CLAIMS_WEBHOOK_URL",
   "website-contact":   "SLACK_WEBSITE_CONTACT_WEBHOOK_URL",
+  "venue-churn":       "SLACK_VENUE_CHURN_WEBHOOK_URL",
 };
 
 function getWebhookUrl(channel: SlackChannel): string | null {
