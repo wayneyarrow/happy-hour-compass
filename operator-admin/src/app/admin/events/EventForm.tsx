@@ -79,6 +79,8 @@ type Props = {
   isOwner: boolean;
   /** Called after a successful insert or update with the saved event's id. */
   onSaved?: (eventId: string) => void;
+  /** Called when the operator backs out of the initial "New event" step without creating a draft. Only rendered while no draft exists yet. */
+  onCancel?: () => void;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -210,8 +212,28 @@ const labelOptCls = "block text-sm font-medium text-gray-500 mb-1";
 const sectionHeadingCls = "text-xs font-semibold text-gray-500 uppercase tracking-wider";
 
 // ── Component ─────────────────────────────────────────────────────────────────
-
-export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, isOwner, onSaved }: Props) {
+//
+// Progressive creation, matching the established Collections pattern
+// (control-panel/collections/CollectionForm.tsx — see that file's "Continue"
+// button/module docstring): a brand new event (no id yet) shows only the
+// minimum field needed to safely create an unpublished draft — Event name,
+// the one column the events table requires NOT NULL — behind a "Continue"
+// action. Once the draft exists (currentEventId is set, whether from a
+// fresh Continue or because an existing event was opened for editing), the
+// full editor renders — every other field is either nullable or has a safe
+// server-side default, so nothing else blocks draft creation. Event Image
+// is therefore never shown in a disabled "come back later" state — it isn't
+// reachable until currentEventId already exists.
+//
+// Unlike Collections (a route-based create page that redirects to a
+// separate edit route), Events lives in one client-side panel
+// (EventsManager) with no per-event URL. The "initial step → full editor"
+// transition here is a local state change (currentEventId becoming
+// non-null) rather than a page navigation — EventsManager remounts this
+// component against the newly created row (see its handleSaved), which is
+// the closest equivalent available without introducing new routes/URLs for
+// Events, which is out of scope for this change.
+export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, isOwner, onSaved, onCancel }: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
@@ -225,9 +247,21 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Field-adjacent errors for the two fields most often missed on save
+  // (see handleSubmit) — shown next to the field itself, in addition to the
+  // summary banner above, so the operator doesn't have to scroll up to learn
+  // what to fix.
+  const [firstDateError, setFirstDateError] = useState<string | null>(null);
+  const [startTimeError, setStartTimeError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [recurrenceUpsellVisible, setRecurrenceUpsellVisible] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Extra defensive guard against a double-submit racing ahead of React's
+  // isSaving-driven disabled state (e.g. a very fast double click/tap) —
+  // belt-and-suspenders alongside the disabled button and the fact that,
+  // once Continue succeeds, the initial step (and its Continue button)
+  // unmounts entirely, so there is no way to submit it a second time.
+  const submittingRef = useRef(false);
 
   const canRecur = canUseRecurringEvents(operatorPlan);
 
@@ -263,7 +297,64 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     setError(null);
+
+    // ── Initial step: Continue — create the draft ─────────────────────────
+    // Only the event name is validated/sent here. Every other events column
+    // is nullable or has a safe server-side default (see saveEventAction),
+    // so nothing else is required to safely create an unpublished draft.
+    // isPublished is hard-coded false — Continue must never publish.
+    if (!currentEventId) {
+      if (!formState.title.trim()) {
+        setError("Please enter an event name to continue.");
+        return;
+      }
+
+      submittingRef.current = true;
+      setIsSaving(true);
+
+      const result = await saveEventAction(
+        {
+          venueId,
+          title: formState.title,
+          eventType: null,
+          description: null,
+          firstDate: "",
+          startTime: "",
+          endTime: null,
+          recurrence: "none",
+          isPublished: false,
+          ticketingEnabled: false,
+          ticketUrl: null,
+          soldOut: false,
+          priceDisplay: null,
+          ageRestriction: null,
+          reservationRecommendation: null,
+          parkingNotes: null,
+          accessibilityNotes: null,
+          teaser: null,
+        },
+        null
+      );
+
+      submittingRef.current = false;
+
+      if ("error" in result) {
+        setError(result.error);
+        setIsSaving(false);
+        return;
+      }
+
+      setCurrentEventId(result.savedId);
+      setIsSaving(false);
+      onSaved?.(result.savedId);
+      return;
+    }
+
+    // ── Full editor: Save changes ──────────────────────────────────────────
+    setFirstDateError(null);
+    setStartTimeError(null);
 
     // ── Validation ────────────────────────────────────────────────────────
     if (formState.isPublished && !formState.eventType) {
@@ -271,11 +362,15 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       return;
     }
     if (!formState.firstDate) {
-      setError("Please pick a date for the first occurrence.");
+      const msg = "Please pick a date for the first occurrence.";
+      setError(msg);
+      setFirstDateError(msg);
       return;
     }
     if (!formState.startTime) {
-      setError("Please select a start time.");
+      const msg = "Please select a start time.";
+      setError(msg);
+      setStartTimeError(msg);
       return;
     }
     if (formState.endTime) {
@@ -311,6 +406,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       return;
     }
 
+    submittingRef.current = true;
     setIsSaving(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
 
@@ -338,6 +434,8 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       currentEventId
     );
 
+    submittingRef.current = false;
+
     if ("error" in result) {
       setError(result.error);
       setIsSaving(false);
@@ -352,6 +450,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
   };
 
   // ── Image upload / remove ─────────────────────────────────────────────────
+  // Both require currentEventId, which is always set by the time this
+  // section can render (see the `!currentEventId` early return in the JSX
+  // below) — the guards here are defensive, not reachable through normal use.
 
   const handleImageUpload = async (file: File) => {
     if (!currentEventId) return;
@@ -459,6 +560,66 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
 
   const preview = getDateTimePreview(formState);
 
+  // ── Initial step: only the field required to create a safe draft ─────────
+  if (!currentEventId) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        <p className="text-sm text-gray-500">
+          Start with your event name. You&rsquo;ll add the schedule, image, and other
+          details next.
+        </p>
+
+        <div>
+          <label htmlFor="event-title" className={labelCls}>
+            Event name
+          </label>
+          <input
+            id="event-title"
+            type="text"
+            value={formState.title}
+            onChange={(e) => update("title", e.target.value)}
+            placeholder="e.g. Music Bingo"
+            disabled={isSaving}
+            autoFocus
+            className={inputCls}
+          />
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={isSaving || !formState.title.trim()}
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? "Creating…" : "Continue"}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isSaving}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400">
+          This event is created as a draft — you&rsquo;ll set the schedule, add an
+          image, and publish it next.
+        </p>
+      </form>
+    );
+  }
+
+  // ── Full editor ────────────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
@@ -550,7 +711,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
           </p>
         </div>
 
-        {/* Event Image */}
+        {/* Event Image — always available here: this section only ever
+            renders once currentEventId exists (see the early return above),
+            so there is no disabled/"come back later" state to show. */}
         <div>
           {/* Shared hidden file input — triggered by both Upload and Replace */}
           <input
@@ -579,20 +742,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             </div>
           )}
 
-          {!currentEventId ? (
-            <div>
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-sm font-medium cursor-not-allowed"
-              >
-                Save event to upload image
-              </button>
-              <p className="text-xs text-gray-400 mt-2">
-                Save the event details first, then you can upload an image.
-              </p>
-            </div>
-          ) : imageUrl ? (
+          {imageUrl ? (
             <div className="flex items-start gap-4">
               <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -661,10 +811,17 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             id="event-first-date"
             type="date"
             value={formState.firstDate}
-            onChange={(e) => update("firstDate", e.target.value)}
+            onChange={(e) => {
+              update("firstDate", e.target.value);
+              if (firstDateError) setFirstDateError(null);
+            }}
             disabled={isSaving}
+            aria-invalid={!!firstDateError}
             className={inputCls}
           />
+          {firstDateError && (
+            <p className="mt-1 text-xs text-red-600">{firstDateError}</p>
+          )}
         </div>
 
         {/* Start time / End time */}
@@ -676,8 +833,12 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             <select
               id="event-start-time"
               value={formState.startTime}
-              onChange={(e) => update("startTime", e.target.value)}
+              onChange={(e) => {
+                update("startTime", e.target.value);
+                if (startTimeError) setStartTimeError(null);
+              }}
               disabled={isSaving}
+              aria-invalid={!!startTimeError}
               className={inputCls}
             >
               <option value="">Select time</option>
@@ -685,6 +846,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+            {startTimeError && (
+              <p className="mt-1 text-xs text-red-600">{startTimeError}</p>
+            )}
           </div>
           <div>
             <label htmlFor="event-end-time" className={labelCls}>
@@ -1023,7 +1187,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
             disabled={isSaving}
             className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? "Saving…" : "Save event"}
+            {isSaving ? "Saving…" : "Save changes"}
           </button>
           {saved && (
             <span

@@ -152,9 +152,32 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
     setEvents((data as unknown as EventRow[]) ?? []);
   };
 
-  // After a successful save, refresh the list and return to the idle empty state.
-  const handleSaved = async (_savedEventId: string) => {
+  // After a successful save: refresh the list, then either stay on the
+  // event (create) or return to the idle empty state (edit).
+  //
+  // Creating a new event is the specific workflow this behaviour fixes —
+  // per QA, the operator previously had to save, get bounced back to the
+  // empty state, and re-select the event from the list just to reach image
+  // upload. Staying on the freshly created event keeps them in place so the
+  // now-unlocked image section is immediately reachable.
+  //
+  // Editing an existing event keeps its prior "return to the list" behaviour
+  // unchanged — that flow was not reported as broken and is out of scope here.
+  const handleSaved = async (savedEventId: string) => {
     await refreshList();
+    if (mode === "creating") {
+      setSelectedId(savedEventId);
+      setMode("editing");
+    } else {
+      setSelectedId(null);
+      setMode("idle");
+    }
+  };
+
+  // Backing out of the initial "New event" step before a draft has been
+  // created — nothing was saved, so this is just a return to idle. Mirrors
+  // Collections' "Cancel" link next to Continue.
+  const handleCancelCreate = () => {
     setSelectedId(null);
     setMode("idle");
   };
@@ -380,6 +403,7 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
                 operatorPlan={operatorPlan}
                 isOwner={isOwner}
                 onSaved={handleSaved}
+                onCancel={mode === "creating" ? handleCancelCreate : undefined}
               />
             </div>
           </>
