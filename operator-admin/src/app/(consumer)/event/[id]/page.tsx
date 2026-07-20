@@ -9,12 +9,11 @@ import { EventViewTracker } from "./EventViewTracker";
 import { EventActionButtons } from "./EventActionButtons";
 import { VenueInfoRows } from "../../venue/[id]/VenueInfoRows";
 
-// Never serve a stale version — preview mode must always read live DB data.
+// Time-sensitive data (open/closed status) — always read fresh.
 export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 const DAY_ORDER = [
@@ -22,18 +21,21 @@ const DAY_ORDER = [
   "Thursday", "Friday", "Saturday",
 ] as const;
 
-export default async function EventPage({ params, searchParams }: PageProps) {
+// This legacy consumer-app route never supported an authorized unpublished
+// preview — it previously trusted a bare ?preview=true query string to
+// enable includeUnpublished with no authorization check at all, letting
+// anyone who knew or guessed an event UUID view an unpublished draft. The
+// authorized equivalent now lives at the website Event Detail page
+// (see (website)/website-events/[id]/page.tsx, gated by canPreviewEvent())
+// reached via Operator Admin's Preview button through
+// /api/preview/event/[id]. No code in this app linked to this route's
+// preview mode, so it is removed entirely rather than duplicated here —
+// this route now always renders published events only, exactly like every
+// other normal "View" link into it.
+export default async function EventPage({ params }: PageProps) {
   const { id } = await params;
-  const resolvedSearchParams = await searchParams;
 
-  const isPreview =
-    resolvedSearchParams.preview === "true" ||
-    (Array.isArray(resolvedSearchParams.preview) &&
-      resolvedSearchParams.preview.includes("true"));
-
-  const event = await getEventForConsumerById(id, {
-    includeUnpublished: isPreview,
-  });
+  const event = await getEventForConsumerById(id);
 
   if (!event) {
     notFound();
@@ -72,12 +74,6 @@ export default async function EventPage({ params, searchParams }: PageProps) {
           <ShareButton />
         </div>
       </div>
-
-      {isPreview && (
-        <div className="px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-700 font-medium">
-          Preview mode — this event may not be publicly visible yet.
-        </div>
-      )}
 
       {/* ── Hero image ─────────────────────────────────────────────────────────
           Real image if available; premium amber gradient fallback otherwise. */}

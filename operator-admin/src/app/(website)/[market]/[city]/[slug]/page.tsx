@@ -58,10 +58,52 @@ type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+function isPreviewRequestedFromParams(
+  resolvedSearchParams: Awaited<PageProps["searchParams"]>
+): boolean {
+  return (
+    resolvedSearchParams.preview === "true" ||
+    (Array.isArray(resolvedSearchParams.preview) &&
+      resolvedSearchParams.preview.includes("true"))
+  );
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug, market } = await params;
-  const venue = await getVenueWithEventsForConsumerById(slug);
+  const resolvedSearchParams = await searchParams;
   const marketConfig = getMarketById(market);
+
+  // Any request carrying ?preview=true is forced noindex regardless of
+  // whether it turns out authorized — a legitimate visitor never adds this
+  // query param, so there is no cost to normal published-page SEO, and it
+  // means preview metadata can never accidentally represent unpublished
+  // content as publicly indexable. Authorization itself is still fully
+  // enforced separately by the page body below; this only controls the
+  // robots directive. Previously this path returned plain venue metadata
+  // (or the untagged { title: "Venue" } fallback) with no robots override
+  // at all, so an unpublished preview page had no per-page noindex signal
+  // in production.
+  if (isPreviewRequestedFromParams(resolvedSearchParams)) {
+    const venue = await getVenueWithEventsForConsumerById(slug, { includeUnpublished: true });
+    if (!venue) return { title: "Venue", robots: { index: false, follow: false } };
+    return {
+      ...buildVenueMetadata({
+        venueName: marketConfig
+          ? `${venue.name} Happy Hour | ${marketConfig.name}`
+          : `${venue.name} Happy Hour`,
+        description:
+          venue.happyHourTagline ||
+          `Happy hour deals at ${venue.name} in ${venue.city}. See the full schedule, specials, and info.`,
+        marketSlug: venue.marketSlug,
+        citySlug: venue.citySlug,
+        slug: venue.id,
+        ogImage: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+      }),
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const venue = await getVenueWithEventsForConsumerById(slug);
   if (!venue) return { title: "Venue" };
   return buildVenueMetadata({
     // No brand-suffix fallback when marketConfig is missing (e.g. a stale
@@ -144,10 +186,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // carrying the flag. A visitor who merely copies a preview URL cannot use
   // it unless they are also independently re-authorized below for THIS
   // venue, so this flag alone never grants access to unpublished data.
-  const isPreviewRequested =
-    resolvedSearchParams.preview === "true" ||
-    (Array.isArray(resolvedSearchParams.preview) &&
-      resolvedSearchParams.preview.includes("true"));
+  const isPreviewRequested = isPreviewRequestedFromParams(resolvedSearchParams);
 
   // Venue lookup is slug-first with a raw-UUID fallback (see
   // getVenueWithEventsForConsumerById) and does not depend on the market/city

@@ -13,7 +13,7 @@ import { GoogleRatingBadge } from "./GoogleRatingBadge";
 import { VenueViewTracker } from "./VenueViewTracker";
 import { VenueInfoRows } from "./VenueInfoRows";
 
-// Never serve a stale version — preview mode must always read live DB data.
+// Time-sensitive data (open/closed status) — always read fresh.
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(
@@ -26,7 +26,6 @@ export async function generateMetadata(
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 const DAY_ORDER = [
@@ -48,18 +47,21 @@ function getVenueImageSrc(establishmentType: string): string {
   return "/images/casual-dining-1.jpg";
 }
 
-export default async function VenuePage({ params, searchParams }: PageProps) {
+// This legacy consumer-app route never supported an authorized unpublished
+// preview — it previously trusted a bare ?preview=true query string to
+// enable includeUnpublished with no authorization check at all, letting
+// anyone who knew or guessed a venue UUID view an unpublished venue. The
+// authorized equivalent is the website Venue Detail page (see
+// (website)/[market]/[city]/[slug]/page.tsx, gated by canPreviewVenue())
+// reached via Operator Admin's Preview button through
+// /api/preview/venue/[id]. No code in this app linked to this route's
+// preview mode, so it is removed entirely rather than duplicated here —
+// this route now always renders published venues only, exactly like every
+// other normal "View" link into it.
+export default async function VenuePage({ params }: PageProps) {
   const { id } = await params;
-  const resolvedSearchParams = await searchParams;
 
-  const isPreview =
-    resolvedSearchParams.preview === "true" ||
-    (Array.isArray(resolvedSearchParams.preview) &&
-      resolvedSearchParams.preview.includes("true"));
-
-  const venue = await getVenueWithEventsForConsumerById(id, {
-    includeUnpublished: isPreview,
-  });
+  const venue = await getVenueWithEventsForConsumerById(id);
 
   if (!venue) {
     notFound();
@@ -104,12 +106,6 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
           <ShareButton />
         </div>
       </div>
-
-      {isPreview && (
-        <div className="px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-700 font-medium">
-          Preview mode — this venue may not be publicly visible yet.
-        </div>
-      )}
 
       {/* ── Hero image + thumbnail strip ───────────────────────────────────────
           Gallery handles hero (always) + thumbnail strip (only when images > 1).

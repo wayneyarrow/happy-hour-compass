@@ -11,6 +11,7 @@ import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
 import { VenueDetailMap } from "@/app/(website)/[market]/[city]/[slug]/VenueDetailMap";
 import { StickyNav } from "@/app/(website)/[market]/[city]/[slug]/StickyNav";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { canPreviewEvent } from "@/lib/venuePreviewAccess";
 import { SaveEventButton } from "@/app/(website)/SaveEventButton";
 import { EventActionCard } from "./EventActionCard";
 import { EventMobileActionBar } from "./EventMobileActionBar";
@@ -24,12 +25,48 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
+
+function isPreviewRequestedFromParams(
+  resolvedSearchParams: Awaited<PageProps["searchParams"]>
+): boolean {
+  return (
+    resolvedSearchParams.preview === "true" ||
+    (Array.isArray(resolvedSearchParams.preview) &&
+      resolvedSearchParams.preview.includes("true"))
+  );
+}
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+
+  // Any request carrying ?preview=true is forced noindex regardless of
+  // whether it turns out authorized — a legitimate visitor never adds this
+  // query param, so there is no cost to normal published-page SEO, and it
+  // means preview metadata can never accidentally represent unpublished
+  // content as publicly indexable (see requirement: preview pages must not
+  // be indexable). Authorization itself is still fully enforced separately
+  // by the page body below; this only controls the robots directive.
+  if (isPreviewRequestedFromParams(resolvedSearchParams)) {
+    const event = await getEventForWebsite(id, { includeUnpublished: true });
+    if (!event) return { title: "Event", robots: { index: false, follow: false } };
+    return {
+      ...buildEventMetadata({
+        eventName: `${event.title} at ${event.venueName}`,
+        description:
+          event.description?.slice(0, 160) ||
+          `${event.title} at ${event.venueName}. ${event.nextOccurrenceLabel}.`.trim(),
+        eventId: id,
+        ogImage: event.imageUrl ?? undefined,
+      }),
+      robots: { index: false, follow: false },
+    };
+  }
+
   const event = await getEventForWebsite(id);
   if (!event) return { title: "Event" };
   return buildEventMetadata({
@@ -176,12 +213,44 @@ function EventHeroImage({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function WebsiteEventDetailPage({ params }: PageProps) {
+export default async function WebsiteEventDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const resolvedSearchParams = await searchParams;
 
-  const event = await getEventForWebsite(id);
+  // Operator Admin's Preview button (via /api/preview/event/[id]) is the
+  // only legitimate source of ?preview=true — it always redirects here
+  // already carrying the flag. A visitor who merely copies a preview URL
+  // cannot use it unless they are also independently re-authorized below
+  // for THIS event, so this flag alone never grants access to unpublished
+  // data. Mirrors the identical pattern already used by the website venue
+  // page (see (website)/[market]/[city]/[slug]/page.tsx).
+  const isPreviewRequested = isPreviewRequestedFromParams(resolvedSearchParams);
+
+  let event = await getEventForWebsite(id);
+  let isPreviewAuthorized = false;
+
+  // Unpublished (or nonexistent-under-normal-rules) event + preview
+  // requested — re-fetch including unpublished rows and only use it once
+  // the requester is independently confirmed authorized to manage this
+  // exact event (see canPreviewEvent). Falls through to the normal 404
+  // handling below when unauthorized, so this never weakens the public path.
+  if (!event && isPreviewRequested) {
+    const previewCandidate = await getEventForWebsite(id, { includeUnpublished: true });
+    if (previewCandidate && (await canPreviewEvent(previewCandidate.id))) {
+      event = previewCandidate;
+      isPreviewAuthorized = true;
+    }
+  }
 
   if (!event) notFound();
+
+  // A published event reached normally, but still requested with
+  // ?preview=true (e.g. the operator previewing an already-live event) —
+  // authorize separately so the banner only ever renders for the operator
+  // who manages it, never for a visitor who stumbled on the same query param.
+  if (isPreviewRequested && !isPreviewAuthorized) {
+    isPreviewAuthorized = await canPreviewEvent(event.id);
+  }
 
   // Home → Event Title only — deliberately not Home → Events → Title. The
   // visible page breadcrumb (below) does link "Events" to /website-events,
@@ -286,6 +355,12 @@ export default async function WebsiteEventDetailPage({ params }: PageProps) {
 
   return (
     <div className="bg-white pb-20 lg:pb-0">
+      {isPreviewAuthorized && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 lg:px-10 py-2.5 text-center text-sm font-medium text-amber-800">
+          Preview mode — this is how your event will look to guests.
+        </div>
+      )}
+
       <EventViewTracker eventId={event.id} />
       <JsonLd nodes={[breadcrumbNode]} />
 

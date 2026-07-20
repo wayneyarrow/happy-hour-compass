@@ -975,21 +975,30 @@ export type WebsiteEventDetail = {
 };
 
 /**
- * Fetches a published event plus extended venue context for the website
- * Event Detail page.  Queries the venue table directly to avoid a circular
- * import with venues.ts (which imports from events.ts).
+ * Fetches an event plus extended venue context for the website Event Detail
+ * page.  Queries the venue table directly to avoid a circular import with
+ * venues.ts (which imports from events.ts).
  *
- * Returns null when the event is not found or is not published.
+ * In normal mode (includeUnpublished = false / unset) only a published event
+ * is returned. In preview mode (includeUnpublished = true) an unpublished
+ * event is also returned — callers MUST independently authorize the request
+ * before passing this (see canPreviewEvent in lib/venuePreviewAccess.ts);
+ * this function performs no authorization itself. The "other events at this
+ * venue" sidebar list always stays published-only regardless of this option,
+ * matching getVenueWithEventsForConsumerById's identical convention — only
+ * the single directly-requested record ever bypasses the publish filter.
+ *
+ * Returns null when the event is not found under the requested mode.
  */
 export async function getEventForWebsite(
-  id: string
+  id: string,
+  options?: { includeUnpublished?: boolean }
 ): Promise<WebsiteEventDetail | null> {
   try {
     const supabase = createAdminClient();
 
     // ── Event row ────────────────────────────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: eventData, error: eventError } = await (supabase
+    let eventQuery = supabase
       .from("events")
       .select(
         "id, venue_id, title, description, event_type, image_url, " +
@@ -998,8 +1007,13 @@ export async function getEventForWebsite(
           "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
           "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
       )
-      .eq("id", id)
-      .eq("is_published", true)
+      .eq("id", id);
+    if (!options?.includeUnpublished) {
+      eventQuery = eventQuery.eq("is_published", true);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: eventData, error: eventError } = await (eventQuery
       .maybeSingle() as unknown as Promise<{ data: unknown; error: unknown }>);
 
     if (eventError) {
