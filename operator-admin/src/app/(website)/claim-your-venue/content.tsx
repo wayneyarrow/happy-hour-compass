@@ -1,4 +1,5 @@
 import type { ClaimJourneyStep } from "./ClaimJourneySteps";
+import { AddVenueStepPrompt } from "./AddVenueStepPrompt";
 
 /**
  * Static copy + screenshot metadata for the four-step walkthrough. Kept
@@ -15,8 +16,14 @@ export const JOURNEY_STEPS: readonly ClaimJourneyStep[] = [
   {
     number: 1,
     title: "Find your venue",
-    description:
-      "Use the search on the Happy Hour Compass homepage to find your venue. Search by venue name, city, or neighbourhood, then select your venue from the results.",
+    description: (
+      <>
+        Use the search on the Happy Hour Compass homepage to find your
+        venue. Search by venue name, city, or neighbourhood, then select
+        your venue from the results.
+        <AddVenueStepPrompt />
+      </>
+    ),
     image: {
       src: "/images/business/claim-page-search.png",
       alt: "Searching for a venue by name on the Happy Hour Compass homepage and selecting it from the results",

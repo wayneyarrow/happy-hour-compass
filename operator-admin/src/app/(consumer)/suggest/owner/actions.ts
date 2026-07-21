@@ -866,5 +866,5 @@ export async function saveOperatorSubmissionAction(
     }
   }
 
-  return { success: true };
+  return { success: true, routedStatus };
 }

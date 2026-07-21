@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import Link from "next/link";
 import {
   APIProvider,
   Map,
@@ -193,7 +194,15 @@ export function AddVenueModalContent({ onDone }: Props) {
           setGeneralError(result.error);
           return;
         }
-        setStep("confirmed");
+        // Only "confirmed_auto" (no existing venue for this Google Place ID)
+        // is actually instant/no-review. If a venue with this place ID
+        // already exists — unclaimed ("pending_review") or claimed by
+        // someone else ("double_claim") — the backend routes it for manual
+        // review instead of auto-provisioning an account. Route those to
+        // the same accurate "submitted" confirmation already shown for the
+        // no-match/rejected paths, rather than the "confirmed" screen's
+        // promise of an account setup email that won't actually be sent.
+        setStep(result.routedStatus === "confirmed_auto" ? "confirmed" : "submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");
       }
@@ -575,6 +584,20 @@ export function AddVenueModalContent({ onDone }: Props) {
   // ── Step: form (default) ───────────────────────────────────────────────────
   return (
     <form onSubmit={handleFormSubmit} className="px-5 pt-6 pb-12" noValidate>
+      <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-100 rounded-lg">
+        <p className="text-[13px] text-amber-900 leading-relaxed">
+          This form is for venues that aren&rsquo;t listed on Happy Hour
+          Compass yet. If your venue is already listed,{" "}
+          <Link
+            href="/claim-your-venue"
+            className="font-semibold underline underline-offset-2 hover:text-amber-950"
+          >
+            claim it instead
+          </Link>
+          .
+        </p>
+      </div>
+
       <p className="text-[14px] text-gray-500 leading-relaxed mb-6">
         Enter your business details and we&rsquo;ll try to look you up on
         Google to save you time.

@@ -59,6 +59,12 @@ export default function ClaimYourVenuePage() {
           Claim Your Venue
         </h1>
         <p className="mt-5 text-lg text-gray-500 leading-relaxed max-w-xl mx-auto">
+          Some venues are already listed on Happy Hour Compass, added to
+          help people discover their happy hours before the owner has
+          claimed the page. If that&rsquo;s your venue, claiming it puts
+          you in control of your listing.
+        </p>
+        <p className="mt-4 text-lg text-gray-500 leading-relaxed max-w-xl mx-auto">
           It only takes a few minutes to claim your venue. Follow the four
           simple steps below to get started.
         </p>

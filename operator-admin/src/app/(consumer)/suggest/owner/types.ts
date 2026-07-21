@@ -76,4 +76,13 @@ export type SavePayload = {
 export type SaveResult = {
   success?: boolean;
   error?: string;
+  /**
+   * Phase 3B routing outcome (see saveOperatorSubmissionAction's routing
+   * doc comment) — "confirmed_auto" is the only outcome that's actually
+   * instant/no-review; "pending_review" and "double_claim" both mean an
+   * existing venue was matched and the submission was routed for manual
+   * review instead. Callers should not assume a successful save means
+   * instant approval without checking this.
+   */
+  routedStatus?: string;
 };
