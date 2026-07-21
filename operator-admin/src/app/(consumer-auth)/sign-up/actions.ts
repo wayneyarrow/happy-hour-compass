@@ -67,9 +67,15 @@ export type CreateConsumerAccountResult =
  * project's single dashboard-configured Site URL rather than the current
  * deployment's actual origin.
  *
- * The confirmation link still resolves through the existing /auth/callback
- * route with ?next=/welcome — unchanged, already documented there as the
- * consumer signup confirmation entry point.
+ * The confirmation link resolves through /auth/confirm?next=/welcome — a
+ * dedicated hash-fragment session handler (src/app/auth/confirm/page.tsx),
+ * not /auth/callback. generateLink() is called server-side with no browser
+ * PKCE code_verifier available, so Supabase can only redirect back with
+ * tokens in the URL hash fragment (#access_token=...&type=signup) rather
+ * than a ?code=... query param — the same implicit-flow shape already
+ * documented for the admin-generated operator recovery link in
+ * /operator/create-password. /auth/callback only understands the ?code=
+ * query-param (PKCE) shape, so it cannot be used here.
  */
 export async function createConsumerAccount({
   email,
@@ -97,7 +103,7 @@ export async function createConsumerAccount({
         consumer_marketing_consent: marketingConsent,
         consumer_marketing_consent_at: marketingConsent ? now : null,
       },
-      redirectTo: `${getSiteUrl()}/auth/callback?next=/welcome`,
+      redirectTo: `${getSiteUrl()}/auth/confirm?next=/welcome`,
     },
   });
 
@@ -128,8 +134,10 @@ export async function createConsumerAccount({
   if (profileError) {
     console.error("[createConsumerAccount] createConsumerProfile failed:", profileError);
     // Auth user was created. Profile creation failed — likely a transient error.
-    // /auth/callback will attempt profile creation again when the user confirms.
-    // Don't block the success screen; the user still needs to confirm their email.
+    // /auth/confirm (src/app/auth/confirm/page.tsx) re-calls createConsumerProfile
+    // once the user confirms and a session is established, so this is retried
+    // rather than lost. Don't block the success screen; the user still needs to
+    // confirm their email.
   }
 
   const emailResult = await sendConsumerSignupConfirmationEmail({
