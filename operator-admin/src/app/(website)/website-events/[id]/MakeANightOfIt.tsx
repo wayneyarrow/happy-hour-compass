@@ -9,9 +9,28 @@ const DAY_NAMES = [
   "Thursday", "Friday", "Saturday",
 ] as const;
 
+// Venue happy-hour slot times (from event.venueHhWeekly, built by
+// hhParse12hToHHMM in src/lib/data/events.ts) are already normalised to
+// 24-hour "HH:MM" — safe to parse with a plain colon split.
 function slotToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
+}
+
+// Event start/end times, by contrast, are stored and passed through as
+// human-readable "H:MM AM/PM" strings (e.g. "7:00 PM") — see
+// eventFormatters.ts / KnowBeforeYouGo.tsx. Parsing them with slotToMinutes
+// silently produced NaN; this parser handles the AM/PM suffix explicitly and
+// returns null (rather than NaN) on anything unparseable.
+function parseEventTimeToMinutes(time: string): number | null {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
 }
 
 function formatHhTime(hhmm: string): string {
@@ -51,8 +70,8 @@ function classifyWindows(
   startTime: string | null,
   endTime: string | null
 ): HhWindow[] {
-  const startMins = startTime ? slotToMinutes(startTime) : null;
-  const endMins = endTime ? slotToMinutes(endTime) : null;
+  const startMins = startTime ? parseEventTimeToMinutes(startTime) : null;
+  const endMins = endTime ? parseEventTimeToMinutes(endTime) : null;
 
   const before = startMins !== null
     ? daySlots.filter((s) => slotToMinutes(s.end) <= startMins)
