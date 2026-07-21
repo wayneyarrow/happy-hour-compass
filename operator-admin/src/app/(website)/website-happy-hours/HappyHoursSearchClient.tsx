@@ -60,25 +60,30 @@ const SEARCH_URL_SYNC_DEBOUNCE_MS = 200;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Returns true if the venue has happy hour at the given "HH:MM" time on any day. */
-function hasHappyHourAtTime(
-  weekly: Record<string, Array<{ start: string; end: string }>>,
-  hhMm: string
-): boolean {
+/** Parses an "HH:MM" string to minutes since midnight. NaN propagates on malformed input, which every comparison below treats as a non-match (mirrors the previous single-time filter's behavior). */
+function timeStringToMinutes(hhMm: string): number {
   const [h, m] = hhMm.split(":").map(Number);
-  const check = h * 60 + (m || 0);
+  return h * 60 + (m || 0);
+}
+
+/**
+ * Returns true if any of the venue's weekly Happy Hour slots (any day)
+ * overlaps the selected [selectedStartHhMm, selectedEndHhMm) range, using the
+ * same start-inclusive/end-exclusive convention as computeHhStatus(): a slot
+ * matches when slotStart < selectedEnd AND slotEnd > selectedStart.
+ */
+function hasHappyHourOverlap(
+  weekly: Record<string, Array<{ start: string; end: string }>>,
+  selectedStartHhMm: string,
+  selectedEndHhMm: string
+): boolean {
+  const selectedStart = timeStringToMinutes(selectedStartHhMm);
+  const selectedEnd = timeStringToMinutes(selectedEndHhMm);
   return Object.values(weekly).some((slots) =>
     slots.some((slot) => {
-      const [sh, sm] = slot.start.split(":").map(Number);
-      const start = sh * 60 + (sm || 0);
-      const end =
-        slot.end === "close"
-          ? 1440
-          : (() => {
-              const [eh, em] = slot.end.split(":").map(Number);
-              return eh * 60 + (em || 0);
-            })();
-      return check >= start && check < end;
+      const start = timeStringToMinutes(slot.start);
+      const end = slot.end === "close" ? 1440 : timeStringToMinutes(slot.end);
+      return start < selectedEnd && end > selectedStart;
     })
   );
 }
@@ -89,6 +94,69 @@ function formatTimeDisplay(hhMm: string): string {
   const dh = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return `${dh}:${String(m).padStart(2, "0")} ${period}`;
 }
+
+/** Compact range label, e.g. "3–6 PM" (same period), "11 AM–2 PM" (crosses noon), or "10 PM–Midnight". */
+function formatTimeRangeDisplay(fromHhMm: string, toHhMm: string): string {
+  const [fh, fm] = fromHhMm.split(":").map(Number);
+  const fPeriod = fh >= 12 ? "PM" : "AM";
+  const fDisplayH = fh === 0 ? 12 : fh > 12 ? fh - 12 : fh;
+  const fShort = fm === 0 ? `${fDisplayH}` : `${fDisplayH}:${String(fm).padStart(2, "0")}`;
+
+  // Midnight has no AM/PM of its own (it's the end-of-day sentinel, not
+  // 12:00 AM the next day) — always show it against the From side's period.
+  if (toHhMm === MIDNIGHT_VALUE) return `${fShort} ${fPeriod}–Midnight`;
+
+  const [th, tm] = toHhMm.split(":").map(Number);
+  const tPeriod = th >= 12 ? "PM" : "AM";
+  const tDisplayH = th === 0 ? 12 : th > 12 ? th - 12 : th;
+  const tShort = tm === 0 ? `${tDisplayH}` : `${tDisplayH}:${String(tm).padStart(2, "0")}`;
+  if (fPeriod === tPeriod) return `${fShort}–${tShort} ${tPeriod}`;
+  return `${fShort} ${fPeriod}–${tShort} ${tPeriod}`;
+}
+
+function minutesToTimeString(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Real Happy Hour schedule data (venues.beta.csv / venues.working.csv) shows
+// slot starts from 2:00 PM–10:00 PM and non-"close" ends up to 6:00 PM, plus
+// many "close" (midnight) ends. 11:00 AM–11:30 PM comfortably covers that
+// with margin for earlier lunch-style specials, without an unusably long
+// list. The overlap check compares against raw minutes, so "close" (1440)
+// schedules are still matched correctly even against the plain 11:30 PM
+// bound — Midnight (below) exists so users can also select it explicitly.
+const TIME_OPTIONS_START_MIN = 11 * 60; // 11:00 AM
+const TIME_OPTIONS_END_MIN = 23 * 60 + 30; // 11:30 PM
+const TIME_OPTIONS_STEP_MIN = 30;
+
+const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
+  const opts: Array<{ value: string; label: string }> = [];
+  for (
+    let min = TIME_OPTIONS_START_MIN;
+    min <= TIME_OPTIONS_END_MIN;
+    min += TIME_OPTIONS_STEP_MIN
+  ) {
+    const value = minutesToTimeString(min);
+    opts.push({ value, label: formatTimeDisplay(value) });
+  }
+  return opts;
+})();
+
+// End-of-day sentinel for the To selector only. "24:00" (not "00:00") so
+// timeStringToMinutes() parses it as 1440 — end of the current day, matching
+// how "close" is normalized in hasHappyHourOverlap — rather than midnight at
+// the *start* of the day, which would silently break the overlap math and
+// reopen the overnight-range case this filter intentionally doesn't support.
+// String-sorts after every TIME_OPTIONS value ("24:00" > "23:30"), so it's
+// always valid as a To choice regardless of the selected From.
+const MIDNIGHT_VALUE = "24:00";
+const MIDNIGHT_OPTION = { value: MIDNIGHT_VALUE, label: "Midnight" };
+const TO_TIME_OPTIONS: Array<{ value: string; label: string }> = [
+  ...TIME_OPTIONS,
+  MIDNIGHT_OPTION,
+];
 
 // ─── Sort options ─────────────────────────────────────────────────────────────
 
@@ -102,16 +170,21 @@ function ChipButton({
   active,
   onClick,
   hasArrow = false,
+  ariaExpanded,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
   hasArrow?: boolean;
+  /** When provided, exposes aria-expanded/aria-haspopup for a chip that opens a popover. */
+  ariaExpanded?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaExpanded !== undefined ? "true" : undefined}
       className={[
         "flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2",
         "border rounded-full text-sm font-medium whitespace-nowrap",
@@ -147,30 +220,90 @@ function ChipButton({
 // Shared between the desktop absolute popover and the mobile inline panel (see
 // render note above the chip bar for why mobile needs its own non-absolute copy).
 
+// Matches the site's existing styled-native-select convention (see INPUT_CLASS
+// in acquisition/ClaimVenueModalContent.tsx) — appearance-none + an inline SVG
+// chevron, no new component or dependency.
+const TIME_SELECT_CLASS =
+  "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 " +
+  "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
+  "appearance-none bg-white bg-no-repeat bg-[right_10px_center] pr-8 " +
+  "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")] " +
+  "disabled:bg-gray-50 disabled:text-gray-400";
+
 function TimeFilterFields({
-  filterTime,
-  onChange,
+  filterTimeFrom,
+  filterTimeTo,
+  onChangeFrom,
+  onChangeTo,
   onClear,
 }: {
-  filterTime: string;
-  onChange: (value: string) => void;
+  filterTimeFrom: string;
+  filterTimeTo: string;
+  onChangeFrom: (value: string) => void;
+  onChangeTo: (value: string) => void;
   onClear: () => void;
 }) {
+  // Structurally prevents From ≥ To: once From is set, To only offers later
+  // options (same-day ranges only — no overnight support). Midnight
+  // ("24:00") always string-sorts after every real From value, so it never
+  // gets filtered out here.
+  const toOptions = filterTimeFrom
+    ? TO_TIME_OPTIONS.filter((opt) => opt.value > filterTimeFrom)
+    : TO_TIME_OPTIONS;
+
   return (
     <>
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Happy hour at
+        Happy hour time
       </p>
-      <input
-        type="time"
-        value={filterTime}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none"
-      />
+      <div className="space-y-3">
+        <div>
+          <label
+            htmlFor="hh-time-from"
+            className="block text-xs font-medium text-gray-600 mb-1"
+          >
+            From
+          </label>
+          <select
+            id="hh-time-from"
+            value={filterTimeFrom}
+            onChange={(e) => onChangeFrom(e.target.value)}
+            className={TIME_SELECT_CLASS}
+          >
+            <option value="">Any</option>
+            {TIME_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label
+            htmlFor="hh-time-to"
+            className="block text-xs font-medium text-gray-600 mb-1"
+          >
+            To
+          </label>
+          <select
+            id="hh-time-to"
+            value={filterTimeTo}
+            onChange={(e) => onChangeTo(e.target.value)}
+            className={TIME_SELECT_CLASS}
+          >
+            <option value="">Any</option>
+            {toOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <p className="mt-2 text-xs text-gray-400 leading-tight">
-        Shows venues with happy hour at this time on any day
+        Shows venues with happy hour overlapping this range on any day
       </p>
-      {filterTime && (
+      {(filterTimeFrom || filterTimeTo) && (
         <button
           type="button"
           onClick={onClear}
@@ -451,7 +584,8 @@ export function HappyHoursSearchClient({
   const [onNowActive, setOnNowActive] = useState(false);
   const [topRatedActive, setTopRatedActive] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [filterTime, setFilterTime] = useState("");
+  const [filterTimeFrom, setFilterTimeFrom] = useState("");
+  const [filterTimeTo, setFilterTimeTo] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>(collectionOrder ? "collection" : "distance");
 
   // ── dropdown open state ──
@@ -570,7 +704,13 @@ export function HappyHoursSearchClient({
       )
         return false;
       if (selectedType && card.establishmentType !== selectedType) return false;
-      if (filterTime && !hasHappyHourAtTime(card.happyHourWeekly, filterTime))
+      // Range is active only once both bounds are chosen — a single bound
+      // never filters (see requirement: "only one selected → do not filter yet").
+      if (
+        filterTimeFrom &&
+        filterTimeTo &&
+        !hasHappyHourOverlap(card.happyHourWeekly, filterTimeFrom, filterTimeTo)
+      )
         return false;
       return true;
     });
@@ -582,7 +722,8 @@ export function HappyHoursSearchClient({
     userLocation,
     topRatedActive,
     selectedType,
-    filterTime,
+    filterTimeFrom,
+    filterTimeTo,
   ]);
 
   // ── sort + enrich with real distances ──
@@ -643,7 +784,18 @@ export function HappyHoursSearchClient({
     setOnNowActive(false);
     setTopRatedActive(false);
     setSelectedType(null);
-    setFilterTime("");
+    setFilterTimeFrom("");
+    setFilterTimeTo("");
+  }
+
+  // Changing From can strand an already-picked To that's no longer later than
+  // it (e.g. From moved past the existing To) — clear it rather than silently
+  // snapping to a different time, which is the less surprising outcome.
+  function handleFilterTimeFromChange(value: string) {
+    setFilterTimeFrom(value);
+    if (value && filterTimeTo && filterTimeTo <= value) {
+      setFilterTimeTo("");
+    }
   }
 
   // ── map markers — only venues with valid coordinates ──
@@ -721,9 +873,10 @@ export function HappyHoursSearchClient({
       ? "Top Rated"
       : "A-Z";
   const typeLabel = selectedType ?? "Type";
-  const timeLabel = filterTime
-    ? `Time: ${formatTimeDisplay(filterTime)}`
-    : "Time";
+  const timeLabel =
+    filterTimeFrom && filterTimeTo
+      ? `Time: ${formatTimeRangeDisplay(filterTimeFrom, filterTimeTo)}`
+      : "Time";
 
   const anyFilter =
     !!searchQuery.trim() ||
@@ -731,7 +884,8 @@ export function HappyHoursSearchClient({
     onNowActive ||
     topRatedActive ||
     !!selectedType ||
-    !!filterTime;
+    !!filterTimeFrom ||
+    !!filterTimeTo;
 
   // ─── render ──────────────────────────────────────────────────────────────
 
@@ -773,18 +927,22 @@ export function HappyHoursSearchClient({
           <div ref={timeRef} className="relative flex-shrink-0">
             <ChipButton
               label={timeLabel}
-              active={!!filterTime || timeOpen}
+              active={!!filterTimeFrom || !!filterTimeTo || timeOpen}
               onClick={() => setTimeOpen((v) => !v)}
               hasArrow
+              ariaExpanded={timeOpen}
             />
             {/* Desktop: absolute popover anchored below the chip */}
             {timeOpen && (
-              <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 w-56">
+              <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 w-64">
                 <TimeFilterFields
-                  filterTime={filterTime}
-                  onChange={setFilterTime}
+                  filterTimeFrom={filterTimeFrom}
+                  filterTimeTo={filterTimeTo}
+                  onChangeFrom={handleFilterTimeFromChange}
+                  onChangeTo={setFilterTimeTo}
                   onClear={() => {
-                    setFilterTime("");
+                    setFilterTimeFrom("");
+                    setFilterTimeTo("");
                     setTimeOpen(false);
                   }}
                 />
@@ -878,10 +1036,13 @@ export function HappyHoursSearchClient({
         {timeOpen && (
           <div ref={timePanelRef} className="md:hidden border-t border-gray-100 bg-white px-4 py-4">
             <TimeFilterFields
-              filterTime={filterTime}
-              onChange={setFilterTime}
+              filterTimeFrom={filterTimeFrom}
+              filterTimeTo={filterTimeTo}
+              onChangeFrom={handleFilterTimeFromChange}
+              onChangeTo={setFilterTimeTo}
               onClear={() => {
-                setFilterTime("");
+                setFilterTimeFrom("");
+                setFilterTimeTo("");
                 setTimeOpen(false);
               }}
             />
