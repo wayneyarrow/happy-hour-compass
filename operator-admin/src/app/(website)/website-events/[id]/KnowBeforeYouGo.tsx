@@ -2,12 +2,27 @@ import { formatPrice } from "./eventFormatters";
 
 // ─── Duration helper ──────────────────────────────────────────────────────────
 
+// start_time / end_time are stored as human-readable "H:MM AM/PM" strings
+// (e.g. "7:00 PM") — see eventFormatters.ts. Parse that format explicitly
+// rather than assuming 24-hour "HH:MM".
+function parseTimeToMinutes(time: string): number | null {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
 function deriveDuration(startTime: string | null, endTime: string | null): string | null {
   if (!startTime || !endTime) return null;
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  const diffMins = (eh * 60 + em) - (sh * 60 + sm);
-  if (diffMins <= 0) return null;
+  const startMins = parseTimeToMinutes(startTime);
+  const endMins = parseTimeToMinutes(endTime);
+  if (startMins === null || endMins === null) return null;
+  const diffMins = endMins - startMins;
+  if (!Number.isFinite(diffMins) || diffMins <= 0) return null;
   const h = Math.floor(diffMins / 60);
   const m = diffMins % 60;
   if (h === 0) return `${m} min`;
