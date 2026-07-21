@@ -32,6 +32,7 @@ import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { buildEventPublicPath } from "@/lib/publicEventUrl";
 import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/lib/geo/geography";
 import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
@@ -191,6 +192,15 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
     if (!section.eventId) return null;
     const [event] = await getPublishedEventsByIds([section.eventId]);
     if (!event) return null;
+    // Canonical slug path when the event's venue has resolvable
+    // market/city; falls back to the UUID compatibility route otherwise —
+    // never a broken or partial canonical path (see buildEventPublicPath).
+    const ctaHref =
+      buildEventPublicPath({
+        marketSlug: event.marketSlug,
+        citySlug: event.citySlug,
+        eventSlug: event.slug,
+      }) ?? `/website-events/${event.id}`;
     return {
       id: section.id,
       kind: "event_feature",
@@ -202,7 +212,7 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         imageUrl: event.imageUrl,
         teaser: event.teaser,
         ctaLabel: "View Event",
-        ctaHref: `/website-events/${event.id}`,
+        ctaHref,
       },
     };
   }

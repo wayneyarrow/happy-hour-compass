@@ -7,6 +7,7 @@ import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { getCollections } from "@/lib/data/collections";
 import { getAllPublicGuidesForSitemap } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { buildEventPublicPath } from "@/lib/publicEventUrl";
 
 // Content changes constantly (venues, events, collections, guides) — always
 // read fresh, same as the public pages the sitemap links to.
@@ -114,10 +115,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // ── Published event pages ───────────────────────────────────────────────
-  const eventPages: MetadataRoute.Sitemap = events.map((event) => ({
-    url: absoluteUrl(`/website-events/${event.id}`),
-    ...(event.updatedAt ? { lastModified: new Date(event.updatedAt) } : {}),
-  }));
+  // Canonical slug URL only — events whose venue has no resolvable
+  // market/city yet are skipped (graceful degradation, identical to the
+  // venue pages above), never listed at their /website-events/{uuid}
+  // compatibility URL. That UUID route is a redirect (or, for the
+  // geography-missing case, a non-canonical fallback render) — either way
+  // not a second indexable copy of the page, so it must never appear here.
+  const eventPages: MetadataRoute.Sitemap = events.flatMap((event) => {
+    const path = buildEventPublicPath({
+      marketSlug: event.marketSlug,
+      citySlug: event.citySlug,
+      eventSlug: event.slug,
+    });
+    if (!path) return [];
+    return [
+      {
+        url: absoluteUrl(path),
+        ...(event.updatedAt ? { lastModified: new Date(event.updatedAt) } : {}),
+      },
+    ];
+  });
 
   // ── Collection landing pages ────────────────────────────────────────────
   const collectionPages: MetadataRoute.Sitemap = collections.flatMap((collection) => {

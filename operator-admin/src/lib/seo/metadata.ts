@@ -169,9 +169,19 @@ export function buildVenueMetadata({
 }
 
 /**
- * Event page metadata builder — used by
- * (website)/website-events/[id]/page.tsx's generateMetadata(). Canonical
- * path is /website-events/{eventId}, matching that route exactly.
+ * Event page metadata builder — used by both the canonical event route
+ * ((website)/[market]/[city]/events/[slug]/page.tsx) and its UUID
+ * compatibility route ((website)/website-events/[id]/page.tsx, which self-
+ * canonicalizes only in the graceful-fallback case where an event's venue
+ * has no resolvable market/city).
+ *
+ * Unlike buildVenueMetadata, this does NOT compute the path internally via
+ * buildEventPublicPath() — the two callers need two different fallback
+ * strategies (the canonical route falls back to the UUID path when
+ * geography is unresolved; the compat route IS that UUID path), so each
+ * caller resolves its own final `path` and passes it straight through.
+ * `path: null` (event not found under this route's lookup) returns bare
+ * title/description with no canonical/OG url, mirroring buildVenueMetadata.
  *
  * Phase 2: wire in OG image from the event/venue photo.
  * Phase 3: add Event JSON-LD via a separate helper.
@@ -179,18 +189,19 @@ export function buildVenueMetadata({
 export function buildEventMetadata({
   eventName,
   description,
-  eventId,
+  path,
   ogImage,
 }: {
   eventName: string;
   description: string;
-  eventId: string;
+  path: string | null;
   ogImage?: string;
 }): Metadata {
+  if (!path) return { title: eventName, description };
   return buildPageMetadata({
     title: eventName,
     description,
-    path: `/website-events/${eventId}`,
+    path,
     ogImage,
   });
 }

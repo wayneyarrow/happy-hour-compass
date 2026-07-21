@@ -540,6 +540,8 @@ export async function getEventsForConsumerVenues(
 /** Shape returned for each event on the consumer /events discovery page. */
 export type ConsumerEventListItem = {
   id: string;
+  /** Canonical slug — see src/lib/eventSlug.ts. Optional — only populated by getPublishedEventsForConsumer() (used by the sitemap); other constructors of this shape (e.g. the (consumer) Discover Engine rail mapping) have no equivalent source. */
+  slug?: string;
   title: string;
   description: string | null;
   nextOccurrenceLabel: string;
@@ -549,6 +551,10 @@ export type ConsumerEventListItem = {
   /** Venue UUID — used for grouping and linking. */
   venueId: string;
   venueName: string;
+  /** Canonical market slug for the event's public URL (via its venue). Optional/null if unresolved or not populated by this constructor — only getPublishedEventsForConsumer() sets it. */
+  marketSlug?: string | null;
+  /** Canonical city slug for the event's public URL (via its venue). Optional/null if unresolved or not populated by this constructor — only getPublishedEventsForConsumer() sets it. */
+  citySlug?: string | null;
   /** ISO date string "YYYY-MM-DD" — used by client-side date filters. */
   firstDate: string | null;
   /** Recurrence pattern — recurring events pass all date filters. */
@@ -593,10 +599,10 @@ export async function getPublishedEventsForConsumer(): Promise<
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, event_type, image_url, " +
+        "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, updated_at, " +
-          "venues(name)"
+          "venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
       )
       .eq("is_published", true)
       .order("title", { ascending: true });
@@ -639,28 +645,34 @@ export async function getPublishedEventsForConsumer(): Promise<
       return 0;
     });
 
-    return rows.map((row: Record<string, any>) => ({
-      id: row.id as string,
-      title: (row.title as string) ?? "",
-      description: (row.description as string | null) ?? null,
-      nextOccurrenceLabel: buildOccurrenceLabel({
-        first_date: row.first_date as string | null,
-        start_time: row.start_time as string | null,
-        end_time: row.end_time as string | null,
-        recurrence: row.recurrence as string | null,
-        event_time: row.event_time as string | null,
-        event_frequency: row.event_frequency as string | null,
-      }),
-      eventType: (row.event_type as string | null) ?? null,
-      imageUrl: (row.image_url as string | null) ?? null,
-      venueId: row.venue_id as string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return rows.map((row: Record<string, any>) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      venueName:
-        ((row.venues as Record<string, any> | null)?.name as string) ?? "",
-      firstDate: (row.first_date as string | null) ?? null,
-      recurrence: (row.recurrence as string | null) ?? null,
-      updatedAt: (row.updated_at as string) ?? "",
-    }));
+      const venue = (row.venues as Record<string, any> | null) ?? {};
+      return {
+        id: row.id as string,
+        slug: (row.slug as string) ?? "",
+        title: (row.title as string) ?? "",
+        description: (row.description as string | null) ?? null,
+        nextOccurrenceLabel: buildOccurrenceLabel({
+          first_date: row.first_date as string | null,
+          start_time: row.start_time as string | null,
+          end_time: row.end_time as string | null,
+          recurrence: row.recurrence as string | null,
+          event_time: row.event_time as string | null,
+          event_frequency: row.event_frequency as string | null,
+        }),
+        eventType: (row.event_type as string | null) ?? null,
+        imageUrl: (row.image_url as string | null) ?? null,
+        venueId: row.venue_id as string,
+        venueName: (venue.name as string) ?? "",
+        marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+        citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
+        firstDate: (row.first_date as string | null) ?? null,
+        recurrence: (row.recurrence as string | null) ?? null,
+        updatedAt: (row.updated_at as string) ?? "",
+      };
+    });
   } catch (err) {
     console.error("[getPublishedEventsForConsumer] Unexpected error:", err);
     return [];
@@ -793,6 +805,8 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
  */
 export type WebsiteEventListItem = {
   id: string;
+  /** Canonical slug — see src/lib/eventSlug.ts. Always populated (events.slug is NOT NULL). */
+  slug: string;
   title: string;
   description: string | null;
   imageUrl: string | null;
@@ -802,6 +816,10 @@ export type WebsiteEventListItem = {
   venueEstablishmentType: string;
   venueLat: number | null;
   venueLng: number | null;
+  /** Canonical market slug for this event's public URL (via its venue). Null if the venue has no assigned market — see buildEventPublicPath. */
+  marketSlug: string | null;
+  /** Canonical city slug for this event's public URL (via its venue). Null if the venue has no assigned city — see buildEventPublicPath. */
+  citySlug: string | null;
   /** ISO "YYYY-MM-DD" — null for undated recurring events. */
   firstDate: string | null;
   /** Recurrence pattern — "none" | "daily" | "weekly" | "biweekly" | "monthly". */
@@ -831,10 +849,10 @@ export async function getPublishedEventsForWebsite(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, event_type, image_url, " +
+        "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
-          "venues(name, lat, lng, establishment_type)"
+          "venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
       )
       .eq("is_published", true)
       .order("first_date", { ascending: true, nullsFirst: false })
@@ -875,6 +893,7 @@ export async function getPublishedEventsForWebsite(
       return [
         {
           id: row.id as string,
+          slug: (row.slug as string) ?? "",
           title: (row.title as string) ?? "",
           description: (row.description as string | null) ?? null,
           imageUrl: (row.image_url as string | null) ?? null,
@@ -883,6 +902,8 @@ export async function getPublishedEventsForWebsite(
           venueEstablishmentType: (venue.establishment_type as string) ?? "",
           venueLat: vLat,
           venueLng: vLng,
+          marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+          citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
           firstDate,
           recurrence,
           startTime: (row.start_time as string | null) ?? null,
@@ -919,6 +940,8 @@ export async function getPublishedEventsForWebsite(
 export type WebsiteEventDetail = {
   // Event
   id: string;
+  /** Canonical slug — see src/lib/eventSlug.ts. Always populated (events.slug is NOT NULL). */
+  slug: string;
   title: string;
   description: string | null;
   nextOccurrenceLabel: string;
@@ -968,6 +991,8 @@ export type WebsiteEventDetail = {
   // Related events
   otherEvents: Array<{
     id: string;
+    /** Canonical slug for this sibling event — same venue as the main event, so it shares venueMarketSlug/venueCitySlug. */
+    slug: string;
     title: string;
     nextOccurrenceLabel: string;
     eventType: string | null;
@@ -976,8 +1001,9 @@ export type WebsiteEventDetail = {
 
 /**
  * Fetches an event plus extended venue context for the website Event Detail
- * page.  Queries the venue table directly to avoid a circular import with
- * venues.ts (which imports from events.ts).
+ * page, looking it up by either its UUID or its current slug. Queries the
+ * venue table directly to avoid a circular import with venues.ts (which
+ * imports from events.ts).
  *
  * In normal mode (includeUnpublished = false / unset) only a published event
  * is returned. In preview mode (includeUnpublished = true) an unpublished
@@ -990,8 +1016,9 @@ export type WebsiteEventDetail = {
  *
  * Returns null when the event is not found under the requested mode.
  */
-export async function getEventForWebsite(
-  id: string,
+async function getEventForWebsiteByField(
+  field: "id" | "slug",
+  value: string,
   options?: { includeUnpublished?: boolean }
 ): Promise<WebsiteEventDetail | null> {
   try {
@@ -1001,13 +1028,13 @@ export async function getEventForWebsite(
     let eventQuery = supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, event_type, image_url, " +
+        "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
           "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
           "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
       )
-      .eq("id", id);
+      .eq(field, value);
     if (!options?.includeUnpublished) {
       eventQuery = eventQuery.eq("is_published", true);
     }
@@ -1017,7 +1044,7 @@ export async function getEventForWebsite(
       .maybeSingle() as unknown as Promise<{ data: unknown; error: unknown }>);
 
     if (eventError) {
-      console.error("[getEventForWebsite] Event fetch error:", eventError);
+      console.error("[getEventForWebsiteByField] Event fetch error:", eventError);
       return null;
     }
     if (!eventData) return null;
@@ -1048,13 +1075,16 @@ export async function getEventForWebsite(
       supabase
         .from("events")
         .select(
-          "id, title, event_type, " +
+          "id, slug, title, event_type, " +
             "first_date, start_time, end_time, recurrence, " +
             "event_time, event_frequency"
         )
         .eq("venue_id", venueId)
         .eq("is_published", true)
-        .neq("id", id)
+        // Excludes by the resolved row's own UUID (row.id), not the raw
+        // lookup `value` — `value` may be a slug when field === "slug", and
+        // comparing a slug against events.id would never match anything.
+        .neq("id", row.id as string)
         .order("first_date", { ascending: true, nullsFirst: false })
         .order("title", { ascending: true }),
       supabase
@@ -1080,6 +1110,7 @@ export async function getEventForWebsite(
 
     return {
       id: row.id as string,
+      slug: (row.slug as string) ?? "",
       title: (row.title as string) ?? "",
       description: (row.description as string | null) ?? null,
       nextOccurrenceLabel: buildOccurrenceLabel({
@@ -1136,6 +1167,7 @@ export async function getEventForWebsite(
       })),
       otherEvents: rawOther.map((e) => ({
         id: e.id as string,
+        slug: (e.slug as string) ?? "",
         title: (e.title as string) ?? "",
         nextOccurrenceLabel: buildOccurrenceLabel({
           first_date: (e.first_date as string | null) ?? null,
@@ -1149,7 +1181,74 @@ export async function getEventForWebsite(
       })),
     };
   } catch (err) {
-    console.error("[getEventForWebsite] Unexpected error:", err);
+    console.error("[getEventForWebsiteByField] Unexpected error:", err);
+    return null;
+  }
+}
+
+/**
+ * Fetches an event by its UUID for the website Event Detail page (and its
+ * UUID compatibility route, /website-events/[id]). See
+ * getEventForWebsiteByField for the full behaviour/options contract.
+ */
+export async function getEventForWebsite(
+  id: string,
+  options?: { includeUnpublished?: boolean }
+): Promise<WebsiteEventDetail | null> {
+  return getEventForWebsiteByField("id", id, options);
+}
+
+/**
+ * Fetches an event by its CURRENT slug for the canonical website Event
+ * Detail route (/{market}/{city}/events/[slug]). Looks up purely by
+ * events.slug — independent of the market/city route segments, exactly
+ * mirroring how getVenueWithEventsForConsumerById resolves a venue by its
+ * slug alone; the caller is responsible for validating the requested
+ * market/city against the resolved event's own venue geography (see
+ * buildEventPublicPath) and redirecting on mismatch. See
+ * getEventForWebsiteByField for the full behaviour/options contract.
+ */
+export async function getEventForWebsiteBySlug(
+  slug: string,
+  options?: { includeUnpublished?: boolean }
+): Promise<WebsiteEventDetail | null> {
+  return getEventForWebsiteByField("slug", slug, options);
+}
+
+/**
+ * Resolves a retired event slug (event_slug_history.old_slug) to that
+ * event's CURRENT WebsiteEventDetail, for the canonical event route's
+ * permanent-redirect fallback — mirrors getVenueByHistoricalSlug exactly
+ * (see src/lib/data/venues.ts).
+ *
+ * History resolves to event_id only, never a "new slug" — the event's live
+ * slug/venue are always read fresh via getEventForWebsite, which also
+ * enforces the same is_published visibility rule the canonical route
+ * already relies on (a historical-slug lookup never bypasses publication
+ * rules — it is not a preview mechanism). A null return means "no
+ * redirect": the old slug is unknown, or its event no longer exists / isn't
+ * publicly visible.
+ */
+export async function getEventByHistoricalSlug(
+  oldSlug: string
+): Promise<WebsiteEventDetail | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("event_slug_history")
+      .select("event_id")
+      .eq("old_slug", oldSlug)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[getEventByHistoricalSlug] Supabase error:", error);
+      return null;
+    }
+    if (!data) return null;
+
+    return await getEventForWebsite(data.event_id as string);
+  } catch (err) {
+    console.error("[getEventByHistoricalSlug] Unexpected error:", err);
     return null;
   }
 }
@@ -1162,10 +1261,16 @@ export async function getEventForWebsite(
 export type EventPreview = {
   /** Event UUID — matches the ID stored by savedItems.ts. */
   id: string;
+  /** Canonical slug — see src/lib/eventSlug.ts. Always populated (events.slug is NOT NULL). */
+  slug: string;
   title: string;
   venueName: string;
   imageUrl: string | null;
   nextOccurrenceLabel: string;
+  /** Canonical market slug for this event's public URL (via its venue). Null if unresolved — see buildEventPublicPath. */
+  marketSlug: string | null;
+  /** Canonical city slug for this event's public URL (via its venue). Null if unresolved — see buildEventPublicPath. */
+  citySlug: string | null;
 };
 
 /**
@@ -1183,8 +1288,8 @@ export async function getEventPreviewsByIds(
     const { data: rows, error } = await supabase
       .from("events")
       .select(
-        "id, title, image_url, first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, venues(name)"
+        "id, slug, title, image_url, first_date, start_time, end_time, recurrence, " +
+          "event_time, event_frequency, venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
       )
       .in("id", eventIds)
       .eq("is_published", true);
@@ -1207,8 +1312,11 @@ export async function getEventPreviewsByIds(
 
       return {
         id: r.id as string,
+        slug: (r.slug as string) ?? "",
         title: r.title as string,
         venueName: (venue.name as string) ?? "",
+        marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+        citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
         imageUrl: (r.image_url as string | null) ?? null,
         nextOccurrenceLabel,
       };
@@ -1235,10 +1343,10 @@ export async function getPublishedEventsByIds(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, title, description, event_type, image_url, teaser, " +
+        "id, slug, title, description, event_type, image_url, teaser, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
-          "venues(name, lat, lng, establishment_type)"
+          "venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
       )
       .in("id", ids)
       .eq("is_published", true);
@@ -1256,6 +1364,7 @@ export async function getPublishedEventsByIds(
 
       return {
         id: row.id as string,
+        slug: (row.slug as string) ?? "",
         title: (row.title as string) ?? "",
         description: (row.description as string | null) ?? null,
         imageUrl: (row.image_url as string | null) ?? null,
@@ -1264,6 +1373,8 @@ export async function getPublishedEventsByIds(
         venueEstablishmentType: (venue.establishment_type as string) ?? "",
         venueLat: vLat,
         venueLng: vLng,
+        marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+        citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
         firstDate,
         recurrence,
         startTime: (row.start_time as string | null) ?? null,

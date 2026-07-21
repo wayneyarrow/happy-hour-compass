@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { SaveEventButton } from "@/app/(website)/SaveEventButton";
+import { buildEventPublicPath } from "@/lib/publicEventUrl";
 
 // ─── Date badge helpers ───────────────────────────────────────────────────────
 
@@ -167,8 +168,18 @@ export function EventSearchCard({ event }: Props) {
   const typeEmoji = getEventTypeEmoji(event.eventType);
   const showType = typeLabel && event.eventType !== "other";
 
+  // Canonical slug path when the event's venue has resolvable market/city;
+  // falls back to the UUID compatibility route otherwise — never a broken
+  // or partial canonical path (see buildEventPublicPath).
+  const href =
+    buildEventPublicPath({
+      marketSlug: event.marketSlug,
+      citySlug: event.citySlug,
+      eventSlug: event.slug,
+    }) ?? `/website-events/${event.id}`;
+
   return (
-    <Link href={`/website-events/${event.id}`} className="block group/card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl">
+    <Link href={href} className="block group/card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl">
     <article
       className="
         bg-white rounded-2xl overflow-hidden

@@ -17,6 +17,7 @@ import type { VenuePreview } from "@/lib/data/venues";
 import type { EventPreview } from "@/lib/data/events";
 import type { SavedGuideCard } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { buildEventPublicPath } from "@/lib/publicEventUrl";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -487,11 +488,21 @@ function EventDropdownRow({
   onClose: () => void;
   onUnsave: (id: string) => void;
 }) {
+  // Canonical slug path when the event's venue has resolvable market/city;
+  // falls back to the UUID compatibility route otherwise — never a broken
+  // or partial canonical path (see buildEventPublicPath).
+  const href =
+    buildEventPublicPath({
+      marketSlug: event.marketSlug,
+      citySlug: event.citySlug,
+      eventSlug: event.slug,
+    }) ?? `/website-events/${event.id}`;
+
   return (
     <div className="flex items-center px-4 py-2 hover:bg-gray-50 group transition-colors">
       {/* Thumbnail + text inside Link so the whole content area navigates */}
       <Link
-        href={`/website-events/${event.id}`}
+        href={href}
         onClick={onClose}
         className="flex flex-1 min-w-0 items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
       >
