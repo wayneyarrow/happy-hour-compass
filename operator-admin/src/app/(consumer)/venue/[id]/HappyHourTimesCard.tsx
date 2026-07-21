@@ -104,6 +104,13 @@ type Props = {
   happyHourWeekly: Record<string, HHSlot[]>;
   specialsFood: string[];
   specialsDrinks: string[];
+  /**
+   * Controls the initial state of the weekly-schedule toggle below — e.g. for
+   * a deep link that should land with the schedule already visible. Purely an
+   * initial value: the toggle button still works normally afterward, and
+   * omitting this prop preserves today's default (collapsed).
+   */
+  initialExpanded?: boolean;
 };
 
 /**
@@ -119,14 +126,22 @@ type Props = {
  *   "Happy Hour Specials"           ← .hh-section-heading (outside box)
  *   Food / Drinks lists
  */
-export function HappyHourTimesCard({ venueId, happyHourWeekly, specialsFood, specialsDrinks }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const [status, setStatus] = useState<HHStatus | null>(null);
-
+export function HappyHourTimesCard({
+  venueId,
+  happyHourWeekly,
+  specialsFood,
+  specialsDrinks,
+  initialExpanded = false,
+}: Props) {
   // True when at least one day has parsed time slots.
   const hasAnySlotsInWeekly = Object.values(happyHourWeekly).some(
     (slots) => slots.length > 0
   );
+
+  // Never start expanded into an empty schedule — initialExpanded only takes
+  // effect when there's an actual weekly schedule to show.
+  const [expanded, setExpanded] = useState(initialExpanded && hasAnySlotsInWeekly);
+  const [status, setStatus] = useState<HHStatus | null>(null);
 
   // Calculate client-side so it uses browser's local time.
   useEffect(() => {

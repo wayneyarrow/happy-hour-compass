@@ -580,7 +580,21 @@ export default async function WebsiteEventDetailPage({ params, searchParams }: P
                 <SectionHeading>Make a Night of It</SectionHeading>
                 <MakeANightOfIt
                   venueName={event.venueName}
-                  venueUrl={venueUrl}
+                  // "View Full Happy Hour Schedule" should land directly on
+                  // the venue page's Happy Hour section, scrolled to and
+                  // expanded — not just the top of the page. ?section=
+                  // drives server-rendered initial expansion (read by the
+                  // venue page, see wantsHappyHourExpanded); #happy-hour
+                  // drives the scroll position via the section's existing id
+                  // + scroll-margin. The hash also acts as a fallback for
+                  // scroll position alone if a rare slug-history/canonical
+                  // redirect ever drops the query string (permanentRedirect()
+                  // doesn't forward query strings; a hash fragment survives
+                  // any redirect regardless, per browser fragment-preservation
+                  // behaviour). This only changes this one CTA — every other
+                  // venueUrl link on this page still points at the plain
+                  // venue URL.
+                  venueUrl={venueUrl ? `${venueUrl}?section=happy-hour#happy-hour` : venueUrl}
                   venueHhTagline={event.venueHhTagline}
                   venueHhWeekly={event.venueHhWeekly}
                   venueSpecialsFoodCount={event.venueSpecialsFoodCount}

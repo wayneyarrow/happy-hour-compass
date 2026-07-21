@@ -188,6 +188,11 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // venue, so this flag alone never grants access to unpublished data.
   const isPreviewRequested = isPreviewRequestedFromParams(resolvedSearchParams);
 
+  // Deep link from the event page's "View Full Happy Hour Schedule" CTA
+  // (?section=happy-hour#happy-hour) — only "happy-hour" is a recognized
+  // value today; anything else is ignored rather than trusted blindly.
+  const wantsHappyHourExpanded = resolvedSearchParams.section === "happy-hour";
+
   // Venue lookup is slug-first with a raw-UUID fallback (see
   // getVenueWithEventsForConsumerById) and does not depend on the market/city
   // route segments at all — venues.slug is globally unique (DB UNIQUE NOT
@@ -472,6 +477,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                 happyHourWeekly={venue.happyHourWeekly}
                 specialsFood={[]}
                 specialsDrinks={[]}
+                initialExpanded={wantsHappyHourExpanded}
               />
             </section>
 
