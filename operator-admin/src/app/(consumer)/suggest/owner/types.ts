@@ -70,12 +70,17 @@ export type SavePayload = {
   rejectionNotes?: string;
   website?: string;
   additionalNotes?: string;
+  /** Cloudflare Turnstile token — verified server-side before any side effect. */
+  turnstileToken: string | null;
 };
 
 /** Result returned by saveOperatorSubmissionAction. */
 export type SaveResult = {
   success?: boolean;
   error?: string;
+  /** Set when `error` is specifically a failed Turnstile verification, so
+   *  the caller knows to reset the widget rather than just show the error. */
+  turnstileFailed?: boolean;
   /**
    * Phase 3B routing outcome (see saveOperatorSubmissionAction's routing
    * doc comment) — "confirmed_auto" is the only outcome that's actually

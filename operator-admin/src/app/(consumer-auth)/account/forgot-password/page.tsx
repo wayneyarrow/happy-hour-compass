@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { requestConsumerPasswordReset } from "./actions";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 const INPUT_CLASS =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
@@ -11,15 +12,26 @@ export default function ConsumerForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
-    const supabase = createClient();
-    await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/account/reset-password`,
-    });
+    const result = await requestConsumerPasswordReset({ email, turnstileToken });
+
+    if (!result.ok) {
+      setError(result.error);
+      setLoading(false);
+      if (result.turnstileFailed) {
+        setTurnstileToken(null);
+        turnstileRef.current?.reset();
+      }
+      return;
+    }
 
     // Always show success to prevent account enumeration.
     setSubmitted(true);
@@ -89,9 +101,21 @@ export default function ConsumerForgotPasswordPage() {
           />
         </div>
 
+        {error && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !turnstileToken}
           className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Sending…" : "Send reset link"}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { forgotPasswordAction } from "./actions";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   showLinkExpiredMessage: boolean;
@@ -9,6 +10,15 @@ type Props = {
 
 export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
   const [state, formAction, isPending] = useActionState(forgotPasswordAction, {});
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   if (state.success) {
     return (
@@ -77,9 +87,16 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
           </div>
         )}
 
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !turnstileToken}
           className="w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? "Sending…" : "Send reset link"}

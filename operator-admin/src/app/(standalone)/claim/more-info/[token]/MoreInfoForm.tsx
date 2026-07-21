@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect, useRef } from "react";
 import { submitClaimMoreInfoAction, type ClaimMoreInfoState } from "./actions";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 const INPUT =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 " +
@@ -56,6 +57,15 @@ export default function MoreInfoForm({
 
   const [phoneDisplay, setPhoneDisplay] = useState(() => formatPhone(initial.initial_phone));
   const [contactMethod, setContactMethod] = useState<string>("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   // ── Success ───────────────────────────────────────────────────────────────
   if (state.success) {
@@ -273,10 +283,20 @@ export default function MoreInfoForm({
           </div>
         </div>
 
+        {/* Turnstile */}
+        <div>
+          <Turnstile
+            ref={turnstileRef}
+            onVerify={setTurnstileToken}
+            onExpire={() => setTurnstileToken(null)}
+          />
+          <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+        </div>
+
         {/* Submit */}
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !turnstileToken}
           className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-[15px] transition-colors"
         >
           {pending ? "Submitting…" : "Submit verification details"}

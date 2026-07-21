@@ -1,7 +1,14 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSuggestionNotificationEmail, sendSuggestionConfirmationEmail } from "@/lib/email";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+  TURNSTILE_TOKEN_FIELD,
+} from "@/lib/turnstile";
 
 export type SuggestionFormState = {
   success?: boolean;
@@ -9,6 +16,7 @@ export type SuggestionFormState = {
   error?: string;
   /** Per-field validation errors. */
   fieldErrors?: Record<string, string>;
+  turnstileFailed?: boolean;
 };
 
 /**
@@ -43,6 +51,15 @@ export async function submitSuggestionAction(
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors };
+  }
+
+  // ── Turnstile verification — must pass before any side effect below ──────
+  const heads = await headers();
+  const turnstileToken = formData.get(TURNSTILE_TOKEN_FIELD) as string | null;
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[submitSuggestionAction] Turnstile verification failed:", verification.reason);
+    return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
   }
 
   // ── Insert suggestion record ──────────────────────────────────────────────

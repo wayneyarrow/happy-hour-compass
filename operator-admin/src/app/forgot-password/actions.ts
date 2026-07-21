@@ -1,15 +1,23 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+  TURNSTILE_TOKEN_FIELD,
+} from "@/lib/turnstile";
 
 export type ForgotPasswordState = {
   success?: true;
   error?: string;
   fieldError?: string;
+  turnstileFailed?: boolean;
 };
 
 /**
@@ -43,6 +51,15 @@ export async function forgotPasswordAction(
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { fieldError: "Please enter a valid email address." };
+  }
+
+  // ── Turnstile verification — must pass before any side effect below ──────
+  const heads = await headers();
+  const turnstileToken = formData.get(TURNSTILE_TOKEN_FIELD) as string | null;
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[forgotPasswordAction] Turnstile verification failed:", verification.reason);
+    return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
   }
 
   const supabase = createAdminClient();

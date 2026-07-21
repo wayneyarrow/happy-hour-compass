@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useActionState, useEffect } from "react";
+import { useState, useActionState, useEffect, useRef } from "react";
 import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[id]/claim/actions";
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   venueRouteParam: string;
@@ -42,10 +43,19 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
     {}
   );
   const [phoneValue, setPhoneValue] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("claim_venue_started");
   }, []);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -209,9 +219,18 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
         </div>
       </div>
 
+      <div className="mt-5">
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+      </div>
+
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !turnstileToken}
         className="mt-8 w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Submitting…" : "Submit claim"}

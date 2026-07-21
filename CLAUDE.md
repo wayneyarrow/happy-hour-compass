@@ -217,6 +217,56 @@ On successful consumer account creation (`createConsumerAccount()`, `operator-ad
 
 ---
 
+## Bot Protection (Cloudflare Turnstile)
+
+Every unauthenticated public form/server action that writes to the database, creates an account, sends an email, or sends a Slack notification is gated by Cloudflare Turnstile. Client-side widget completion is never sufficient on its own — every protected server action re-verifies the token server-side via Siteverify before doing anything else.
+
+### Architecture
+
+- `operator-admin/src/lib/turnstile.ts` — server-only. `verifyTurnstileToken(token, remoteIp?)` calls Cloudflare Siteverify and returns `{ success: true }` or `{ success: false, reason }`. A missing token, a failed/expired/already-used token, and a Siteverify network failure are all treated identically: verification did not succeed. Also exports `TURNSTILE_FAILURE_MESSAGE` (the shared user-facing error copy) and `TURNSTILE_TOKEN_FIELD` (the FormData field name, `cf_turnstile_token`, used by every form-action-based flow).
+- `operator-admin/src/components/Turnstile.tsx` — the one shared client widget. Renders Cloudflare's official script (`https://challenges.cloudflare.com/turnstile/v0/api.js`) via `next/script` and explicit `window.turnstile.render()` (not the implicit `data-sitekey` div), so a parent form can reset the widget imperatively through a forwarded ref (`TurnstileHandle.reset()`) after a failed submission. `onVerify(token)` fires on completion; `onExpire()` fires on token expiry, widget error, or timeout — callers must clear any stored token in response.
+- No third-party Turnstile wrapper package is used — Cloudflare's script + Siteverify's plain HTTP API cover every case here.
+
+### Protected flows
+
+| Flow | Server action | Client form(s) |
+|---|---|---|
+| Contact Us | `submitContactAction` (`(consumer)/contact/actions.ts`) | `ContactForm.tsx`, website `ContactUsModalContent.tsx` |
+| Suggest a Venue | `submitSuggestionAction` (`(consumer)/suggest/customer/actions.ts`) | `SuggestionForm.tsx`, website `SuggestVenueModalContent.tsx` |
+| Add Your Venue | `saveOperatorSubmissionAction` (`(consumer)/suggest/owner/actions.ts`) | `OwnerSubmissionFlow.tsx`, website `AddVenueModalContent.tsx` |
+| Add Venue — more info follow-up | `submitMoreInfoAction` (`(standalone)/suggest/owner/more-info/[token]/actions.ts`) | `MoreInfoForm.tsx` |
+| Claim Your Venue | `submitClaimAction` (`(consumer)/venue/[id]/claim/actions.ts`) | `ClaimForm.tsx`, website `ClaimVenueModalContent.tsx` |
+| Claim — more info follow-up | `submitClaimMoreInfoAction` (`(standalone)/claim/more-info/[token]/actions.ts`) | `MoreInfoForm.tsx` |
+| Consumer signup | `createConsumerAccount` (`(consumer-auth)/sign-up/actions.ts`) | `sign-up/page.tsx` |
+| Operator forgot password | `forgotPasswordAction` (`app/forgot-password/actions.ts`) | `ForgotPasswordForm.tsx` |
+| Consumer forgot password | `requestConsumerPasswordReset` (`(consumer-auth)/account/forgot-password/actions.ts`) | `account/forgot-password/page.tsx` |
+
+The consumer forgot-password flow previously called `supabase.auth.resetPasswordForEmail()` directly from the browser with no server action at all — there was no point to gate. It was moved into a small server action for exactly this reason; behavior (redirect target, always-return-success anti-enumeration) is unchanged, just moved server-side.
+
+The Add Your Venue flow is multi-step (business lookup → match confirmation / no-match / rejection). `lookupBusinessAction` (the Google Places lookup) is **not** Turnstile-gated — it performs no database write, account creation, email, or Slack notification. Verification instead happens inside `saveOperatorSubmissionAction`, the actual side-effecting call, which is reached from all three terminal steps (confirm match, reject match, no-match continue); the widget is rendered on each of those three steps, immediately before its submit action.
+
+**Not protected, intentionally:** operator/founder authenticated actions (Operator Admin, Founder Control Panel), read-only browsing/search/saved-items interactions, and `src/app/api/track/*` analytics endpoints (unauthenticated but not a submission/lead-capture surface).
+
+### Server-side verification rule
+
+Every protected server action follows the same shape:
+1. Run existing field validation first (cheap, no network) — return field errors before touching Turnstile.
+2. Extract the token from `formData.get(TURNSTILE_TOKEN_FIELD)` (form-action flows) or an explicit `turnstileToken` parameter (flows that call the server action directly, e.g. `createConsumerAccount`, `saveOperatorSubmissionAction`).
+3. Call `verifyTurnstileToken()`. On failure, return immediately with the shared failure message and a `turnstileFailed: true` flag on the result — **before** any database write, `auth.admin.createUser`/`generateLink`, email send, or Slack notification.
+4. Only proceed to the flow's existing side effects once verification succeeds. Existing behavior (emails, Slack notifications, redirects, success confirmations, the "notification failures never block a valid submission" rule) is otherwise unchanged.
+
+On the client, `turnstileFailed: true` in the result is what triggers `turnstileRef.current?.reset()` and clears the stored token — an ordinary validation error does not reset the widget, since the token is still valid for the next attempt.
+
+### Environment variables
+
+Uses the existing `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (client-side, safe to expose) and `TURNSTILE_SECRET_KEY` (server-only — never import `src/lib/turnstile.ts` from a Client Component). Both already exist locally and in Vercel Preview/Production; no new environment variables were introduced.
+
+### Content Security Policy
+
+This codebase has no CSP anywhere (`next.config.ts` has no `headers()` block; `middleware.ts` sets no security headers). Turnstile therefore required no CSP update — there is nothing to conflict with. If a CSP is introduced later, it must allow `https://challenges.cloudflare.com` for `script-src`, `frame-src`, and `connect-src`.
+
+---
+
 ## Supabase migrations
 
 ### Every new public-schema table must have explicit GRANTs

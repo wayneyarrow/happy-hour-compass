@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   APIProvider,
@@ -14,6 +14,7 @@ import {
 import type { OwnerFormValues, GoogleMatch } from "@/app/(consumer)/suggest/owner/types";
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   onDone: () => void;
@@ -116,10 +117,24 @@ export function AddVenueModalContent({ onDone }: Props) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("operator_submission_started");
   }, []);
+
+  /**
+   * Handles a saveOperatorSubmissionAction result that failed Turnstile
+   * verification — resets the widget (shown on whichever step the submit
+   * button lives on) so the user can retry, distinct from an ordinary
+   * error which leaves the already-valid token in place.
+   */
+  function handleTurnstileFailure(message: string) {
+    setGeneralError(message);
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }
 
   function handleFormSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -189,7 +204,12 @@ export function AddVenueModalContent({ onDone }: Props) {
           formValues,
           match,
           matchConfirmed: true,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -212,6 +232,7 @@ export function AddVenueModalContent({ onDone }: Props) {
   function handleRejectMatch() {
     setGeneralError(null);
     setFieldErrors({});
+    setTurnstileToken(null);
     setStep("reject-form");
   }
 
@@ -242,7 +263,12 @@ export function AddVenueModalContent({ onDone }: Props) {
           rejectionNotes,
           website,
           additionalNotes: additionalNotes || undefined,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -262,7 +288,12 @@ export function AddVenueModalContent({ onDone }: Props) {
           formValues,
           match: null,
           matchConfirmed: false,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -364,10 +395,18 @@ export function AddVenueModalContent({ onDone }: Props) {
           </div>
         </div>
 
+        <div className="mb-5">
+          <Turnstile
+            ref={turnstileRef}
+            onVerify={setTurnstileToken}
+            onExpire={() => setTurnstileToken(null)}
+          />
+        </div>
+
         <div className="space-y-3">
           <button
             onClick={handleConfirmMatch}
-            disabled={isPending}
+            disabled={isPending || !turnstileToken}
             className={BTN_PRIMARY}
           >
             {isPending ? "Saving…" : "Yes, this is my business"}
@@ -392,6 +431,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           onClick={() => {
             setStep("form");
             setGeneralError(null);
+            setTurnstileToken(null);
           }}
         />
         <div className="flex flex-col items-center text-center pt-4">
@@ -414,9 +454,16 @@ export function AddVenueModalContent({ onDone }: Props) {
               {generalError}
             </div>
           )}
+          <div className="w-full mb-5">
+            <Turnstile
+              ref={turnstileRef}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
           <button
             onClick={handleNoMatchContinue}
-            disabled={isPending}
+            disabled={isPending || !turnstileToken}
             className={BTN_PRIMARY}
           >
             {isPending ? "Submitting…" : "Submit my details"}
@@ -435,6 +482,7 @@ export function AddVenueModalContent({ onDone }: Props) {
             setStep("match");
             setFieldErrors({});
             setGeneralError(null);
+            setTurnstileToken(null);
           }}
         />
         <h3 className="text-[17px] font-bold text-gray-900 mb-2">
@@ -494,10 +542,17 @@ export function AddVenueModalContent({ onDone }: Props) {
               />
             </div>
           </div>
+          <div className="mt-5">
+            <Turnstile
+              ref={turnstileRef}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
           <button
             type="submit"
-            disabled={isPending}
-            className={"mt-8 " + BTN_PRIMARY}
+            disabled={isPending || !turnstileToken}
+            className={"mt-5 " + BTN_PRIMARY}
           >
             {isPending ? "Sending…" : "Send my details"}
           </button>

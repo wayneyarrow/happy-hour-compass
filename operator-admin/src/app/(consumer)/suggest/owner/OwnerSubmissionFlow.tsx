@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   APIProvider,
@@ -10,6 +10,7 @@ import {
 import { lookupBusinessAction, saveOperatorSubmissionAction } from "./actions";
 import type { OwnerFormValues, GoogleMatch } from "./types";
 import { trackEvent } from "@/lib/analytics";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 // ── Step state machine ────────────────────────────────────────────────────────
 // form        — initial 8-field submission form
@@ -130,10 +131,24 @@ export function OwnerSubmissionFlow() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("operator_submission_started");
   }, []);
+
+  /**
+   * Handles a saveOperatorSubmissionAction result that failed Turnstile
+   * verification — resets the widget (shown on whichever step the submit
+   * button lives on) so the user can retry, distinct from an ordinary
+   * error which leaves the already-valid token in place.
+   */
+  function handleTurnstileFailure(message: string) {
+    setGeneralError(message);
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -208,7 +223,12 @@ export function OwnerSubmissionFlow() {
           formValues,
           match,
           matchConfirmed: true,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -223,6 +243,7 @@ export function OwnerSubmissionFlow() {
   function handleRejectMatch() {
     setGeneralError(null);
     setFieldErrors({});
+    setTurnstileToken(null);
     setStep("reject-form");
   }
 
@@ -254,7 +275,12 @@ export function OwnerSubmissionFlow() {
           rejectionNotes,
           website,
           additionalNotes: additionalNotes || undefined,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -274,7 +300,12 @@ export function OwnerSubmissionFlow() {
           formValues,
           match: null,
           matchConfirmed: false,
+          turnstileToken,
         });
+        if (result.turnstileFailed) {
+          handleTurnstileFailure(result.error!);
+          return;
+        }
         if (result.error) {
           setGeneralError(result.error);
           return;
@@ -390,11 +421,20 @@ export function OwnerSubmissionFlow() {
             </div>
           </div>
 
+          {/* Turnstile — verified server-side before saveOperatorSubmissionAction */}
+          <div className="mb-5">
+            <Turnstile
+              ref={turnstileRef}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
+
           {/* Action buttons */}
           <div className="space-y-3">
             <button
               onClick={handleConfirmMatch}
-              disabled={isPending}
+              disabled={isPending || !turnstileToken}
               className={BTN_PRIMARY}
             >
               {isPending ? "Saving…" : "Yes, this is my business"}
@@ -418,7 +458,7 @@ export function OwnerSubmissionFlow() {
       <div>
         <PageHeader
           title="List Your Venue"
-          onBack={() => { setStep("form"); setGeneralError(null); }}
+          onBack={() => { setStep("form"); setGeneralError(null); setTurnstileToken(null); }}
         />
         <div className="px-5 pt-10 pb-12 flex flex-col items-center text-center">
           <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-6 text-2xl">
@@ -442,9 +482,17 @@ export function OwnerSubmissionFlow() {
             </div>
           )}
 
+          <div className="w-full mb-5">
+            <Turnstile
+              ref={turnstileRef}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
+
           <button
             onClick={handleNoMatchContinue}
-            disabled={isPending}
+            disabled={isPending || !turnstileToken}
             className={BTN_PRIMARY}
           >
             {isPending ? "Submitting…" : "Submit my details"}
@@ -460,7 +508,7 @@ export function OwnerSubmissionFlow() {
       <div>
         <PageHeader
           title="Let us know more"
-          onBack={() => { setStep("match"); setFieldErrors({}); setGeneralError(null); }}
+          onBack={() => { setStep("match"); setFieldErrors({}); setGeneralError(null); setTurnstileToken(null); }}
         />
 
         <form onSubmit={handleRejectSubmit} className="px-5 pt-6 pb-12" noValidate>
@@ -523,10 +571,18 @@ export function OwnerSubmissionFlow() {
             </div>
           </div>
 
+          <div className="mt-5">
+            <Turnstile
+              ref={turnstileRef}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
+
           <button
             type="submit"
-            disabled={isPending}
-            className={"mt-8 " + BTN_PRIMARY}
+            disabled={isPending || !turnstileToken}
+            className={"mt-5 " + BTN_PRIMARY}
           >
             {isPending ? "Sending…" : "Send my details"}
           </button>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   submitSuggestionAction,
   type SuggestionFormState,
 } from "@/app/(consumer)/suggest/customer/actions";
 import { trackEvent } from "@/lib/analytics";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   onDone: () => void;
@@ -32,10 +33,19 @@ export function SuggestVenueModalContent({ onDone }: Props) {
     {}
   );
   const [emailValue, setEmailValue] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("suggest_venue_started");
   }, []);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   // ── Success confirmation ───────────────────────────────────────────────────
   if (state.success) {
@@ -213,10 +223,20 @@ export function SuggestVenueModalContent({ onDone }: Props) {
         </div>
       </div>
 
+      {/* Turnstile */}
+      <div className="mb-5">
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+      </div>
+
       {/* Submit */}
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !turnstileToken}
         className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Submitting…" : "Submit suggestion"}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { submitContactAction, type ContactFormState } from "@/app/(consumer)/contact/actions";
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   onDone: () => void;
@@ -29,6 +30,8 @@ export function ContactUsModalContent({ onDone }: Props) {
     submitContactAction,
     {}
   );
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("contact_us_started");
@@ -37,6 +40,13 @@ export function ContactUsModalContent({ onDone }: Props) {
   useEffect(() => {
     if (state.success) trackEvent("contact_us_submitted");
   }, [state.success]);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -140,9 +150,18 @@ export function ContactUsModalContent({ onDone }: Props) {
         </div>
       </div>
 
+      <div className="mt-5">
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+      </div>
+
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !turnstileToken}
         className="mt-8 w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Sending…" : "Send Message"}

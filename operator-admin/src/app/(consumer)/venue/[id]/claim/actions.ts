@@ -6,6 +6,12 @@ import {
   sendClaimNotificationEmail,
   sendClaimSubmissionConfirmationEmail,
 } from "@/lib/email";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+  TURNSTILE_TOKEN_FIELD,
+} from "@/lib/turnstile";
 
 export type ClaimFormState = {
   success?: boolean;
@@ -13,6 +19,7 @@ export type ClaimFormState = {
   error?: string;
   /** Per-field validation errors. */
   fieldErrors?: Record<string, string>;
+  turnstileFailed?: boolean;
 };
 
 const VALID_POSITIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
@@ -66,6 +73,14 @@ export async function submitClaimAction(
   const ip = forwarded
     ? forwarded.split(",")[0].trim()
     : (heads.get("x-real-ip") ?? null);
+
+  // ── Turnstile verification — must pass before any side effect below ──────
+  const turnstileToken = formData.get(TURNSTILE_TOKEN_FIELD) as string | null;
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[submitClaimAction] Turnstile verification failed:", verification.reason);
+    return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
+  }
 
   // ── Resolve venue UUID from route param (slug or UUID) ───────────────────
   const supabase = createAdminClient();

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import PasswordInput from "@/components/PasswordInput";
 import { createConsumerAccount } from "./actions";
 import { EmailConfirmationNote } from "@/app/(website)/acquisition/emailConfirmationCopy";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -29,6 +30,8 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successEmail, setSuccessEmail] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,6 +60,7 @@ export default function SignUpPage() {
       password,
       displayName: trimmedName,
       marketingConsent,
+      turnstileToken,
     });
 
     devLog("createConsumerAccount result:", result);
@@ -64,6 +68,10 @@ export default function SignUpPage() {
     if (!result.ok) {
       setError(result.error);
       setLoading(false);
+      if (result.turnstileFailed) {
+        setTurnstileToken(null);
+        turnstileRef.current?.reset();
+      }
       return;
     }
 
@@ -261,9 +269,15 @@ export default function SignUpPage() {
           </div>
         )}
 
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !turnstileToken}
           className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Creating account…" : "Create account"}

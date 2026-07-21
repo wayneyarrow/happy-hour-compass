@@ -1,9 +1,15 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { sendConsumerSignupConfirmationEmail, sendConsumerSignupFounderNotificationEmail } from "@/lib/email";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+} from "@/lib/turnstile";
 
 export async function createConsumerProfile({
   userId,
@@ -47,7 +53,7 @@ export async function createConsumerProfile({
 
 export type CreateConsumerAccountResult =
   | { ok: true }
-  | { ok: false; error: string };
+  | { ok: false; error: string; turnstileFailed?: boolean };
 
 /**
  * Creates a new consumer auth user, creates their consumer_profiles row,
@@ -83,12 +89,22 @@ export async function createConsumerAccount({
   password,
   displayName,
   marketingConsent,
+  turnstileToken,
 }: {
   email: string;
   password: string;
   displayName: string | null;
   marketingConsent: boolean;
+  turnstileToken: string | null;
 }): Promise<CreateConsumerAccountResult> {
+  // ── Turnstile verification — must pass before any side effect below ──────
+  const heads = await headers();
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[createConsumerAccount] Turnstile verification failed:", verification.reason);
+    return { ok: false, error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
+  }
+
   const supabase = createAdminClient();
   const now = new Date().toISOString();
 

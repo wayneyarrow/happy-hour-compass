@@ -17,6 +17,11 @@ import {
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { slugify } from "@/lib/slugify";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+} from "@/lib/turnstile";
 import type {
   GoogleMatch,
   LookupResult,
@@ -530,6 +535,7 @@ export async function saveOperatorSubmissionAction(
     rejectionNotes,
     website,
     additionalNotes,
+    turnstileToken,
   } = payload;
 
   // ── IP capture ────────────────────────────────────────────────────────────
@@ -539,6 +545,18 @@ export async function saveOperatorSubmissionAction(
     forwarded
       ? forwarded.split(",")[0].trim()
       : (heads.get("x-real-ip") ?? null);
+
+  // ── Turnstile verification — must pass before any side effect below ──────
+  // This is the actual side-effecting call in the multi-step operator
+  // submission flow (lookupBusinessAction, which runs earlier, only queries
+  // Google Places and writes nothing) — so verification happens here, not
+  // at the lookup step, and applies to all three ways this action is
+  // invoked (confirm match, reject match, no-match continue).
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[saveOperatorSubmissionAction] Turnstile verification failed:", verification.reason);
+    return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
+  }
 
   // ── Derive match_status ───────────────────────────────────────────────────
   // no_match:  Google returned nothing (match is null, matchConfirmed is false)

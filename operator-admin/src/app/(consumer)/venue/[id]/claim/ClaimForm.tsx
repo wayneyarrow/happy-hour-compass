@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useState, useActionState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 /**
  * Formats a phone string as (XXX) XXX-XXXX while the user types.
@@ -38,6 +39,15 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
     {}
   );
   const [phoneValue, setPhoneValue] = useState("");
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -206,10 +216,20 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
         </div>
       </div>
 
+      {/* Turnstile */}
+      <div className="mt-5">
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+      </div>
+
       {/* Submit */}
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !turnstileToken}
         className="mt-8 w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Submitting…" : "Submit claim"}

@@ -1,9 +1,16 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOperatorSubmissionInfoSubmittedNotificationEmail } from "@/lib/email";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
+import {
+  verifyTurnstileToken,
+  getClientIpFromHeaders,
+  TURNSTILE_FAILURE_MESSAGE,
+  TURNSTILE_TOKEN_FIELD,
+} from "@/lib/turnstile";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,6 +23,7 @@ export type MoreInfoState = {
     info_website?: string;
     info_relationship?: string;
   };
+  turnstileFailed?: boolean;
 };
 
 // ── Action ────────────────────────────────────────────────────────────────────
@@ -71,6 +79,15 @@ export async function submitMoreInfoAction(
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors };
+  }
+
+  // ── Turnstile verification — must pass before any side effect below ──────
+  const heads = await headers();
+  const turnstileToken = formData.get(TURNSTILE_TOKEN_FIELD) as string | null;
+  const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  if (!verification.success) {
+    console.warn("[submitMoreInfoAction] Turnstile verification failed:", verification.reason);
+    return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
   }
 
   // ── Re-validate token server-side ─────────────────────────────────────────

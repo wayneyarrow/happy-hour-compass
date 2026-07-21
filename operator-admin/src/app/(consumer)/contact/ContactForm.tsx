@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { submitContactAction, type ContactFormState } from "./actions";
 import { trackEvent } from "@/lib/analytics";
+import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 const INPUT_CLASS =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 " +
@@ -16,6 +17,8 @@ export function ContactForm() {
     submitContactAction,
     {}
   );
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     trackEvent("contact_us_started");
@@ -24,6 +27,13 @@ export function ContactForm() {
   useEffect(() => {
     if (state.success) trackEvent("contact_us_submitted");
   }, [state.success]);
+
+  useEffect(() => {
+    if (state.turnstileFailed) {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  }, [state.turnstileFailed]);
 
   if (state.success) {
     return (
@@ -110,9 +120,18 @@ export function ContactForm() {
         </div>
       </div>
 
+      <div className="mt-5">
+        <Turnstile
+          ref={turnstileRef}
+          onVerify={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+        <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+      </div>
+
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !turnstileToken}
         className="mt-8 w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-[15px] transition-colors"
       >
         {isPending ? "Sending…" : "Send Message"}
