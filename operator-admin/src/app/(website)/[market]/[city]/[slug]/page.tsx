@@ -315,26 +315,48 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // External links.
   const menuUrl = venue.menuUrl || null;
   const websiteUrl = venue.websiteUrl || null;
-  // Google's documented cross-platform "Universal URL" scheme (api=1&query=...)
-  // is used here rather than the legacy bare `?q=`/`maps/place/?q=place_id:`
-  // formats — on mobile, tapping an <a> to google.com/maps is intercepted by
-  // the OS as a universal link and handed to the native Google Maps app,
-  // whose deep-link parser handles the legacy formats less reliably than the
-  // desktop web frontend (this is why the address/Get Directions links failed
-  // with "No results found" on mobile only, while unaffected desktop and the
-  // JS-triggered map-pin window.open() — which bypasses that OS interception
-  // — worked). Coordinates are preferred when valid since they're the same
-  // values the embedded map already trusts to place the pin correctly.
+  // Google Maps URL priority (highest confidence first):
+  //   1. placeId (paired with a name+address query, not coordinates alone) —
+  //      opens the actual Google business listing.
+  //   2. venue name + address text query — no placeId, but still a
+  //      sufficiently specific search to find the right business.
+  //   3. raw coordinates — last resort only. A bare lat,lng query opens a
+  //      generic dropped pin with no business selected, so this must never
+  //      be preferred over placeId/name+address (a prior version of this
+  //      fix put the coordinate check first, which regressed every venue
+  //      with valid lat/lng — i.e. almost all of them — to a coordinate pin
+  //      instead of its business listing).
+  //   4. null — no usable destination.
+  // Google's documented api=1 URL structure is used throughout (rather than
+  // legacy bare `?q=`/`maps/place/?q=place_id:` forms) since the legacy
+  // formats are handled unreliably by the native Google Maps mobile app,
+  // which intercepts <a> taps to google.com/maps via OS-level universal
+  // links (this is why the address/Directions links previously failed with
+  // "No results found" on mobile only).
   const hasValidCoords =
     venue.latitude !== null &&
     venue.longitude !== null &&
     !(venue.latitude === 0 && venue.longitude === 0);
-  const mapsUrl = hasValidCoords
-    ? `https://www.google.com/maps/search/?api=1&query=${venue.latitude},${venue.longitude}`
-    : venue.placeId
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address || venue.name)}&query_place_id=${venue.placeId}`
-    : venue.address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
+  const venueQueryText = venue.address
+    ? `${venue.name}, ${venue.address}`
+    : venue.name || null;
+  const venueLocationQuery =
+    venueQueryText || (hasValidCoords ? `${venue.latitude},${venue.longitude}` : null);
+
+  // "View listing" intent — the address link and the embedded map pin should
+  // open the venue's actual Google Place, not just a dropped coordinate pin.
+  const mapsUrl = venueLocationQuery
+    ? venue.placeId
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueLocationQuery)}&query_place_id=${venue.placeId}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueLocationQuery)}`
+    : null;
+
+  // "Get directions" intent — same priority/query text, but Google's
+  // turn-by-turn directions endpoint rather than the place-search endpoint.
+  const directionsUrl = venueLocationQuery
+    ? venue.placeId
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venueLocationQuery)}&destination_place_id=${venue.placeId}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venueLocationQuery)}`
     : null;
 
   // Nav sections — only sections that will render.
@@ -736,7 +758,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                 phone={venue.phone}
                 websiteUrl={websiteUrl ?? ""}
                 menuUrl={menuUrl}
-                mapsUrl={mapsUrl}
+                mapsUrl={directionsUrl}
               />
             </div>
           </div>
@@ -746,7 +768,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
       {/* Mobile bottom action bar (hidden on desktop) */}
       <MobileActionBar
         phone={venue.phone}
-        mapsUrl={mapsUrl}
+        mapsUrl={directionsUrl}
         menuUrl={menuUrl}
         websiteUrl={websiteUrl ?? ""}
       />
