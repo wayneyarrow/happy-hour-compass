@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
-import { sendConsumerSignupConfirmationEmail } from "@/lib/email";
+import { sendConsumerSignupConfirmationEmail, sendConsumerSignupFounderNotificationEmail } from "@/lib/email";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
 
 export async function createConsumerProfile({
@@ -50,9 +50,10 @@ export type CreateConsumerAccountResult =
   | { ok: false; error: string };
 
 /**
- * Creates a new consumer auth user, creates their consumer_profiles row, and
- * sends a branded confirmation-link email — server-side, using the Supabase
- * admin API rather than the public client SDK's supabase.auth.signUp().
+ * Creates a new consumer auth user, creates their consumer_profiles row,
+ * sends a branded confirmation-link email, and notifies the founder — all
+ * server-side, using the Supabase admin API rather than the public client
+ * SDK's supabase.auth.signUp().
  *
  * This mirrors provisionOperatorForVenue's auth.admin.generateLink pattern
  * (src/lib/operatorActivation.ts): generateLink({ type: "signup" }) both
@@ -119,6 +120,29 @@ export async function createConsumerAccount({
         ? "An account with this email already exists. Please sign in instead, or use a different email."
         : "Something went wrong. Please try again.",
     };
+  }
+
+  // ── Notify founder — fire-and-forget; email failure must not block account
+  // creation or the consumer's success screen. Matches submitSuggestionAction's
+  // pattern (src/app/(consumer)/suggest/customer/actions.ts): the account is
+  // already confirmed created (the early return above already ruled out
+  // failed/duplicate signups), so this can't fire for those cases.
+  const signupAt = new Date(now).toLocaleString("en-CA", {
+    timeZone: "America/Vancouver",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  try {
+    const founderResult = await sendConsumerSignupFounderNotificationEmail({
+      displayName,
+      email,
+      signupAt,
+    });
+    if (!founderResult.ok) {
+      console.error("[createConsumerAccount] Founder notification email failed:", founderResult.error);
+    }
+  } catch (founderErr) {
+    console.error("[createConsumerAccount] Founder notification email threw unexpected exception:", founderErr);
   }
 
   const profileError = await createConsumerProfile({

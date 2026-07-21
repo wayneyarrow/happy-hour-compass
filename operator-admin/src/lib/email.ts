@@ -1900,3 +1900,72 @@ Happy Hour Compass`;
     criticality: "critical",
   });
 }
+
+// ── Consumer signup — founder notification ────────────────────────────────────
+
+/**
+ * Notifies the founder when a new consumer account is created.
+ *
+ * Fire-and-forget, like sendSuggestionNotificationEmail: this is a
+ * supplementary internal FYI, not the consumer's primary confirmation (that's
+ * sendConsumerSignupConfirmationEmail above). Email failure must not block
+ * account creation or the consumer-facing success screen.
+ *
+ * Recipient: getFounderNotificationEmail() — see that function's doc comment
+ * for why this is hardcoded rather than read from an env var.
+ *
+ * Does not send the #consumer-signup Slack notification — that's already
+ * sent separately by the caller (createConsumerAccount, sign-up/actions.ts)
+ * via sendSlackAcquisitionNotification.
+ */
+export async function sendConsumerSignupFounderNotificationEmail({
+  displayName,
+  email,
+  signupAt,
+}: {
+  displayName: string | null;
+  email: string;
+  signupAt: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to = getFounderNotificationEmail();
+  const nameRow = displayName
+    ? `<tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Name</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${displayName}</td>
+            </tr>`
+    : "";
+  const nameText = displayName ? `Name:      ${displayName}\n` : "";
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New consumer signup</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Email</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${email}</td>
+            </tr>
+            ${nameRow}
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Signed up</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${signupAt}</td>
+            </tr>
+          </table>`,
+    "Happy Hour Compass &middot; Consumer signup notification"
+  );
+
+  const text = `New consumer signup — Happy Hour Compass
+
+Email:     ${email}
+${nameText}Signed up: ${signupAt}
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "consumer_signup_founder_notification",
+    to,
+    subject:     "New consumer signup",
+    html,
+    text,
+    criticality: "standard",
+  });
+}
