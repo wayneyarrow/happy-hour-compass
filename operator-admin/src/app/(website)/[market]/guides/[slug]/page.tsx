@@ -12,6 +12,7 @@ import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { absoluteUrl } from "@/lib/siteUrl";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
 import { buildGuideArticleNode } from "@/lib/seo/schema/article";
@@ -246,6 +247,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
         eventItems={eventItems}
         relatedGuides={relatedGuides}
         faqs={faqs}
+        canonicalUrl={absoluteUrl(canonicalPath)}
       />
     </>
   );

@@ -14,7 +14,8 @@ import { getMarketById } from "@/lib/markets";
 import { canPreviewVenue } from "@/lib/venuePreviewAccess";
 import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
-import { ShareButton } from "@/app/(consumer)/event/[id]/ShareButton";
+import { ShareButton } from "@/app/(website)/ShareButton";
+import { absoluteUrl } from "@/lib/siteUrl";
 import { HappyHourTimesCard } from "@/app/(consumer)/venue/[id]/HappyHourTimesCard";
 import { BusinessHoursRow } from "@/app/(consumer)/event/[id]/BusinessHoursRow";
 import { VenueViewTracker } from "@/app/(consumer)/venue/[id]/VenueViewTracker";
@@ -427,7 +428,11 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
             </h1>
             <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
               <SaveVenueButton venueId={venue.venueUuid} variant="detail" />
-              <ShareButton />
+              {/* canonicalPath is the venue's own resolved market/city/slug
+                  path (never the requested path) — already guaranteed to
+                  exclude preview/section/query state, since it's built purely
+                  from venue.marketSlug/citySlug/id, not from the request URL. */}
+              <ShareButton url={absoluteUrl(canonicalPath)} label="Share venue" />
             </div>
           </div>
 

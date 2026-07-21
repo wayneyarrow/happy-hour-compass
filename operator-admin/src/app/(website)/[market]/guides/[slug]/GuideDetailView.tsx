@@ -7,6 +7,7 @@ import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard"
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { GuideCard } from "@/app/(website)/GuideCard";
 import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
+import { ShareButton } from "@/app/(website)/ShareButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
 
@@ -81,6 +82,14 @@ type Props = {
   eventItems: WebsiteEventListItem[];
   relatedGuides: RelatedGuideSummary[];
   faqs: GuideFaqAnswer[];
+  /**
+   * Absolute canonical guide URL — passed down for the Share button. Omitted
+   * by the Control Panel's admin preview route (content-engine/[id]/preview),
+   * which intentionally previews guides that may have no live public URL yet
+   * (drafts) — the Share button simply doesn't render when this is absent,
+   * rather than sharing a non-existent or draft URL.
+   */
+  canonicalUrl?: string;
 };
 
 export function GuideDetailView({
@@ -90,6 +99,7 @@ export function GuideDetailView({
   eventItems,
   relatedGuides,
   faqs,
+  canonicalUrl,
 }: Props) {
   const cityOrMarket = guide.cityName || guide.marketName;
   const province = MARKET_PROVINCE[guide.marketName];
@@ -144,8 +154,9 @@ export function GuideDetailView({
             <h1 className="flex-1 min-w-0 text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 tracking-tight leading-[1.05]">
               {guide.title}
             </h1>
-            <div className="shrink-0 -mt-1">
+            <div className="flex items-center gap-0.5 shrink-0 -mt-1">
               <SaveGuideButton guideId={guide.id} variant="detail" />
+              {canonicalUrl && <ShareButton url={canonicalUrl} label="Share guide" />}
             </div>
           </div>
 

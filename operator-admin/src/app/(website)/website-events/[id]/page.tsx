@@ -11,8 +11,10 @@ import { EventViewTracker } from "@/app/(consumer)/event/[id]/EventViewTracker";
 import { VenueDetailMap } from "@/app/(website)/[market]/[city]/[slug]/VenueDetailMap";
 import { StickyNav } from "@/app/(website)/[market]/[city]/[slug]/StickyNav";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { absoluteUrl } from "@/lib/siteUrl";
 import { canPreviewEvent } from "@/lib/venuePreviewAccess";
 import { SaveEventButton } from "@/app/(website)/SaveEventButton";
+import { ShareButton } from "@/app/(website)/ShareButton";
 import { EventActionCard } from "./EventActionCard";
 import { EventMobileActionBar } from "./EventMobileActionBar";
 import { MakeANightOfIt } from "./MakeANightOfIt";
@@ -445,12 +447,19 @@ export default async function WebsiteEventDetailPage({ params, searchParams }: P
                 </div>
               )}
 
-              {/* Title + save */}
+              {/* Title + save/share */}
               <div className="flex items-start gap-2 mb-3">
                 <h1 className="flex-1 min-w-0 text-[1.75rem] md:text-[2rem] lg:text-[2.2rem] font-bold text-gray-900 leading-tight tracking-tight">
                   {event.title}
                 </h1>
-                <SaveEventButton eventId={event.id} variant="detail" />
+                <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                  <SaveEventButton eventId={event.id} variant="detail" />
+                  {/* eventCanonicalPath (computed above) is the plain
+                      /website-events/{id} route path — never the request's
+                      query/hash state — so this always excludes preview/
+                      section params. */}
+                  <ShareButton url={absoluteUrl(eventCanonicalPath)} label="Share event" />
+                </div>
               </div>
 
               {/* Venue link */}
