@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { submitContactAction, type ContactFormState } from "@/app/(consumer)/contact/actions";
 import { trackEvent } from "@/lib/analytics";
+import { EmailConfirmationNote } from "./emailConfirmationCopy";
 
 type Props = {
   onDone: () => void;
@@ -58,10 +59,13 @@ export function ContactUsModalContent({ onDone }: Props) {
         <h3 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
           Message sent!
         </h3>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-10 max-w-[280px]">
+        <p className="text-[15px] text-gray-600 leading-relaxed mb-6 max-w-[280px]">
           Thanks &mdash; we&rsquo;ve received your message and will get back to
           you.
         </p>
+        <div className="mb-10">
+          <EmailConfirmationNote lead="We&rsquo;ve sent a confirmation to your inbox." />
+        </div>
 
         <button
           type="button"

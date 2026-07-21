@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/browser";
 import Link from "next/link";
 import PasswordInput from "@/components/PasswordInput";
-import { createConsumerProfile } from "./actions";
+import { createConsumerAccount } from "./actions";
+import { EmailConfirmationNote } from "@/app/(website)/acquisition/emailConfirmationCopy";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -50,68 +50,21 @@ export default function SignUpPage() {
     setLoading(true);
     devLog("signup started for email:", email);
 
-    const now = new Date().toISOString();
     const trimmedName = name.trim() || null;
 
-    const supabase = createClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const result = await createConsumerAccount({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/welcome`,
-        data: {
-          display_name: trimmedName,
-          consumer_terms_accepted_at: now,
-          consumer_privacy_accepted_at: now,
-          consumer_marketing_consent: marketingConsent,
-          consumer_marketing_consent_at: marketingConsent ? now : null,
-        },
-      },
-    });
-
-    devLog("signUp response — user:", data?.user?.id ?? null, "identities:", data?.user?.identities?.length ?? null, "error:", signUpError?.message ?? null);
-
-    if (signUpError) {
-      devLog("signUp error:", signUpError.message);
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Supabase silently obfuscates duplicate-email signups to prevent enumeration.
-    // When this happens: error is null BUT user is null (or user.identities is []).
-    // Use a direct null/identities check so TypeScript narrows data.user below.
-    if (
-      !data.user ||
-      (data.user.identities !== undefined && data.user.identities.length === 0)
-    ) {
-      devLog("signUp returned no real user — likely duplicate email or obfuscated response");
-      setError(
-        "An account with this email already exists. Please sign in instead, or use a different email."
-      );
-      setLoading(false);
-      return;
-    }
-
-    devLog("auth user created — id:", data.user.id, "— creating consumer profile");
-
-    const profileError = await createConsumerProfile({
-      userId: data.user.id,
-      email,
       displayName: trimmedName,
-      termsAcceptedAt: now,
-      privacyAcceptedAt: now,
       marketingConsent,
-      marketingConsentAt: marketingConsent ? now : null,
     });
 
-    if (profileError) {
-      devLog("createConsumerProfile failed:", profileError);
-      // Auth user was created. Profile creation failed — likely a transient error.
-      // /auth/callback will attempt profile creation again when the user confirms.
-      // Don't block the success screen; the user still needs to confirm their email.
-    } else {
-      devLog("consumer_profiles row created successfully");
+    devLog("createConsumerAccount result:", result);
+
+    if (!result.ok) {
+      setError(result.error);
+      setLoading(false);
+      return;
     }
 
     setSuccessEmail(email);
@@ -137,11 +90,13 @@ export default function SignUpPage() {
           </svg>
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Check your email</h2>
-        <p className="text-sm text-gray-500 leading-relaxed mb-6">
+        <p className="text-sm text-gray-500 leading-relaxed mb-3">
           We sent a confirmation link to{" "}
           <span className="font-medium text-gray-700">{successEmail}</span>.
-          Click the link to activate your account.
         </p>
+        <div className="mb-6 mx-auto max-w-[290px]">
+          <EmailConfirmationNote lead="Click the link to activate your account." />
+        </div>
         <Link
           href="/sign-in"
           className="text-sm text-amber-600 hover:text-amber-700 font-medium"

@@ -957,7 +957,6 @@ export async function sendContactSubmitterConfirmationEmail({
             "We&rsquo;ll read your message and get back to you as soon as we can.",
             "You&rsquo;ll receive our reply at this email address.",
           ])}
-          ${emailSpamCallout()}
           <p style="margin:24px 0 4px;font-size:15px;color:#475569;">Cheers,</p>
           <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#0f172a;">Wayne</p>
           <p style="margin:0;font-size:14px;color:#64748b;">Founder, Happy Hour Compass</p>`,
@@ -971,8 +970,6 @@ Thanks for reaching out to Happy Hour Compass. We've received your message and w
 What happens next?
 1. We'll read your message and get back to you as soon as we can.
 2. You'll receive our reply at this email address.
-
-Keep an eye on your inbox: Our reply may land in your spam or junk folder. Add hello@happyhourcompass.com to your contacts so you don't miss it.
 
 Cheers,
 Wayne
@@ -1833,5 +1830,73 @@ Happy Hour Compass Control Panel`;
     html,
     text,
     criticality: "important",
+  });
+}
+
+// ── Consumer signup confirmation email ────────────────────────────────────────
+
+/**
+ * Sends the branded email-confirmation link to a newly signed-up consumer.
+ *
+ * `confirmLink` is the Supabase-generated action link (from
+ * auth.admin.generateLink({ type: "signup", ... })), built with a redirectTo
+ * resolved via getSiteUrl() — the same environment-aware canonical URL
+ * already used for operator activation links (see
+ * provisionOperatorForVenue in src/lib/operatorActivation.ts) — rather than
+ * relying on Supabase Auth's own dashboard-configured Site URL, which does
+ * not vary per deployment environment (staging vs. production) the way
+ * getSiteUrl() does.
+ *
+ * Replaces Supabase Auth's default (unbranded) "Confirm signup" email so the
+ * consumer signup flow uses the same branded shell as every other HHC
+ * transactional email.
+ *
+ * No spam/junk reminder here — the sign-up success screen already carries
+ * that reminder (see emailSpamCallout()'s doc comment: an email that pairs
+ * 1:1 with an on-screen confirmation modal should not repeat it).
+ *
+ * Link expiry is controlled by the Supabase project's "OTP Expiry" setting
+ * (Auth → Configuration in the Supabase dashboard).
+ */
+export async function sendConsumerSignupConfirmationEmail({
+  to,
+  firstName,
+  confirmLink,
+}: {
+  to: string;
+  firstName: string | null;
+  confirmLink: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Confirm your email</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">${greeting}</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            Thanks for creating a Happy Hour Compass account. Click the button below to confirm your email and activate your account.
+          </p>
+          ${emailCta(confirmLink, "Confirm my email &rarr;")}
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This link expires within 24 hours.</p>
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${confirmLink}</p>`,
+    "You received this email because you created an account on Happy Hour Compass."
+  );
+
+  const text = `${greeting}
+
+Thanks for creating a Happy Hour Compass account. Confirm your email to activate your account:
+${confirmLink}
+
+This link expires within 24 hours.
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "consumer_signup_confirmation",
+    to,
+    subject:     "Confirm your email — Happy Hour Compass",
+    html,
+    text,
+    criticality: "critical",
   });
 }
