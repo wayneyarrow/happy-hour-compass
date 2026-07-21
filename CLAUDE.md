@@ -186,6 +186,37 @@ The root layout (`operator-admin/src/app/layout.tsx`) sets `title: { template: "
 
 ---
 
+## Authentication & Email
+
+### Consumer email confirmation flow
+
+Consumer signup confirmations resolve through **`/auth/confirm`** (`operator-admin/src/app/auth/confirm/page.tsx`), not `/auth/callback`.
+
+**Rule:** Never route a consumer confirmation link through `/auth/callback`.
+
+**Why:** `/auth/callback` handles the browser PKCE `?code=` flow. Server-generated Supabase links (`auth.admin.generateLink()`, used for consumer signup) have no browser `code_verifier` to anchor a PKCE exchange, so Supabase can only redirect back with tokens in the URL hash fragment (`#access_token=...&type=signup`) — a shape `/auth/callback` doesn't understand. `/auth/confirm` is the dedicated handler for that hash-fragment shape.
+
+### Supabase Redirect URLs
+
+**Rule:** Every authentication callback route the app redirects to (`/auth/callback`, `/auth/confirm`, `/operator/create-password`, etc.) must also be added to the Supabase dashboard under **Authentication → URL Configuration → Redirect URLs** — for **both** the staging and production URLs. Adding the route in code is not sufficient by itself.
+
+**Why it matters:** If a `redirectTo` isn't in that allow-list, Supabase does not error — it silently falls back to the dashboard-configured Site URL, stripping the intended path/query entirely. This produces misleading behavior: the code is correct, but the deployed redirect is wrong, and it looks like the new route "isn't being used." See `operator-admin/src/app/(consumer)/RecoveryRedirect.tsx`'s header comment for the original diagnosis of this failure mode (operator recovery links).
+
+### Environment-aware authentication links
+
+**Rule:** Every authentication email must build its redirect/action URL through `getSiteUrl()` (`operator-admin/src/lib/siteUrl.ts`) rather than a hard-coded domain. This is the same environment-aware helper used for SEO/metadata — it resolves to the correct staging vs. production origin per deployment, whereas Supabase's own dashboard-configured Site URL does not vary per environment.
+
+### Consumer signup notifications
+
+On successful consumer account creation (`createConsumerAccount()`, `operator-admin/src/app/(consumer-auth)/sign-up/actions.ts`):
+- Consumer receives the branded confirmation email (`sendConsumerSignupConfirmationEmail`).
+- Slack notification is sent to `#consumer-signup`.
+- Founder notification email is sent to `hello@happyhourcompass.com` (`sendConsumerSignupFounderNotificationEmail`).
+
+**Rule:** Notification failures (email or Slack) must never block successful account creation — each is fire-and-forget with its own error logging, matching the founder-notification pattern already used for claims/suggestions/submissions in `src/lib/email.ts`.
+
+---
+
 ## Supabase migrations
 
 ### Every new public-schema table must have explicit GRANTs
