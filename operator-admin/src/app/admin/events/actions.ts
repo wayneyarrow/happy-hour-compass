@@ -1,11 +1,16 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { canUseRecurringEvents, parseOperatorPlan } from "@/lib/plans";
 import { isRecurring } from "./recurrenceUtils";
-import { slugify } from "@/lib/slugify";
+import {
+  MAX_SLUG_GENERATION_ATTEMPTS,
+  MissingVenueSlugError,
+  generateEventSlug,
+  isUniqueSlugViolation,
+} from "@/lib/eventSlug";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Delete event
@@ -187,25 +192,73 @@ export async function saveEventAction(
   }
 
   // ── Insert new event ──────────────────────────────────────────────────────
-  const slug = (payload.title ? slugify(payload.title) : "") || randomUUID();
+  // Slug is venue-qualified and generated once, here, at creation — never
+  // regenerated on later edits (see the update branch above, which never
+  // touches `slug`). See src/lib/eventSlug.ts for the full algorithm.
+  let slug: string;
+  try {
+    slug = await generateEventSlug(ctx.supabase, {
+      venueId: payload.venueId,
+      title: payload.title ?? "",
+    });
+  } catch (err) {
+    if (err instanceof MissingVenueSlugError) {
+      console.error("[saveEventAction] Slug generation failed:", err);
+      return {
+        error: "This venue is missing a slug and can't be used to create an event yet. Please contact support.",
+      };
+    }
+    console.error("[saveEventAction] Slug generation failed:", err);
+    return { error: "Failed to create event. Please try again." };
+  }
 
-  const { data: inserted, error: insertError } = await ctx.supabase
-    .from("events")
-    .insert([{
-      ...fields,
-      slug,
-      venue_id:                payload.venueId,
-      created_by_operator_id:  ctx.operator.id,
-      is_seeded_event:         false,
-    }])
-    .select("id")
-    .single();
+  let inserted: { id: string } | null = null;
+  let lastError: PostgrestError | null = null;
 
-  if (insertError) {
-    console.error("[saveEventAction] Insert failed:", insertError);
-    return { error: insertError.message || "Failed to create event. Please try again." };
+  for (let attempt = 0; attempt < MAX_SLUG_GENERATION_ATTEMPTS; attempt++) {
+    const { data, error } = await ctx.supabase
+      .from("events")
+      .insert([{
+        ...fields,
+        slug,
+        venue_id:                payload.venueId,
+        created_by_operator_id:  ctx.operator.id,
+        is_seeded_event:         false,
+      }])
+      .select("id")
+      .single();
+
+    if (!error) {
+      inserted = data as { id: string };
+      break;
+    }
+
+    lastError = error;
+
+    // A real race lost to the DB's UNIQUE constraint (the final integrity
+    // safeguard) — regenerate against now-current state and retry, rather
+    // than surface the raw constraint violation to the operator.
+    if (isUniqueSlugViolation(error) && attempt < MAX_SLUG_GENERATION_ATTEMPTS - 1) {
+      try {
+        slug = await generateEventSlug(ctx.supabase, {
+          venueId: payload.venueId,
+          title: payload.title ?? "",
+        });
+      } catch (err) {
+        console.error("[saveEventAction] Slug regeneration after collision failed:", err);
+        break;
+      }
+      continue;
+    }
+
+    break;
+  }
+
+  if (!inserted) {
+    console.error("[saveEventAction] Insert failed:", lastError);
+    return { error: "Failed to create event. Please try again." };
   }
 
   revalidatePath("/admin/events");
-  return { savedId: (inserted as { id: string }).id };
+  return { savedId: inserted.id };
 }

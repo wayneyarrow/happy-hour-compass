@@ -3,6 +3,7 @@
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
 import { redirect } from "next/navigation";
+import { isReservedVenueSlug } from "@/lib/slugify";
 import {
   ABOUT_VENUE_MAX_CHARS,
   ESTABLISHMENT_TYPE_OPTIONS,
@@ -25,8 +26,14 @@ function generateSlug(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 50);
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return base ? `${base}-${suffix}` : `venue-${suffix}`;
+
+  let candidate: string;
+  do {
+    const suffix = Math.random().toString(36).slice(2, 7);
+    candidate = base ? `${base}-${suffix}` : `venue-${suffix}`;
+  } while (isReservedVenueSlug(candidate));
+
+  return candidate;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

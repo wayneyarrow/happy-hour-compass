@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
 import { redirect } from "next/navigation";
+import { isReservedVenueSlug } from "@/lib/slugify";
 import type { VenueFormValues, VenueFormState } from "../_shared/types";
 
 // Re-export so any existing imports from this file continue to work.
@@ -16,6 +17,11 @@ export type CreateVenueState = VenueFormState;
  * to make collisions against the UNIQUE constraint virtually impossible.
  *
  * e.g. "The Rusty Anchor!" → "the-rusty-anchor-x7k2m"
+ *
+ * Also guards against a reserved slug (see isReservedVenueSlug) — the random
+ * suffix already makes an exact reserved-word match effectively impossible,
+ * but the loop keeps this function correct even if that suffix is ever
+ * removed or shortened.
  */
 function generateSlug(name: string): string {
   const base = name
@@ -25,8 +31,13 @@ function generateSlug(name: string): string {
     .replace(/^-+|-+$/g, "")     // strip leading/trailing dashes
     .slice(0, 50);                // keep it readable
 
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return base ? `${base}-${suffix}` : `venue-${suffix}`;
+  let candidate: string;
+  do {
+    const suffix = Math.random().toString(36).slice(2, 7);
+    candidate = base ? `${base}-${suffix}` : `venue-${suffix}`;
+  } while (isReservedVenueSlug(candidate));
+
+  return candidate;
 }
 
 // ── Server action ─────────────────────────────────────────────────────────────
