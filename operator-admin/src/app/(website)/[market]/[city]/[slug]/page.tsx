@@ -315,10 +315,26 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // External links.
   const menuUrl = venue.menuUrl || null;
   const websiteUrl = venue.websiteUrl || null;
-  const mapsUrl = venue.placeId
-    ? `https://www.google.com/maps/place/?q=place_id:${venue.placeId}`
+  // Google's documented cross-platform "Universal URL" scheme (api=1&query=...)
+  // is used here rather than the legacy bare `?q=`/`maps/place/?q=place_id:`
+  // formats — on mobile, tapping an <a> to google.com/maps is intercepted by
+  // the OS as a universal link and handed to the native Google Maps app,
+  // whose deep-link parser handles the legacy formats less reliably than the
+  // desktop web frontend (this is why the address/Get Directions links failed
+  // with "No results found" on mobile only, while unaffected desktop and the
+  // JS-triggered map-pin window.open() — which bypasses that OS interception
+  // — worked). Coordinates are preferred when valid since they're the same
+  // values the embedded map already trusts to place the pin correctly.
+  const hasValidCoords =
+    venue.latitude !== null &&
+    venue.longitude !== null &&
+    !(venue.latitude === 0 && venue.longitude === 0);
+  const mapsUrl = hasValidCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${venue.latitude},${venue.longitude}`
+    : venue.placeId
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address || venue.name)}&query_place_id=${venue.placeId}`
     : venue.address
-    ? `https://www.google.com/maps?q=${encodeURIComponent(venue.address)}`
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
     : null;
 
   // Nav sections — only sections that will render.
