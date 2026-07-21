@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { haversineKm } from "@/lib/geo";
-import { computeHhStatus } from "@/lib/happyHourStatus";
+import { computeHhStatus, getCurrentDayName } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
@@ -85,6 +85,35 @@ function hasHappyHourOverlap(
       const end = slot.end === "close" ? 1440 : timeStringToMinutes(slot.end);
       return start < selectedEnd && end > selectedStart;
     })
+  );
+}
+
+/** True when `value` is a non-empty "HH:MM" string that parses to a finite number of minutes. Used only by hasHappyHourToday's slot-validity check below — "close" is deliberately NOT accepted here, since it's only ever a valid *end* value. */
+function isFiniteHhTime(value: string): boolean {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    Number.isFinite(timeStringToMinutes(value))
+  );
+}
+
+/**
+ * Returns true if the venue has at least one non-malformed Happy Hour slot
+ * on `todayName` — regardless of whether it's active right now, already
+ * ended, or hasn't started yet. Independent of any selected Time range (see
+ * the On Today + Time-range interaction in filteredCards below).
+ *
+ * A slot counts only when both start and end are valid: start must parse to
+ * a finite time (never "close" — that's only ever an end value); end must
+ * either parse to a finite time or be the literal "close".
+ */
+function hasHappyHourToday(
+  weekly: Record<string, Array<{ start: string; end: string }>>,
+  todayName: string
+): boolean {
+  const todaySlots = weekly[todayName] ?? [];
+  return todaySlots.some(
+    (slot) => isFiniteHhTime(slot.start) && (slot.end === "close" || isFiniteHhTime(slot.end))
   );
 }
 
@@ -171,6 +200,7 @@ function ChipButton({
   onClick,
   hasArrow = false,
   ariaExpanded,
+  ariaPressed,
 }: {
   label: string;
   active: boolean;
@@ -178,6 +208,8 @@ function ChipButton({
   hasArrow?: boolean;
   /** When provided, exposes aria-expanded/aria-haspopup for a chip that opens a popover. */
   ariaExpanded?: boolean;
+  /** When provided, exposes aria-pressed for a plain on/off toggle chip (no popover). */
+  ariaPressed?: boolean;
 }) {
   return (
     <button
@@ -185,6 +217,7 @@ function ChipButton({
       onClick={onClick}
       aria-expanded={ariaExpanded}
       aria-haspopup={ariaExpanded !== undefined ? "true" : undefined}
+      aria-pressed={ariaPressed}
       className={[
         "flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2",
         "border rounded-full text-sm font-medium whitespace-nowrap",
@@ -582,6 +615,7 @@ export function HappyHoursSearchClient({
   // ── filter state ──
   const [nearMeActive, setNearMeActive] = useState(false);
   const [onNowActive, setOnNowActive] = useState(false);
+  const [onTodayActive, setOnTodayActive] = useState(false);
   const [topRatedActive, setTopRatedActive] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [filterTimeFrom, setFilterTimeFrom] = useState("");
@@ -674,6 +708,11 @@ export function HappyHoursSearchClient({
     [cards]
   );
 
+  // Same wall-clock convention as computeHhStatus() (see getCurrentDayName's
+  // doc comment) — recomputed fresh each render/filter-change rather than
+  // live-ticking, matching how On Now's clock already behaves on this page.
+  const todayName = getCurrentDayName();
+
   // ── filter (live: On Now uses computeHhStatus so it reflects actual wall-clock time) ──
   const filteredCards = useMemo(() => {
     const hasLoc = userLocation !== null;
@@ -681,6 +720,8 @@ export function HappyHoursSearchClient({
     return cards.filter((card) => {
       if (trimmedQuery && !matchesSearchQuery(card, trimmedQuery)) return false;
       if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
+        return false;
+      if (onTodayActive && !hasHappyHourToday(card.happyHourWeekly, todayName))
         return false;
       if (
         nearMeActive &&
@@ -706,18 +747,24 @@ export function HappyHoursSearchClient({
       if (selectedType && card.establishmentType !== selectedType) return false;
       // Range is active only once both bounds are chosen — a single bound
       // never filters (see requirement: "only one selected → do not filter yet").
-      if (
-        filterTimeFrom &&
-        filterTimeTo &&
-        !hasHappyHourOverlap(card.happyHourWeekly, filterTimeFrom, filterTimeTo)
-      )
-        return false;
+      // When On Today is also active, restrict the overlap check to today's
+      // slots only (not every weekday) — a separate day's overlap shouldn't
+      // count once the result set has already been narrowed to today.
+      if (filterTimeFrom && filterTimeTo) {
+        const weeklyForOverlap = onTodayActive
+          ? { [todayName]: card.happyHourWeekly[todayName] ?? [] }
+          : card.happyHourWeekly;
+        if (!hasHappyHourOverlap(weeklyForOverlap, filterTimeFrom, filterTimeTo))
+          return false;
+      }
       return true;
     });
   }, [
     cards,
     searchQuery,
     onNowActive,
+    onTodayActive,
+    todayName,
     nearMeActive,
     userLocation,
     topRatedActive,
@@ -782,6 +829,7 @@ export function HappyHoursSearchClient({
     setSearchQuery("");
     setNearMeActive(false);
     setOnNowActive(false);
+    setOnTodayActive(false);
     setTopRatedActive(false);
     setSelectedType(null);
     setFilterTimeFrom("");
@@ -882,6 +930,7 @@ export function HappyHoursSearchClient({
     !!searchQuery.trim() ||
     nearMeActive ||
     onNowActive ||
+    onTodayActive ||
     topRatedActive ||
     !!selectedType ||
     !!filterTimeFrom ||
@@ -914,6 +963,14 @@ export function HappyHoursSearchClient({
             label="Near Me"
             active={nearMeActive}
             onClick={handleNearMe}
+          />
+
+          {/* On Today */}
+          <ChipButton
+            label="On Today"
+            active={onTodayActive}
+            onClick={() => setOnTodayActive((v) => !v)}
+            ariaPressed={onTodayActive}
           />
 
           {/* On Now */}

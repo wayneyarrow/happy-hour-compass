@@ -27,6 +27,17 @@ const DAY_NAMES = [
 type HHSlot = { start: string; end: string };
 
 /**
+ * Returns the current day's canonical happyHourWeekly key ("Sunday".."Saturday"),
+ * using the same clock (`new Date().getDay()`, i.e. the viewer's local wall
+ * clock) that computeHhStatus() itself uses to resolve "today" — no venue
+ * timezone data exists anywhere in the product today, so this intentionally
+ * mirrors that existing convention rather than introducing a second one.
+ */
+export function getCurrentDayName(): string {
+  return DAY_NAMES[new Date().getDay()];
+}
+
+/**
  * HH card status — drives the green "On Now" and amber "Upcoming" badges.
  * Intentionally minimal for card use; the Venue Detail page should render
  * the full weekly schedule using HappyHourTimesCard instead.
