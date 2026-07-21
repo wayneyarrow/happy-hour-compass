@@ -81,6 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // MARKETS is the same static "is this market live" source every other
   // website route already relies on (see src/lib/markets.ts).
   const activeMarketSlugs = MARKETS.filter((m) => m.status === "active").map((m) => m.id);
+  const activeMarketSlugSet = new Set(activeMarketSlugs);
 
   // ── Static marketing pages — no real updated_at source, so no lastModified ──
   const staticPages: MetadataRoute.Sitemap = [
@@ -99,7 +100,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // ── Published venue pages ───────────────────────────────────────────────
+  // Venues in a non-active (coming-soon) market are still published in the
+  // DB — this launch config only controls public discoverability, not the
+  // underlying data — so they must not be crawlable/indexable via the
+  // sitemap, same "is this market live" gate as the guide library index above.
   const venuePages: MetadataRoute.Sitemap = venues.flatMap((venue) => {
+    if (!venue.marketSlug || !activeMarketSlugSet.has(venue.marketSlug)) return [];
     const path = buildVenuePublicPath({
       marketSlug: venue.marketSlug,
       citySlug: venue.citySlug,
@@ -122,6 +128,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // geography-missing case, a non-canonical fallback render) — either way
   // not a second indexable copy of the page, so it must never appear here.
   const eventPages: MetadataRoute.Sitemap = events.flatMap((event) => {
+    if (!event.marketSlug || !activeMarketSlugSet.has(event.marketSlug)) return [];
     const path = buildEventPublicPath({
       marketSlug: event.marketSlug,
       citySlug: event.citySlug,
@@ -139,7 +146,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // ── Collection landing pages ────────────────────────────────────────────
   const collectionPages: MetadataRoute.Sitemap = collections.flatMap((collection) => {
     const marketSlug = marketSlugByDbId.get(collection.marketId);
-    if (!marketSlug) return [];
+    if (!marketSlug || !activeMarketSlugSet.has(marketSlug)) return [];
     return [
       {
         url: absoluteUrl(`/${marketSlug}/collections/${collection.slug}`),
@@ -149,10 +156,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // ── Guide detail pages ───────────────────────────────────────────────────
-  const guidePages: MetadataRoute.Sitemap = guides.map((guide) => ({
-    url: absoluteUrl(`/${guide.marketSlug}/guides/${guide.slug}`),
-    ...(guide.updatedAt ? { lastModified: new Date(guide.updatedAt) } : {}),
-  }));
+  const guidePages: MetadataRoute.Sitemap = guides.flatMap((guide) => {
+    if (!activeMarketSlugSet.has(guide.marketSlug)) return [];
+    return [
+      {
+        url: absoluteUrl(`/${guide.marketSlug}/guides/${guide.slug}`),
+        ...(guide.updatedAt ? { lastModified: new Date(guide.updatedAt) } : {}),
+      },
+    ];
+  });
 
   return [
     ...staticPages,

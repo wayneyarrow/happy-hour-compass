@@ -5,7 +5,8 @@ import { getGuideLibraryForMarket } from "@/lib/data/contentGuideDistribution";
 import { GuideCard } from "@/app/(website)/GuideCard";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
-import { buildPageMetadata } from "@/lib/seo/metadata";
+import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
+import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 
 /**
  * Public Guides Library (Card 6B Part 4). Canonical URL: /{market}/guides —
@@ -35,6 +36,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // doesn't resolve, so this intentionally stays outside buildPageMetadata.
   if (!marketConfig) return { title: "Guides" };
 
+  // Launch config: same noindex gate as the venue/event/collection/guide
+  // detail pages — see MarketComingSoon.tsx, which this metadata pairs with.
+  if (marketConfig.status !== "active") {
+    return buildComingSoonMetadata(marketConfig.name);
+  }
+
   return buildPageMetadata({
     title: `Guides | ${marketConfig.name}`,
     description: `Editorial guides to the best happy hours and events in ${marketConfig.name}, curated by Happy Hour Compass.`,
@@ -46,6 +53,12 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
   const { market } = await params;
   const marketConfig = getMarketById(market);
   if (!marketConfig) notFound();
+
+  // Launch config: a market that isn't active shows the shared branded
+  // Coming Soon experience instead of real content.
+  if (marketConfig.status !== "active") {
+    return <MarketComingSoon marketName={marketConfig.name} />;
+  }
 
   const guides = await getGuideLibraryForMarket(market);
 

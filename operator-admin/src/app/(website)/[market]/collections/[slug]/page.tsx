@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { buildPageMetadata } from "@/lib/seo/metadata";
+import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import {
   getPublicCollectionModel,
   generateCollectionFallbackDescription,
@@ -10,6 +10,8 @@ import { CollectionTypeContent } from "@/app/(website)/collections/CollectionTyp
 import { buildCollectionPageNode } from "@/lib/seo/schema/collection";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
+import { getMarketById } from "@/lib/markets";
+import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 
 /**
  * Public Collection Landing Page — /{market}/collections/{collection-slug}
@@ -35,6 +37,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const model = await getPublicCollectionModel(market, slug);
   if (!model) return { title: "Collection" };
 
+  // Launch config: same noindex gate as the venue/event pages — see
+  // MarketComingSoon.tsx, which this metadata pairs with.
+  const marketConfig = getMarketById(model.marketSlug);
+  if (marketConfig && marketConfig.status !== "active") {
+    return buildComingSoonMetadata(marketConfig.name);
+  }
+
   const description = model.publicIntro?.trim() || generateCollectionFallbackDescription(model);
 
   return buildPageMetadata({
@@ -49,6 +58,13 @@ export default async function CollectionLandingPage({ params }: PageProps) {
 
   const model = await getPublicCollectionModel(market, slug);
   if (!model) notFound();
+
+  // Launch config: a market that isn't active shows the shared branded
+  // Coming Soon experience instead of real content.
+  const marketConfig = getMarketById(model.marketSlug);
+  if (marketConfig && marketConfig.status !== "active") {
+    return <MarketComingSoon marketName={marketConfig.name} />;
+  }
 
   // Same canonical path template generateMetadata() above builds inline for
   // its <link rel="canonical"> tag — collections have no admin-editable

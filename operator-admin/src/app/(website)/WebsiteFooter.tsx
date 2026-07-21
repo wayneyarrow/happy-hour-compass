@@ -116,6 +116,11 @@ export function WebsiteFooter() {
   const [contactOpen, setContactOpen] = useState(false);
   const [addVenueOpen, setAddVenueOpen] = useState(false);
 
+  // Launch config: with only one active market, switching to it from itself
+  // is a no-op — render it as the current live market label instead of a
+  // clickable link. If a second market goes active, both become links again.
+  const activeMarketCount = MARKETS.filter((m) => m.status === "active").length;
+
   function goToMarketHomepage(marketId: string) {
     startTransition(async () => {
       await setMarketAction(marketId);
@@ -169,12 +174,16 @@ export function WebsiteFooter() {
                   {MARKETS.map((market) => (
                     <li key={market.id}>
                       {market.status === "active" ? (
-                        <FooterButton
-                          onClick={() => goToMarketHomepage(market.id)}
-                          disabled={isPending}
-                        >
-                          {market.name}
-                        </FooterButton>
+                        activeMarketCount > 1 ? (
+                          <FooterButton
+                            onClick={() => goToMarketHomepage(market.id)}
+                            disabled={isPending}
+                          >
+                            {market.name}
+                          </FooterButton>
+                        ) : (
+                          <span className="text-sm text-gray-300">{market.name}</span>
+                        )
                       ) : (
                         <span className="inline-flex items-center gap-2 text-sm text-gray-400">
                           {market.name}

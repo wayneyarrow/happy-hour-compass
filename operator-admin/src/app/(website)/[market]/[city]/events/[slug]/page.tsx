@@ -5,9 +5,11 @@ import {
   getEventByHistoricalSlug,
 } from "@/lib/data/events";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
-import { buildEventMetadata } from "@/lib/seo/metadata";
+import { buildEventMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { canPreviewEvent } from "@/lib/venuePreviewAccess";
+import { getMarketById } from "@/lib/markets";
 import { EventDetailContent } from "@/app/(website)/website-events/[id]/EventDetailContent";
+import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 
 /**
  * Canonical public event detail route: /{market}/{city}/events/{event-slug}
@@ -86,6 +88,14 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
   const event = await getEventForWebsiteBySlug(slug);
   if (!event) return { title: "Event" };
+
+  // Launch config: same noindex gate as the venue page — see
+  // MarketComingSoon.tsx, which this metadata pairs with.
+  const marketConfig = event.venueMarketSlug ? getMarketById(event.venueMarketSlug) : null;
+  if (marketConfig && marketConfig.status !== "active") {
+    return buildComingSoonMetadata(marketConfig.name);
+  }
+
   const path =
     buildEventPublicPath({
       marketSlug: event.venueMarketSlug,
@@ -202,6 +212,15 @@ export default async function EventDetailPage({ params, searchParams }: PageProp
   // the venue page's identical redirect-on-mismatch pattern.
   if (requestedPath !== canonicalPath) {
     permanentRedirect(isPreviewRequested ? `${canonicalPath}?preview=true` : canonicalPath);
+  }
+
+  // Launch config: a market that isn't active shows the shared branded
+  // Coming Soon experience instead of real content — except for an
+  // authorized operator preview, which must keep working regardless of
+  // market status (isPreviewAuthorized is already fully resolved above).
+  const marketConfig = getMarketById(market);
+  if (marketConfig && marketConfig.status !== "active" && !isPreviewAuthorized) {
+    return <MarketComingSoon marketName={marketConfig.name} />;
   }
 
   return (

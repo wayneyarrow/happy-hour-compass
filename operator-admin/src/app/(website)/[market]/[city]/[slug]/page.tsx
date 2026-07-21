@@ -6,7 +6,7 @@ import {
   getVenueByHistoricalSlug,
 } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
-import { buildVenueMetadata } from "@/lib/seo/metadata";
+import { buildVenueMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
@@ -26,6 +26,7 @@ import { VenueIdentityStatus } from "./VenueIdentityStatus";
 import { MobileActionBar } from "./MobileActionBar";
 import { VenueDetailMap } from "./VenueDetailMap";
 import { ClaimVenueCTA } from "./ClaimVenueCTA";
+import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -106,6 +107,14 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
   const venue = await getVenueWithEventsForConsumerById(slug);
   if (!venue) return { title: "Venue" };
+
+  // Launch config: a market that isn't active never gets an indexable
+  // venue-page tag, regardless of how mature/published the venue itself is
+  // — see MarketComingSoon.tsx below, which this metadata pairs with.
+  if (marketConfig && marketConfig.status !== "active") {
+    return buildComingSoonMetadata(marketConfig.name);
+  }
+
   return buildVenueMetadata({
     // No brand-suffix fallback when marketConfig is missing (e.g. a stale
     // /{market}/... URL whose market segment no longer resolves) — a plain
@@ -266,6 +275,14 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
 
   const marketConfig = getMarketById(market);
   if (!marketConfig) notFound();
+
+  // Launch config: a market that isn't active shows the shared branded
+  // Coming Soon experience instead of real content — except for an
+  // authorized operator preview, which must keep working regardless of
+  // market status (isPreviewAuthorized is already fully resolved above).
+  if (marketConfig.status !== "active" && !isPreviewAuthorized) {
+    return <MarketComingSoon marketName={marketConfig.name} />;
+  }
 
   // Page-specific venue structured data — built from the raw venue.images
   // (never the type-based fallbackImage() used for gallery display below;

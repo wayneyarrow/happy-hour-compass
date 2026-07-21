@@ -45,7 +45,7 @@ export const MARKETS: Market[] = [
   {
     id: "greater-vancouver",
     name: "Greater Vancouver",
-    status: "active",
+    status: "coming_soon",
     center: { lat: 49.2827, lng: -123.1207 },
     radiusKm: 50,
     mapCenter: { lat: 49.2827, lng: -123.1207 },

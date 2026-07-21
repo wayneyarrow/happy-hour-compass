@@ -186,6 +186,28 @@ export function buildVenueMetadata({
  * Phase 2: wire in OG image from the event/venue photo.
  * Phase 3: add Event JSON-LD via a separate helper.
  */
+/**
+ * Metadata for the shared "Coming Soon" experience
+ * ((website)/MarketComingSoon.tsx) rendered in place of venue/event/
+ * collection/guide content whose market isn't active (see
+ * src/lib/markets.ts). Deliberately minimal — no canonical/OG override,
+ * since a noindex page has nothing worth surfacing in search or social
+ * previews — but always explicitly noindex so these pages are never indexed
+ * regardless of environment (unlike buildPageMetadata's noindex, which only
+ * triggers from shouldNoIndex() on staging). follow stays true so crawlers
+ * can still reach the active-market link this page points visitors to.
+ */
+export function buildComingSoonMetadata(marketName: string): Metadata {
+  return {
+    title: `${marketName} — Coming Soon`,
+    description: `${marketName} is coming soon to Happy Hour Compass.`,
+    // follow: true (not false) — crawlers should still follow the page's
+    // link back to the active Central Okanagan experience, even though the
+    // page itself stays out of the index.
+    robots: { index: false, follow: true },
+  };
+}
+
 export function buildEventMetadata({
   eventName,
   description,

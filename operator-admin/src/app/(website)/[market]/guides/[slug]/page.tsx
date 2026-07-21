@@ -13,12 +13,14 @@ import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { absoluteUrl } from "@/lib/siteUrl";
-import { buildPageMetadata } from "@/lib/seo/metadata";
+import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
 import { buildGuideArticleNode } from "@/lib/seo/schema/article";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
+import { getMarketById } from "@/lib/markets";
+import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { GuideDetailView } from "./GuideDetailView";
 
 /**
@@ -59,6 +61,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { market, slug } = await params;
   const guide = await getPublicGuideByMarketAndSlug(market, slug);
   if (!guide) return { title: "Guide" };
+
+  // Launch config: same noindex gate as the venue/event/collection pages —
+  // see MarketComingSoon.tsx, which this metadata pairs with.
+  const marketConfig = getMarketById(guide.marketSlug);
+  if (marketConfig && marketConfig.status !== "active") {
+    return buildComingSoonMetadata(marketConfig.name);
+  }
 
   // Same generator the CP editor uses for live suggestions — reused here as
   // the fallback for any manual SEO field the admin left empty, so public
@@ -134,6 +143,13 @@ export default async function GuideDetailPage({ params }: PageProps) {
 
   const guide = await getPublicGuideByMarketAndSlug(market, slug);
   if (!guide) notFound();
+
+  // Launch config: a market that isn't active shows the shared branded
+  // Coming Soon experience instead of real content.
+  const marketConfig = getMarketById(guide.marketSlug);
+  if (marketConfig && marketConfig.status !== "active") {
+    return <MarketComingSoon marketName={marketConfig.name} />;
+  }
 
   // Same canonical-path cascade generateMetadata() above resolves for its
   // <link rel="canonical"> tag (manual canonical_url override when it looks
