@@ -9,7 +9,10 @@ import type { KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from
 // map state" behaviour: map stays large, a results header is anchored at the
 // bottom). Open: reveals the venue list, leaving a small sliver of map
 // visible at the top so the map is never fully hidden behind the list.
-const PEEK_HEIGHT_PX = 104;
+// Sized with headroom beyond the header row's own content height so a visible
+// sliver of the list peeks through underneath — that sliver, plus the larger
+// touch target, is what signals "this pulls up" at rest.
+const PEEK_HEIGHT_PX = 124;
 const OPEN_TOP_GAP_PX = 72;
 // Pointer travel (px) before a press counts as a drag rather than a tap —
 // lets the header double as both the drag handle and a plain tap-to-toggle
@@ -110,7 +113,7 @@ export function MobileMapResultsSheet({ containerHeightPx, headerLabel, children
       {/* Drag handle + label — the sole drag target, and the accessible
           non-drag fallback (tap, or Enter/Space, toggles peek/open). */}
       <div
-        className="flex flex-shrink-0 touch-none select-none flex-col items-center gap-2 px-4 pt-2.5 pb-3 cursor-grab active:cursor-grabbing"
+        className="flex flex-shrink-0 touch-none select-none flex-col items-center gap-2 px-4 pt-3.5 pb-4 cursor-grab active:cursor-grabbing"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -126,7 +129,7 @@ export function MobileMapResultsSheet({ containerHeightPx, headerLabel, children
             : `Expand results, ${headerLabel}`
         }
       >
-        <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-gray-300" />
+        <span aria-hidden="true" className="h-1.5 w-12 rounded-full bg-gray-300" />
         <p className="text-sm font-semibold text-gray-800">{headerLabel}</p>
       </div>
 

@@ -956,15 +956,16 @@ export function HappyHoursSearchClient({
     );
   }, [sortedCards, mapExpanded, mapBounds]);
 
-  // Label shown in the results sheet's peek header — mirrors the venue-count
-  // copy the previous "Showing N venues in this area" paragraph used, now
-  // living in the sheet header instead of a separate line under the map.
+  // Label shown in the results sheet's header — visible in both the peek and
+  // open states, so it doubles as the live viewport count while collapsed.
+  // Recomputes on every mapBounds change (see mobileVisibleCards above),
+  // which fires from the map's onIdle after each pan/zoom.
   const sheetHeaderLabel =
     sortedCards.length === 0
       ? "No venues found"
       : mobileVisibleCards.length === 0
       ? "No venues in this area"
-      : `${mobileVisibleCards.length} venue${mobileVisibleCards.length === 1 ? "" : "s"} in this area`;
+      : `${mobileVisibleCards.length} venue${mobileVisibleCards.length === 1 ? "" : "s"}`;
 
   // Scroll the matching card into view when a marker is clicked.
   useEffect(() => {
