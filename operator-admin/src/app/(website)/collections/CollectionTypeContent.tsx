@@ -289,34 +289,30 @@ function GuideCollectionContent({ model }: { model: Extract<PublicCollectionMode
   const [lead, ...rest] = model.items;
 
   return (
-    <>
-      <div className="max-w-5xl mx-auto px-6 lg:px-10 pb-16 md:pb-20">
-        <LeadGuideFeature guide={lead} marketSlug={model.marketSlug} />
+    <div className="max-w-5xl mx-auto px-6 lg:px-10 pb-16 md:pb-20">
+      <LeadGuideFeature guide={lead} marketSlug={model.marketSlug} />
 
-        {rest.length > 0 && (
-          // md:mt-16 (back to the pre-polish desktop baseline — confirmed via
-          // real Chromium measurement to be the smallest-margin ceiling here:
-          // the Lead Guide card's own bottom edge already sits at ~951px on a
-          // 1440x900 viewport, past the fold before this margin is even
-          // applied, so no non-overlapping margin value makes "Keep exploring"
-          // peek in at ~900-1000px viewport heights without touching the
-          // preserved Lead Guide card/hero — out of scope for this pass. This
-          // value does fully surface the heading at more generous viewport
-          // heights (e.g. 1920x1080). Mobile (mt-20) is unchanged.
-          <section className="mt-20 md:mt-16">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight leading-snug mb-8 md:mb-10">
-              Keep exploring
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10 md:gap-x-10 md:gap-y-12">
-              {rest.map((guide) => (
-                <GuideGridCard key={guide.id} guide={guide} marketSlug={model.marketSlug} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-
-      <ExploreAllCta href={`/${model.marketSlug}/guides`} label="Explore all Guides" />
-    </>
+      {rest.length > 0 && (
+        // md:mt-16 (back to the pre-polish desktop baseline — confirmed via
+        // real Chromium measurement to be the smallest-margin ceiling here:
+        // the Lead Guide card's own bottom edge already sits at ~951px on a
+        // 1440x900 viewport, past the fold before this margin is even
+        // applied, so no non-overlapping margin value makes "Keep exploring"
+        // peek in at ~900-1000px viewport heights without touching the
+        // preserved Lead Guide card/hero — out of scope for this pass. This
+        // value does fully surface the heading at more generous viewport
+        // heights (e.g. 1920x1080). Mobile (mt-20) is unchanged.
+        <section className="mt-20 md:mt-16">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight leading-snug mb-8 md:mb-10">
+            Keep exploring
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10 md:gap-x-10 md:gap-y-12">
+            {rest.map((guide) => (
+              <GuideGridCard key={guide.id} guide={guide} marketSlug={model.marketSlug} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
