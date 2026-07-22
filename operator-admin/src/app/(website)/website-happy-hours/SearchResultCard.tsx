@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
-import { computeHhStatus, type HhStatus } from "@/lib/happyHourStatus";
+import { computeHhStatusForDay, getCurrentDayName, type HhStatus } from "@/lib/happyHourStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,13 +110,26 @@ function StarRating({ rating }: { rating: number }) {
  * server-computed value would reflect the deployment server's timezone
  * instead. Renders nothing until mounted, matching VenueIdentityStatus.tsx's
  * pattern on the Venue Detail page.
+ *
+ * `effectiveDayName` is the schedule day this card should evaluate against —
+ * passed down by callers with a Day filter (HappyHoursSearchClient) so an
+ * upcoming card shows the *selected* day's schedule rather than always
+ * today's; defaults to the actual current day for callers with no Day
+ * filter concept (homepage rail, Guide pages), preserving prior behaviour
+ * exactly for them.
  */
-function HhStatusDisplay({ happyHourWeekly }: { happyHourWeekly: Record<string, HHSlot[]> }) {
+function HhStatusDisplay({
+  happyHourWeekly,
+  effectiveDayName,
+}: {
+  happyHourWeekly: Record<string, HHSlot[]>;
+  effectiveDayName?: string;
+}) {
   const [status, setStatus] = useState<HhStatus | null>(null);
 
   useEffect(() => {
-    setStatus(computeHhStatus(happyHourWeekly));
-  }, [happyHourWeekly]);
+    setStatus(computeHhStatusForDay(happyHourWeekly, effectiveDayName ?? getCurrentDayName()));
+  }, [happyHourWeekly, effectiveDayName]);
 
   if (!status || status.type === "none") return null;
 
@@ -147,7 +160,9 @@ function HhStatusDisplay({ happyHourWeekly }: { happyHourWeekly: Record<string, 
   return (
     <div className="space-y-0.5">
       <p className="text-sm font-bold text-amber-700">{prefix}</p>
-      <p className="text-sm text-gray-400">Starts at {status.startsAt}</p>
+      <p className="text-sm text-gray-400">
+        {status.startsAt} – {status.endsAt}
+      </p>
     </div>
   );
 }
@@ -156,9 +171,15 @@ function HhStatusDisplay({ happyHourWeekly }: { happyHourWeekly: Record<string, 
 
 type Props = {
   data: SearchResultCardData;
+  /**
+   * Which weekday's schedule this card's HH status should evaluate against
+   * — passed by callers with a Day filter (see HhStatusDisplay above).
+   * Omitted by callers with no Day filter concept.
+   */
+  effectiveDayName?: string;
 };
 
-export function SearchResultCard({ data }: Props) {
+export function SearchResultCard({ data, effectiveDayName }: Props) {
   return (
     <Link
       href={data.href}
@@ -250,7 +271,10 @@ export function SearchResultCard({ data }: Props) {
           )}
 
           {/* 3. Happy Hour status — time-sensitive decision signal */}
-          <HhStatusDisplay happyHourWeekly={data.happyHourWeekly} />
+          <HhStatusDisplay
+            happyHourWeekly={data.happyHourWeekly}
+            effectiveDayName={effectiveDayName}
+          />
 
           {/* 4. Distance + establishment type — convenience signal */}
           {(data.distanceKm !== null || data.establishmentType) && (

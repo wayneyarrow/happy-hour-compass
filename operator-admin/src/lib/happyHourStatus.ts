@@ -41,10 +41,14 @@ export function getCurrentDayName(): string {
  * HH card status — drives the green "On Now" and amber "Upcoming" badges.
  * Intentionally minimal for card use; the Venue Detail page should render
  * the full weekly schedule using HappyHourTimesCard instead.
+ *
+ * "upcoming" carries both `startsAt` and `endsAt` so card UI can show the
+ * full scheduled range (e.g. "4 PM – 6 PM") rather than only the start
+ * time — see Beta Feedback Roadmap item #6.
  */
 export type HhStatus =
   | { type: "active"; endsIn: string }
-  | { type: "upcoming"; day: string; startsAt: string }
+  | { type: "upcoming"; day: string; startsAt: string; endsAt: string }
   | { type: "none" };
 
 function timeToMinutes(t: string): number {
@@ -53,9 +57,14 @@ function timeToMinutes(t: string): number {
   return h * 60 + (m || 0);
 }
 
-/** Formats "HH:MM" to a short display like "4 PM" or "4:30 PM". */
+/**
+ * Formats "HH:MM" to a short display like "4 PM" or "4:30 PM", or "Close"
+ * for the literal "close" end-of-day value. "close" is only ever a valid
+ * *end* time (never a start), so this branch was previously unreachable —
+ * it's exercised now that `endsAt` (below) can carry it.
+ */
 function formatDisplayTime(t: string): string {
-  if (t === "close") return "midnight";
+  if (t === "close") return "Close";
   const [h, m] = t.split(":").map(Number);
   const period = h >= 12 ? "PM" : "AM";
   const dh = h === 0 ? 12 : h > 12 ? h - 12 : h;
@@ -112,6 +121,7 @@ export function computeHhStatus(
       type: "upcoming",
       day: "Today",
       startsAt: formatDisplayTime(upcomingToday[0].start),
+      endsAt: formatDisplayTime(upcomingToday[0].end),
     };
   }
 
@@ -124,9 +134,47 @@ export function computeHhStatus(
         type: "upcoming",
         day: i === 1 ? "Tomorrow" : nextName,
         startsAt: formatDisplayTime(nextSlots[0].start),
+        endsAt: formatDisplayTime(nextSlots[0].end),
       };
     }
   }
 
   return { type: "none" };
+}
+
+/**
+ * Day-aware variant of computeHhStatus(), for card contexts where the
+ * viewer may have explicitly selected which weekday's schedule to view
+ * (the Happy Hour search Day filter) rather than always the actual current
+ * day — see Beta Feedback Roadmap item #6's Day filter compatibility
+ * requirement.
+ *
+ * When `targetDayName` is the actual current day, this delegates to
+ * computeHhStatus() unchanged, including live "active"/"On Now" status.
+ * When `targetDayName` is a different day, the venue can never be active
+ * right now (that day isn't happening), so this always resolves to
+ * "upcoming" using that day's own first slot, or "none" if it has no
+ * slots. Callers in Day-filtered contexts (e.g. HappyHoursSearchClient)
+ * already guarantee a valid slot exists for `targetDayName` before a card
+ * is rendered, matching the trust-the-data convention computeHhStatus()
+ * itself already uses for its own "next day" search above.
+ */
+export function computeHhStatusForDay(
+  happyHourWeekly: Record<string, HHSlot[]>,
+  targetDayName: string
+): HhStatus {
+  const todayName = getCurrentDayName();
+  if (targetDayName === todayName) {
+    return computeHhStatus(happyHourWeekly);
+  }
+
+  const slots = happyHourWeekly[targetDayName] ?? [];
+  if (slots.length === 0) return { type: "none" };
+
+  return {
+    type: "upcoming",
+    day: targetDayName,
+    startsAt: formatDisplayTime(slots[0].start),
+    endsAt: formatDisplayTime(slots[0].end),
+  };
 }

@@ -1398,7 +1398,7 @@ export function HappyHoursSearchClient({
                       : "",
                   ].join(" ")}
                 >
-                  <SearchResultCard data={card} />
+                  <SearchResultCard data={card} effectiveDayName={effectiveDayName} />
                 </div>
               ))}
             </div>
@@ -1504,7 +1504,7 @@ export function HappyHoursSearchClient({
                 ) : (
                   <div className="space-y-4">
                     {mobileVisibleCards.map((card) => (
-                      <SearchResultCard key={card.id} data={card} />
+                      <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
                     ))}
                   </div>
                 )}
@@ -1523,7 +1523,7 @@ export function HappyHoursSearchClient({
           ) : (
             <div className="px-4 pb-8 space-y-4">
               {sortedCards.map((card) => (
-                <SearchResultCard key={card.id} data={card} />
+                <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
               ))}
             </div>
           ))}
