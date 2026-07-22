@@ -8,7 +8,9 @@ import { computeHhStatus, getCurrentDayName } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
+import { MobileMapResultsSheet } from "./MobileMapResultsSheet";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
+import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
 
 // ─── Extended card type ───────────────────────────────────────────────────────
@@ -658,6 +660,31 @@ export function HappyHoursSearchClient({
     setMapBounds(null);
   }
 
+  // Rendered pixel height of the map+sheet wrapper while expanded — read
+  // fresh (rather than derived from the "70dvh" class) so the results sheet
+  // can size its "open" snap point off the real box instead of duplicating
+  // viewport-unit math. Measured ~320ms after expanding, matching the delay
+  // SearchResultsMap's own resize-trigger already uses so it reads the
+  // wrapper's settled post-transition height, and re-measured on resize
+  // (e.g. orientation change) for as long as the map stays expanded.
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
+  const [expandedContainerHeightPx, setExpandedContainerHeightPx] = useState(0);
+
+  useEffect(() => {
+    if (!mapExpanded) return;
+    function measure() {
+      if (mapWrapperRef.current) {
+        setExpandedContainerHeightPx(mapWrapperRef.current.clientHeight);
+      }
+    }
+    const timer = setTimeout(measure, 320);
+    window.addEventListener("resize", measure);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", measure);
+    };
+  }, [mapExpanded]);
+
   // ── dropdown refs for click-outside ──
   // *Ref covers the chip button + desktop popover. *PanelRef additionally covers
   // the mobile inline panel (rendered outside the chip row — see below), so
@@ -928,6 +955,16 @@ export function HappyHoursSearchClient({
         isWithinBounds(c.latitude, c.longitude, mapBounds)
     );
   }, [sortedCards, mapExpanded, mapBounds]);
+
+  // Label shown in the results sheet's peek header — mirrors the venue-count
+  // copy the previous "Showing N venues in this area" paragraph used, now
+  // living in the sheet header instead of a separate line under the map.
+  const sheetHeaderLabel =
+    sortedCards.length === 0
+      ? "No venues found"
+      : mobileVisibleCards.length === 0
+      ? "No venues in this area"
+      : `${mobileVisibleCards.length} venue${mobileVisibleCards.length === 1 ? "" : "s"} in this area`;
 
   // Scroll the matching card into view when a marker is clicked.
   useEffect(() => {
@@ -1234,18 +1271,28 @@ export function HappyHoursSearchClient({
           </div>
         )}
 
-        <div className="relative mx-4 my-4">
+        <div
+          ref={mapWrapperRef}
+          className={[
+            "relative mx-4 my-4 rounded-2xl overflow-hidden transition-[height] duration-300 ease-in-out",
+            mapExpanded ? "h-[70dvh]" : "h-52",
+          ].join(" ")}
+        >
           <SearchResultsMap
             markers={mapMarkers}
             marketCenter={market.mapCenter}
             marketZoom={market.mapZoom}
-            className={[
-              "rounded-2xl overflow-hidden transition-[height] duration-300 ease-in-out",
-              mapExpanded ? "h-[60dvh]" : "h-52",
-            ].join(" ")}
+            className="absolute inset-0"
             gestureHandling={mapExpanded ? "greedy" : "cooperative"}
             onBoundsChanged={mapExpanded ? setMapBounds : undefined}
             resizeSignal={mapExpanded}
+            // The results sheet permanently anchors to the bottom edge once
+            // expanded (even at "peek" height) — Google's default
+            // bottom-right zoom control would sit directly behind it, so
+            // move it to the top-left corner (the one corner the sheet, the
+            // "Done" button, and the InfoWindow layout never occupy).
+            // Collapsed mobile and desktop are unaffected (prop omitted).
+            zoomControlPosition={mapExpanded ? ControlPosition.LEFT_TOP : undefined}
           />
 
           {/* Collapsed: a transparent tap target expands the map in place —
@@ -1264,42 +1311,59 @@ export function HappyHoursSearchClient({
             </button>
           )}
 
-          {/* Expanded: explicit, always-visible way back to the default layout. */}
+          {/* Expanded: the results sheet's drag/tap header now owns
+              revealing the list vs. seeing more map (see
+              MobileMapResultsSheet), but it never fully exits the expanded
+              map — "Done" remains the one explicit, always-reachable way
+              back to the original compact layout. It sits within the sheet's
+              top gap (OPEN_TOP_GAP_PX) at every sheet state, so it's never
+              covered by the sheet itself. */}
           {mapExpanded && (
-            <button
-              type="button"
-              onClick={handleCollapseMap}
-              className="absolute top-3 right-3 z-10 px-3.5 py-1.5 rounded-full bg-gray-900/85 text-white text-xs font-semibold shadow-lg"
-            >
-              Done
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleCollapseMap}
+                className="absolute top-3 right-3 z-30 px-3.5 py-1.5 rounded-full bg-gray-900/85 text-white text-xs font-semibold shadow-lg"
+              >
+                Done
+              </button>
+
+              <MobileMapResultsSheet
+                containerHeightPx={expandedContainerHeightPx}
+                headerLabel={sheetHeaderLabel}
+              >
+                {sortedCards.length === 0 ? (
+                  <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
+                ) : mobileVisibleCards.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">
+                    Pan or zoom out to see venues in this area.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {mobileVisibleCards.map((card) => (
+                      <SearchResultCard key={card.id} data={card} />
+                    ))}
+                  </div>
+                )}
+              </MobileMapResultsSheet>
+            </>
           )}
         </div>
 
-        {mapExpanded && mapBounds && sortedCards.length > 0 && (
-          <p className="px-4 text-xs text-gray-500 mb-2">
-            Showing {mobileVisibleCards.length} venue
-            {mobileVisibleCards.length === 1 ? "" : "s"} in this area
-          </p>
-        )}
-
-        {sortedCards.length === 0 ? (
-          <div className="px-4 pb-8">
-            <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
-          </div>
-        ) : mobileVisibleCards.length === 0 ? (
-          <div className="px-4 pb-8">
-            <p className="text-sm text-gray-400 text-center py-8">
-              Pan or zoom out to see venues in this area.
-            </p>
-          </div>
-        ) : (
-          <div className="px-4 pb-8 space-y-4">
-            {mobileVisibleCards.map((card) => (
-              <SearchResultCard key={card.id} data={card} />
-            ))}
-          </div>
-        )}
+        {/* Default (collapsed) layout — identical to the pre-map-interaction
+            behaviour: the full list in normal document flow, no sheet. */}
+        {!mapExpanded &&
+          (sortedCards.length === 0 ? (
+            <div className="px-4 pb-8">
+              <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
+            </div>
+          ) : (
+            <div className="px-4 pb-8 space-y-4">
+              {sortedCards.map((card) => (
+                <SearchResultCard key={card.id} data={card} />
+              ))}
+            </div>
+          ))}
       </div>
 
       {footerCta}

@@ -8,6 +8,7 @@ import {
   InfoWindow,
   useMap,
   useMapsLibrary,
+  ControlPosition,
 } from "@vis.gl/react-google-maps";
 import type { LatLngBounds } from "@/lib/geo";
 
@@ -360,6 +361,13 @@ type Props = {
    * containers whose size never changes after mount (existing behavior).
    */
   resizeSignal?: unknown;
+  /**
+   * Repositions Google's built-in zoom +/- control (default: bottom-right).
+   * Omit to leave Google's default position untouched (existing behavior
+   * everywhere). Callers that overlay their own bottom-anchored UI on top of
+   * the map (e.g. the mobile results sheet) can move it out of the way.
+   */
+  zoomControlPosition?: ControlPosition;
 };
 
 export function SearchResultsMap({
@@ -372,6 +380,7 @@ export function SearchResultsMap({
   gestureHandling = "cooperative",
   onBoundsChanged,
   resizeSignal,
+  zoomControlPosition,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -397,6 +406,15 @@ export function SearchResultsMap({
           fullscreenControl={false}
           cameraControl={false}
           zoomControl={true}
+          zoomControlOptions={
+            zoomControlPosition
+              ? // vis.gl's ControlPosition is a runtime-safe duplicate of
+                // google.maps.ControlPosition (see its own doc comment: "has
+                // to be duplicated ... since we can't wait for the maps API
+                // to load") — same numeric values, distinct nominal type.
+                { position: zoomControlPosition as unknown as google.maps.ControlPosition }
+              : undefined
+          }
           style={{ width: "100%", height: "100%" }}
           onClick={() => handleSelectId(null)}
           onIdle={(e) => {
