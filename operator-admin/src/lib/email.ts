@@ -87,6 +87,7 @@ export async function sendTransactionalEmail({
   html,
   text,
   criticality,
+  replyTo,
 }: {
   type: string;
   to: string;
@@ -94,10 +95,12 @@ export async function sendTransactionalEmail({
   html: string;
   text: string;
   criticality: EmailCriticality;
+  /** Optional Reply-To override. Defaults to Resend's normal behavior (replies go to DEFAULT_FROM). */
+  replyTo?: string;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const resend = getResend();
-    const { data, error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, html, text });
+    const { data, error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, html, text, replyTo });
 
     if (error) {
       console.error(`[EMAIL] FAILED type=${type} to=${to} error=${error.message}`);
@@ -918,6 +921,7 @@ Happy Hour Compass`;
     html,
     text,
     criticality: "important",
+    replyTo:     email,
   });
 
   await sendSlackAcquisitionNotification({
