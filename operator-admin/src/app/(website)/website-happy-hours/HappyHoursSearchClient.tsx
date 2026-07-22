@@ -12,6 +12,14 @@ import { MobileMapResultsSheet } from "./MobileMapResultsSheet";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
+import {
+  TIME_OPTIONS,
+  TO_TIME_OPTIONS,
+  MIDNIGHT_VALUE,
+  DAY_FILTER_OPTIONS,
+  resolveDayName,
+  type DayFilterValue,
+} from "./searchFilters";
 
 // ─── Extended card type ───────────────────────────────────────────────────────
 
@@ -110,7 +118,7 @@ function hasHappyHourOverlap(
   );
 }
 
-/** True when `value` is a non-empty "HH:MM" string that parses to a finite number of minutes. Used only by hasHappyHourToday's slot-validity check below — "close" is deliberately NOT accepted here, since it's only ever a valid *end* value. */
+/** True when `value` is a non-empty "HH:MM" string that parses to a finite number of minutes. Used only by hasValidHappyHourOnDay's slot-validity check below — "close" is deliberately NOT accepted here, since it's only ever a valid *end* value. */
 function isFiniteHhTime(value: string): boolean {
   return (
     typeof value === "string" &&
@@ -121,29 +129,24 @@ function isFiniteHhTime(value: string): boolean {
 
 /**
  * Returns true if the venue has at least one non-malformed Happy Hour slot
- * on `todayName` — regardless of whether it's active right now, already
- * ended, or hasn't started yet. Independent of any selected Time range (see
- * the On Today + Time-range interaction in filteredCards below).
+ * on `dayName` — regardless of whether it's active right now, already ended,
+ * or hasn't started yet. This is the Day filter's own check, independent of
+ * any selected Time range — see the Day + Time interaction in filteredCards
+ * below, where a complete From/To range further narrows this same day's
+ * slots by overlap.
  *
  * A slot counts only when both start and end are valid: start must parse to
  * a finite time (never "close" — that's only ever an end value); end must
  * either parse to a finite time or be the literal "close".
  */
-function hasHappyHourToday(
+function hasValidHappyHourOnDay(
   weekly: Record<string, Array<{ start: string; end: string }>>,
-  todayName: string
+  dayName: string
 ): boolean {
-  const todaySlots = weekly[todayName] ?? [];
-  return todaySlots.some(
+  const daySlots = weekly[dayName] ?? [];
+  return daySlots.some(
     (slot) => isFiniteHhTime(slot.start) && (slot.end === "close" || isFiniteHhTime(slot.end))
   );
-}
-
-function formatTimeDisplay(hhMm: string): string {
-  const [h, m] = hhMm.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const dh = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${dh}:${String(m).padStart(2, "0")} ${period}`;
 }
 
 /** Compact range label, e.g. "3–6 PM" (same period), "11 AM–2 PM" (crosses noon), or "10 PM–Midnight". */
@@ -165,50 +168,6 @@ function formatTimeRangeDisplay(fromHhMm: string, toHhMm: string): string {
   return `${fShort} ${fPeriod}–${tShort} ${tPeriod}`;
 }
 
-function minutesToTimeString(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-// Real Happy Hour schedule data (venues.beta.csv / venues.working.csv) shows
-// slot starts from 2:00 PM–10:00 PM and non-"close" ends up to 6:00 PM, plus
-// many "close" (midnight) ends. 11:00 AM–11:30 PM comfortably covers that
-// with margin for earlier lunch-style specials, without an unusably long
-// list. The overlap check compares against raw minutes, so "close" (1440)
-// schedules are still matched correctly even against the plain 11:30 PM
-// bound — Midnight (below) exists so users can also select it explicitly.
-const TIME_OPTIONS_START_MIN = 11 * 60; // 11:00 AM
-const TIME_OPTIONS_END_MIN = 23 * 60 + 30; // 11:30 PM
-const TIME_OPTIONS_STEP_MIN = 30;
-
-const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
-  const opts: Array<{ value: string; label: string }> = [];
-  for (
-    let min = TIME_OPTIONS_START_MIN;
-    min <= TIME_OPTIONS_END_MIN;
-    min += TIME_OPTIONS_STEP_MIN
-  ) {
-    const value = minutesToTimeString(min);
-    opts.push({ value, label: formatTimeDisplay(value) });
-  }
-  return opts;
-})();
-
-// End-of-day sentinel for the To selector only. "24:00" (not "00:00") so
-// timeStringToMinutes() parses it as 1440 — end of the current day, matching
-// how "close" is normalized in hasHappyHourOverlap — rather than midnight at
-// the *start* of the day, which would silently break the overlap math and
-// reopen the overnight-range case this filter intentionally doesn't support.
-// String-sorts after every TIME_OPTIONS value ("24:00" > "23:30"), so it's
-// always valid as a To choice regardless of the selected From.
-const MIDNIGHT_VALUE = "24:00";
-const MIDNIGHT_OPTION = { value: MIDNIGHT_VALUE, label: "Midnight" };
-const TO_TIME_OPTIONS: Array<{ value: string; label: string }> = [
-  ...TIME_OPTIONS,
-  MIDNIGHT_OPTION,
-];
-
 // ─── Sort options ─────────────────────────────────────────────────────────────
 
 /** "collection" is only offered when `collectionOrder` is passed — it preserves input order. */
@@ -223,6 +182,7 @@ function ChipButton({
   hasArrow = false,
   ariaExpanded,
   ariaPressed,
+  disabled = false,
 }: {
   label: string;
   active: boolean;
@@ -232,11 +192,14 @@ function ChipButton({
   ariaExpanded?: boolean;
   /** When provided, exposes aria-pressed for a plain on/off toggle chip (no popover). */
   ariaPressed?: boolean;
+  /** Native disabled semantics (not just visual styling) — removes the chip from the tab order and blocks clicks. */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-expanded={ariaExpanded}
       aria-haspopup={ariaExpanded !== undefined ? "true" : undefined}
       aria-pressed={ariaPressed}
@@ -245,6 +208,7 @@ function ChipButton({
         "border rounded-full text-sm font-medium whitespace-nowrap",
         "transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400",
+        "disabled:opacity-50 disabled:pointer-events-none",
         active
           ? "bg-gray-900 border-gray-900 text-white"
           : "bg-white border-gray-200 text-gray-800 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-gray-300 hover:bg-gray-50",
@@ -356,7 +320,7 @@ function TimeFilterFields({
         </div>
       </div>
       <p className="mt-2 text-xs text-gray-400 leading-tight">
-        Shows venues with happy hour overlapping this range on any day
+        Shows venues with happy hour overlapping this range on the selected day
       </p>
       {(filterTimeFrom || filterTimeTo) && (
         <button
@@ -401,6 +365,31 @@ function TypeFilterOptions({
           }`}
         >
           {type}
+        </button>
+      ))}
+    </>
+  );
+}
+
+function DayFilterOptions({
+  selectedDay,
+  onSelect,
+}: {
+  selectedDay: DayFilterValue;
+  onSelect: (day: DayFilterValue) => void;
+}) {
+  return (
+    <>
+      {DAY_FILTER_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onSelect(opt.value)}
+          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+            selectedDay === opt.value ? "font-semibold text-gray-900" : "text-gray-700"
+          }`}
+        >
+          {opt.label}
         </button>
       ))}
     </>
@@ -594,6 +583,13 @@ type Props = {
   enableSearch?: boolean;
   /** Initial search value, read server-side from ?q=. Only meaningful when enableSearch is true. */
   initialQuery?: string;
+  /** Initial Day filter value, read server-side from ?day= (pre-normalized against ?now= — see resolveInitialDayFilter). Only meaningful when enableSearch is true. */
+  initialDay?: DayFilterValue;
+  /** Initial On Now state, read server-side from ?now=. Only meaningful when enableSearch is true. */
+  initialOnNow?: boolean;
+  /** Initial Time range, read server-side from ?from=/?to= (pre-validated — see resolveInitialTimeRange). Only meaningful when enableSearch is true. */
+  initialTimeFrom?: string;
+  initialTimeTo?: string;
 };
 
 export function HappyHoursSearchClient({
@@ -604,50 +600,75 @@ export function HappyHoursSearchClient({
   footerCta,
   enableSearch = false,
   initialQuery = "",
+  initialDay = "today",
+  initialOnNow = false,
+  initialTimeFrom = "",
+  initialTimeTo = "",
 }: Props) {
   const pathname = usePathname();
 
   // ── search state ──
   const [searchQuery, setSearchQuery] = useState(enableSearch ? initialQuery : "");
 
-  // Debounced ?q= URL sync — filtering itself is instant/client-side (no
-  // network round trip), so only the URL write is debounced, matching the
-  // homepage autocomplete's existing debounce value.
-  //
-  // Uses history.replaceState() rather than next/navigation's router.replace().
-  // This page is `force-dynamic` and reads `searchParams` to compute
-  // initialQuery — router.replace() would re-render the server component on
-  // every debounce tick, re-running getPublishedVenuesForConsumer() as the
-  // user types, which is both an unnecessary DB round trip and the source of
-  // update latency/raciness. history.replaceState() updates the address bar
-  // and history entry directly, with no server involvement — filtering
-  // already happens entirely client-side, so nothing server-rendered
-  // actually depends on this URL update except a future hard reload/deep
-  // link, which reads it correctly regardless of how it got there.
-  useEffect(() => {
-    if (!enableSearch) return;
-    const trimmed = searchQuery.trim();
-    const timer = setTimeout(() => {
-      const url = trimmed ? `${pathname}?q=${encodeURIComponent(trimmed)}` : pathname;
-      window.history.replaceState(null, "", url);
-    }, SEARCH_URL_SYNC_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchQuery, enableSearch, pathname]);
-
   // ── filter state ──
   const [nearMeActive, setNearMeActive] = useState(false);
-  const [onNowActive, setOnNowActive] = useState(false);
-  const [onTodayActive, setOnTodayActive] = useState(false);
+  const [onNowActive, setOnNowActive] = useState(enableSearch ? initialOnNow : false);
   const [topRatedActive, setTopRatedActive] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [filterTimeFrom, setFilterTimeFrom] = useState("");
-  const [filterTimeTo, setFilterTimeTo] = useState("");
+  const [selectedDay, setSelectedDay] = useState<DayFilterValue>(
+    enableSearch ? initialDay : "today"
+  );
+  const [filterTimeFrom, setFilterTimeFrom] = useState(enableSearch ? initialTimeFrom : "");
+  const [filterTimeTo, setFilterTimeTo] = useState(enableSearch ? initialTimeTo : "");
   const [sortBy, setSortBy] = useState<SortOption>(collectionOrder ? "collection" : "distance");
 
   // ── dropdown open state ──
   const [typeOpen, setTypeOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
+  const [dayOpen, setDayOpen] = useState(false);
+
+  // Debounced URL sync for search + Day + On Now + Time range — filtering
+  // itself is instant/client-side (no network round trip), so only the URL
+  // write is debounced, matching the homepage autocomplete's existing
+  // debounce value.
+  //
+  // Uses history.replaceState() rather than next/navigation's router.replace().
+  // This page is `force-dynamic` and reads `searchParams` to compute initial
+  // filter state — router.replace() would re-render the server component on
+  // every debounce tick, re-running getPublishedVenuesForConsumer() as the
+  // user changes a filter, which is both an unnecessary DB round trip and
+  // the source of update latency/raciness. history.replaceState() updates
+  // the address bar and history entry directly, with no server involvement —
+  // filtering already happens entirely client-side, so nothing
+  // server-rendered actually depends on this URL update except a future hard
+  // reload/deep link, which reads it correctly regardless of how it got
+  // there. "today" (the Day default) and an inactive On Now are omitted
+  // entirely, matching this page's existing URL-cleanliness convention for
+  // `q`.
+  useEffect(() => {
+    if (!enableSearch) return;
+    const trimmedQuery = searchQuery.trim();
+    const timer = setTimeout(() => {
+      const parts: string[] = [];
+      if (trimmedQuery) parts.push(`q=${encodeURIComponent(trimmedQuery)}`);
+      if (selectedDay !== "today") parts.push(`day=${selectedDay}`);
+      if (onNowActive) parts.push("now=1");
+      if (filterTimeFrom) parts.push(`from=${filterTimeFrom}`);
+      if (filterTimeTo) parts.push(`to=${filterTimeTo}`);
+      const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
+      window.history.replaceState(null, "", url);
+    }, SEARCH_URL_SYNC_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [
+    searchQuery,
+    selectedDay,
+    onNowActive,
+    filterTimeFrom,
+    filterTimeTo,
+    enableSearch,
+    pathname,
+  ]);
 
   // ── geo state ──
   const [userLocation, setUserLocation] = useState<{
@@ -730,9 +751,11 @@ export function HappyHoursSearchClient({
   const typeRef = useRef<HTMLDivElement>(null);
   const sortRef = useRef<HTMLDivElement>(null);
   const timeRef = useRef<HTMLDivElement>(null);
+  const dayRef = useRef<HTMLDivElement>(null);
   const typePanelRef = useRef<HTMLDivElement>(null);
   const sortPanelRef = useRef<HTMLDivElement>(null);
   const timePanelRef = useRef<HTMLDivElement>(null);
+  const dayPanelRef = useRef<HTMLDivElement>(null);
 
   // Request geolocation on mount — same auto-request pattern as VenueList.tsx.
   // When granted, the default "distance" sort activates and cards are sorted nearest-first.
@@ -774,10 +797,16 @@ export function HappyHoursSearchClient({
         (!timePanelRef.current || !timePanelRef.current.contains(t))
       )
         setTimeOpen(false);
+      if (
+        dayOpen &&
+        dayRef.current && !dayRef.current.contains(t) &&
+        (!dayPanelRef.current || !dayPanelRef.current.contains(t))
+      )
+        setDayOpen(false);
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [typeOpen, sortOpen, timeOpen]);
+  }, [typeOpen, sortOpen, timeOpen, dayOpen]);
 
   // ── derived data ──
 
@@ -794,16 +823,22 @@ export function HappyHoursSearchClient({
   // live-ticking, matching how On Now's clock already behaves on this page.
   const todayName = getCurrentDayName();
 
+  // On Now forces Day to Today (Option A — see handleToggleOnNow), but this
+  // is computed defensively here too rather than trusting that invariant
+  // alone, since it's what the Time-range overlap check below evaluates
+  // against.
+  const effectiveDayName = resolveDayName(onNowActive ? "today" : selectedDay, todayName);
+
   // ── filter (live: On Now uses computeHhStatus so it reflects actual wall-clock time) ──
+  // Ordered to mirror the product's Near Me → On Now → Day → Time → Type
+  // filter sequence (Sort is a separate, later stage — see sortedCards
+  // below). AND-combined checks are order-independent for correctness; this
+  // ordering is purely for readability/maintainability.
   const filteredCards = useMemo(() => {
     const hasLoc = userLocation !== null;
     const trimmedQuery = searchQuery.trim();
     return cards.filter((card) => {
       if (trimmedQuery && !matchesSearchQuery(card, trimmedQuery)) return false;
-      if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
-        return false;
-      if (onTodayActive && !hasHappyHourToday(card.happyHourWeekly, todayName))
-        return false;
       if (
         nearMeActive &&
         hasLoc &&
@@ -825,33 +860,35 @@ export function HappyHoursSearchClient({
         (card.googleRating === null || card.googleRating < TOP_RATED_MIN)
       )
         return false;
-      if (selectedType && card.establishmentType !== selectedType) return false;
-      // Range is active only once both bounds are chosen — a single bound
-      // never filters (see requirement: "only one selected → do not filter yet").
-      // When On Today is also active, restrict the overlap check to today's
-      // slots only (not every weekday) — a separate day's overlap shouldn't
-      // count once the result set has already been narrowed to today.
+      if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
+        return false;
+      // Day is an independent filter (Today by default): a venue must have
+      // at least one valid Happy Hour slot on the effective day, regardless
+      // of whether a Time range is set.
+      if (!hasValidHappyHourOnDay(card.happyHourWeekly, effectiveDayName)) return false;
+      // Time range is active only once both bounds are chosen — a single
+      // bound never filters (see requirement: "only one selected → do not
+      // filter yet"). Once active, it further narrows the already
+      // Day-filtered result to slots on that same day overlapping the range.
       if (filterTimeFrom && filterTimeTo) {
-        const weeklyForOverlap = onTodayActive
-          ? { [todayName]: card.happyHourWeekly[todayName] ?? [] }
-          : card.happyHourWeekly;
+        const weeklyForOverlap = { [effectiveDayName]: card.happyHourWeekly[effectiveDayName] ?? [] };
         if (!hasHappyHourOverlap(weeklyForOverlap, filterTimeFrom, filterTimeTo))
           return false;
       }
+      if (selectedType && card.establishmentType !== selectedType) return false;
       return true;
     });
   }, [
     cards,
     searchQuery,
-    onNowActive,
-    onTodayActive,
-    todayName,
     nearMeActive,
     userLocation,
     topRatedActive,
-    selectedType,
+    onNowActive,
+    effectiveDayName,
     filterTimeFrom,
     filterTimeTo,
+    selectedType,
   ]);
 
   // ── sort + enrich with real distances ──
@@ -910,11 +947,27 @@ export function HappyHoursSearchClient({
     setSearchQuery("");
     setNearMeActive(false);
     setOnNowActive(false);
-    setOnTodayActive(false);
     setTopRatedActive(false);
     setSelectedType(null);
     setFilterTimeFrom("");
     setFilterTimeTo("");
+    setSelectedDay("today");
+  }
+
+  // Option A: turning On Now on forces Day back to Today and disables the
+  // control (closing its dropdown if it happened to be open); turning On Now
+  // off simply re-enables Day, which is already Today — no prior weekday is
+  // restored (see requirements: "Do not restore a previously selected
+  // weekday or add extra state for that purpose").
+  function handleToggleOnNow() {
+    setOnNowActive((prev) => {
+      const next = !prev;
+      if (next) {
+        setSelectedDay("today");
+        setDayOpen(false);
+      }
+      return next;
+    });
   }
 
   // Changing From can strand an already-picked To that's no longer later than
@@ -1036,16 +1089,17 @@ export function HappyHoursSearchClient({
     filterTimeFrom && filterTimeTo
       ? `Time: ${formatTimeRangeDisplay(filterTimeFrom, filterTimeTo)}`
       : "Time";
+  const dayLabel = `Day: ${DAY_FILTER_OPTIONS.find((o) => o.value === selectedDay)?.label ?? "Today"}`;
 
   const anyFilter =
     !!searchQuery.trim() ||
     nearMeActive ||
     onNowActive ||
-    onTodayActive ||
     topRatedActive ||
     !!selectedType ||
     !!filterTimeFrom ||
-    !!filterTimeTo;
+    !!filterTimeTo ||
+    selectedDay !== "today";
 
   // ─── render ──────────────────────────────────────────────────────────────
 
@@ -1069,27 +1123,46 @@ export function HappyHoursSearchClient({
         )}
         <div className="flex items-center gap-2 px-4 md:px-6 py-3 overflow-x-auto md:overflow-visible [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
 
-          {/* Near Me */}
+          {/* Near Me — quick "right now" shortcut (see On Now below). */}
           <ChipButton
             label="Near Me"
             active={nearMeActive}
             onClick={handleNearMe}
           />
 
-          {/* On Today */}
-          <ChipButton
-            label="On Today"
-            active={onTodayActive}
-            onClick={() => setOnTodayActive((v) => !v)}
-            ariaPressed={onTodayActive}
-          />
-
-          {/* On Now */}
+          {/* On Now — quick "right now" shortcut, placed with Near Me ahead
+              of the planning-ahead controls (Day, Time). */}
           <ChipButton
             label="On Now"
             active={onNowActive}
-            onClick={() => setOnNowActive((v) => !v)}
+            onClick={handleToggleOnNow}
           />
+
+          {/* Day — planning-ahead control, placed immediately after On Now
+              (Option A: On Now forces Today and disables this control; see
+              handleToggleOnNow). */}
+          <div ref={dayRef} className="relative flex-shrink-0">
+            <ChipButton
+              label={dayLabel}
+              active={selectedDay !== "today" || dayOpen}
+              onClick={() => setDayOpen((v) => !v)}
+              hasArrow
+              ariaExpanded={dayOpen}
+              disabled={onNowActive}
+            />
+            {/* Desktop: absolute popover anchored below the chip */}
+            {dayOpen && (
+              <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl py-2 min-w-[180px]">
+                <DayFilterOptions
+                  selectedDay={selectedDay}
+                  onSelect={(day) => {
+                    setSelectedDay(day);
+                    setDayOpen(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Time */}
           <div ref={timeRef} className="relative flex-shrink-0">
@@ -1201,6 +1274,17 @@ export function HappyHoursSearchClient({
             an absolute popover, because the chip row scrolls horizontally on mobile
             (overflow-x-auto) which clips/traps an absolutely-positioned child — the
             same pattern EventSearchResults.tsx uses for its mobile calendar panel. */}
+        {dayOpen && (
+          <div ref={dayPanelRef} className="md:hidden border-t border-gray-100 bg-white px-2 py-2">
+            <DayFilterOptions
+              selectedDay={selectedDay}
+              onSelect={(day) => {
+                setSelectedDay(day);
+                setDayOpen(false);
+              }}
+            />
+          </div>
+        )}
         {timeOpen && (
           <div ref={timePanelRef} className="md:hidden border-t border-gray-100 bg-white px-4 py-4">
             <TimeFilterFields

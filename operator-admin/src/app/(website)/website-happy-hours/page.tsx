@@ -8,6 +8,7 @@ import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
 } from "./HappyHoursSearchClient";
+import { resolveInitialDayFilter, resolveInitialTimeRange } from "./searchFilters";
 
 export const metadata: Metadata = {
   title: "Happy Hours",
@@ -34,12 +35,25 @@ function fallbackImage(establishmentType: string): string {
 export default async function HappyHoursSearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    day?: string | string[];
+    now?: string | string[];
+    from?: string | string[];
+    to?: string | string[];
+  }>;
 }) {
   const { market } = await getActiveMarket();
   const marketConfig = toMarketConfig(market);
-  const { q } = await searchParams;
+  const { q, day, now, from, to } = await searchParams;
   const initialQuery = typeof q === "string" ? q : "";
+  // On Now takes precedence over a conflicting ?day= — see resolveInitialDayFilter.
+  const initialOnNow = now === "1";
+  const initialDay = resolveInitialDayFilter(typeof day === "string" ? day : undefined, initialOnNow);
+  const { from: initialTimeFrom, to: initialTimeTo } = resolveInitialTimeRange(
+    typeof from === "string" ? from : undefined,
+    typeof to === "string" ? to : undefined
+  );
 
   // Fetch all published venues then gate to the active market.
   // isNearMarket() is the canonical geo filter used by the Discover Engine;
@@ -96,6 +110,10 @@ export default async function HappyHoursSearchPage({
       market={market}
       enableSearch
       initialQuery={initialQuery}
+      initialDay={initialDay}
+      initialOnNow={initialOnNow}
+      initialTimeFrom={initialTimeFrom}
+      initialTimeTo={initialTimeTo}
     />
   );
 }
