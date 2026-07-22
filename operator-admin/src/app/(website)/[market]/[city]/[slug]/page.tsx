@@ -309,8 +309,9 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // in this app (confirmed against the route tree: only
   // [market]/[city]/[slug], [market]/guides, and [market]/collections
   // exist under [market]/). The venue page's own visible breadcrumb
-  // already reflects this — Market/City render as plain, non-linked text
-  // there for the same reason (see this page's breadcrumb <nav> below).
+  // (below) matches this for the same reason — see the TODO there for the
+  // product rationale and the future multi-city trigger to restore these
+  // levels.
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath,
     items: [
@@ -411,24 +412,21 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
       {/* ── Page content ─────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
 
-        {/* Breadcrumb: Home → Market → City → Venue. Market and City are
-            plain, non-linked labels — there are no Market/City landing pages
-            to link to yet (matches the established pattern already used by
-            (website)/collections/CollectionBreadcrumb.tsx for its own
-            not-yet-built "Collections" index level). Update these to real
-            Links once Market/City landing pages exist. */}
+        {/* Breadcrumb: Home → Venue. Central Okanagan/Kelowna launch
+            intentionally uses this simplified two-level breadcrumb — Home
+            and Kelowna currently resolve to the same consumer destination,
+            and no distinct public Market/City landing page exists to link
+            to (same rationale (website)/collections/CollectionBreadcrumb.tsx
+            applies to its own "Collections" level).
+            TODO(multi-city breadcrumbs): Reintroduce Market → City levels
+            here once HHC launches a true multi-city market (e.g. Greater
+            Vancouver) with real, distinct public Market and City landing
+            destinations — restore them only when those destinations exist,
+            not preemptively. */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
           <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
           </Link>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-          <span className="shrink-0">{marketConfig.name}</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-          <span className="shrink-0">{venue.city}</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">
             <path d="m9 18 6-6-6-6" />
           </svg>

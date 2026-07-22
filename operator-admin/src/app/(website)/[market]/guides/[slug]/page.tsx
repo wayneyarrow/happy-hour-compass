@@ -186,19 +186,17 @@ export default async function GuideDetailPage({ params }: PageProps) {
     updatedAt: guide.updated_at,
   });
 
-  // Home → Guides → Guide Title. "Guides" links to the market-specific
-  // guide-library index (/{market}/guides) — a real, canonical, sitemap-
-  // included public page (see (website)/[market]/guides/page.tsx), unlike
-  // Market/City for venues, which have no such landing page. The guide's
-  // own visible breadcrumb (below) only shows Home → Title — this JSON-LD
-  // is intentionally more complete than that shorter visual breadcrumb,
-  // since the intermediate route genuinely exists and is accurate to
-  // include, not merely mirroring what's rendered on-page.
+  // Home → Guide Title only, matching the guide's own visible breadcrumb
+  // (below). "Guides" (/{market}/guides) is a real, canonical, sitemap-
+  // included route, but for the current Central Okanagan/Kelowna launch it
+  // has no active guides_library-channel merchandising (see Beta Feedback
+  // Roadmap item #4 — the "Explore all Guides" CTA removal), so it isn't a
+  // distinct, useful public destination right now. Revisit once that
+  // channel is actively merchandised for a market.
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath,
     items: [
       { name: "Home", path: "/" },
-      { name: "Guides", path: `/${guide.marketSlug}/guides` },
       { name: guide.title, path: canonicalPath },
     ],
   });

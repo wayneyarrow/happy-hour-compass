@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 /**
- * Collection Landing Page breadcrumb: Home > Collections > {Collection Name}.
- * Ports the exact inline breadcrumb markup already used by the venue detail
- * page ((website)/[market]/[city]/[slug]/page.tsx) and the Guide detail view
+ * Collection Landing Page breadcrumb: Home > {Collection Name}. Ports the
+ * exact inline breadcrumb markup already used by the venue detail page
+ * ((website)/[market]/[city]/[slug]/page.tsx) and the Guide detail view
  * (GuideDetailView.tsx) rather than inventing new styling — same wrapper
  * classes, same hand-drawn chevron SVG, same truncation on the final
  * (current-page) segment so long Collection names don't wrap on narrow
@@ -13,8 +13,10 @@ import Link from "next/link";
  * "Home" always links to `/` — exactly what the venue page's breadcrumb
  * does today, since the public site's `/` already resolves to "the
  * applicable Market homepage" for the current session (see the Homepage
- * Public Integration task). "Collections" stays a plain, non-linked label
- * until a general Collections index page exists, per product spec.
+ * Public Integration task). No "Collections" level: there is no general
+ * Collections index page to link to, and a plain-text, non-clickable
+ * "Collections" label reads as a broken link — see Beta Feedback Roadmap
+ * item #5. Revisit only if a real Collections index page is built.
  */
 
 function BreadcrumbChevron() {
@@ -59,8 +61,6 @@ export function CollectionBreadcrumb({ collectionName, compact = false }: Props)
       >
         Home
       </Link>
-      <BreadcrumbChevron />
-      <span className="shrink-0">Collections</span>
       <BreadcrumbChevron />
       <span className="text-gray-900 font-medium truncate min-w-0">{collectionName}</span>
     </nav>

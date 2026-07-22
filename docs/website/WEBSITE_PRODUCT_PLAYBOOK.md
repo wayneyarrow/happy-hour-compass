@@ -410,6 +410,18 @@ Search results may still include venues outside the user's current city when the
 
 ---
 
+### Breadcrumbs (Current Launch)
+
+The Central Okanagan / Kelowna launch uses simplified, two-level public breadcrumbs (Home → current page) rather than the full Market → City hierarchy this document otherwise describes. This is intentional, not an oversight (Beta Feedback Roadmap item #5):
+
+- Home and Kelowna are not both shown, because they currently resolve to the same consumer destination — there is no distinct public Kelowna landing page separate from Home.
+- Central Okanagan and Collections are not shown, because no useful public Market landing page or Collections index page exists yet.
+- Do not create placeholder pages solely to satisfy breadcrumb hierarchy — every breadcrumb level must be a real, useful, distinct public destination.
+
+Revisit and restore meaningful Market/City breadcrumb levels once Greater Vancouver or another true multi-city market goes active and has real, distinct Market and City landing destinations to link to.
+
+---
+
 ### Canonical URL Structure
 
 Canonical URLs include both market and city to prevent naming conflicts and to support long-term geographic expansion.

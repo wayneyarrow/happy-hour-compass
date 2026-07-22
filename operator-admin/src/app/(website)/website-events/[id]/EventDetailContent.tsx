@@ -44,14 +44,14 @@ export function EventDetailContent({
   eventCanonicalPath: string;
   isPreviewAuthorized: boolean;
 }) {
-  // Home → Event Title only — deliberately not Home → Events → Title. The
-  // visible page breadcrumb (below) does link "Events" to /website-events,
-  // but that route is explicitly robots: { index: false } (see
+  // Home → Event Title only — deliberately not Home → Events → Title.
+  // /website-events is explicitly robots: { index: false } (see
   // (website)/website-events/page.tsx) and excluded from the sitemap — it
   // fails "appropriate for indexing" / "stable, crawlable, canonical
-  // public page," so it cannot be a valid intermediate breadcrumb level
-  // here even though it's a real, linkable route. Same canonical path the
-  // caller already resolved for buildEventMetadata()'s <link rel="canonical">
+  // public page," so it isn't a valid intermediate breadcrumb level even
+  // though it's a real, working route. The visible page breadcrumb (below)
+  // matches this for the same reason. Same canonical path the caller
+  // already resolved for buildEventMetadata()'s <link rel="canonical">
   // tag. Event structured data itself remains deferred and is not
   // reintroduced by this breadcrumb.
   const breadcrumbNode = buildBreadcrumbListNode({
@@ -159,7 +159,9 @@ export function EventDetailContent({
       <div className="border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
 
-          {/* Breadcrumb */}
+          {/* Breadcrumb: Home → Event. No "Events" level — /website-events
+              is noindex/sitemap-excluded (see the breadcrumbNode comment
+              above), so it isn't a valid intermediate destination. */}
           <nav
             aria-label="Breadcrumb"
             className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0"
@@ -169,13 +171,6 @@ export function EventDetailContent({
               className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
             >
               Home
-            </Link>
-            <ChevronIcon />
-            <Link
-              href="/website-events"
-              className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-            >
-              Events
             </Link>
             <ChevronIcon />
             <span className="text-gray-900 font-medium truncate min-w-0">
