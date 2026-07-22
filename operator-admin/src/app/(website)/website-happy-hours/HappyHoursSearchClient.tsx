@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { haversineKm } from "@/lib/geo";
+import { haversineKm, isWithinBounds, type LatLngBounds } from "@/lib/geo";
 import { computeHhStatus, getCurrentDayName } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
@@ -642,6 +642,22 @@ export function HappyHoursSearchClient({
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
+  // ── mobile map interaction state ──
+  // mapExpanded: true while the mobile map is in its enlarged "interaction
+  // mode" (entered by tapping the map). mapBounds: the map's current viewport
+  // while expanded, used to narrow the mobile venue list to what's visible —
+  // same bounding-box technique the consumer app's map view already uses
+  // (VenueDiscovery.tsx / VenueMapView.tsx), via the shared isWithinBounds()
+  // helper (src/lib/geo.ts). Desktop's split layout is unaffected: its map
+  // and card grid never read this state.
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [mapBounds, setMapBounds] = useState<LatLngBounds | null>(null);
+
+  function handleCollapseMap() {
+    setMapExpanded(false);
+    setMapBounds(null);
+  }
+
   // ── dropdown refs for click-outside ──
   // *Ref covers the chip button + desktop popover. *PanelRef additionally covers
   // the mobile inline panel (rendered outside the chip row — see below), so
@@ -897,6 +913,21 @@ export function HappyHoursSearchClient({
         }),
     [sortedCards]
   );
+
+  // Mobile-only: while the map is expanded and has reported a viewport, narrow
+  // the venue list below it to only cards visible on screen. Collapsed
+  // (default) mobile rendering and all of desktop use sortedCards directly and
+  // never compute or read this — filters/sort/search above are unaffected,
+  // this only ever narrows their already-produced result set.
+  const mobileVisibleCards = useMemo(() => {
+    if (!mapExpanded || !mapBounds) return sortedCards;
+    return sortedCards.filter(
+      (c) =>
+        c.latitude !== null &&
+        c.longitude !== null &&
+        isWithinBounds(c.latitude, c.longitude, mapBounds)
+    );
+  }, [sortedCards, mapExpanded, mapBounds]);
 
   // Scroll the matching card into view when a marker is clicked.
   useEffect(() => {
@@ -1203,20 +1234,68 @@ export function HappyHoursSearchClient({
           </div>
         )}
 
-        <SearchResultsMap
-          markers={mapMarkers}
-          marketCenter={market.mapCenter}
-          marketZoom={market.mapZoom}
-          className="mx-4 my-4 h-52 rounded-2xl overflow-hidden"
-        />
+        <div className="relative mx-4 my-4">
+          <SearchResultsMap
+            markers={mapMarkers}
+            marketCenter={market.mapCenter}
+            marketZoom={market.mapZoom}
+            className={[
+              "rounded-2xl overflow-hidden transition-[height] duration-300 ease-in-out",
+              mapExpanded ? "h-[60dvh]" : "h-52",
+            ].join(" ")}
+            gestureHandling={mapExpanded ? "greedy" : "cooperative"}
+            onBoundsChanged={mapExpanded ? setMapBounds : undefined}
+            resizeSignal={mapExpanded}
+          />
+
+          {/* Collapsed: a transparent tap target expands the map in place —
+              swallows the tap (so it doesn't fall through to a marker) while
+              leaving vertical swipes free to scroll the page normally. */}
+          {!mapExpanded && (
+            <button
+              type="button"
+              onClick={() => setMapExpanded(true)}
+              aria-label="Expand map"
+              className="absolute inset-0 z-10 flex items-end justify-center pb-3"
+            >
+              <span className="px-3 py-1.5 rounded-full bg-gray-900/80 text-white text-xs font-medium shadow-lg">
+                Tap to explore map
+              </span>
+            </button>
+          )}
+
+          {/* Expanded: explicit, always-visible way back to the default layout. */}
+          {mapExpanded && (
+            <button
+              type="button"
+              onClick={handleCollapseMap}
+              className="absolute top-3 right-3 z-10 px-3.5 py-1.5 rounded-full bg-gray-900/85 text-white text-xs font-semibold shadow-lg"
+            >
+              Done
+            </button>
+          )}
+        </div>
+
+        {mapExpanded && mapBounds && sortedCards.length > 0 && (
+          <p className="px-4 text-xs text-gray-500 mb-2">
+            Showing {mobileVisibleCards.length} venue
+            {mobileVisibleCards.length === 1 ? "" : "s"} in this area
+          </p>
+        )}
 
         {sortedCards.length === 0 ? (
           <div className="px-4 pb-8">
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
           </div>
+        ) : mobileVisibleCards.length === 0 ? (
+          <div className="px-4 pb-8">
+            <p className="text-sm text-gray-400 text-center py-8">
+              Pan or zoom out to see venues in this area.
+            </p>
+          </div>
         ) : (
           <div className="px-4 pb-8 space-y-4">
-            {sortedCards.map((card) => (
+            {mobileVisibleCards.map((card) => (
               <SearchResultCard key={card.id} data={card} />
             ))}
           </div>

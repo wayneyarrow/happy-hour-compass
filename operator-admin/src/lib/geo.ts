@@ -16,3 +16,21 @@ export function haversineKm(
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+export type LatLngBounds = { north: number; south: number; east: number; west: number };
+
+/**
+ * True when (lat, lng) falls inside a map viewport's bounds. Same bounding-box
+ * check already used by the consumer app's map view (VenueDiscovery.tsx /
+ * VenueMapView.tsx) to narrow a venue list to what's visible on screen,
+ * formalized here so other presentation layers can reuse it without
+ * duplicating the comparison logic.
+ */
+export function isWithinBounds(lat: number, lng: number, bounds: LatLngBounds): boolean {
+  return (
+    lat >= bounds.south &&
+    lat <= bounds.north &&
+    lng >= bounds.west &&
+    lng <= bounds.east
+  );
+}

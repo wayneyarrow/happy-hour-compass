@@ -9,6 +9,7 @@ import {
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
+import type { LatLngBounds } from "@/lib/geo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -275,6 +276,26 @@ function MapInnards({
   );
 }
 
+// ─── Resize handler ───────────────────────────────────────────────────────────
+// Google Maps doesn't detect its container being resized via CSS (e.g. the
+// mobile map growing into its expanded "interaction mode") — it must be told
+// explicitly via the "resize" event, same pattern VenueMapView.tsx's
+// MapCenterManager already uses after mount. Firing after a short delay lets
+// the CSS height transition finish before the map recalculates its viewport.
+
+function MapResizeHandler({ signal }: { signal: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const timer = setTimeout(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).google?.maps?.event?.trigger(map, "resize");
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [map, signal]);
+  return null;
+}
+
 // ─── Fallback ─────────────────────────────────────────────────────────────────
 
 function MapFallback({ message, className = "" }: { message: string; className?: string }) {
@@ -318,6 +339,27 @@ type Props = {
    * is closed (passes null). Parent uses this to highlight the matching card.
    */
   onMarkerClick?: (id: string | null) => void;
+  /**
+   * Google Maps gesture handling mode. Defaults to "cooperative" (existing
+   * behavior everywhere): a single finger scrolls the page instead of panning
+   * the map. Callers can pass "greedy" for a deliberately-entered interaction
+   * mode where the map should take over single-finger gestures.
+   */
+  gestureHandling?: "cooperative" | "greedy";
+  /**
+   * Fires after pan/zoom settles (Maps' "idle" event), with the map's current
+   * viewport bounds — or null if bounds aren't available yet. Omit to opt out
+   * entirely (default); nothing is wired up or computed when absent, so
+   * existing callers are unaffected.
+   */
+  onBoundsChanged?: (bounds: LatLngBounds | null) => void;
+  /**
+   * Any value that changes when this map's container size changes outside of
+   * a window resize (e.g. an expand/collapse toggle). Triggers a Maps
+   * "resize" event so the map redraws to fill its new container. Omit for
+   * containers whose size never changes after mount (existing behavior).
+   */
+  resizeSignal?: unknown;
 };
 
 export function SearchResultsMap({
@@ -327,6 +369,9 @@ export function SearchResultsMap({
   className = "",
   hoveredMarkerId = null,
   onMarkerClick,
+  gestureHandling = "cooperative",
+  onBoundsChanged,
+  resizeSignal,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -346,7 +391,7 @@ export function SearchResultsMap({
         <Map
           defaultCenter={marketCenter}
           defaultZoom={marketZoom}
-          gestureHandling="cooperative"
+          gestureHandling={gestureHandling}
           mapTypeControl={false}
           streetViewControl={false}
           fullscreenControl={false}
@@ -354,6 +399,11 @@ export function SearchResultsMap({
           zoomControl={true}
           style={{ width: "100%", height: "100%" }}
           onClick={() => handleSelectId(null)}
+          onIdle={(e) => {
+            if (!onBoundsChanged) return;
+            const b = e.map.getBounds();
+            onBoundsChanged(b ? b.toJSON() : null);
+          }}
         >
           <MapInnards
             markers={markers}
@@ -361,6 +411,7 @@ export function SearchResultsMap({
             selectedId={selectedId}
             onSelectId={handleSelectId}
           />
+          {resizeSignal !== undefined && <MapResizeHandler signal={resizeSignal} />}
         </Map>
       </APIProvider>
     </div>
