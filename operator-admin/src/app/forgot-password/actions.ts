@@ -95,6 +95,12 @@ export async function forgotPasswordAction(
   }
 
   // ── Generate a Supabase recovery link ─────────────────────────────────────
+  // redirectTo resolves correctly per environment via getSiteUrl(), but that
+  // alone doesn't make Supabase honour it — /operator/create-password must
+  // also be listed in the Supabase dashboard under Auth → URL Configuration →
+  // Redirect URLs for every environment (localhost, staging, production), or
+  // Supabase silently falls back to the bare Site URL instead. See
+  // RecoveryRedirect.tsx's header comment for the original diagnosis.
   const appUrl = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 

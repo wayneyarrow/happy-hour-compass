@@ -26,6 +26,23 @@ export type RequestConsumerPasswordResetResult =
  * Turnstile token can be verified — and the reset email blocked on failure —
  * before Supabase is asked to send anything; a client-only call has no point
  * to gate server-side.
+ *
+ * redirectTo is already built from getSiteUrl(), so it resolves to the
+ * correct per-environment origin (confirmed: staging Preview has
+ * NEXT_PUBLIC_SITE_URL=https://staging.happyhourcompass.com). That alone is
+ * NOT sufficient — Supabase's /auth/v1/verify endpoint only honours a
+ * redirect_to it recognises. Every one of these redirectTo paths must also
+ * be added to the Supabase dashboard under Auth → URL Configuration →
+ * Redirect URLs, for every environment that uses it:
+ *   http://localhost:3000/account/reset-password
+ *   https://staging.happyhourcompass.com/account/reset-password
+ *   https://happyhourcompass.com/account/reset-password
+ * If a redirect_to isn't listed there, Supabase does not error — it
+ * silently falls back to the project's single, environment-invariant Site
+ * URL, stripping the path and appending the recovery tokens to the bare
+ * domain instead (see RecoveryRedirect.tsx and sign-up/actions.ts for the
+ * two other times this exact failure mode has hit this codebase). This is
+ * dashboard-only configuration, invisible to git history or any repo file.
  */
 export async function requestConsumerPasswordReset({
   email,
