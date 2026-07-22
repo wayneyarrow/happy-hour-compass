@@ -51,6 +51,26 @@ function matchesSearchQuery(card: WebsiteVenueCard, query: string): boolean {
   );
 }
 
+/**
+ * Narrows `cards` to those within `bounds`, via the same shared
+ * isWithinBounds() bounding-box helper (src/lib/geo.ts) the consumer app's
+ * map view already uses. This is the one piece of viewport-filtering math in
+ * this file — both the desktop split-layout map and the mobile expanded-map
+ * results sheet call it, so neither surface reimplements its own geographic
+ * filtering. Returns `cards` unchanged when `bounds` is null (no viewport
+ * reported yet, or viewport filtering isn't active for this surface).
+ */
+function filterCardsWithinBounds<T extends { latitude: number | null; longitude: number | null }>(
+  cards: T[],
+  bounds: LatLngBounds | null
+): T[] {
+  if (!bounds) return cards;
+  return cards.filter(
+    (c) =>
+      c.latitude !== null && c.longitude !== null && isWithinBounds(c.latitude, c.longitude, bounds)
+  );
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NEAR_ME_RADIUS_KM = 25;
@@ -660,6 +680,24 @@ export function HappyHoursSearchClient({
     setMapBounds(null);
   }
 
+  // ── desktop map interaction state ──
+  // desktopMapBounds: current viewport of the desktop split-layout map,
+  // narrowing the results column the same way mapBounds narrows mobile's
+  // results sheet (see filterCardsWithinBounds above) — kept as separate
+  // state because desktop's SearchResultsMap is a distinct, always-mounted
+  // instance with no expand/collapse concept, so it starts reporting bounds
+  // as soon as it mounts rather than only while "expanded". mapMarkers below
+  // is intentionally NOT filtered by this — pins stay on the full filtered
+  // set (sortedCards) so panning never changes the marker set, which is what
+  // keeps SearchResultsMap's own fitBounds-on-marker-change effect from
+  // re-firing on every pan (it only re-fits when filters/search/sort change
+  // the underlying result set, never from the user's own map interaction).
+  const [desktopMapBounds, setDesktopMapBounds] = useState<LatLngBounds | null>(null);
+
+  function handleShowAllOnMap() {
+    setDesktopMapBounds(null);
+  }
+
   // Rendered pixel height of the map+sheet wrapper while expanded — read
   // fresh (rather than derived from the "70dvh" class) so the results sheet
   // can size its "open" snap point off the real box instead of duplicating
@@ -947,14 +985,18 @@ export function HappyHoursSearchClient({
   // never compute or read this — filters/sort/search above are unaffected,
   // this only ever narrows their already-produced result set.
   const mobileVisibleCards = useMemo(() => {
-    if (!mapExpanded || !mapBounds) return sortedCards;
-    return sortedCards.filter(
-      (c) =>
-        c.latitude !== null &&
-        c.longitude !== null &&
-        isWithinBounds(c.latitude, c.longitude, mapBounds)
-    );
+    if (!mapExpanded) return sortedCards;
+    return filterCardsWithinBounds(sortedCards, mapBounds);
   }, [sortedCards, mapExpanded, mapBounds]);
+
+  // Desktop equivalent — always live (no expand/collapse gate), since the
+  // split-layout map is visible and interactive from first render. Markers
+  // (mapMarkers, above) intentionally stay on the full sortedCards set; only
+  // this list-facing value narrows with the viewport.
+  const desktopVisibleCards = useMemo(
+    () => filterCardsWithinBounds(sortedCards, desktopMapBounds),
+    [sortedCards, desktopMapBounds]
+  );
 
   // Label shown in the results sheet's header — visible in both the peek and
   // open states, so it doubles as the live viewport count while collapsed.
@@ -1215,16 +1257,51 @@ export function HappyHoursSearchClient({
           {contextHeader !== null && (
             <div className="mb-7">
               {contextHeader ?? (
-                <SearchContextHeader market={market} resultCount={sortedCards.length} />
+                <SearchContextHeader market={market} resultCount={desktopVisibleCards.length} />
               )}
             </div>
           )}
 
+          {/* Map-narrowed notice — only when the map viewport has actually
+              excluded some of the filtered results (not just whenever bounds
+              are known). "Show all results" resets only the viewport filter,
+              never the map position itself or any other filter — panning
+              back out re-widens it naturally instead. */}
+          {desktopMapBounds &&
+            desktopVisibleCards.length > 0 &&
+            desktopVisibleCards.length < sortedCards.length && (
+              <p className="mb-4 text-xs text-gray-500">
+                Showing {desktopVisibleCards.length} of {sortedCards.length} venue
+                {sortedCards.length === 1 ? "" : "s"} in this area ·{" "}
+                <button
+                  type="button"
+                  onClick={handleShowAllOnMap}
+                  className="text-amber-600 hover:text-amber-700 font-medium underline"
+                >
+                  Show all results
+                </button>
+              </p>
+            )}
+
           {sortedCards.length === 0 ? (
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
+          ) : desktopVisibleCards.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-sm font-semibold text-gray-500">No venues in this area</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Pan or zoom out on the map, or
+              </p>
+              <button
+                type="button"
+                onClick={handleShowAllOnMap}
+                className="mt-2 text-sm text-amber-600 hover:text-amber-700 font-medium underline"
+              >
+                Show all results
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {sortedCards.map((card) => (
+              {desktopVisibleCards.map((card) => (
                 <div
                   key={card.id}
                   data-card-id={card.id}
@@ -1257,6 +1334,7 @@ export function HappyHoursSearchClient({
               className="flex-1 rounded-2xl overflow-hidden"
               hoveredMarkerId={hoveredCardId}
               onMarkerClick={handleMarkerClick}
+              onBoundsChanged={setDesktopMapBounds}
             />
           </div>
         </div>
