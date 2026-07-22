@@ -31,6 +31,21 @@ export type MapMarker = {
   href?: string;
 };
 
+// ─── User-location marker icon ───────────────────────────────────────────────
+// Familiar "blue dot" treatment (Google's own My Location colour) — a plain
+// filled circle with a white ring, deliberately unlike the HHC teardrop pins
+// so it reads as "you are here," not another venue. No accuracy halo or
+// heading indicator (out of scope) and no click/InfoWindow behavior — see
+// its Marker usage in MapInnards below.
+
+function buildUserLocationDotUrl(): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
+    `<circle cx="12" cy="12" r="7" fill="#4285F4" stroke="#ffffff" stroke-width="3"/>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 // ─── HHC pin icon builder ─────────────────────────────────────────────────────
 // Reproduces the hhc-icon.png design as an SVG data URL (transparent background,
 // scalable, no rectangular box artifact that the PNG would produce on the map).
@@ -190,6 +205,13 @@ type MapInnardsProps = {
   hoveredMarkerId: string | null;
   selectedId: string | null;
   onSelectId: (id: string | null) => void;
+  /**
+   * The viewer's current location, if already known — renders a
+   * non-interactive "you are here" dot. Never included in `markers`, so it
+   * has no effect on the bounds-fitting effect below (keyed only on
+   * `markers`) or on anything the caller derives from `markers`/bounds.
+   */
+  userLocation?: { lat: number; lng: number } | null;
 };
 
 function MapInnards({
@@ -197,6 +219,7 @@ function MapInnards({
   hoveredMarkerId,
   selectedId,
   onSelectId,
+  userLocation = null,
 }: MapInnardsProps) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
@@ -204,7 +227,9 @@ function MapInnards({
   // when the visible result set changes (filter changes), not on sort order changes.
   const prevFitKeyRef = useRef("");
 
-  // Refit bounds when the coordinate set meaningfully changes.
+  // Refit bounds when the coordinate set meaningfully changes. Deliberately
+  // keyed only on `markers` (venue pins) — the user-location marker below
+  // must never trigger a refit/recenter, including on its first appearance.
   useEffect(() => {
     if (!map || !coreLib || markers.length === 0) return;
 
@@ -225,8 +250,9 @@ function MapInnards({
     }
   }, [map, coreLib, markers]);
 
-  // Build HHC pin icons once the core library is ready (Size + Point constructors).
-  // Falls back to undefined (default Google red marker) while coreLib loads.
+  // Build HHC pin icons + the user-location dot once the core library is
+  // ready (Size + Point constructors). Falls back to undefined (default
+  // Google red marker / no user dot) while coreLib loads.
   const icons = useMemo(() => {
     if (!coreLib) return null;
     return {
@@ -239,6 +265,11 @@ function MapInnards({
         url: buildHhcPinUrl(true),
         scaledSize: new coreLib.Size(36, 47),
         anchor: new coreLib.Point(18, 47),
+      },
+      userLocation: {
+        url: buildUserLocationDotUrl(),
+        scaledSize: new coreLib.Size(18, 18),
+        anchor: new coreLib.Point(9, 9),
       },
     };
   }, [coreLib]);
@@ -264,6 +295,19 @@ function MapInnards({
           />
         );
       })}
+
+      {/* User-location dot — deliberately outside the venue `markers` loop:
+          not clickable, no title-driven InfoWindow, no selection state, and
+          excluded from the refit effect above by construction. */}
+      {userLocation && icons && (
+        <Marker
+          position={{ lat: userLocation.lat, lng: userLocation.lng }}
+          icon={icons.userLocation}
+          zIndex={5}
+          clickable={false}
+          title="Your location"
+        />
+      )}
 
       {selectedMarker && (
         <InfoWindow
@@ -368,6 +412,16 @@ type Props = {
    * the map (e.g. the mobile results sheet) can move it out of the way.
    */
   zoomControlPosition?: ControlPosition;
+  /**
+   * The viewer's current location, if already known through an existing
+   * geolocation flow (e.g. a caller's own Near Me feature) — renders a
+   * distinct, non-interactive "you are here" dot. Omit or pass null when
+   * coordinates aren't available yet; this prop never itself requests
+   * location and has no effect on `markers`, bounds-fitting, or viewport
+   * filtering. Optional and off by default — existing callers (e.g.
+   * EventSearchResults) are unaffected unless they opt in.
+   */
+  userLocation?: { lat: number; lng: number } | null;
 };
 
 export function SearchResultsMap({
@@ -381,6 +435,7 @@ export function SearchResultsMap({
   onBoundsChanged,
   resizeSignal,
   zoomControlPosition,
+  userLocation = null,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -428,6 +483,7 @@ export function SearchResultsMap({
             hoveredMarkerId={hoveredMarkerId}
             selectedId={selectedId}
             onSelectId={handleSelectId}
+            userLocation={userLocation}
           />
           {resizeSignal !== undefined && <MapResizeHandler signal={resizeSignal} />}
         </Map>

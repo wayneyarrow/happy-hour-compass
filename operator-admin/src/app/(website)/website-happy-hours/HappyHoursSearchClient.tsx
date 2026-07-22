@@ -1419,6 +1419,7 @@ export function HappyHoursSearchClient({
               hoveredMarkerId={hoveredCardId}
               onMarkerClick={handleMarkerClick}
               onBoundsChanged={setDesktopMapBounds}
+              userLocation={userLocation}
             />
           </div>
         </div>
@@ -1456,6 +1457,7 @@ export function HappyHoursSearchClient({
             // "Done" button, and the InfoWindow layout never occupy).
             // Collapsed mobile and desktop are unaffected (prop omitted).
             zoomControlPosition={mapExpanded ? ControlPosition.LEFT_TOP : undefined}
+            userLocation={userLocation}
           />
 
           {/* Collapsed: a transparent tap target expands the map in place —
