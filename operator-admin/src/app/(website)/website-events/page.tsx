@@ -14,5 +14,5 @@ export default async function EventsSearchPage() {
   const { market } = await getActiveMarket();
   const events = await getPublishedEventsForWebsite(market);
 
-  return <EventSearchResults events={events} market={market} />;
+  return <EventSearchResults events={events} market={market} enableFilterSync />;
 }

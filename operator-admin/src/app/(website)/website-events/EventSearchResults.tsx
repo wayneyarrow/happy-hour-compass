@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import type { Market } from "@/lib/markets";
@@ -42,6 +43,18 @@ function isSameDay(a: Date, b: Date): boolean {
 
 function toIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Inverse of toIso(). Returns null for a malformed or non-round-tripping (e.g. Feb 30) date string. */
+function parseIsoLocal(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const date = new Date(y, mo - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null;
+  return date;
 }
 
 function fmtFieldDate(d: Date): string {
@@ -438,6 +451,11 @@ function EventTypePanel({ activeType, onSelect }: EventTypePanelProps) {
 
 type DateFilter = "today" | "tomorrow" | "weekend" | null;
 
+// Matches the debounce already established for the Happy Hours search page's
+// ?q= URL sync (HappyHoursSearchClient.tsx) — filtering itself stays
+// instant/client-side, only the URL write is debounced.
+const FILTER_URL_SYNC_DEBOUNCE_MS = 200;
+
 type Props = {
   events: WebsiteEventListItem[];
   market: Market;
@@ -445,9 +463,23 @@ type Props = {
   contextHeader?: ReactNode;
   /** Rendered once, full-width, after the results in both desktop and mobile layouts. */
   footerCta?: ReactNode;
+  /**
+   * Enables the ?date=/?from=/?to=/?type= URL sync and mount-time restore.
+   * Off by default so other callers of this component (Saved, Collections)
+   * are unaffected — only website-events/page.tsx opts in today.
+   */
+  enableFilterSync?: boolean;
 };
 
-export function EventSearchResults({ events, market, contextHeader, footerCta }: Props) {
+export function EventSearchResults({
+  events,
+  market,
+  contextHeader,
+  footerCta,
+  enableFilterSync = false,
+}: Props) {
+  const pathname = usePathname();
+
   const today = todayLocal();
   const tomorrow = tomorrowLocal();
 
@@ -545,6 +577,63 @@ export function EventSearchResults({ events, market, contextHeader, footerCta }:
     setActiveType(type);
     setTypeOpen(false);
   }
+
+  // Debounced URL sync for the Date/Calendar/Type filters, mirroring the
+  // Happy Hours search page's ?q= sync (HappyHoursSearchClient.tsx). Uses
+  // history.replaceState() directly rather than next/navigation's
+  // router.replace() for the same reason: this page's filtering is entirely
+  // client-side, so a router-driven update would trigger an unnecessary
+  // server re-render on every change.
+  useEffect(() => {
+    if (!enableFilterSync) return;
+    const timer = setTimeout(() => {
+      const parts: string[] = [];
+      if (dateFilter) {
+        parts.push(`date=${dateFilter}`);
+      } else if (hasAppliedRange && calAppliedStart && calAppliedEnd) {
+        parts.push(`from=${toIso(calAppliedStart)}`);
+        parts.push(`to=${toIso(calAppliedEnd)}`);
+      }
+      if (activeType) parts.push(`type=${encodeURIComponent(activeType)}`);
+      const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
+      window.history.replaceState(null, "", url);
+    }, FILTER_URL_SYNC_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [enableFilterSync, dateFilter, hasAppliedRange, calAppliedStart, calAppliedEnd, activeType, pathname]);
+
+  // Restores filter state from the live address bar once, on mount — see the
+  // matching effect and comment in HappyHoursSearchClient.tsx for why this is
+  // necessary: history.replaceState() above keeps the address bar in sync,
+  // but Next.js's client-side Router Cache can still remount this component
+  // from a pre-filter render (e.g. after opening an event and returning via
+  // the browser Back button). Re-parsing the live URL once after mount
+  // reconciles state with what the address bar actually shows.
+  useEffect(() => {
+    if (!enableFilterSync) return;
+    const params = new URLSearchParams(window.location.search);
+    const dateParam = params.get("date");
+    const fromParam = params.get("from");
+    const toParam = params.get("to");
+    const typeParam = params.get("type");
+
+    if (dateParam === "today" || dateParam === "tomorrow" || dateParam === "weekend") {
+      setDateFilter(dateParam);
+    } else if (fromParam && toParam) {
+      const start = parseIsoLocal(fromParam);
+      const end = parseIsoLocal(toParam);
+      if (start && end && start <= end) {
+        setCalAppliedStart(start);
+        setCalAppliedEnd(end);
+        setCalSelectedStart(start);
+        setCalSelectedEnd(end);
+        setCalendarMonth(new Date(start.getFullYear(), start.getMonth(), 1));
+      }
+    }
+
+    if (typeParam && EVENT_TYPE_OPTIONS.some((o) => o.value === typeParam)) {
+      setActiveType(typeParam);
+    }
+  }, [enableFilterSync]);
 
   // ── Filter pipeline ───────────────────────────────────────────────────────
   // Filter-only, never sorted — `events`' input order always survives into

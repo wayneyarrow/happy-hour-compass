@@ -18,6 +18,8 @@ import {
   MIDNIGHT_VALUE,
   DAY_FILTER_OPTIONS,
   resolveDayName,
+  resolveInitialDayFilter,
+  resolveInitialTimeRange,
   type DayFilterValue,
 } from "./searchFilters";
 
@@ -628,7 +630,7 @@ export function HappyHoursSearchClient({
   const [timeOpen, setTimeOpen] = useState(false);
   const [dayOpen, setDayOpen] = useState(false);
 
-  // Debounced URL sync for search + Day + On Now + Time range — filtering
+  // Debounced URL sync for search + every filter chip + Sort — filtering
   // itself is instant/client-side (no network round trip), so only the URL
   // write is debounced, matching the homepage autocomplete's existing
   // debounce value.
@@ -643,12 +645,15 @@ export function HappyHoursSearchClient({
   // filtering already happens entirely client-side, so nothing
   // server-rendered actually depends on this URL update except a future hard
   // reload/deep link, which reads it correctly regardless of how it got
-  // there. "today" (the Day default) and an inactive On Now are omitted
-  // entirely, matching this page's existing URL-cleanliness convention for
-  // `q`.
+  // there. Every value at its own default ("today" for Day, inactive for
+  // Near Me/On Now/Top Rated, no Type, and the sort each surface starts on)
+  // is omitted entirely, matching this page's existing URL-cleanliness
+  // convention for `q`. Map bounds/viewport are deliberately never included
+  // here — they're not part of the search configuration this URL describes.
   useEffect(() => {
     if (!enableSearch) return;
     const trimmedQuery = searchQuery.trim();
+    const defaultSort: SortOption = collectionOrder ? "collection" : "distance";
     const timer = setTimeout(() => {
       const parts: string[] = [];
       if (trimmedQuery) parts.push(`q=${encodeURIComponent(trimmedQuery)}`);
@@ -656,6 +661,10 @@ export function HappyHoursSearchClient({
       if (onNowActive) parts.push("now=1");
       if (filterTimeFrom) parts.push(`from=${filterTimeFrom}`);
       if (filterTimeTo) parts.push(`to=${filterTimeTo}`);
+      if (nearMeActive) parts.push("near=1");
+      if (topRatedActive) parts.push("top=1");
+      if (selectedType) parts.push(`type=${encodeURIComponent(selectedType)}`);
+      if (sortBy !== defaultSort) parts.push(`sort=${sortBy}`);
       const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
       window.history.replaceState(null, "", url);
     }, SEARCH_URL_SYNC_DEBOUNCE_MS);
@@ -666,9 +675,65 @@ export function HappyHoursSearchClient({
     onNowActive,
     filterTimeFrom,
     filterTimeTo,
+    nearMeActive,
+    topRatedActive,
+    selectedType,
+    sortBy,
+    collectionOrder,
     enableSearch,
     pathname,
   ]);
+
+  // Restores search/filter state from the live address bar once, on mount.
+  // Needed for the browser Back button: history.replaceState() above keeps
+  // the *address bar* in sync as filters change, but it deliberately never
+  // calls Next.js's router, so it can't refresh what Next's client-side
+  // Router Cache has stored for this route. When the visitor opens a venue
+  // (a normal <Link> navigation) and returns via Back, Next restores this
+  // component from that cache — a fresh mount using the *original*
+  // initialQuery/initialDay/etc. props from before any filters were applied,
+  // even though the address bar itself still shows the filtered URL. Since
+  // the address bar is always correct (the browser, not Next, owns it during
+  // a popstate restoration), re-parsing it once after mount reconciles state
+  // with reality. A true fresh visit is a no-op here, since window.location
+  // already matches the initial props in that case. Near Me/Top Rated/Type/
+  // Sort have no server-side initial* prop counterpart (they're validated
+  // here against the live `cards`/`collectionOrder` instead), since this
+  // effect is the only place that ever reads them from the URL.
+  useEffect(() => {
+    if (!enableSearch) return;
+    const params = new URLSearchParams(window.location.search);
+    setSearchQuery(params.get("q") ?? "");
+    const nowParam = params.get("now") === "1";
+    setOnNowActive(nowParam);
+    setSelectedDay(resolveInitialDayFilter(params.get("day") ?? undefined, nowParam));
+    const { from, to } = resolveInitialTimeRange(
+      params.get("from") ?? undefined,
+      params.get("to") ?? undefined
+    );
+    setFilterTimeFrom(from);
+    setFilterTimeTo(to);
+
+    setNearMeActive(params.get("near") === "1");
+    setTopRatedActive(params.get("top") === "1");
+
+    const typeParam = params.get("type");
+    setSelectedType(
+      typeParam && cards.some((c) => c.establishmentType === typeParam) ? typeParam : null
+    );
+
+    const sortParam = params.get("sort");
+    const validSorts: SortOption[] = collectionOrder
+      ? ["collection", "distance", "rating", "az"]
+      : ["distance", "rating", "az"];
+    setSortBy(
+      sortParam && (validSorts as string[]).includes(sortParam)
+        ? (sortParam as SortOption)
+        : collectionOrder
+        ? "collection"
+        : "distance"
+    );
+  }, [enableSearch, cards, collectionOrder]);
 
   // ── geo state ──
   const [userLocation, setUserLocation] = useState<{
