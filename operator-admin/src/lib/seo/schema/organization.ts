@@ -9,16 +9,19 @@
  * organizationId()); it is rendered once, from (website)/layout.tsx, via
  * JsonLd — this module only builds the plain node.
  *
- * Deliberately minimal: only @type/@id/name/url/logo are included. Every
- * optional Organization property schema.org supports (legalName,
- * foundingDate, founder, address, telephone, email, sameAs, etc.) is
+ * Deliberately minimal: only @type/@id/name/url/logo/sameAs are included.
+ * Every other optional Organization property schema.org supports
+ * (legalName, foundingDate, founder, address, telephone, email, etc.) is
  * omitted because none of it is currently accurate/supportable from
  * approved project data — see the structured data strategy review's
- * Organization section (no public social profiles exist yet for sameAs;
- * the About page intentionally never names a founder; no public
- * address/phone is published anywhere on the site today). Add any of
- * these later only once real, approved data exists to back it — never
- * speculatively.
+ * Organization section (the About page intentionally never names a
+ * founder; no public address/phone is published anywhere on the site
+ * today). Add any of these later only once real, approved data exists to
+ * back it — never speculatively.
+ *
+ * sameAs: the site's live Facebook and Instagram profiles (also linked from
+ * WebsiteFooter.tsx, which declares its own copies of these same URLs —
+ * see that file's header comment on why social URLs aren't centralized).
  */
 
 import { absoluteUrl } from "@/lib/siteUrl";
@@ -39,12 +42,17 @@ const ORGANIZATION_NAME = "Happy Hour Compass";
  */
 const LOGO_PATH = "/logo.png";
 
+/** Live social profiles — kept in sync with WebsiteFooter.tsx's own copies. */
+const FACEBOOK_URL = "https://www.facebook.com/happyhourcompass";
+const INSTAGRAM_URL = "https://www.instagram.com/happyhourcompass/";
+
 export type OrganizationNode = SchemaNode & {
   "@type": "Organization";
   "@id": string;
   name: string;
   url: string;
   logo: string;
+  sameAs: string[];
 };
 
 /**
@@ -66,5 +74,6 @@ export function buildOrganizationNode(): OrganizationNode {
     name: ORGANIZATION_NAME,
     url: absoluteUrl("/"),
     logo: absoluteUrl(LOGO_PATH),
+    sameAs: [FACEBOOK_URL, INSTAGRAM_URL],
   };
 }
