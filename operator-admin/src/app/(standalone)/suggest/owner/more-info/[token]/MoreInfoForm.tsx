@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState, useEffect, useRef } from "react";
 import { submitMoreInfoAction, type MoreInfoState } from "./actions";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
@@ -90,11 +91,18 @@ export default function MoreInfoForm({
         <h2 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">
           Details received — thank you!
         </h2>
-        <p className="text-[14px] text-gray-500 leading-relaxed max-w-[300px]">
+        <p className="text-[14px] text-gray-500 leading-relaxed max-w-[300px] mb-6">
           We&rsquo;ve got what we need to verify{" "}
           <strong className="text-gray-700">{initial.venue_name}</strong>.
           We&rsquo;ll review your submission and be in touch soon.
         </p>
+
+        <Link
+          href="/"
+          className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-[15px] transition-colors"
+        >
+          Explore Happy Hours
+        </Link>
       </div>
     );
   }
