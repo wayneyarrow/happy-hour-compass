@@ -32,7 +32,7 @@ export async function changePlanAction(
 
     const role = await getMembershipRole(operatorId, userEmail);
     if (role !== "owner") {
-      return { ok: false, error: "Only the account owner can change the plan." };
+      return { ok: false, error: "Only the admin can change the plan." };
     }
   }
 

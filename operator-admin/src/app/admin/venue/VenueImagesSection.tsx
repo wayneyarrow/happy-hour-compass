@@ -307,7 +307,7 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
                     Change your plan →
                   </Link>
                 ) : (
-                  <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                  <span className="text-amber-700">Ask the admin to change the plan.</span>
                 )}
               </>
             )}

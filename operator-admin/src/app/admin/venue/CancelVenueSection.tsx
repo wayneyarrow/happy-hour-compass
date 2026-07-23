@@ -107,7 +107,7 @@ export default function CancelVenueSection({
             </p>
             {!isOwner && (
               <p className="text-xs text-gray-400 mt-1">
-                Only the account owner can cancel the venue.
+                Only the admin can cancel the venue.
               </p>
             )}
           </div>
@@ -115,7 +115,7 @@ export default function CancelVenueSection({
             type="button"
             onClick={handleCancelClick}
             disabled={!isOwner}
-            title={!isOwner ? "Only the account owner can cancel the venue." : undefined}
+            title={!isOwner ? "Only the admin can cancel the venue." : undefined}
             className="px-4 py-2 rounded-lg border border-red-200 bg-white text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
             Cancel venue account

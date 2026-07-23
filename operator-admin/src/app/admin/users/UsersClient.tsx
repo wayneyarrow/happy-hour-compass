@@ -357,7 +357,7 @@ export default function UsersClient({
       {/* Non-owner notice */}
       {isMember && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-6 text-sm text-blue-700">
-          You have view-only access. Only the account owner can invite or remove users.
+          You have view-only access. Only the admin can invite or remove users.
         </div>
       )}
 
@@ -386,7 +386,7 @@ export default function UsersClient({
                   Change your plan →
                 </a>
               ) : (
-                <span>Ask the account owner to change the plan.</span>
+                <span>Ask the admin to change the plan.</span>
               )}
             </p>
           )}
@@ -419,7 +419,7 @@ export default function UsersClient({
                     </span>
                     {isThisOwner && (
                       <span className="inline-flex items-center text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
-                        Owner
+                        Admin
                       </span>
                     )}
                     {isMe && (

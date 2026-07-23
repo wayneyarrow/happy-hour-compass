@@ -98,7 +98,7 @@ export default function SearchTagsForm({
               Change your plan →
             </Link>
           ) : (
-            <span className="text-xs text-amber-700">Ask the account owner to change the plan.</span>
+            <span className="text-xs text-amber-700">Ask the admin to change the plan.</span>
           )}
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function SearchTagsForm({
                   Change your plan →
                 </Link>
               ) : (
-                <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                <span className="text-amber-700">Ask the admin to change the plan.</span>
               )
             )}
           </div>

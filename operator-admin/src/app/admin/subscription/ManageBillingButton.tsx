@@ -26,14 +26,14 @@ export default function ManageBillingButton({ isOwner }: { isOwner: boolean }) {
         type="button"
         onClick={handleClick}
         disabled={isPending || !isOwner}
-        title={!isOwner ? "Only the account owner can manage billing." : undefined}
+        title={!isOwner ? "Only the admin can manage billing." : undefined}
         className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isPending ? "Opening…" : "Manage Billing"}
       </button>
       {!isOwner && (
         <p className="text-xs text-gray-400 text-right max-w-[220px]">
-          Only the account owner can manage billing.
+          Only the admin can manage billing.
         </p>
       )}
       {error && (

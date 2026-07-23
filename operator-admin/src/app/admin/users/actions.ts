@@ -29,7 +29,7 @@ async function assertOwner(operatorId: string): Promise<
 
   const role = await getMembershipRole(operatorId, userEmail);
   if (role !== "owner") {
-    return { ok: false, error: "Only the account owner can manage users." };
+    return { ok: false, error: "Only the admin can manage users." };
   }
 
   return { ok: true, ctx };
@@ -206,7 +206,7 @@ export async function removeMemberAction(
   if (!target) return { ok: false, error: "Membership not found." };
 
   const t = target as { email: string; role: string; status: string };
-  if (t.role === "owner")    return { ok: false, error: "You cannot remove the account owner." };
+  if (t.role === "owner")    return { ok: false, error: "You cannot remove the admin." };
   if (t.status !== "active") return { ok: false, error: "This user is not an active member." };
 
   const { error } = await supabase

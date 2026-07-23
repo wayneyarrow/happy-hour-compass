@@ -57,7 +57,7 @@ export async function cancelVenueAction(
     if (!ctx.operator) return { error: "Could not resolve operator." };
     const role = await getMembershipRole(ctx.operator.id, userEmail);
     if (role !== "owner") {
-      return { error: "Only the account owner can cancel the venue." };
+      return { error: "Only the admin can cancel the venue." };
     }
   }
 

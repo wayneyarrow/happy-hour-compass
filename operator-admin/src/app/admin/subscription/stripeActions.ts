@@ -42,7 +42,7 @@ export async function createCheckoutSessionAction(
     if (!userEmail) return { ok: false, error: "Could not determine current user." };
     const role = await getMembershipRole(operatorId, userEmail);
     if (role !== "owner") {
-      return { ok: false, error: "Only the account owner can upgrade the plan." };
+      return { ok: false, error: "Only the admin can upgrade the plan." };
     }
   }
 
@@ -138,7 +138,7 @@ export async function createPortalSessionAction(): Promise<{ ok: boolean; url?: 
     if (!userEmail) return { ok: false, error: "Could not determine current user." };
     const role = await getMembershipRole(operatorId, userEmail);
     if (role !== "owner") {
-      return { ok: false, error: "Only the account owner can manage billing." };
+      return { ok: false, error: "Only the admin can manage billing." };
     }
   }
 

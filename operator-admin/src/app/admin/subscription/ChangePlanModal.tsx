@@ -802,7 +802,7 @@ export default function ChangePlanModal({
         type="button"
         onClick={openModal}
         disabled={!operatorId || !isOwner}
-        title={!isOwner ? "Only the account owner can change the plan." : undefined}
+        title={!isOwner ? "Only the admin can change the plan." : undefined}
         className="px-5 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
       >
         Change Plan

@@ -889,7 +889,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
                   Change your plan →
                 </Link>
               ) : (
-                <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                <span className="text-amber-700">Ask the admin to change the plan.</span>
               )}
             </div>
           )}
@@ -950,7 +950,7 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
                     Change your plan →
                   </Link>
                 ) : (
-                  <span className="text-amber-700">Ask the account owner to change the plan.</span>
+                  <span className="text-amber-700">Ask the admin to change the plan.</span>
                 )}
               </p>
             </div>
