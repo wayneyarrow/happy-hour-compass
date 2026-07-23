@@ -344,7 +344,7 @@ export default async function AdminVenuePage({
           <AccordionSection
             id="publish"
             title="Publish"
-            description="Make your venue visible to the public. At least one venue image is required."
+            description="Make your venue visible to the public. At least one venue image and at least one active happy hour are required before you can publish."
             defaultOpen={isOpen(section, "publish")}
           >
             <VenuePublishSection
