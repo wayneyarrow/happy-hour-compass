@@ -117,22 +117,6 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
-/** Small diagonal arrow — the understated, icon-only signal that a link opens in a new tab (no added copy). */
-function ExternalLinkIcon() {
-  return (
-    <svg
-      className="w-3 h-3 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M7 7h10v10" />
-    </svg>
-  );
-}
-
 function FooterButton({
   onClick,
   disabled,
@@ -275,16 +259,7 @@ export function WebsiteFooter() {
                     <FooterButton onClick={() => setAddVenueOpen(true)}>Add Your Venue</FooterButton>
                   </li>
                   <li>
-                    <Link
-                      href="/login"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Business Login (opens in a new tab)"
-                      className={`${FOOTER_LINK_CLASS} inline-flex items-center gap-1.5`}
-                    >
-                      Business Login
-                      <ExternalLinkIcon />
-                    </Link>
+                    <FooterLink href="/login">Business Login</FooterLink>
                   </li>
                 </ul>
               </div>
