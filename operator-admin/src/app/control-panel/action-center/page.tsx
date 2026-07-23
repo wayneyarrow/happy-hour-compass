@@ -63,6 +63,13 @@ const REPORTS = [
     description: "Verified venues with no operator attached — a lifecycle leak to investigate.",
     priority:    "medium",
   },
+  {
+    key:         "unusedSearchTagCapacity" as const,
+    href:        "/control-panel/action-center/reports/unused-search-tags",
+    name:        "Unused Search Tag Capacity",
+    description: "Pro and Premium venues not using all the Search Tags included in their subscription.",
+    priority:    "low",
+  },
 ] as const;
 
 type ReportKey = (typeof REPORTS)[number]["key"];

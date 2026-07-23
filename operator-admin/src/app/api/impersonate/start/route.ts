@@ -2,8 +2,10 @@
  * POST /api/impersonate/start
  *
  * Creates a Control Panel → Operator Admin impersonation session.
- * Invoked by a plain HTML <form method="post" target="_blank"> on the CP
- * venue detail page — no client JS needed, no popup-blocker issues.
+ * Invoked by a plain HTML <form method="post" target="_blank"> — no client
+ * JS needed, no popup-blocker issues. Used by the CP venue detail page's
+ * ImpersonateButton, and by Action Center reports that deep-link into a
+ * specific Operator Admin section (e.g. the Unused Search Tags report).
  *
  * Security:
  *   • Caller must be authenticated (Supabase Auth session cookie)
@@ -11,8 +13,11 @@
  *   • venue_id is validated against the DB before session creation
  *   • The session ID is set as an httpOnly cookie (not in the URL)
  *   • Cookie is Secure in production, SameSite=Lax
+ *   • Optional redirect_to must start with "/admin/" (same-app path only,
+ *     prevents open-redirect); anything else falls back to /admin/home.
  *
- * On success: sets imp_session_id cookie and redirects to /admin/home
+ * On success: sets imp_session_id cookie and redirects to redirect_to
+ * (defaults to /admin/home when absent or invalid, matching prior behavior)
  * On failure: redirects to /control-panel/venues with an error param
  */
 
@@ -48,11 +53,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(errorRedirect, { status: 303 });
   }
 
-  // ── 3. Parse venue_id from form body ───────────────────────────────────────
+  // ── 3. Parse venue_id (and optional redirect_to) from form body ────────────
   let venueId: string | null = null;
+  let redirectTo = "/admin/home";
   try {
     const body = await request.formData();
     venueId = (body.get("venue_id") as string | null)?.trim() ?? null;
+    const redirectToRaw = (body.get("redirect_to") as string | null)?.trim() ?? null;
+    // Only same-app /admin/ paths are honored — anything else (including a
+    // protocol-relative or external URL) silently falls back to /admin/home.
+    if (redirectToRaw && redirectToRaw.startsWith("/admin/")) {
+      redirectTo = redirectToRaw;
+    }
   } catch {
     return NextResponse.redirect(errorRedirect, { status: 303 });
   }
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 6. Set httpOnly cookie and redirect to Operator Admin ──────────────────
-  const response = NextResponse.redirect(`${origin}/admin/home`, {
+  const response = NextResponse.redirect(`${origin}${redirectTo}`, {
     status: 303,
   });
 

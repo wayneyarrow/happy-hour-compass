@@ -11,6 +11,7 @@ import {
   maxFoodSpecials,
   maxDrinkSpecials,
   maxUsers,
+  maxSearchTags,
 } from "@/lib/plans";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
@@ -143,6 +144,7 @@ export type ActionCenterSummary = {
   highDemandVenues: number;
   upcomingHighDemandEvents: number;
   verifiedWithoutOperators: number;
+  unusedSearchTagCapacity: number;
 };
 
 export type SeededNeedingClaimsRow = {
@@ -255,6 +257,19 @@ export type VerifiedWithoutOperatorRow = {
   isPublished: boolean;
 };
 
+export type UnusedSearchTagsRow = {
+  id: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  plan: OperatorPlan;
+  operatorName: string;
+  operatorEmail: string;
+  searchTagsUsed: number;
+  searchTagLimit: number;
+  searchTagsRemaining: number;
+};
+
 // ── Summary (home page) ───────────────────────────────────────────────────────
 
 export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
@@ -361,6 +376,10 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     upcomingHighDemandEvents = (upcomingEvents ?? []).length;
   }
 
+  // Reuses the full report query (rather than a parallel count computation)
+  // so the summary count is guaranteed to match the report's own contents.
+  const unusedSearchTagRows = await getUnusedSearchTagsOpportunities();
+
   return {
     seededNeedingClaims:      r_seededNoClaim.count ?? 0,
     activeStillOnboarding:    stillOnboarding,
@@ -370,6 +389,7 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     highDemandVenues,
     upcomingHighDemandEvents,
     verifiedWithoutOperators: r_verifiedNoOp.count ?? 0,
+    unusedSearchTagCapacity:  unusedSearchTagRows.length,
   };
 }
 
@@ -931,4 +951,89 @@ export async function getVerifiedWithoutOperators(): Promise<VerifiedWithoutOper
     eventViews30d: eventViewsByVenue.get(v.id) ?? 0,
     isPublished: v.is_published,
   })).sort((a, b) => b.venueViews30d - a.venueViews30d);
+}
+
+// ── Report #9: Unused Search Tag Capacity ────────────────────────────────────
+//
+// Paid (Pro/Premium) operators whose venue has room left in its plan's Search
+// Tag allowance — a customer-success opportunity to help them use a feature
+// already included in their subscription. Reuses maxSearchTags() (the same
+// plan-limit helper used by the operator-facing Search Tags form and the
+// plan comparison UI) and the same used-count logic as the save-time
+// enforcement in searchTagsActions.ts (venues.search_tags array length).
+
+export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTagsRow[]> {
+  const supabase = createAdminClient();
+
+  const { data: venuesData } = await supabase
+    .from("venues")
+    .select("id, slug, name, city, created_by_operator_id, search_tags")
+    .not("created_by_operator_id", "is", null);
+
+  const venues = (venuesData ?? []) as {
+    id: string;
+    slug: string;
+    name: string;
+    city: string | null;
+    created_by_operator_id: string | null;
+    search_tags: string[] | null;
+  }[];
+  if (venues.length === 0) return [];
+
+  const opIds = [...new Set(
+    venues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
+  )];
+  if (opIds.length === 0) return [];
+
+  const [r_subs, r_ops] = await Promise.all([
+    supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds),
+    supabase.from("operators").select("id, email, plan, last_seen_at, name, first_name, last_name").in("id", opIds),
+  ]);
+
+  type OperatorWithNameRow = OperatorRow & {
+    name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  };
+
+  const operators = (r_ops.data ?? []) as OperatorWithNameRow[];
+  const planMap    = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const opById     = new Map(operators.map((o) => [o.id, o]));
+
+  const rows: UnusedSearchTagsRow[] = [];
+
+  for (const v of venues) {
+    const opId = v.created_by_operator_id;
+    if (!opId) continue;
+
+    const plan = planMap.get(opId) ?? "free";
+    if (plan !== "pro" && plan !== "premium") continue; // paid plans only
+
+    const limit = maxSearchTags(plan);
+    const used  = Array.isArray(v.search_tags) ? v.search_tags.length : 0;
+    const remaining = limit - used;
+    if (remaining <= 0) continue; // fully utilized (or, defensively, over-limit) — not an opportunity
+
+    const op = opById.get(opId);
+    const operatorEmail = op?.email ?? "";
+    const operatorName =
+      op?.name ||
+      [op?.first_name, op?.last_name].filter(Boolean).join(" ") ||
+      operatorEmail;
+
+    rows.push({
+      id: v.id,
+      slug: v.slug,
+      name: v.name,
+      city: v.city,
+      plan,
+      operatorName,
+      operatorEmail,
+      searchTagsUsed: used,
+      searchTagLimit: limit,
+      searchTagsRemaining: remaining,
+    });
+  }
+
+  return rows.sort((a, b) => b.searchTagsRemaining - a.searchTagsRemaining);
 }
