@@ -1,10 +1,25 @@
 import Link from "next/link";
 
-const SECTIONS = [
+// Kept in the same order as ControlPanelSideNav.tsx's NAV_ITEMS (source of
+// truth for what's implemented), minus "Dashboard" itself. Industry Reads is
+// appended at the end — it's a real, implemented route but isn't in the
+// persistent side nav, so this card is currently its only entry point.
+const SECTIONS: Array<{
+  title: string;
+  href: string;
+  description: string;
+  status: "active" | "soon";
+}> = [
   {
-    title: "Discover Management",
-    href: "/control-panel/discover",
-    description: "Manage Consumer Home discovery rails. Preview each rail, adjust internal boost, toggle spotlight eligibility, and add or remove venues via internal curation.",
+    title: "Analytics",
+    href: "/control-panel/analytics",
+    description: "Platform-wide metrics — acquisition, activation, monetization, and consumer demand.",
+    status: "active" as const,
+  },
+  {
+    title: "Action Center",
+    href: "/control-panel/action-center",
+    description: "Operational work queues for HHC staff. Each report answers: what should we do next?",
     status: "active" as const,
   },
   {
@@ -32,16 +47,64 @@ const SECTIONS = [
     status: "active" as const,
   },
   {
+    title: "Discover Management",
+    href: "/control-panel/discover",
+    description: "Manage Consumer Home discovery rails. Preview each rail, adjust internal boost, toggle spotlight eligibility, and add or remove venues via internal curation.",
+    status: "active" as const,
+  },
+  {
+    title: "Content Engine",
+    href: "/control-panel/content-engine",
+    description: "Create and manage the Venue Guides and Event Guides platform admins publish across the Happy Hour Compass website.",
+    status: "active" as const,
+  },
+  {
+    title: "FAQ Library",
+    href: "/control-panel/content-engine/faq-library",
+    description: "Reusable questions guides can answer from — the shared library used across the guide editor.",
+    status: "active" as const,
+  },
+  {
+    title: "Collections",
+    href: "/control-panel/collections",
+    description: "Reusable editorial curation — Venue, Event, and Guide Collections that Homepage Sections assemble into the public website.",
+    status: "active" as const,
+  },
+  {
+    title: "Homepages",
+    href: "/control-panel/homepages",
+    description: "One Homepage per geographic destination — a Market or a City within a Market. Homepages assemble published Collections via Sections.",
+    status: "active" as const,
+  },
+  {
+    title: "Venue QA",
+    href: "/control-panel/settings",
+    description: "Tools for reviewing and publishing imported venue data before it goes live.",
+    status: "active" as const,
+  },
+  {
+    title: "Integrations",
+    href: "/control-panel/integrations",
+    description: "Manage third-party service connections and test notification delivery.",
+    status: "active" as const,
+  },
+  {
+    title: "Platform Admins",
+    href: "/control-panel/platform-admins",
+    description: "Manage who has access to this Control Panel. All platform admins have full access.",
+    status: "active" as const,
+  },
+  {
+    title: "Audit Logs",
+    href: "/control-panel/audit-logs",
+    description: "High-value platform actions — who did it, what, and when.",
+    status: "active" as const,
+  },
+  {
     title: "Industry Reads",
     href: "/control-panel/industry-reads",
     description: "Review and rate article relevance to tune keyword weighting and source quality over time.",
     status: "active" as const,
-  },
-  {
-    title: "Settings",
-    href: "/control-panel/settings",
-    description: "Platform configuration and feature flags.",
-    status: "soon" as const,
   },
 ];
 
