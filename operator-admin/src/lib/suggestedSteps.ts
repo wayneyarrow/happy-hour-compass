@@ -129,7 +129,7 @@ const RULES: Rule[] = [
       title: "Add more photos",
       description: "More photos help guests decide faster — and choose you with confidence.",
       ctaLabel: "Add photos",
-      href: "/admin/images",
+      href: "/admin/venue?section=images#images",
     },
   },
 

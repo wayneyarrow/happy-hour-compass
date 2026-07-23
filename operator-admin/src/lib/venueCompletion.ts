@@ -110,7 +110,7 @@ const INDICATOR_DEFS: IndicatorDef[] = [
     key: "photos",
     label: "Photos",
     weight: 2,
-    href: "/admin/images",
+    href: "/admin/venue?section=images#images",
     compute: ({ operatorImageCount }) => ({
       status:
         operatorImageCount >= PHOTO_TARGET

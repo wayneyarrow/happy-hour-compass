@@ -18,7 +18,7 @@ type Props = {
 
 export default function VenueSnapshotModule({ photosCount, specialsCount, eventsCount }: Props) {
   const metrics: Metric[] = [
-    { label: "Photos",   icon: "📷", value: photosCount,   href: "/admin/images" },
+    { label: "Photos",   icon: "📷", value: photosCount,   href: "/admin/venue?section=images#images" },
     { label: "Specials", icon: "🍽️", value: specialsCount, href: "/admin/happy-hours" },
     { label: "Events",   icon: "🎉", value: eventsCount,   href: "/admin/events" },
   ];
