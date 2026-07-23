@@ -6,61 +6,29 @@ import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
 
-type Mode = "signin" | "signup";
-
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [mode, setMode] = useState<Mode>("signin");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
-    setSuccessMsg(null);
 
-    if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        router.push("/dashboard");
-        router.refresh();
-      }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      setErrorMsg(error.message);
     } else {
-      if (!firstName.trim() || !lastName.trim()) {
-        setErrorMsg("Please enter your first and last name.");
-        setLoading(false);
-        return;
-      }
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-          },
-        },
-      });
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        setSuccessMsg(
-          "Account created! Check your email for a confirmation link, then sign in."
-        );
-      }
+      router.push("/dashboard");
+      router.refresh();
     }
 
     setLoading(false);
@@ -89,82 +57,7 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Operator Admin Portal</p>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex mb-6 rounded-lg overflow-hidden border border-gray-200">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signin");
-              setErrorMsg(null);
-              setSuccessMsg(null);
-            }}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              mode === "signin"
-                ? "bg-amber-500 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signup");
-              setErrorMsg(null);
-              setSuccessMsg(null);
-            }}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              mode === "signup"
-                ? "bg-amber-500 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Create Account
-          </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "signup" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="first-name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  First name
-                </label>
-                <input
-                  id="first-name"
-                  type="text"
-                  required
-                  autoComplete="given-name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Jane"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="last-name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Last name
-                </label>
-                <input
-                  id="last-name"
-                  type="text"
-                  required
-                  autoComplete="family-name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Smith"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                />
-              </div>
-            </div>
-          )}
-
           <div>
             <label
               htmlFor="email"
@@ -192,20 +85,18 @@ export default function LoginPage() {
               >
                 Password
               </label>
-              {mode === "signin" && (
-                <a
-                  href="/forgot-password"
-                  className="text-xs text-amber-600 hover:text-amber-700 font-medium"
-                >
-                  Forgot your password?
-                </a>
-              )}
+              <a
+                href="/forgot-password"
+                className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+              >
+                Forgot your password?
+              </a>
             </div>
             <PasswordInput
               id="password"
               required
               minLength={6}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -219,33 +110,26 @@ export default function LoginPage() {
             </div>
           )}
 
-          {successMsg && (
-            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-              {successMsg}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading
-              ? "Please wait…"
-              : mode === "signin"
-              ? "Sign In"
-              : "Create Account"}
+            {loading ? "Please wait…" : "Sign In"}
           </button>
-
-          {mode === "signup" && (
-            <p className="text-xs text-gray-400 text-center leading-relaxed">
-              By creating an account, you agree to our{" "}
-              <a href="/terms" className="underline hover:text-gray-600 transition-colors">Terms of Service</a>
-              {" "}and{" "}
-              <a href="/privacy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>.
-            </p>
-          )}
         </form>
+
+        <p className="mt-6 text-xs text-gray-400 text-center leading-relaxed">
+          New to Happy Hour Compass?{" "}
+          <a href="/claim-your-venue" className="underline hover:text-gray-600 transition-colors">
+            Claim your venue
+          </a>{" "}
+          or find out how to{" "}
+          <a href="/business" className="underline hover:text-gray-600 transition-colors">
+            add your business
+          </a>
+          .
+        </p>
         </div>{/* end card */}
       </div>{/* end max-w-md wrapper */}
     </main>
