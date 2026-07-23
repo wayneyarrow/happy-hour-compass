@@ -107,9 +107,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description: metaDescription,
     path: `/${guide.marketSlug}/guides/${guide.slug}`,
     canonicalPath,
-    // hero_image_url may be null — /og-default.png isn't a real asset yet
-    // (see metadata.ts), so fall back to the site logo instead of a 404.
-    ogImage: guide.hero_image_url ?? "/logo.png",
+    // hero_image_url may be null — fall back to the sitewide default social
+    // card (same asset DEFAULT_OG_IMAGE in metadata.ts falls back to)
+    // instead of a 404.
+    ogImage: guide.hero_image_url ?? "/images/branding/og-card.png",
     ogType: "article",
     ogTitle,
     ogDescription,

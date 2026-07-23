@@ -66,15 +66,12 @@ export interface PageMetadataOptions {
  * point at a real file in /public — this previously pointed at
  * "/og-default.png", which was never actually added, producing a broken
  * image URL in every social preview that fell through to it (see the SEO
- * Metadata Consistency Audit). /logo.png is the existing asset this
- * codebase already treats as "the" standalone brand logo in every other
- * external-facing context — email templates, auth-flow pages, the
- * Organization JSON-LD node (src/lib/seo/schema/organization.ts), and the
- * Guide detail page's own hero-image fallback — so reusing it here keeps
- * one single fallback image sitewide instead of introducing a second,
- * OG-specific asset.
+ * Metadata Consistency Audit). Previously reused /logo.png (the square brand
+ * logo) for this; now points at a purpose-built 1200x630 social card
+ * (Kate's og-card.png) so link previews render a proper landscape share
+ * image instead of a square logo.
  */
-const DEFAULT_OG_IMAGE = "/logo.png";
+const DEFAULT_OG_IMAGE = "/images/branding/og-card.png";
 const SITE_NAME = "Happy Hour Compass";
 const LOCALE = "en_CA";
 
