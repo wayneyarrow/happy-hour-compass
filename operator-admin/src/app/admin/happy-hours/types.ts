@@ -11,6 +11,13 @@ export type TaglineState = {
 export type HhTimesState = {
   success?: boolean;
   errors?: { form?: string };
+  /**
+   * True when this save left the venue with no qualifying Happy Hour slot on
+   * any day and it was automatically unpublished as a result (see the
+   * auto-unpublish block in updateHhTimesAction). Optional/undefined for
+   * every other outcome, including the Control Panel's actionOverride.
+   */
+  venueUnpublished?: boolean;
 };
 
 /** A single food or drink special item. */

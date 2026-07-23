@@ -4,6 +4,8 @@
  * Pure module — no DB queries, no Next.js APIs, no side effects.
  * All inputs are derived by callers and passed in. This keeps the engine
  * testable, UI-agnostic, and safe for use in server actions or CS tooling.
+ * The one exception is parseHhTimes (below), imported for its parsing logic
+ * only — it performs no I/O itself, so this module still performs none.
  *
  * Three-tier model:
  *   Tier 1 – Required:              block publish if missing
@@ -19,6 +21,7 @@
  */
 
 import type { OperatorPlan } from "@/lib/plans";
+import { parseHhTimes } from "@/lib/data/venues";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -134,6 +137,22 @@ function hasContent(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+// ── Public: qualifying Happy Hour helper ──────────────────────────────────────
+
+/**
+ * True when `hhTimes` contains at least one valid Happy Hour slot on at
+ * least one day. This is the single definition of "qualifying" shared by
+ * the hasHappyHourTimes publish-readiness signal below and the auto-unpublish
+ * check in updateHhTimesAction (src/app/admin/happy-hours/actions.ts) — a raw
+ * non-empty-string check (the previous hasHappyHourTimes definition) is not
+ * enough, since the Happy Hour Times editor always saves a non-empty string,
+ * one line per day, even when every day is set to "No happy hour".
+ */
+export function hasQualifyingHappyHour(hhTimes: string | null | undefined): boolean {
+  const weekly = parseHhTimes(hhTimes ?? null);
+  return Object.values(weekly).some((slots) => slots.length > 0);
+}
+
 export function parseSpecialItemCount(raw: string | null | undefined): number {
   if (!raw?.trim()) return 0;
   try {
@@ -192,7 +211,7 @@ export function computeVenueReadiness(input: VenueReadinessInput): VenueReadines
   const hasCity             = hasContent(input.city);
   const hasProvinceOrState  = hasContent(input.region);
   const hasMarketAndCity    = !!input.market_id && !!input.city_id;
-  const hasHappyHourTimes   = hasContent(input.hh_times);
+  const hasHappyHourTimes   = hasQualifyingHappyHour(input.hh_times);
   const hasAnyVenueImage    = input.imageCount > 0;
   const hasOperatorVenueImage = input.operatorImageCount > 0;
   const isUsingGenericSeededImage = hasAnyVenueImage && !hasOperatorVenueImage;

@@ -84,7 +84,7 @@ export async function deleteVenueImageAction(
   venueId: string,
   mediaId: string,
   imageUrl: string
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; venueUnpublished?: boolean }> {
   const ctx = await resolveOperatorContext();
 
   if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
@@ -114,7 +114,41 @@ export async function deleteVenueImageAction(
     // Non-fatal — the media row is already gone.
   }
 
-  return { error: null };
+  // Auto-unpublish: a published venue must have at least one image (see the
+  // hasAnyVenueImage/hasOperatorVenueImage required items in
+  // computeVenueReadiness / updatePublishStatusAction). If this delete left
+  // the venue with zero images, every variant of that requirement fails
+  // regardless of claimed/submitted status — unpublish it automatically
+  // rather than leaving a published listing with no image to show.
+  let venueUnpublished = false;
+  const { count: remainingImages } = await ctx.supabase
+    .from("media")
+    .select("id", { count: "exact", head: true })
+    .eq("venue_id", targetVenueId)
+    .eq("type", "venue_image");
+
+  if ((remainingImages ?? 0) === 0) {
+    let unpublishQuery = ctx.supabase
+      .from("venues")
+      .update(
+        {
+          is_published: false,
+          ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+        },
+        { count: "exact" }
+      )
+      .eq("id", targetVenueId)
+      .eq("is_published", true);
+
+    if (ctx.operator) {
+      unpublishQuery = unpublishQuery.eq("created_by_operator_id", ctx.operator.id);
+    }
+
+    const { count: unpublishedCount } = await unpublishQuery;
+    venueUnpublished = (unpublishedCount ?? 0) > 0;
+  }
+
+  return { error: null, venueUnpublished };
 }
 
 export async function reorderVenueImagesAction(

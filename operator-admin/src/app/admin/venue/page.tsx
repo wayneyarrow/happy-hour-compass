@@ -336,6 +336,7 @@ export default async function AdminVenuePage({
               imageLimit={imageLimit}
               plan={operatorPlan}
               isOwner={isOwner}
+              isPublished={venue.is_published ?? false}
             />
           </AccordionSection>
 

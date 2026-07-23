@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
 import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
+import { hasQualifyingHappyHour } from "@/lib/venueReadiness";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,8 +98,43 @@ export async function updateHhTimesAction(
     };
   }
 
+  // Auto-unpublish: a published venue must have at least one qualifying Happy
+  // Hour slot on some day (the same "happy hour times" signal
+  // computeVenueReadiness/updatePublishStatusAction already require to
+  // publish). If this save leaves every day without a valid time block, the
+  // venue no longer satisfies that requirement — unpublish it automatically
+  // rather than leaving a published listing with no happy hour to show.
+  // hasQualifyingHappyHour (src/lib/venueReadiness.ts) is the single shared
+  // definition of "qualifying" — reused here and by computeVenueReadiness's
+  // own hasHappyHourTimes signal so the two can never drift apart again.
+  let venueUnpublished = false;
+  if (!hasQualifyingHappyHour(hh_times)) {
+    let unpublishQuery = ctx.supabase
+      .from("venues")
+      .update(
+        {
+          is_published: false,
+          ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+        },
+        { count: "exact" }
+      )
+      .eq("id", venueId)
+      .eq("is_published", true);
+
+    if (ctx.operator) {
+      unpublishQuery = unpublishQuery.eq("created_by_operator_id", ctx.operator.id);
+    }
+
+    const { count: unpublishedCount } = await unpublishQuery;
+    venueUnpublished = (unpublishedCount ?? 0) > 0;
+  }
+
   revalidatePath("/admin/happy-hours");
-  return { success: true };
+  if (venueUnpublished) {
+    revalidatePath("/admin/venue");
+    revalidatePath("/admin/home");
+  }
+  return { success: true, venueUnpublished };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

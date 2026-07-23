@@ -23,6 +23,7 @@ type HappyHoursVenueRow = {
   hh_times?: string | null;
   hh_food_details?: string | null;
   hh_drink_details?: string | null;
+  is_published?: boolean | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ export default async function AdminHappyHoursPage({
   if (operator) {
     const { data, error } = await ctx.supabase
       .from("venues")
-      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details")
+      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details, is_published")
       .eq("created_by_operator_id", operator.id)
       .maybeSingle();
     venueData = data as HappyHoursVenueRow | null;
@@ -178,7 +179,7 @@ export default async function AdminHappyHoursPage({
   } else if (isImpersonating && impersonatingVenueId) {
     const { data, error } = await ctx.supabase
       .from("venues")
-      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details")
+      .select("id, hh_tagline, hh_times, hh_food_details, hh_drink_details, is_published")
       .eq("id", impersonatingVenueId)
       .maybeSingle();
     venueData = data as HappyHoursVenueRow | null;
@@ -255,6 +256,7 @@ export default async function AdminHappyHoursPage({
             <HhTimesForm
               venueId={venue.id}
               initialHhTimes={venue.hh_times ?? null}
+              isPublished={venue.is_published ?? false}
             />
           </HhTimesSection>
 

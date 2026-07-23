@@ -765,6 +765,14 @@ type Props = {
    * router.refresh() + Saved badge behaviour (e.g., to close a panel).
    */
   onSuccess?: () => void;
+  /**
+   * Whether the venue is currently published. Gates the confirmation warning
+   * shown before a save would leave every day without a valid time — see
+   * handleSubmit. Defaults to false (e.g. the Control Panel Fix panel, which
+   * runs its own actionOverride rather than updateHhTimesAction and has no
+   * use for this warning).
+   */
+  isPublished?: boolean;
 };
 
 const initialState: HhTimesState = {};
@@ -774,6 +782,7 @@ export default function HhTimesForm({
   initialHhTimes,
   actionOverride,
   onSuccess,
+  isPublished = false,
 }: Props) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -852,6 +861,30 @@ export default function HhTimesForm({
     setHasAttemptedSubmit(true);
     if (hasClientErrors) {
       e.preventDefault();
+      return;
+    }
+
+    // Confirm before a save that would leave a published venue with no
+    // qualifying Happy Hour day — mirrors the same "no valid slot" rule
+    // updateHhTimesAction enforces server-side (parseHhTimes / hasQualifyingDay).
+    // Only fires when this save is what actually removes the last one: the
+    // venue must currently have at least one qualifying day (hadQualifying)
+    // and this save must leave zero (!willQualify) — never when another
+    // qualifying day remains, and never for an already-unpublished venue.
+    if (isPublished) {
+      const hadQualifying = DAYS.some((d) => !parseHhTimes(initialHhTimes)[d].noHappyHour);
+      const willQualify = DAYS.some((d) => !dayStates[d].noHappyHour);
+      if (hadQualifying && !willQualify) {
+        const confirmed = window.confirm(
+          "Removing this will leave your venue without an active Happy Hour. " +
+            "Your venue will be unpublished and will no longer appear on Happy Hour Compass. " +
+            "Do you want to continue?"
+        );
+        if (!confirmed) {
+          e.preventDefault();
+          return;
+        }
+      }
     }
   }
 
@@ -859,6 +892,13 @@ export default function HhTimesForm({
     <form action={formAction} onSubmit={handleSubmit} noValidate>
         {/* Hidden input carries the serialized weekly schedule */}
         <input type="hidden" name="hh_times" value={generatedText} readOnly />
+
+        {state.venueUnpublished && (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+            Your venue has been unpublished because it no longer has an active Happy Hour.
+            Update your schedule and republish from the Venue page.
+          </div>
+        )}
 
         {state.errors?.form && (
           <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">

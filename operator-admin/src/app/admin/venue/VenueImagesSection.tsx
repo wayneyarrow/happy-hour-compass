@@ -52,13 +52,19 @@ type Props = {
   plan: OperatorPlan;
   /** Whether the current user is the account owner (controls CTA wording). */
   isOwner: boolean;
+  /**
+   * Whether the venue is currently published. Gates the confirmation warning
+   * shown before deleting the venue's last image — see handleDelete.
+   */
+  isPublished: boolean;
 };
 
-export default function VenueImagesSection({ venueId, establishmentType, imageLimit, plan, isOwner }: Props) {
+export default function VenueImagesSection({ venueId, establishmentType, imageLimit, plan, isOwner, isPublished }: Props) {
   const [images, setImages] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unpublishedNotice, setUnpublishedNotice] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Fetch (browser client — "media: authenticated read" permits all authed users) ──
@@ -181,12 +187,29 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
     if (!venueId) return;
     setError(null);
 
-    const { error: actionError } = await deleteVenueImageAction(venueId, img.id, img.url);
+    // Confirm before removing a published venue's last image — deleting it
+    // would leave the venue unable to satisfy the "at least one image"
+    // publish requirement (computeVenueReadiness), so deleteVenueImageAction
+    // unpublishes automatically. Only fires for the actual final image on an
+    // already-published venue — never when another image will remain, and
+    // never for a draft/unpublished venue.
+    if (isPublished && images.length === 1) {
+      const confirmed = window.confirm(
+        "Removing this will leave your venue without an uploaded image. " +
+          "Your venue will be unpublished and will no longer appear on Happy Hour Compass. " +
+          "Do you want to continue?"
+      );
+      if (!confirmed) return;
+    }
+
+    const { error: actionError, venueUnpublished } = await deleteVenueImageAction(venueId, img.id, img.url);
 
     if (actionError) {
       setError(actionError);
       return;
     }
+
+    if (venueUnpublished) setUnpublishedNotice(true);
 
     // Re-normalise sort_order on the remaining images to keep them 0..n-1.
     const remaining = images.filter((i) => i.id !== img.id);
@@ -209,6 +232,14 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
 
   return (
     <div className="space-y-4">
+
+      {/* Unpublished notice — shown once after deleting the last image auto-unpublished the venue */}
+      {unpublishedNotice && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          Your venue has been unpublished because it no longer has an uploaded image.
+          Upload a new photo and republish from the Publish section on this page.
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (

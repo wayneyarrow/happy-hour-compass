@@ -308,7 +308,7 @@ function expandScraperGroupedHhTimes(text: string): string {
  * Also handles scraper compact format (single line, pipe-separated blocks):
  *   "3pm - 6pm & 8pm - close | 3pm - 5pm & 9pm - close"
  */
-function parseHhTimes(
+export function parseHhTimes(
   text: string | null
 ): Record<string, Array<{ start: string; end: string }>> {
   const weekly: Record<string, Array<{ start: string; end: string }>> = {};
