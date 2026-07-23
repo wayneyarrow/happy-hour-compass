@@ -30,17 +30,17 @@ import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
  *     for dark surfaces elsewhere on the site (e.g. the Collection CTA
  *     buttons), not a new color introduced for this footer.
  *
- * Brand mark: neither full logo file (hhc-logo-horizontal-header.png,
- * logo.png) has a transparent background — both are opaque RGB PNGs that
- * render as a plain white rectangle on a dark surface. Only hhc-icon.png is
- * true RGBA with a transparent canvas. Rather than force one of the boxed
- * lockups onto a dark background (or add a decorative light plate behind
- * it, which the brief rules out), the brand block pairs the transparent
- * icon with a real text wordmark styled directly in the site's own type/
- * color system — the same "icon + styled text" shape the very first
- * version of this footer used, just larger and recolored for a dark
- * surface. This keeps brand recognition and guarantees contrast without
- * fabricating a new image asset.
+ * Brand mark: images/branding/logo-white.png is the official white lockup
+ * for dark surfaces (the counterpart to hhc-icon.png/logo.png, which are
+ * opaque and render as a plain white rectangle here) — a true RGBA PNG
+ * (colorType 6) with fully transparent corners, replacing the icon +
+ * styled-text substitute the footer used before this asset existed.
+ *
+ * Social links: Instagram/Facebook URLs have no existing centralized
+ * config (organization.ts's Organization JSON-LD explicitly omits `sameAs`
+ * pending real profiles — see that file), so they're plain local
+ * constants here, matching how other fixed external URLs in this codebase
+ * are declared inline rather than routed through a shared config module.
  *
  * "Claim Your Venue" now points at /claim-your-venue (see that route's
  * page.tsx) instead of straight into search — an instructional landing
@@ -53,6 +53,50 @@ import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
  * footer is the permanent structure; the pages it points to are each
  * their own task.
  */
+
+const INSTAGRAM_URL = "https://www.instagram.com/happyhourcompass/";
+const FACEBOOK_URL = "https://www.facebook.com/happyhourcompass";
+
+const SOCIAL_ICON_LINK_CLASS =
+  "text-white hover:text-white/80 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400";
+
+/** Feather Icons' instagram glyph — kept as inline SVG since no icon library is installed. */
+function InstagramIcon() {
+  return (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
+/** Feather Icons' facebook glyph — inline SVG, matching InstagramIcon's shape. */
+function FacebookIcon() {
+  return (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  );
+}
 
 function FooterColumnHeading({ children }: { children: ReactNode }) {
   return (
@@ -146,22 +190,42 @@ export function WebsiteFooter() {
               <Link
                 href="/"
                 aria-label="Happy Hour Compass — Home"
-                className="inline-flex items-center gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                className="inline-flex items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               >
                 <Image
-                  src="/hhc-icon.png"
-                  alt=""
-                  width={271}
-                  height={345}
-                  className="h-10 w-auto shrink-0"
+                  src="/images/branding/logo-white.png"
+                  alt="Happy Hour Compass"
+                  width={889}
+                  height={325}
+                  className="h-14 md:h-16 w-auto shrink-0"
                 />
-                <span className="text-2xl font-bold tracking-tight leading-none">
-                  <span className="text-amber-400">Happy Hour</span>{" "}
-                  <span className="text-white">Compass</span>
-                </span>
               </Link>
-              <p className="mt-5 text-sm text-gray-400 leading-relaxed max-w-[230px] text-balance">
-                &ldquo;Never ask &lsquo;Where should we go?&rsquo; again.&rdquo;
+              <div className="mt-4 flex items-center gap-4">
+                <Link
+                  href={INSTAGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Happy Hour Compass on Instagram (opens in a new tab)"
+                  className={SOCIAL_ICON_LINK_CLASS}
+                >
+                  <InstagramIcon />
+                </Link>
+                <Link
+                  href={FACEBOOK_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Happy Hour Compass on Facebook (opens in a new tab)"
+                  className={SOCIAL_ICON_LINK_CLASS}
+                >
+                  <FacebookIcon />
+                </Link>
+              </div>
+              <p className="mt-5 text-sm text-gray-400 leading-relaxed max-w-[230px]">
+                Never ask
+                <br />
+                &ldquo;Where should we go?&rdquo;
+                <br />
+                again.
               </p>
             </div>
 
