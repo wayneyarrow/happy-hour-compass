@@ -224,9 +224,6 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
-                    <span className={thStaticCls}>Status</span>
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("plan")} className={thBtnCls}>
                       Plan <SortIcon active={sortCol === "plan"} dir={sortDir} />
                     </button>
@@ -259,12 +256,6 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                         {op.name ?? <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{op.email}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <StatusBadge
-                          variant={op.is_approved ? "success" : "neutral"}
-                          label={op.is_approved ? "Approved" : "Pending"}
-                        />
-                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <StatusBadge variant={planVariant} label={planLabel} />
                       </td>
