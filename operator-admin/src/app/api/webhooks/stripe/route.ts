@@ -221,7 +221,7 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] checkout.session.completed: DB sync failed:", result.error);
-      } else {
+      } else if (oldPlanForCheckout !== targetPlan) {
         console.log("[webhook/stripe] checkout.session.completed: plan activated successfully →", targetPlan);
         await logPlanChangeEvent({
           operatorId,
@@ -230,7 +230,18 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
           changedByEmail:                 null,
           trigger:                        "stripe_checkout",
           billingProviderSubscriptionId:  subscriptionId,
+          billingProviderCustomerId:      customerId,
         });
+      } else {
+        // Plan was already targetPlan before this sync — either a retried/
+        // redelivered checkout.session.completed event, or a
+        // customer.subscription.updated event for the same subscription
+        // already processed and wrote this plan first. Either way, the DB
+        // sync above is still safe to run unconditionally (idempotent), but
+        // logging a second plan_change_events row (and firing a second
+        // founder notification) here would be a duplicate for the same
+        // effective change.
+        console.log("[webhook/stripe] checkout.session.completed: plan already", targetPlan, "— skipping duplicate plan_change_event");
       }
       break;
     }
@@ -289,6 +300,7 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
           changedByEmail:                 null,
           trigger:                        "stripe_subscription_updated",
           billingProviderSubscriptionId:  sub.id,
+          billingProviderCustomerId:      customerId,
         });
       }
       break;
@@ -333,6 +345,7 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
           changedByEmail:                 null,
           trigger:                        "stripe_subscription_deleted",
           billingProviderSubscriptionId:  sub.id,
+          billingProviderCustomerId:      customerId,
         });
       }
       break;

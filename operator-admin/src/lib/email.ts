@@ -23,6 +23,7 @@
 import { Resend } from "resend";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -1831,6 +1832,103 @@ Happy Hour Compass Control Panel`;
     type:        "venue_cancellation_founder",
     to,
     subject:     `Operator cancelled venue — ${venueName}`,
+    html,
+    text,
+    criticality: "important",
+  });
+}
+
+/**
+ * Notifies the founder whenever a venue's paid plan changes — upgrade or
+ * downgrade, whether triggered by the operator directly (changePlanAction),
+ * Stripe Checkout activation, or a Stripe-side subscription update/deletion
+ * (webhook). Called from the single shared logPlanChangeEvent() choke point
+ * (src/lib/planChangeEvents.ts) rather than from each individual trigger, so
+ * this fires exactly once per confirmed plan change.
+ *
+ * Sent to FOUNDER_NOTIFICATION_EMAIL (defaults to hello@happyhourcompass.com).
+ */
+export async function sendPlanChangeFounderEmail({
+  venueName,
+  venueId,
+  operatorEmail,
+  fromPlan,
+  toPlan,
+  isUpgrade,
+  billingProviderSubscriptionId,
+  billingProviderCustomerId,
+}: {
+  venueName:                      string | null;
+  venueId:                        string | null;
+  operatorEmail:                  string;
+  fromPlan:                       OperatorPlan;
+  toPlan:                         OperatorPlan;
+  isUpgrade:                      boolean;
+  billingProviderSubscriptionId?: string | null;
+  billingProviderCustomerId?:     string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to         = getFounderNotificationEmail();
+  const appUrl     = getSiteUrl();
+  const venueLabel = venueName ?? "(no venue on file)";
+  const venueUrl   = venueId ? `${appUrl}/control-panel/venues/${venueId}` : null;
+  const changeLabel = isUpgrade ? "Plan Upgrade" : "Plan Downgrade";
+  const timestamp   = new Date().toUTCString();
+
+  const stripeRows = `${billingProviderSubscriptionId
+    ? `<tr><td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Stripe subscription</td><td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${billingProviderSubscriptionId}</td></tr>`
+    : ""}${billingProviderCustomerId
+    ? `<tr><td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Stripe customer</td><td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${billingProviderCustomerId}</td></tr>`
+    : ""}`;
+
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">${changeLabel}</h1>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Venue</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;">${venueLabel}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Venue ID</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${venueId ?? "—"}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Operator</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${operatorEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Previous plan</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${PLAN_LABELS[fromPlan]}</td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">New plan</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${PLAN_LABELS[toPlan]}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Effective</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${timestamp} &middot; Immediate</td>
+            </tr>${stripeRows}
+          </table>
+          ${venueUrl ? emailCta(venueUrl, "View venue in Control Panel &rarr;") : ""}
+          ${venueUrl ? `<p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy: ${venueUrl}</p>` : ""}`,
+    "Happy Hour Compass &middot; Control Panel notification"
+  );
+
+  const text = `${changeLabel} — Happy Hour Compass
+
+Venue:         ${venueLabel}
+Venue ID:      ${venueId ?? "—"}
+Operator:      ${operatorEmail}
+Previous plan: ${PLAN_LABELS[fromPlan]}
+New plan:      ${PLAN_LABELS[toPlan]}
+Effective:     ${timestamp} · Immediate${billingProviderSubscriptionId ? `\nStripe subscription: ${billingProviderSubscriptionId}` : ""}${billingProviderCustomerId ? `\nStripe customer:     ${billingProviderCustomerId}` : ""}
+${venueUrl ? `\nView venue in Control Panel:\n${venueUrl}\n` : ""}
+—
+Happy Hour Compass Control Panel`;
+
+  return sendTransactionalEmail({
+    type:        "plan_change_founder",
+    to,
+    subject:     `${changeLabel}: ${venueLabel} (${PLAN_LABELS[fromPlan]} → ${PLAN_LABELS[toPlan]})`,
     html,
     text,
     criticality: "important",
