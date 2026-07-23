@@ -107,6 +107,18 @@ export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
     console.error("[webhook/stripe] STRIPE_WEBHOOK_SECRET is not set");
+    // Every Stripe event hits this guard identically until the env var is
+    // fixed — a console.error alone is easy to miss (Vercel's log retention
+    // is short-lived), and this specific misconfiguration silently prevents
+    // every plan sync and plan-change notification in this environment. Alert
+    // like the unhandled-error path below, rather than only logging.
+    await sendSlackAlert({
+      channel:  "ops-critical",
+      severity: "critical",
+      title:    "Stripe webhook misconfigured",
+      message:  "STRIPE_WEBHOOK_SECRET is not set — every Stripe webhook event is being rejected before processing, blocking plan syncs and plan-change notifications in this environment.",
+      metadata: { environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown" },
+    });
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
