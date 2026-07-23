@@ -506,7 +506,7 @@ export default async function AdminHomePage() {
             {!isPublished && readiness?.publishReady && (
               <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
                 <Link
-                  href="/admin/venue"
+                  href="/admin/venue?section=publish#publish"
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-colors"
                 >
                   Publish your venue →
