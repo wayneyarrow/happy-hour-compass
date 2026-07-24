@@ -7,8 +7,20 @@ import { getStripeClient, getStripePriceId } from "@/lib/stripe";
 
 // ─── Shared utility ────────────────────────────────────────────────────────────
 
+/**
+ * Preview deployments must never trust a manually-configured APP_URL — it has
+ * historically been set to a single fixed value across all Vercel
+ * environments (see src/lib/email.ts's header comment for the original
+ * incident, where this same pattern sent staging email links to the
+ * production deployment). That would leak Preview/Test-mode Stripe Checkout
+ * and Customer Portal redirects into the Production admin app. VERCEL_URL is
+ * always specific to the deployment actually serving the request, so Preview
+ * stays self-contained regardless of how APP_URL is configured.
+ */
 function getAppUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+  if (process.env.APP_URL && process.env.VERCEL_ENV !== "preview") {
+    return process.env.APP_URL.replace(/\/$/, "");
+  }
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }

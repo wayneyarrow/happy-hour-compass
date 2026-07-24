@@ -8,9 +8,10 @@
  * Architecture notes:
  *   - Happy Hour Compass owns plan limits, entitlements, and feature gating.
  *     (src/lib/plans.ts + src/lib/subscriptions.ts remain the source of truth.)
- *   - Stripe will become the source of truth for payment status, subscription
- *     status, invoices, and payment methods — fulfilled via webhooks and the
- *     Customer Portal in a follow-up task.
+ *   - Stripe is the source of truth for payment status, subscription status,
+ *     invoices, and payment methods — fulfilled via the webhook handler
+ *     (src/app/api/webhooks/stripe/route.ts) and the Customer Portal
+ *     (createPortalSessionAction, src/app/admin/subscription/stripeActions.ts).
  *
  * Required environment variables (add to .env.local + Vercel project settings):
  *   STRIPE_SECRET_KEY              — sk_live_… or sk_test_… (server-only)
