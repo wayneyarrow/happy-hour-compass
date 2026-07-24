@@ -3,6 +3,15 @@ import { sendSlackAlert } from "@/lib/slack";
 import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 
+// KNOWN ISSUE: Supabase's GoTrue Admin API intermittently rejects calls with
+// "unrecognized JWT kid <nil> for algorithm ES256" following the platform's
+// HS256→ES256 JWT signing-key migration — a confirmed upstream bug, not a
+// config/code issue (see supabase/supabase#48295, #48272). Remove the retry
+// in provisionOperatorForVenue's generateLink step once Supabase ships a fix.
+function isKnownSupabaseJwtKidError(message: string | null | undefined): boolean {
+  return !!message && message.includes("unrecognized JWT kid") && message.includes("ES256");
+}
+
 /**
  * Provisions an operator account for a venue and sends an activation email.
  *
@@ -236,11 +245,27 @@ export async function provisionOperatorForVenue({
   const appUrl = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type:    "recovery",
-    email,
-    options: { redirectTo },
-  });
+  // Retry only the known transient Supabase JWT/kid failure (see note at top
+  // of file), up to 3 attempts total, short exponential backoff. Any other
+  // error returns immediately on the first attempt.
+  let linkData: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["data"] | null = null;
+  let linkError: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["error"] = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const result = await supabase.auth.admin.generateLink({
+      type:    "recovery",
+      email,
+      options: { redirectTo },
+    });
+    linkData = result.data;
+    linkError = result.error;
+
+    if (!linkError || !isKnownSupabaseJwtKidError(linkError.message)) break;
+    if (attempt < 3) {
+      console.error(`${logTag} generateLink hit known Supabase JWT/kid issue — retrying (attempt ${attempt + 1}/3).`);
+      await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 500));
+    }
+  }
 
   if (linkError || !linkData?.properties?.action_link) {
     console.error(
