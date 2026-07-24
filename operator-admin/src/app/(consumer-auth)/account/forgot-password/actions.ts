@@ -3,6 +3,9 @@
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
+import { sendPasswordResetEmail } from "@/lib/email";
+import { sendSlackAlert } from "@/lib/slack";
 import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
@@ -14,18 +17,40 @@ export type RequestConsumerPasswordResetResult =
   | { ok: false; error: string; turnstileFailed?: boolean };
 
 /**
- * Requests a Supabase password-reset email for a consumer account.
+ * Requests a password-reset email for a consumer account.
  *
  * Always resolves { ok: true } once Turnstile verification passes,
  * regardless of whether the email matches an account — prevents account
  * enumeration, matching the same convention already used by the operator
  * forgot-password flow (forgotPasswordAction, src/app/forgot-password/actions.ts).
  *
- * This used to be a direct supabase.auth.resetPasswordForEmail() call from
- * the browser (ConsumerForgotPasswordPage). Moved server-side so the
- * Turnstile token can be verified — and the reset email blocked on failure —
- * before Supabase is asked to send anything; a client-only call has no point
- * to gate server-side.
+ * This used to call supabase.auth.resetPasswordForEmail(), letting Supabase
+ * render and send the whole email itself. That produced Supabase's default,
+ * unbranded "Reset Password" template — sent through Supabase's own mail
+ * infrastructure rather than the app's verified Resend domain — which Gmail
+ * flagged with a "This message might be dangerous" warning in staging
+ * end-to-end testing (2026-07-24). It also had no observable success/failure
+ * signal to hang a Slack alert off of.
+ *
+ * Now mirrors forgotPasswordAction's own pattern instead: generate the
+ * recovery link via admin.generateLink() and send our own branded email via
+ * sendPasswordResetEmail() (Resend, hello@happyhourcompass.com — the same
+ * authenticated sender every other transactional email in this codebase
+ * already uses without triggering a Gmail warning).
+ *
+ * IMPORTANT — the link sent is NOT linkData.properties.action_link (the raw
+ * .../auth/v1/verify?... URL). It's rebuilt as
+ * `${redirectTo}?token_hash=${hashed_token}&type=recovery`, matching exactly
+ * the shape the Reset Password *email template* was previously changed to
+ * produce (see CLAUDE.md's Authentication & Email section and commit
+ * 1e7067a, "Prevent password reset links from being consumed on page load").
+ * hashed_token is the same value Supabase's own {{ .TokenHash }} template
+ * variable would resolve to for this exact operation. This preserves
+ * /account/reset-password's existing token_hash + explicit-Continue-click
+ * flow untouched: that page defers auth.verifyOtp() to a manual button click
+ * specifically so an email security scanner prefetching the link cannot
+ * consume the single-use recovery token before the user opens it. Sending
+ * the raw action_link here instead would silently reintroduce that bug.
  *
  * redirectTo is already built from getSiteUrl(), so it resolves to the
  * correct per-environment origin (confirmed: staging Preview has
@@ -59,8 +84,49 @@ export async function requestConsumerPasswordReset({
   }
 
   const supabase = createAdminClient();
-  await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-    redirectTo: `${getSiteUrl()}/account/reset-password`,
+  const normalizedEmail = email.trim().toLowerCase();
+  const redirectTo = `${getSiteUrl()}/account/reset-password`;
+
+  // Retries the known transient Supabase JWT/kid failure (see
+  // generateLinkWithRetry's header comment) — the same intermittent
+  // generateLink failure already confirmed to hit operator provisioning
+  // and the operator forgot-password flow.
+  const { data: linkData, error: linkError } = await generateLinkWithRetry(supabase, {
+    type:    "recovery",
+    email:   normalizedEmail,
+    options: { redirectTo },
+  });
+
+  if (linkError || !linkData?.properties?.hashed_token) {
+    // "user_not_found" just means no consumer account exists for this email —
+    // expected for unknown addresses, never alerted on or revealed to the
+    // caller (account-enumeration guard, same as forgotPasswordAction's
+    // silent no-op for an unmatched email). Any other error is a genuine
+    // failure worth ops visibility.
+    if (linkError?.code !== "user_not_found") {
+      console.error("[requestConsumerPasswordReset] generateLink failed:", linkError?.message);
+      await sendSlackAlert({
+        channel:  "ops-alerts",
+        severity: "warning",
+        title:    "Consumer Forgot Password — Recovery Link Generation Failed",
+        message:  "A consumer requested a password reset but the Supabase recovery link could not be generated.",
+        metadata: {
+          Flow:        "requestConsumerPasswordReset",
+          Error:       linkError?.message ?? "unknown",
+          Environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+        },
+      });
+    }
+    return { ok: true };
+  }
+
+  const resetLink = `${redirectTo}?token_hash=${linkData.properties.hashed_token}&type=recovery`;
+
+  // Slack escalation on delivery failure is handled by sendTransactionalEmail
+  // (password_reset → critical → #ops-critical), same as the operator flow.
+  await sendPasswordResetEmail({
+    to: normalizedEmail,
+    resetLink,
   });
 
   return { ok: true };

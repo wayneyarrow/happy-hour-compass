@@ -6,6 +6,7 @@ import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
+import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
 import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
@@ -104,7 +105,11 @@ export async function forgotPasswordAction(
   const appUrl = getSiteUrl();
   const redirectTo = `${appUrl}/operator/create-password`;
 
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+  // Retries the known transient Supabase JWT/kid failure (see
+  // generateLinkWithRetry's header comment) — this is the same class of
+  // intermittent generateLink failure already mitigated for operator
+  // provisioning (src/lib/operatorActivation.ts).
+  const { data: linkData, error: linkError } = await generateLinkWithRetry(supabase, {
     type:    "recovery",
     email,
     options: { redirectTo },
