@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:e2e:website": "playwright test",
     "import:venues": "tsx scripts/importVenuesFromCsv.ts",
     "import:events": "tsx scripts/importEventsFromCsv.ts",
     "trim:specials": "tsx scripts/trimSeededSpecials.ts",
@@ -36,6 +37,7 @@
     "stripe": "^22.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

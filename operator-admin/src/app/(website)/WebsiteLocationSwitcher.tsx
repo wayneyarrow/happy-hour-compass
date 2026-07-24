@@ -39,6 +39,18 @@ export default function WebsiteLocationSwitcher({
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setShowRegions(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   function close() {
     setOpen(false);
     setShowRegions(false);
