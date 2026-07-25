@@ -9,7 +9,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const EFFECTIVE_DATE = "June 19, 2026";
-const LAST_UPDATED   = "June 19, 2026";
+const LAST_UPDATED   = "July 25, 2026";
 
 export default function TermsOfServicePage() {
   return (
@@ -85,9 +85,11 @@ export default function TermsOfServicePage() {
           the Service.
         </p>
         <p>
-          Future versions of the Service may offer consumer accounts, saved venues, personalized
-          recommendations, and other features. Any such features will be subject to these Terms
-          and any additional terms presented at the time of registration.
+          Consumers may optionally create a free account to save venues, events, and guides,
+          and to personalize their use of the Service. Creating a consumer account is subject
+          to these Terms and our Privacy Policy. Future versions of the Service may offer
+          personalized recommendations and other additional features, which will be subject
+          to these Terms and any additional terms presented at the time of introduction.
         </p>
       </Section>
 
@@ -211,8 +213,7 @@ export default function TermsOfServicePage() {
         <p>
           Payments for paid operator plans are processed by Stripe, our third-party payment
           processor. By subscribing to a paid plan, you authorize us (via Stripe) to charge
-          your payment method on a recurring basis according to your chosen billing cycle
-          (monthly or annually, as applicable).
+          your payment method on a recurring monthly basis.
         </p>
         <p>
           All fees are displayed in Canadian dollars (CAD) unless otherwise stated. You are

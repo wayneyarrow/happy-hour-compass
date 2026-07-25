@@ -9,7 +9,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const EFFECTIVE_DATE = "June 19, 2026";
-const LAST_UPDATED   = "June 19, 2026";
+const LAST_UPDATED   = "July 25, 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -57,6 +57,13 @@ export default function PrivacyPolicyPage() {
               your first name, last name, email address, and password. You may also provide your
               venue&rsquo;s business name, address, phone number, website URL, business hours,
               happy hour details, and images.
+            </li>
+            <li>
+              <strong>Consumer accounts:</strong> When you create a consumer account, we collect
+              your name, email address, and password, along with your acceptance of these Terms
+              and this Privacy Policy and your marketing communication preference. A consumer
+              account allows you to save venues, events, and guides, and to personalize your
+              use of the Service.
             </li>
             <li>
               <strong>Venue claim submissions:</strong> When you submit a claim to manage a venue
@@ -112,6 +119,13 @@ export default function PrivacyPolicyPage() {
               our fraud prevention and trust verification process.
             </li>
             <li>
+              <strong>Device location:</strong> With your permission, we may access your device&rsquo;s
+              location to show nearby venues, events, and other location-based features. Granting
+              location access is optional; you can decline or revoke permission at any time through
+              your browser or device settings. We do not permanently store your precise device
+              location.
+            </li>
+            <li>
               <strong>Referral information:</strong> How you arrived at the Service (e.g., direct
               link, search engine, referral).
             </li>
@@ -153,9 +167,10 @@ export default function PrivacyPolicyPage() {
             across sessions.
           </li>
           <li>
-            <strong>Analytics:</strong> We use Vercel Analytics and Vercel Speed Insights to
-            collect anonymized usage data. These services may use cookies or similar technologies
-            to track page views and performance metrics.
+            <strong>Analytics:</strong> We use Vercel Analytics and Vercel Speed Insights, as
+            well as Google Analytics 4, to collect anonymized or aggregated usage data. These
+            services may use cookies or similar technologies to track page views and
+            performance metrics.
           </li>
         </ul>
         <p>
@@ -278,11 +293,21 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Google</strong> — We use the Google Places API (New) to assist with venue
-            lookup during the owner submission flow. Google Maps static images and Street View
-            imagery may be displayed on the platform. Your use of these features is also governed
-            by Google&rsquo;s privacy policy.{" "}
+            lookup during the owner submission flow, and the Google Maps JavaScript SDK to
+            display interactive maps of venues and events on the platform. We also use Google
+            Analytics 4 to collect aggregated usage and traffic data about the Service. Your
+            use of these features is also governed by Google&rsquo;s privacy policy.{" "}
             <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">
               Google Privacy Policy
+            </a>
+          </li>
+          <li>
+            <strong>Cloudflare Turnstile</strong> — We use Cloudflare Turnstile to help protect
+            certain forms on the Service (such as contact, venue suggestion, claim, and sign-up
+            forms) from spam and automated abuse. Turnstile may process your IP address as part
+            of this verification.{" "}
+            <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">
+              Cloudflare Privacy Policy
             </a>
           </li>
         </ul>
