@@ -606,20 +606,39 @@ function SavedGuidesGrid({ guides }: { guides: SavedGuideCard[] }) {
 
 function SavedGuideEditorialCard({ guide }: { guide: SavedGuideCard }) {
   return (
-    <Link
-      href={`/${guide.marketSlug}/guides/${guide.slug}`}
-      className="block group relative rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow bg-white"
-    >
-      <div className="h-40 sm:h-44 bg-gray-100 overflow-hidden">
-        {guide.heroImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={guide.heroImageUrl}
-            alt={guide.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-          />
-        )}
-      </div>
+    // <article> (not the Link) is the outer element so the Remove button
+    // below can be an interactive sibling of the Link rather than nested
+    // inside it — a <button> inside an <a> is invalid HTML and inaccessible.
+    // Same structural fix applied to GuideCard.tsx / SearchResultCard.tsx.
+    <article className="group relative rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow bg-white">
+      <Link href={`/${guide.marketSlug}/guides/${guide.slug}`} className="block">
+        <div className="h-40 sm:h-44 bg-gray-100 overflow-hidden">
+          {guide.heroImageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={guide.heroImageUrl}
+              alt={guide.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+            />
+          )}
+        </div>
+
+        <div className="p-4">
+          {guide.locationLabel && (
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+              {guide.locationLabel}
+            </p>
+          )}
+          <p className="text-base font-bold text-gray-900 leading-snug line-clamp-2">
+            {guide.title}
+          </p>
+          {guide.standfirst && (
+            <p className="mt-1.5 text-sm text-gray-500 leading-relaxed line-clamp-2">
+              {guide.standfirst}
+            </p>
+          )}
+        </div>
+      </Link>
 
       {/* Remove button — top-right, frosted circle, matches other Save buttons */}
       <div
@@ -632,22 +651,6 @@ function SavedGuideEditorialCard({ guide }: { guide: SavedGuideCard }) {
       >
         <SaveGuideButton guideId={guide.id} variant="list" />
       </div>
-
-      <div className="p-4">
-        {guide.locationLabel && (
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
-            {guide.locationLabel}
-          </p>
-        )}
-        <p className="text-base font-bold text-gray-900 leading-snug line-clamp-2">
-          {guide.title}
-        </p>
-        {guide.standfirst && (
-          <p className="mt-1.5 text-sm text-gray-500 leading-relaxed line-clamp-2">
-            {guide.standfirst}
-          </p>
-        )}
-      </div>
-    </Link>
+    </article>
   );
 }

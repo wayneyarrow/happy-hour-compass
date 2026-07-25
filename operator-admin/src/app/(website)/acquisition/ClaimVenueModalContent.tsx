@@ -5,6 +5,7 @@ import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { FieldError } from "@/components/FieldError";
 
 type Props = {
   venueRouteParam: string;
@@ -26,7 +27,6 @@ const INPUT_CLASS =
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
   "placeholder:text-gray-400";
 const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1.5";
-const FIELD_ERROR_CLASS = "mt-1.5 text-xs text-red-600";
 
 /**
  * Claim a Venue form adapted for the AcquisitionModal context.
@@ -105,7 +105,10 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
   return (
     <form action={formAction} className="px-6 pt-5 pb-8">
       {state.error && (
-        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700">
+        <div
+          role="alert"
+          className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700"
+        >
           {state.error}
         </div>
       )}
@@ -128,11 +131,11 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
             type="text"
             autoComplete="given-name"
             required
+            aria-invalid={!!state.fieldErrors?.first_name}
+            aria-describedby={state.fieldErrors?.first_name ? "cvm-first_name-error" : undefined}
             className={INPUT_CLASS}
           />
-          {state.fieldErrors?.first_name && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.first_name}</p>
-          )}
+          <FieldError id="cvm-first_name-error" message={state.fieldErrors?.first_name} />
         </div>
 
         <div>
@@ -145,11 +148,11 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
             type="text"
             autoComplete="family-name"
             required
+            aria-invalid={!!state.fieldErrors?.last_name}
+            aria-describedby={state.fieldErrors?.last_name ? "cvm-last_name-error" : undefined}
             className={INPUT_CLASS}
           />
-          {state.fieldErrors?.last_name && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.last_name}</p>
-          )}
+          <FieldError id="cvm-last_name-error" message={state.fieldErrors?.last_name} />
         </div>
 
         <div>
@@ -161,6 +164,8 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
             name="position"
             required
             defaultValue=""
+            aria-invalid={!!state.fieldErrors?.position}
+            aria-describedby={state.fieldErrors?.position ? "cvm-position-error" : undefined}
             className={
               INPUT_CLASS +
               " appearance-none bg-white bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")] bg-no-repeat bg-[right_12px_center] pr-9"
@@ -175,9 +180,7 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
               </option>
             ))}
           </select>
-          {state.fieldErrors?.position && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.position}</p>
-          )}
+          <FieldError id="cvm-position-error" message={state.fieldErrors?.position} />
         </div>
 
         <div>
@@ -194,11 +197,11 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
             required
             value={phoneValue}
             onChange={(e) => setPhoneValue(formatPhoneInput(e.target.value))}
+            aria-invalid={!!state.fieldErrors?.phone}
+            aria-describedby={state.fieldErrors?.phone ? "cvm-phone-error" : undefined}
             className={INPUT_CLASS}
           />
-          {state.fieldErrors?.phone && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.phone}</p>
-          )}
+          <FieldError id="cvm-phone-error" message={state.fieldErrors?.phone} />
         </div>
 
         <div>
@@ -211,11 +214,11 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
             type="email"
             autoComplete="email"
             required
+            aria-invalid={!!state.fieldErrors?.email}
+            aria-describedby={state.fieldErrors?.email ? "cvm-email-error" : undefined}
             className={INPUT_CLASS}
           />
-          {state.fieldErrors?.email && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.email}</p>
-          )}
+          <FieldError id="cvm-email-error" message={state.fieldErrors?.email} />
         </div>
       </div>
 

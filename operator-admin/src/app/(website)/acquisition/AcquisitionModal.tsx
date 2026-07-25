@@ -12,6 +12,9 @@ type Props = {
   children: React.ReactNode;
 };
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /**
  * Branded acquisition modal shell — reusable for Suggest a Venue,
  * Submit Your Venue, Claim Venue, Contact Us, and any future flow.
@@ -25,6 +28,7 @@ type Props = {
 export function AcquisitionModal({ open, onClose, title, description, children }: Props) {
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   // Wait for hydration before rendering portal.
   useEffect(() => setMounted(true), []);
@@ -49,11 +53,49 @@ export function AcquisitionModal({ open, onClose, title, description, children }
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Move focus into the panel when it opens.
+  // Move focus into the panel when it opens; restore it to whatever
+  // triggered the modal (usually the button that opened it) once it closes,
+  // so keyboard users don't lose their place in the page behind it.
   useEffect(() => {
     if (!open || !mounted) return;
+    triggerRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus({ preventScroll: true });
+    return () => {
+      triggerRef.current?.focus?.();
+    };
   }, [open, mounted]);
+
+  // Trap Tab/Shift+Tab within the panel while open, so focus can't escape
+  // to the page behind the modal. Re-queries focusable elements on every
+  // keypress since the multi-step forms rendered inside change per step.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      // Initial focus on open lands on the panel itself (see the effect
+      // above), not on `first` — sequential focus navigation treats a
+      // focused container as being positioned before its own children, so
+      // an unguarded Shift+Tab from that state moves focus backward out of
+      // the panel entirely rather than wrapping to `last`. Treating the
+      // panel itself as an additional "start" position closes that gap.
+      if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   if (!mounted || !open) return null;
 

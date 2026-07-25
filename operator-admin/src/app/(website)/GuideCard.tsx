@@ -23,20 +23,28 @@ type Props = {
 
 export function GuideCard({ guideId, title, href, heroImageUrl }: Props) {
   return (
-    <Link
-      href={href}
-      className="block group relative rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-    >
-      <div className="h-32 bg-gray-100 overflow-hidden">
-        {heroImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={heroImageUrl}
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-          />
-        )}
-      </div>
+    // <article> (not the Link) is the outer element so the Save button below
+    // can be an interactive sibling of the Link rather than nested inside it
+    // — a <button> inside an <a> is invalid HTML and inaccessible (nested
+    // interactive controls can't both be reached reliably by keyboard/
+    // assistive tech). Same structural fix already applied to
+    // SearchResultCard.tsx / EventSearchCard.tsx.
+    <article className="group relative rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+      <Link href={href} className="block">
+        <div className="h-32 bg-gray-100 overflow-hidden">
+          {heroImageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroImageUrl}
+              alt={title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+            />
+          )}
+        </div>
+        <div className="p-3">
+          <p className="text-sm font-semibold text-gray-900 line-clamp-2">{title}</p>
+        </div>
+      </Link>
       {guideId && (
         <div
           className="absolute top-2.5 right-3"
@@ -49,9 +57,6 @@ export function GuideCard({ guideId, title, href, heroImageUrl }: Props) {
           <SaveGuideButton guideId={guideId} variant="list" />
         </div>
       )}
-      <div className="p-3">
-        <p className="text-sm font-semibold text-gray-900 line-clamp-2">{title}</p>
-      </div>
-    </Link>
+    </article>
   );
 }

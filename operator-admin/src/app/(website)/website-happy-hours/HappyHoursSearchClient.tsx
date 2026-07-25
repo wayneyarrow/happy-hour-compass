@@ -1416,8 +1416,10 @@ export function HappyHoursSearchClient({
 
         {/* Location denied hint — only shown when Near Me was activated but denied */}
         {nearMeActive && locationStatus === "denied" && (
-          <p className="px-4 md:px-6 pb-2.5 text-xs text-amber-700">
-            Enable location access in your browser settings to use Near Me.
+          <p role="status" aria-live="polite" className="px-4 md:px-6 pb-2.5 text-xs text-amber-700">
+            We couldn&rsquo;t access your location, so Near Me is unavailable. You
+            can allow location access in your browser settings, or select a
+            location manually instead.
           </p>
         )}
       </div>

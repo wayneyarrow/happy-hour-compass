@@ -5,6 +5,7 @@ import { submitContactAction, type ContactFormState } from "@/app/(consumer)/con
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { FieldError } from "@/components/FieldError";
 
 type Props = {
   onDone: () => void;
@@ -15,7 +16,6 @@ const INPUT_CLASS =
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
   "placeholder:text-gray-400";
 const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1.5";
-const FIELD_ERROR_CLASS = "mt-1.5 text-xs text-red-600";
 
 /**
  * Contact Us form adapted for the AcquisitionModal context.
@@ -92,7 +92,10 @@ export function ContactUsModalContent({ onDone }: Props) {
   return (
     <form action={formAction} className="px-6 pt-5 pb-8">
       {state.error && (
-        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700">
+        <div
+          role="alert"
+          className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700"
+        >
           {state.error}
         </div>
       )}
@@ -125,11 +128,11 @@ export function ContactUsModalContent({ onDone }: Props) {
             inputMode="email"
             placeholder="you@example.com"
             required
+            aria-invalid={!!state.fieldErrors?.email}
+            aria-describedby={state.fieldErrors?.email ? "cum-email-error" : undefined}
             className={INPUT_CLASS}
           />
-          {state.fieldErrors?.email && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.email}</p>
-          )}
+          <FieldError id="cum-email-error" message={state.fieldErrors?.email} />
         </div>
 
         <div>
@@ -142,11 +145,11 @@ export function ContactUsModalContent({ onDone }: Props) {
             rows={5}
             placeholder="How can we help?"
             required
+            aria-invalid={!!state.fieldErrors?.message}
+            aria-describedby={state.fieldErrors?.message ? "cum-message-error" : undefined}
             className={INPUT_CLASS + " resize-none"}
           />
-          {state.fieldErrors?.message && (
-            <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.message}</p>
-          )}
+          <FieldError id="cum-message-error" message={state.fieldErrors?.message} />
         </div>
       </div>
 

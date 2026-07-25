@@ -24,6 +24,7 @@ export default function WebsiteLocationSwitcher({
   const [showRegions, setShowRegions] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState(false);
   const [comingSoonId, setComingSoonId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -55,6 +56,7 @@ export default function WebsiteLocationSwitcher({
     setOpen(false);
     setShowRegions(false);
     setComingSoonId(null);
+    setLocationError(false);
   }
 
   function handleSelectRegion(market: (typeof MARKETS)[0]) {
@@ -76,6 +78,7 @@ export default function WebsiteLocationSwitcher({
   function handleUseMyLocation() {
     if (!navigator.geolocation || locating || isPending) return;
     setLocating(true);
+    setLocationError(false);
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         const nearest = findNearestActiveMarket(coords.latitude, coords.longitude);
@@ -86,7 +89,10 @@ export default function WebsiteLocationSwitcher({
           close();
         });
       },
-      () => setLocating(false),
+      () => {
+        setLocating(false);
+        setLocationError(true);
+      },
       { timeout: 8000 }
     );
   }
@@ -248,8 +254,16 @@ export default function WebsiteLocationSwitcher({
                   <circle cx="12" cy="12" r="3" />
                   <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
                 </svg>
-                {locating ? "Detecting location…" : "Use My Location"}
+                <span aria-live="polite">
+                  {locating ? "Detecting location…" : "Use My Location"}
+                </span>
               </button>
+
+              {locationError && (
+                <p role="status" aria-live="polite" className="text-xs text-gray-500 -mt-2 mb-3 px-1">
+                  We couldn&rsquo;t access your location. Choose a region below instead.
+                </p>
+              )}
 
               {/* Active regions */}
               <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">

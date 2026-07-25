@@ -15,6 +15,7 @@ import type { OwnerFormValues, GoogleMatch } from "@/app/(consumer)/suggest/owne
 import { trackEvent } from "@/lib/analytics";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { FieldError } from "@/components/FieldError";
 
 type Props = {
   onDone: () => void;
@@ -37,7 +38,6 @@ const INPUT_CLASS =
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
   "placeholder:text-gray-400";
 const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1.5";
-const FIELD_ERROR_CLASS = "mt-1.5 text-xs text-red-600";
 const BTN_PRIMARY =
   "w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 " +
   "disabled:cursor-not-allowed text-white font-semibold rounded-xl text-[15px] transition-colors";
@@ -45,11 +45,6 @@ const BTN_SECONDARY =
   "w-full py-3 bg-white hover:bg-gray-50 disabled:opacity-60 " +
   "disabled:cursor-not-allowed text-gray-700 font-semibold rounded-xl text-[15px] " +
   "border border-gray-200 transition-colors";
-
-function FieldError({ msg }: { msg?: string }) {
-  if (!msg) return null;
-  return <p className={FIELD_ERROR_CLASS}>{msg}</p>;
-}
 
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
@@ -345,7 +340,10 @@ export function AddVenueModalContent({ onDone }: Props) {
         </h3>
 
         {generalError && (
-          <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
+          <div
+            role="alert"
+            className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700"
+          >
             {generalError}
           </div>
         )}
@@ -450,7 +448,10 @@ export function AddVenueModalContent({ onDone }: Props) {
             we&rsquo;ll review your business manually.
           </p>
           {generalError && (
-            <div className="mb-5 w-full px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
+            <div
+              role="alert"
+              className="mb-5 w-full px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700"
+            >
               {generalError}
             </div>
           )}
@@ -494,7 +495,10 @@ export function AddVenueModalContent({ onDone }: Props) {
         </p>
 
         {generalError && (
-          <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
+          <div
+            role="alert"
+            className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700"
+          >
             {generalError}
           </div>
         )}
@@ -510,9 +514,11 @@ export function AddVenueModalContent({ onDone }: Props) {
                 name="rejection_notes"
                 rows={3}
                 placeholder="e.g. Wrong address, different business name, wrong city…"
+                aria-invalid={!!fieldErrors.rejection_notes}
+                aria-describedby={fieldErrors.rejection_notes ? "avm-rejection_notes-error" : undefined}
                 className={INPUT_CLASS + " resize-none"}
               />
-              <FieldError msg={fieldErrors.rejection_notes} />
+              <FieldError id="avm-rejection_notes-error" message={fieldErrors.rejection_notes} />
             </div>
             <div>
               <label htmlFor="avm-website" className={LABEL_CLASS}>
@@ -525,9 +531,11 @@ export function AddVenueModalContent({ onDone }: Props) {
                 inputMode="url"
                 autoComplete="url"
                 placeholder="https://yourbusiness.com"
+                aria-invalid={!!fieldErrors.website}
+                aria-describedby={fieldErrors.website ? "avm-website-error" : undefined}
                 className={INPUT_CLASS}
               />
-              <FieldError msg={fieldErrors.website} />
+              <FieldError id="avm-website-error" message={fieldErrors.website} />
             </div>
             <div>
               <label htmlFor="avm-additional_notes" className={LABEL_CLASS}>
@@ -659,7 +667,10 @@ export function AddVenueModalContent({ onDone }: Props) {
       </p>
 
       {generalError && (
-        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700">
+        <div
+          role="alert"
+          className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700"
+        >
           {generalError}
         </div>
       )}
@@ -679,9 +690,11 @@ export function AddVenueModalContent({ onDone }: Props) {
             type="text"
             autoComplete="organization"
             placeholder="e.g. The Keg Steakhouse"
+            aria-invalid={!!fieldErrors.business_name}
+            aria-describedby={fieldErrors.business_name ? "avm-business_name-error" : undefined}
             className={INPUT_CLASS}
           />
-          <FieldError msg={fieldErrors.business_name} />
+          <FieldError id="avm-business_name-error" message={fieldErrors.business_name} />
         </div>
 
         <div>
@@ -694,9 +707,11 @@ export function AddVenueModalContent({ onDone }: Props) {
             type="text"
             autoComplete="street-address"
             placeholder="e.g. 123 Main St"
+            aria-invalid={!!fieldErrors.street_address}
+            aria-describedby={fieldErrors.street_address ? "avm-street_address-error" : undefined}
             className={INPUT_CLASS}
           />
-          <FieldError msg={fieldErrors.street_address} />
+          <FieldError id="avm-street_address-error" message={fieldErrors.street_address} />
         </div>
 
         <div className="flex gap-3">
@@ -710,9 +725,11 @@ export function AddVenueModalContent({ onDone }: Props) {
               type="text"
               autoComplete="address-level2"
               placeholder="e.g. Vancouver"
+              aria-invalid={!!fieldErrors.city}
+              aria-describedby={fieldErrors.city ? "avm-city-error" : undefined}
               className={INPUT_CLASS}
             />
-            <FieldError msg={fieldErrors.city} />
+            <FieldError id="avm-city-error" message={fieldErrors.city} />
           </div>
           <div className="w-[120px] shrink-0">
             <label htmlFor="avm-province" className={LABEL_CLASS}>
@@ -724,9 +741,11 @@ export function AddVenueModalContent({ onDone }: Props) {
               type="text"
               autoComplete="address-level1"
               placeholder="e.g. BC"
+              aria-invalid={!!fieldErrors.province}
+              aria-describedby={fieldErrors.province ? "avm-province-error" : undefined}
               className={INPUT_CLASS}
             />
-            <FieldError msg={fieldErrors.province} />
+            <FieldError id="avm-province-error" message={fieldErrors.province} />
           </div>
         </div>
 
@@ -747,9 +766,11 @@ export function AddVenueModalContent({ onDone }: Props) {
               type="text"
               autoComplete="given-name"
               placeholder="Jane"
+              aria-invalid={!!fieldErrors.first_name}
+              aria-describedby={fieldErrors.first_name ? "avm-first_name-error" : undefined}
               className={INPUT_CLASS}
             />
-            <FieldError msg={fieldErrors.first_name} />
+            <FieldError id="avm-first_name-error" message={fieldErrors.first_name} />
           </div>
           <div className="flex-1 min-w-0">
             <label htmlFor="avm-last_name" className={LABEL_CLASS}>
@@ -761,9 +782,11 @@ export function AddVenueModalContent({ onDone }: Props) {
               type="text"
               autoComplete="family-name"
               placeholder="Smith"
+              aria-invalid={!!fieldErrors.last_name}
+              aria-describedby={fieldErrors.last_name ? "avm-last_name-error" : undefined}
               className={INPUT_CLASS}
             />
-            <FieldError msg={fieldErrors.last_name} />
+            <FieldError id="avm-last_name-error" message={fieldErrors.last_name} />
           </div>
         </div>
 
@@ -775,6 +798,8 @@ export function AddVenueModalContent({ onDone }: Props) {
             id="avm-position"
             name="position"
             defaultValue=""
+            aria-invalid={!!fieldErrors.position}
+            aria-describedby={fieldErrors.position ? "avm-position-error" : undefined}
             className={INPUT_CLASS}
           >
             <option value="" disabled>Select your position</option>
@@ -784,7 +809,7 @@ export function AddVenueModalContent({ onDone }: Props) {
             <option value="Server">Server</option>
             <option value="Other">Other</option>
           </select>
-          <FieldError msg={fieldErrors.position} />
+          <FieldError id="avm-position-error" message={fieldErrors.position} />
         </div>
 
         <div>
@@ -798,9 +823,11 @@ export function AddVenueModalContent({ onDone }: Props) {
             autoComplete="email"
             inputMode="email"
             placeholder="you@yourbusiness.com"
+            aria-invalid={!!fieldErrors.email}
+            aria-describedby={fieldErrors.email ? "avm-email-error" : undefined}
             className={INPUT_CLASS}
           />
-          <FieldError msg={fieldErrors.email} />
+          <FieldError id="avm-email-error" message={fieldErrors.email} />
         </div>
       </div>
 

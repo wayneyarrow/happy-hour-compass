@@ -83,6 +83,18 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
 
   return (
     <ConsumerAuthProvider consumerId={consumerId}>
+      {/* Skip link — visually hidden until keyboard-focused; jumps straight
+          to the <main> landmark below so keyboard users can bypass the
+          header/nav on every page. `tabIndex={-1}` on <main> lets the
+          browser move focus there on activation (native fragment-navigation
+          focus behaviour only applies to focusable elements); it stays out
+          of the normal Tab order otherwise. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-amber-700 focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+      >
+        Skip to main content
+      </a>
       <div className="min-h-screen bg-white flex flex-col">
         <WebsiteHeader
           marketId={market.id}
@@ -92,7 +104,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
           consumerUser={consumerUser}
         />
 
-        <main className="flex-1">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
 
         <WebsiteFooter />
       </div>

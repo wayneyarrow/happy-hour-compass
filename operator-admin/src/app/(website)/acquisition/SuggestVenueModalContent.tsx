@@ -7,6 +7,7 @@ import {
 } from "@/app/(consumer)/suggest/customer/actions";
 import { trackEvent } from "@/lib/analytics";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { FieldError } from "@/components/FieldError";
 
 type Props = {
   onDone: () => void;
@@ -17,7 +18,6 @@ const INPUT_CLASS =
   "focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent " +
   "placeholder:text-gray-400";
 const LABEL_CLASS = "block text-sm font-medium text-gray-700 mb-1.5";
-const FIELD_ERROR_CLASS = "mt-1.5 text-xs text-red-600";
 
 /**
  * Suggest a Venue form adapted for the AcquisitionModal context.
@@ -95,7 +95,10 @@ export function SuggestVenueModalContent({ onDone }: Props) {
   return (
     <form action={formAction} className="px-6 pt-5 pb-8">
       {state.error && (
-        <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700">
+        <div
+          role="alert"
+          className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700"
+        >
           {state.error}
         </div>
       )}
@@ -117,11 +120,11 @@ export function SuggestVenueModalContent({ onDone }: Props) {
               autoComplete="off"
               placeholder="e.g. The Keg Steakhouse"
               required
+              aria-invalid={!!state.fieldErrors?.name}
+              aria-describedby={state.fieldErrors?.name ? "svm-name-error" : undefined}
               className={INPUT_CLASS}
             />
-            {state.fieldErrors?.name && (
-              <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.name}</p>
-            )}
+            <FieldError id="svm-name-error" message={state.fieldErrors?.name} />
           </div>
 
           <div>
@@ -135,11 +138,11 @@ export function SuggestVenueModalContent({ onDone }: Props) {
               autoComplete="address-level2"
               placeholder="e.g. Vancouver"
               required
+              aria-invalid={!!state.fieldErrors?.city}
+              aria-describedby={state.fieldErrors?.city ? "svm-city-error" : undefined}
               className={INPUT_CLASS}
             />
-            {state.fieldErrors?.city && (
-              <p className={FIELD_ERROR_CLASS}>{state.fieldErrors.city}</p>
-            )}
+            <FieldError id="svm-city-error" message={state.fieldErrors?.city} />
           </div>
 
           <div>
@@ -194,13 +197,16 @@ export function SuggestVenueModalContent({ onDone }: Props) {
               inputMode="email"
               value={emailValue}
               onChange={(e) => setEmailValue(e.target.value)}
+              aria-invalid={!!state.fieldErrors?.customer_email}
+              aria-describedby={
+                state.fieldErrors?.customer_email ? "svm-customer-email-error" : undefined
+              }
               className={INPUT_CLASS}
             />
-            {state.fieldErrors?.customer_email && (
-              <p className={FIELD_ERROR_CLASS}>
-                {state.fieldErrors.customer_email}
-              </p>
-            )}
+            <FieldError
+              id="svm-customer-email-error"
+              message={state.fieldErrors?.customer_email}
+            />
           </div>
 
           {emailValue && (
