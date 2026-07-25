@@ -28,6 +28,24 @@ function isThirdPartyNoise(text: string): boolean {
   return THIRD_PARTY_CONSOLE_NOISE.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Vercel's own "Live Feedback" toolbar script, auto-injected into every page
+ * response on Preview deployments only (confirmed absent from Production —
+ * `happy-hour-compass.vercel.app` never serves this script). It calls
+ * `navigator.storage.persisted()` without checking `navigator.storage`
+ * exists first. Playwright's Linux WebKit build has no Storage Manager API
+ * at all (`navigator.storage` is `undefined`, unlike real macOS/iOS Safari,
+ * which has supported it since Safari 16.4), so this throws an uncaught
+ * rejection on every page load under the `webkit`/`mobile-safari` projects
+ * when run against staging. Not HHC code, not reproducible in real Safari,
+ * not present in Production.
+ */
+const THIRD_PARTY_PAGEERROR_NOISE: RegExp[] = [/vercel\.live\/_next-live\/feedback/i];
+
+function isThirdPartyPageError(err: Error): boolean {
+  return THIRD_PARTY_PAGEERROR_NOISE.some((pattern) => pattern.test(err.stack ?? err.message));
+}
+
 export type Diagnostics = {
   pageErrors: string[];
   consoleErrors: string[];
@@ -41,6 +59,7 @@ export const test = base.extend<{ diagnostics: Diagnostics }>({
       const siteHost = baseURL ? new URL(baseURL).host : "";
 
       page.on("pageerror", (err) => {
+        if (isThirdPartyPageError(err)) return;
         diagnostics.pageErrors.push(err.message);
       });
 
