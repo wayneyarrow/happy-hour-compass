@@ -28,19 +28,38 @@ function isThirdPartyNoise(text: string): boolean {
   return THIRD_PARTY_CONSOLE_NOISE.some((pattern) => pattern.test(text));
 }
 
-/**
- * Vercel's own "Live Feedback" toolbar script, auto-injected into every page
- * response on Preview deployments only (confirmed absent from Production —
- * `happy-hour-compass.vercel.app` never serves this script). It calls
- * `navigator.storage.persisted()` without checking `navigator.storage`
- * exists first. Playwright's Linux WebKit build has no Storage Manager API
- * at all (`navigator.storage` is `undefined`, unlike real macOS/iOS Safari,
- * which has supported it since Safari 16.4), so this throws an uncaught
- * rejection on every page load under the `webkit`/`mobile-safari` projects
- * when run against staging. Not HHC code, not reproducible in real Safari,
- * not present in Production.
- */
-const THIRD_PARTY_PAGEERROR_NOISE: RegExp[] = [/vercel\.live\/_next-live\/feedback/i];
+const THIRD_PARTY_PAGEERROR_NOISE: RegExp[] = [
+  // Vercel's own "Live Feedback" toolbar script, auto-injected into every page
+  // response on Preview deployments only (confirmed absent from Production —
+  // `happy-hour-compass.vercel.app` never serves this script). It calls
+  // `navigator.storage.persisted()` without checking `navigator.storage`
+  // exists first. Playwright's Linux WebKit build has no Storage Manager API
+  // at all (`navigator.storage` is `undefined`, unlike real macOS/iOS Safari,
+  // which has supported it since Safari 16.4), so this throws an uncaught
+  // rejection on every page load under the `webkit`/`mobile-safari` projects
+  // when run against staging. Not HHC code, not reproducible in real Safari,
+  // not present in Production.
+  /vercel\.live\/_next-live\/feedback/i,
+  // Cloudflare's own Turnstile "challenge platform" script
+  // (`challenges.cloudflare.com/cdn-cgi/challenge-platform/.../turnstile/...`)
+  // throws an uncaught `SecurityError: Blocked a frame with origin
+  // "https://challenges.cloudflare.com" from accessing a frame with origin
+  // "https://<site>". Protocols, domains, and ports must match.` — confirmed
+  // via full stack trace to originate entirely inside that Cloudflare-hosted
+  // script (every frame is a `challenges.cloudflare.com` URL; HHC's
+  // `Turnstile.tsx` never touches the widget iframe's contents, only the
+  // public `window.turnstile.render/reset/remove` API). Reproduces only under
+  // Playwright's `webkit`/`mobile-safari` projects — never Chromium or
+  // Firefox on the identical interaction — and only in this sandboxed test
+  // environment, which lacks an IPv6 route to
+  // `brunhild.challenges.cloudflare.com` (one of Turnstile's own attestation
+  // domains, IPv6-only; confirmed via `ip -6 route` and a raw `curl`
+  // connection failure), a plausible contributor to Cloudflare's script not
+  // completing its normal flow here. A real iPhone Safari device completed
+  // this same widget and submitted a protected form successfully, so this
+  // is not reproducible outside this constrained environment.
+  /challenges\.cloudflare\.com\/cdn-cgi\/challenge-platform/i,
+];
 
 function isThirdPartyPageError(err: Error): boolean {
   return THIRD_PARTY_PAGEERROR_NOISE.some((pattern) => pattern.test(err.stack ?? err.message));
