@@ -179,109 +179,123 @@ export function EventSearchCard({ event }: Props) {
     }) ?? `/website-events/${event.id}`;
 
   return (
-    <Link href={href} className="block group/card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl">
+    // `<article>` (not the Link) is the outer element so the Save button
+    // below can be an interactive sibling of the Link rather than nested
+    // inside it — a <button> inside an <a> is invalid HTML and inaccessible
+    // (nested interactive controls can't both be reached reliably by
+    // keyboard/assistive tech). `relative` moves here (from the old image
+    // wrapper) so the Save button's absolute position is relative to this
+    // shared ancestor of both siblings; hover styling moves from
+    // group/group-hover to a plain `hover:` since the hoverable box and the
+    // styled box are now the same element.
     <article
       className="
+        relative
         bg-white rounded-2xl overflow-hidden
         border border-gray-100/80
         shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
-        group-hover/card:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
-        group-hover/card:-translate-y-[3px]
+        hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
+        hover:-translate-y-[3px]
         transition-all duration-200
-        cursor-pointer
       "
     >
-      {/* ── Hero Image ───────────────────────────────────────────────────── */}
-      <div className="relative h-[200px] overflow-hidden bg-gray-100">
-        {event.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={event.imageUrl}
-            alt={event.title}
-            className="w-full h-full object-cover"
+      <Link
+        href={href}
+        className="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl"
+      >
+        {/* ── Hero Image ───────────────────────────────────────────────── */}
+        <div className="relative h-[200px] overflow-hidden bg-gray-100">
+          {event.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={event.imageUrl}
+              alt={event.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <EventImagePlaceholder />
+          )}
+
+          {/* Gradient — darkens top edge for legibility */}
+          {event.imageUrl && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0) 48%)",
+              }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Date badge — top-left */}
+          <DateBadge
+            firstDate={event.firstDate}
+            recurrence={event.recurrence}
+            startTime={event.startTime}
           />
-        ) : (
-          <EventImagePlaceholder />
-        )}
-
-        {/* Gradient — darkens top edge for legibility */}
-        {event.imageUrl && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "linear-gradient(to bottom, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0) 48%)",
-            }}
-            aria-hidden="true"
-          />
-        )}
-
-        {/* Date badge — top-left */}
-        <DateBadge
-          firstDate={event.firstDate}
-          recurrence={event.recurrence}
-          startTime={event.startTime}
-        />
-
-        {/* Save button — top-right, frosted circle */}
-        <div
-          className="absolute top-2.5 right-3"
-          style={{
-            background: "rgba(255,255,255,0.88)",
-            borderRadius: "50%",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <SaveEventButton eventId={event.id} variant="list" />
         </div>
-      </div>
 
-      {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 space-y-1.5">
+        {/* ── Content ────────────────────────────────────────────────────── */}
+        <div className="px-4 py-3 space-y-1.5">
 
-        {/* 1. Event title — primary signal */}
-        <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
-          {event.title}
-        </h3>
+          {/* 1. Event title — primary signal */}
+          <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
+            {event.title}
+          </h3>
 
-        {/* 2. Venue name */}
-        {event.venueName && (
-          <p className="text-sm font-semibold text-blue-600 leading-tight">
-            {event.venueName}
-          </p>
-        )}
+          {/* 2. Venue name */}
+          {event.venueName && (
+            <p className="text-sm font-semibold text-blue-600 leading-tight">
+              {event.venueName}
+            </p>
+          )}
 
-        {/* 3. Date / time label */}
-        {event.nextOccurrenceLabel && (
-          <p className="text-sm text-amber-700 font-medium">
-            {event.nextOccurrenceLabel}
-          </p>
-        )}
+          {/* 3. Date / time label */}
+          {event.nextOccurrenceLabel && (
+            <p className="text-sm text-amber-700 font-medium">
+              {event.nextOccurrenceLabel}
+            </p>
+          )}
 
-        {/* 4. Venue type — context signal */}
-        {event.venueEstablishmentType && (
-          <p className="text-sm text-gray-500">{event.venueEstablishmentType}</p>
-        )}
+          {/* 4. Venue type — context signal */}
+          {event.venueEstablishmentType && (
+            <p className="text-sm text-gray-500">{event.venueEstablishmentType}</p>
+          )}
 
-        {/* 5. Description — why attend */}
-        {event.description && (
-          <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 pt-0.5">
-            {event.description}
-          </p>
-        )}
+          {/* 5. Description — why attend */}
+          {event.description && (
+            <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 pt-0.5">
+              {event.description}
+            </p>
+          )}
 
-        {/* 6. Event type pill */}
-        {showType && (
-          <div className="pt-1.5 border-t border-gray-100">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-medium text-gray-600">
-              <span aria-hidden="true">{typeEmoji}</span>
-              {typeLabel}
-            </span>
-          </div>
-        )}
+          {/* 6. Event type pill */}
+          {showType && (
+            <div className="pt-1.5 border-t border-gray-100">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-medium text-gray-600">
+                <span aria-hidden="true">{typeEmoji}</span>
+                {typeLabel}
+              </span>
+            </div>
+          )}
 
+        </div>
+      </Link>
+
+      {/* Save button — sibling of the Link (not nested inside it), still
+          visually positioned as a frosted circle over the image's top-right
+          corner via the `relative` on this <article>. */}
+      <div
+        className="absolute top-2.5 right-3"
+        style={{
+          background: "rgba(255,255,255,0.88)",
+          borderRadius: "50%",
+          backdropFilter: "blur(4px)",
+        }}
+      >
+        <SaveEventButton eventId={event.id} variant="list" />
       </div>
     </article>
-    </Link>
   );
 }
