@@ -73,7 +73,7 @@ export type Diagnostics = {
 
 export const test = base.extend<{ diagnostics: Diagnostics }>({
   diagnostics: [
-    async ({ page, baseURL }, use) => {
+    async ({ page, baseURL, browserName }, use) => {
       const diagnostics: Diagnostics = { pageErrors: [], consoleErrors: [], firstPartyFailures: [] };
       const siteHost = baseURL ? new URL(baseURL).host : "";
 
@@ -98,7 +98,17 @@ export const test = base.extend<{ diagnostics: Diagnostics }>({
         }
         if (host !== siteHost) return;
         const failure = request.failure()?.errorText ?? "unknown";
-        if (/net::ERR_ABORTED/i.test(failure)) return; // benign nav cancellation
+        if (/net::ERR_ABORTED/i.test(failure)) return; // benign nav cancellation (Chromium/WebKit)
+        // Firefox's network stack reports the same benign
+        // superseded-by-navigation cancellation under a different error
+        // string — confirmed via direct repro (rapid client-side
+        // navigations abort in-flight chunk/RSC/image requests with this
+        // exact code on Firefox, never on Chromium/WebKit for the identical
+        // interaction). Scoped to `browserName === "firefox"` specifically
+        // so Chromium/WebKit diagnostics are completely unaffected, and to
+        // this exact error string so a genuine first-party failure (a real
+        // connection error, timeout, or 5xx) is never swallowed.
+        if (browserName === "firefox" && /NS_BINDING_ABORTED/i.test(failure)) return;
         diagnostics.firstPartyFailures.push(`${request.url()} — ${failure}`);
       });
 

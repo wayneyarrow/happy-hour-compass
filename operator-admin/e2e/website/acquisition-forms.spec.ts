@@ -1,14 +1,30 @@
 import { test, expect } from "./support/fixtures";
 import type { Page } from "@playwright/test";
 
-/** Opens a header-triggered modal, going through the mobile hamburger menu on narrow viewports. */
+/**
+ * Opens a header-triggered modal, going through the mobile hamburger menu on
+ * narrow viewports. Scoped to the header's nav landmark (desktop:
+ * "Main navigation", mobile: "Mobile navigation") because the footer renders
+ * its own independent trigger with the same accessible name (e.g. "Add Your
+ * Venue" appears in both the header and the footer as separate entry points
+ * into separate modal instances) — an unscoped page-wide locator is
+ * ambiguous.
+ */
 async function openHeaderTrigger(page: Page, label: string) {
   const viewport = page.viewportSize();
   const isMobile = (viewport?.width ?? 0) < 768;
   if (isMobile) {
     await page.getByRole("button", { name: "Open navigation menu" }).click();
+    await page
+      .getByRole("navigation", { name: "Mobile navigation" })
+      .getByRole("button", { name: label, exact: true })
+      .click();
+  } else {
+    await page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: label, exact: true })
+      .click();
   }
-  await page.getByRole("button", { name: label, exact: true }).click();
 }
 
 test.describe("Acquisition forms — open without submitting", () => {

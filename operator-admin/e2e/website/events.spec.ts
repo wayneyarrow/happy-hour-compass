@@ -25,7 +25,11 @@ test.describe("Events search", () => {
     await expect.poll(() => urlSearch(page)).toContain("date=weekend");
 
     // Clearing the active date chip removes the filter and its URL param.
-    await page.getByRole("button", { name: "Clear filter" }).click();
+    // `exact: true` is required here: without it, the substring match also
+    // matches the parent chip button, whose accessible name concatenates to
+    // "This Weekend Clear filter" (the chip's visible label plus the nested
+    // clear icon's aria-label).
+    await page.getByRole("button", { name: "Clear filter", exact: true }).click();
     await expect.poll(() => urlSearch(page)).not.toContain("date=");
   });
 

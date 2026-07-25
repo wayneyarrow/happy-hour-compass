@@ -44,8 +44,15 @@ test.describe("Happy Hours search", () => {
 
   test("Time range control is usable and updates the chip + URL", async ({ page }) => {
     await page.getByRole("button", { name: "Time", exact: true }).click();
-    const fromSelect = page.locator("#hh-time-from");
-    const toSelect = page.locator("#hh-time-to");
+    // The Time popover renders two copies of these fields with the same
+    // #hh-time-from / #hh-time-to ids at once — a desktop absolute popover
+    // (`hidden md:block`) and a mobile inline panel (`md:hidden`) — so an
+    // unfiltered id locator is ambiguous regardless of viewport. `:visible`
+    // scopes to whichever copy the current viewport actually renders. See
+    // TimeFilterFields in HappyHoursSearchClient.tsx — flagged separately as
+    // an application cleanup item (duplicate ids), not fixed here.
+    const fromSelect = page.locator("#hh-time-from:visible");
+    const toSelect = page.locator("#hh-time-to:visible");
     await expect(fromSelect).toBeVisible();
 
     await fromSelect.selectOption({ index: 1 });
