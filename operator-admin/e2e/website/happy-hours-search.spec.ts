@@ -145,6 +145,52 @@ test.describe("Happy Hours search", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
+  test("a card's Save venue control is independent of its link and never navigates", async ({ page }) => {
+    const firstCardHeading = page.getByRole("heading", { level: 3 }).first();
+    if (!(await firstCardHeading.count())) {
+      test.skip(true, "No venues available for this market at test time.");
+    }
+
+    // Save venue used to be a <button> nested inside the card's <a> —
+    // invalid HTML (a link may not contain other interactive content) and
+    // inaccessible. Confirm no card link contains it as a descendant (see
+    // SearchResultCard.tsx — the Save button is now a sibling of the Link,
+    // not nested inside it, matching EventSearchCard.tsx's fix).
+    await expect(page.locator('a:has(button[aria-label="Save venue"])')).toHaveCount(0);
+
+    // getByRole already resolves only to the currently-visible copy here —
+    // desktop and mobile each render their own card grid simultaneously in
+    // the DOM (one hidden via CSS depending on viewport), but unlike
+    // getByText/raw CSS locators elsewhere on this page, getByRole excludes
+    // hidden-ancestor matches, so `.first()` is safe without an explicit
+    // `:visible` filter (confirmed: 49 matches on a mobile viewport, none of
+    // them the hidden desktop copies).
+    const saveBtn = page.getByRole("button", { name: "Save venue" }).first();
+    await expect(saveBtn).toBeVisible();
+
+    // Mouse click toggles save state without navigating away from the list.
+    await saveBtn.click();
+    await expect(page).toHaveURL("/website-happy-hours");
+    const removeBtn = page.getByRole("button", { name: "Remove saved venue" }).first();
+    await expect(removeBtn).toBeVisible();
+
+    // Unsaving is equally side-effect-free on navigation.
+    await removeBtn.click();
+    await expect(page).toHaveURL("/website-happy-hours");
+    await expect(saveBtn).toBeVisible();
+
+    // Keyboard: the button is independently focusable and Enter activates
+    // only the save action, not the card's navigation.
+    await saveBtn.focus();
+    await expect(saveBtn).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL("/website-happy-hours");
+    await expect(page.getByRole("button", { name: "Remove saved venue" }).first()).toBeVisible();
+    // Leave state as found — unsave again so the localStorage-only save list
+    // this throwaway browser context leaves behind doesn't linger.
+    await page.getByRole("button", { name: "Remove saved venue" }).first().click();
+  });
+
   test("desktop shows a list/map split; mobile shows a collapsible map", async ({ page }) => {
     const viewport = page.viewportSize();
     const isDesktop = (viewport?.width ?? 0) >= 768;

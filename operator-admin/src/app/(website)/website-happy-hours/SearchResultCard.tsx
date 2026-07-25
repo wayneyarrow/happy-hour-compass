@@ -181,26 +181,36 @@ type Props = {
 
 export function SearchResultCard({ data, effectiveDayName }: Props) {
   return (
-    <Link
-      href={data.href}
-      className="block group"
-      // Scroll restoration is handled natively by the browser when using
-      // Next.js Link + browser back. Enhanced session-storage restoration
-      // can be added in a future pass once the Venue Detail page exists.
+    // `<article>` (not the Link) is the outer element so the Save button
+    // below can be an interactive sibling of the Link rather than nested
+    // inside it — a <button> inside an <a> is invalid HTML and inaccessible
+    // (nested interactive controls can't both be reached reliably by
+    // keyboard/assistive tech). Same structural fix already applied to
+    // EventSearchCard.tsx. `relative` moves here (from the old image
+    // wrapper) so the Save button's absolute position is relative to this
+    // shared ancestor of both siblings; hover styling moves from
+    // group/group-hover to a plain `hover:` since the hoverable box and the
+    // styled box are now the same element.
+    <article
+      className="
+        relative
+        bg-white rounded-2xl overflow-hidden
+        border border-gray-100/80
+        shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
+        hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
+        hover:-translate-y-[3px]
+        transition-all duration-200
+        flex flex-col
+      "
     >
-      <article
-        className="
-          bg-white rounded-2xl overflow-hidden
-          border border-gray-100/80
-          shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
-          group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
-          group-hover:-translate-y-[3px]
-          transition-all duration-200
-          cursor-pointer
-          flex flex-col
-        "
+      <Link
+        href={data.href}
+        className="block cursor-pointer"
+        // Scroll restoration is handled natively by the browser when using
+        // Next.js Link + browser back. Enhanced session-storage restoration
+        // can be added in a future pass once the Venue Detail page exists.
       >
-        {/* ── Hero Image ───────────────────────────────────────────────────── */}
+        {/* ── Hero Image ───────────────────────────────────────────────── */}
         <div className="relative h-[200px] overflow-hidden bg-gray-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -243,21 +253,9 @@ export function SearchResultCard({ data, effectiveDayName }: Props) {
               </span>
             </div>
           )}
-
-          {/* Save button — top-right, frosted circle; stopPropagation prevents Link from firing */}
-          <div
-            className="absolute top-2.5 right-3"
-            style={{
-              background: "rgba(255,255,255,0.88)",
-              borderRadius: "50%",
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            <SaveVenueButton venueId={data.venueUuid} variant="list" />
-          </div>
         </div>
 
-        {/* ── Content ──────────────────────────────────────────────────────── */}
+        {/* ── Content ──────────────────────────────────────────────────── */}
         <div className="px-4 py-3 flex flex-col flex-1 gap-1.5">
 
           {/* 1. Venue name — bold; first thing the eye finds */}
@@ -306,7 +304,21 @@ export function SearchResultCard({ data, effectiveDayName }: Props) {
           </div>
 
         </div>
-      </article>
-    </Link>
+      </Link>
+
+      {/* Save button — sibling of the Link (not nested inside it), still
+          visually positioned as a frosted circle over the image's top-right
+          corner via the `relative` on this <article>. */}
+      <div
+        className="absolute top-2.5 right-3"
+        style={{
+          background: "rgba(255,255,255,0.88)",
+          borderRadius: "50%",
+          backdropFilter: "blur(4px)",
+        }}
+      >
+        <SaveVenueButton venueId={data.venueUuid} variant="list" />
+      </div>
+    </article>
   );
 }
