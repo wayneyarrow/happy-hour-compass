@@ -25,10 +25,12 @@ test.describe("Events search", () => {
     await expect.poll(() => urlSearch(page)).toContain("date=weekend");
 
     // Clearing the active date chip removes the filter and its URL param.
-    // `exact: true` is required here: without it, the substring match also
-    // matches the parent chip button, whose accessible name concatenates to
-    // "This Weekend Clear filter" (the chip's visible label plus the nested
-    // clear icon's aria-label).
+    // The clear action is its own sibling <button aria-label="Clear filter">
+    // next to the chip's main toggle button (see FilterChip in
+    // EventSearchResults.tsx — previously a non-nested-interactive `<span
+    // role="button">`), so its accessible name no longer collides with the
+    // parent chip's; `exact: true` is kept as normal best practice, not to
+    // resolve an ambiguity.
     await page.getByRole("button", { name: "Clear filter", exact: true }).click();
     await expect.poll(() => urlSearch(page)).not.toContain("date=");
   });

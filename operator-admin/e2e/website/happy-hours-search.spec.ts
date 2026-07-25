@@ -11,7 +11,22 @@ test.describe("Happy Hours search", () => {
 
   test("results page loads with a result count", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Happy Hours" })).toBeVisible();
-    await expect(page.getByText(/\d+ venues?|no venues found/i).first()).toBeVisible();
+    // Desktop and mobile each render their own SearchContextHeader (see
+    // HappyHoursSearchClient.tsx's desktop/mobile split) simultaneously in
+    // the DOM — one hidden via CSS depending on viewport. `getByText`
+    // doesn't filter by visibility the way `getByRole` does, so an
+    // unfiltered `.first()` can resolve to the hidden copy. `.and(:visible)`
+    // scopes to whichever copy the current viewport actually renders. The
+    // pattern is anchored (^...$) because an unanchored `/\d+ venues?/` can
+    // also substring-match the desktop-only "Showing X of Y venues in this
+    // area" banner (rendered when the map viewport excludes some results) —
+    // confirmed reproducible on Firefox, where that banner and the count
+    // span were simultaneously visible, causing a second strict-mode
+    // violation distinct from the desktop/mobile duplication above.
+    const resultCount = page
+      .getByText(/^\d+ venues?$|^no venues found$/i)
+      .and(page.locator(":visible"));
+    await expect(resultCount).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -44,15 +59,14 @@ test.describe("Happy Hours search", () => {
 
   test("Time range control is usable and updates the chip + URL", async ({ page }) => {
     await page.getByRole("button", { name: "Time", exact: true }).click();
-    // The Time popover renders two copies of these fields with the same
-    // #hh-time-from / #hh-time-to ids at once — a desktop absolute popover
-    // (`hidden md:block`) and a mobile inline panel (`md:hidden`) — so an
-    // unfiltered id locator is ambiguous regardless of viewport. `:visible`
-    // scopes to whichever copy the current viewport actually renders. See
-    // TimeFilterFields in HappyHoursSearchClient.tsx — flagged separately as
-    // an application cleanup item (duplicate ids), not fixed here.
-    const fromSelect = page.locator("#hh-time-from:visible");
-    const toSelect = page.locator("#hh-time-to:visible");
+    // The Time popover renders two copies of these fields at once — a
+    // desktop absolute popover (`hidden md:block`) and a mobile inline panel
+    // (`md:hidden`) — each with its own uniquely-suffixed id
+    // (hh-time-from-desktop / hh-time-from-mobile, see TimeFilterFields'
+    // `idPrefix` prop in HappyHoursSearchClient.tsx). `:visible` scopes to
+    // whichever copy the current viewport actually renders.
+    const fromSelect = page.locator('[id^="hh-time-from-"]:visible');
+    const toSelect = page.locator('[id^="hh-time-to-"]:visible');
     await expect(fromSelect).toBeVisible();
 
     await fromSelect.selectOption({ index: 1 });

@@ -168,16 +168,22 @@ type ChipProps = {
 };
 
 function FilterChip({ label, icon, chevron, active, open, onClick, onClear }: ChipProps) {
+  // The clear action used to be a `<span role="button">` nested inside this
+  // chip's own `<button>` — invalid HTML (a button may not contain other
+  // interactive content) and inaccessible (tabIndex={-1} meant keyboard users
+  // could never reach it at all; a real nested button would also double-fire
+  // via click bubbling, which the previous version worked around with
+  // stopPropagation). Rendered as an independent sibling `<button>` instead:
+  // both controls are properly focusable/keyboard-activatable, and since
+  // there's no nesting there's no bubbling to guard against.
+  const showClear = !!(active && onClear);
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <span
       className={`
-        flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full
+        flex-shrink-0 flex items-center rounded-full
         text-sm font-medium whitespace-nowrap
         shadow-[0_1px_2px_rgba(0,0,0,0.04)]
         transition-all
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
         ${
           active
             ? "bg-amber-500 border border-amber-500 text-white"
@@ -187,37 +193,41 @@ function FilterChip({ label, icon, chevron, active, open, onClick, onClear }: Ch
         }
       `}
     >
-      {icon && <span className="flex-shrink-0 opacity-75">{icon}</span>}
-      {label}
-      {chevron && !active && (
-        <svg
-          className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      )}
-      {active && onClear && (
-        <span
-          role="button"
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex items-center gap-1.5 py-2 pl-4 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+          showClear ? "pr-1.5" : "pr-4"
+        }`}
+      >
+        {icon && <span className="flex-shrink-0 opacity-75">{icon}</span>}
+        {label}
+        {chevron && !active && (
+          <svg
+            className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </button>
+      {showClear && (
+        <button
+          type="button"
+          onClick={onClear}
           aria-label="Clear filter"
-          tabIndex={-1}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-          className="ml-0.5 opacity-80 hover:opacity-100"
+          className="flex items-center py-2 pl-0.5 pr-3 rounded-full opacity-80 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
         >
           <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
             <path d="M6.707 6l2.647-2.646a.5.5 0 00-.708-.708L6 5.293 3.354 2.646a.5.5 0 00-.708.708L5.293 6 2.646 8.646a.5.5 0 00.708.708L6 6.707l2.646 2.647a.5.5 0 00.708-.708L6.707 6z" />
           </svg>
-        </span>
+        </button>
       )}
-    </button>
+    </span>
   );
 }
 

@@ -252,12 +252,20 @@ const TIME_SELECT_CLASS =
   "disabled:bg-gray-50 disabled:text-gray-400";
 
 function TimeFilterFields({
+  idPrefix,
   filterTimeFrom,
   filterTimeTo,
   onChangeFrom,
   onChangeTo,
   onClear,
 }: {
+  /**
+   * Distinguishes the desktop popover's and mobile panel's simultaneously-
+   * rendered copies of these fields (see the two <TimeFilterFields> call
+   * sites below) so their ids never collide — `id`/`htmlFor` must be unique
+   * per rendered element regardless of which copy is currently visible.
+   */
+  idPrefix: string;
   filterTimeFrom: string;
   filterTimeTo: string;
   onChangeFrom: (value: string) => void;
@@ -271,6 +279,8 @@ function TimeFilterFields({
   const toOptions = filterTimeFrom
     ? TO_TIME_OPTIONS.filter((opt) => opt.value > filterTimeFrom)
     : TO_TIME_OPTIONS;
+  const fromId = `hh-time-from-${idPrefix}`;
+  const toId = `hh-time-to-${idPrefix}`;
 
   return (
     <>
@@ -280,13 +290,13 @@ function TimeFilterFields({
       <div className="space-y-3">
         <div>
           <label
-            htmlFor="hh-time-from"
+            htmlFor={fromId}
             className="block text-xs font-medium text-gray-600 mb-1"
           >
             From
           </label>
           <select
-            id="hh-time-from"
+            id={fromId}
             value={filterTimeFrom}
             onChange={(e) => onChangeFrom(e.target.value)}
             className={TIME_SELECT_CLASS}
@@ -301,13 +311,13 @@ function TimeFilterFields({
         </div>
         <div>
           <label
-            htmlFor="hh-time-to"
+            htmlFor={toId}
             className="block text-xs font-medium text-gray-600 mb-1"
           >
             To
           </label>
           <select
-            id="hh-time-to"
+            id={toId}
             value={filterTimeTo}
             onChange={(e) => onChangeTo(e.target.value)}
             className={TIME_SELECT_CLASS}
@@ -1253,6 +1263,7 @@ export function HappyHoursSearchClient({
             {timeOpen && (
               <div className="hidden md:block absolute top-full mt-2 left-0 z-30 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 w-64">
                 <TimeFilterFields
+                  idPrefix="desktop"
                   filterTimeFrom={filterTimeFrom}
                   filterTimeTo={filterTimeTo}
                   onChangeFrom={handleFilterTimeFromChange}
@@ -1364,6 +1375,7 @@ export function HappyHoursSearchClient({
         {timeOpen && (
           <div ref={timePanelRef} className="md:hidden border-t border-gray-100 bg-white px-4 py-4">
             <TimeFilterFields
+              idPrefix="mobile"
               filterTimeFrom={filterTimeFrom}
               filterTimeTo={filterTimeTo}
               onChangeFrom={handleFilterTimeFromChange}
