@@ -399,6 +399,22 @@ type Props = {
    */
   onBoundsChanged?: (bounds: LatLngBounds | null) => void;
   /**
+   * Height, in px, of an opaque overlay permanently covering the bottom edge
+   * of this map's own container (e.g. a results sheet/drawer that never
+   * fully closes) — used only to shrink the bounds reported to
+   * `onBoundsChanged` so they describe the unobstructed, actually-visible
+   * map area rather than the full container. Google Maps' own `getBounds()`
+   * has no notion of on-screen overlays, so without this, panning/zooming
+   * reports (and a caller may then count/filter by) markers that are
+   * geographically in-frame but visually hidden behind the overlay. Approximated
+   * via simple linear interpolation against the map div's pixel height —
+   * consistent with this codebase's existing bounding-box approach
+   * (isWithinBounds, src/lib/geo.ts) rather than exact Mercator/projection
+   * math, and accurate enough at the city-level zooms this map is used at.
+   * Omit (default) for callers with no such permanent overlay.
+   */
+  boundsBottomInsetPx?: number;
+  /**
    * Any value that changes when this map's container size changes outside of
    * a window resize (e.g. an expand/collapse toggle). Triggers a Maps
    * "resize" event so the map redraws to fill its new container. Omit for
@@ -436,6 +452,7 @@ export function SearchResultsMap({
   resizeSignal,
   zoomControlPosition,
   userLocation = null,
+  boundsBottomInsetPx,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -475,7 +492,26 @@ export function SearchResultsMap({
           onIdle={(e) => {
             if (!onBoundsChanged) return;
             const b = e.map.getBounds();
-            onBoundsChanged(b ? b.toJSON() : null);
+            if (!b) {
+              onBoundsChanged(null);
+              return;
+            }
+            if (boundsBottomInsetPx && boundsBottomInsetPx > 0) {
+              const heightPx = e.map.getDiv().clientHeight;
+              if (heightPx > 0) {
+                const ne = b.getNorthEast();
+                const sw = b.getSouthWest();
+                const insetFraction = Math.min(boundsBottomInsetPx / heightPx, 1);
+                onBoundsChanged({
+                  north: ne.lat(),
+                  south: sw.lat() + (ne.lat() - sw.lat()) * insetFraction,
+                  east: ne.lng(),
+                  west: sw.lng(),
+                });
+                return;
+              }
+            }
+            onBoundsChanged(b.toJSON());
           }}
         >
           <MapInnards

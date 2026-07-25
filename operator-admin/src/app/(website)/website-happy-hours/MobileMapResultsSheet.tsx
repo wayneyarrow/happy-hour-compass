@@ -12,7 +12,7 @@ import type { KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from
 // Sized with headroom beyond the header row's own content height so a visible
 // sliver of the list peeks through underneath — that sliver, plus the larger
 // touch target, is what signals "this pulls up" at rest.
-const PEEK_HEIGHT_PX = 124;
+export const PEEK_HEIGHT_PX = 124;
 const OPEN_TOP_GAP_PX = 72;
 // Pointer travel (px) before a press counts as a drag rather than a tap —
 // lets the header double as both the drag handle and a plain tap-to-toggle

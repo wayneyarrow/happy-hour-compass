@@ -8,7 +8,7 @@ import { computeHhStatus, getCurrentDayName } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
-import { MobileMapResultsSheet } from "./MobileMapResultsSheet";
+import { MobileMapResultsSheet, PEEK_HEIGHT_PX } from "./MobileMapResultsSheet";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
@@ -758,12 +758,17 @@ export function HappyHoursSearchClient({
   // (VenueDiscovery.tsx / VenueMapView.tsx), via the shared isWithinBounds()
   // helper (src/lib/geo.ts). Desktop's split layout is unaffected: its map
   // and card grid never read this state.
+  //
+  // mapBounds deliberately persists across collapse (tapping "Done") — it is
+  // only ever replaced by a fresh onIdle report (re-panning/zooming the
+  // expanded map) or by a filter/search/location/market change invalidating
+  // `sortedCards`, never reset just for exiting the expanded map. "Done"
+  // closes the expanded-map UI; it isn't a "discard my map search" action.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [mapBounds, setMapBounds] = useState<LatLngBounds | null>(null);
 
   function handleCollapseMap() {
     setMapExpanded(false);
-    setMapBounds(null);
   }
 
   // ── desktop map interaction state ──
@@ -1097,15 +1102,21 @@ export function HappyHoursSearchClient({
     [sortedCards]
   );
 
-  // Mobile-only: while the map is expanded and has reported a viewport, narrow
-  // the venue list below it to only cards visible on screen. Collapsed
-  // (default) mobile rendering and all of desktop use sortedCards directly and
-  // never compute or read this — filters/sort/search above are unaffected,
-  // this only ever narrows their already-produced result set.
-  const mobileVisibleCards = useMemo(() => {
-    if (!mapExpanded) return sortedCards;
-    return filterCardsWithinBounds(sortedCards, mapBounds);
-  }, [sortedCards, mapExpanded, mapBounds]);
+  // Mobile-only: once the map has reported a viewport (from expanding and
+  // panning/zooming it), narrow the venue list to only cards within that
+  // viewport — both while the map is expanded AND after collapsing it via
+  // "Done", so the normal list keeps reflecting the visitor's own map search
+  // instead of reverting to the unfiltered set (mapBounds is null until the
+  // map first reports a viewport, and filterCardsWithinBounds passes cards
+  // through unchanged when bounds is null — matching prior behavior before
+  // the map has ever been used). Desktop uses its own separate
+  // desktopVisibleCards/desktopMapBounds and never reads this — filters/sort/
+  // search above are unaffected, this only ever narrows their already-
+  // produced result set.
+  const mobileVisibleCards = useMemo(
+    () => filterCardsWithinBounds(sortedCards, mapBounds),
+    [sortedCards, mapBounds]
+  );
 
   // Desktop equivalent — always live (no expand/collapse gate), since the
   // split-layout map is visible and interactive from first render. Markers
@@ -1495,7 +1506,7 @@ export function HappyHoursSearchClient({
         {contextHeader !== null && (
           <div className="px-4 pt-6 pb-5 border-b border-gray-100">
             {contextHeader ?? (
-              <SearchContextHeader market={market} resultCount={sortedCards.length} />
+              <SearchContextHeader market={market} resultCount={mobileVisibleCards.length} />
             )}
           </div>
         )}
@@ -1523,6 +1534,15 @@ export function HappyHoursSearchClient({
             // Collapsed mobile and desktop are unaffected (prop omitted).
             zoomControlPosition={mapExpanded ? ControlPosition.LEFT_TOP : undefined}
             userLocation={userLocation}
+            // The results sheet never fully closes while expanded — it always
+            // covers at least PEEK_HEIGHT_PX of the map's bottom edge, even at
+            // rest. Without this, reported bounds (and therefore the result
+            // count/list derived from them) include venues that are
+            // geographically in view but visually hidden behind the sheet.
+            // Deliberately keyed to the sheet's minimum (peek) height, not its
+            // live drag height — dragging the sheet open only reveals more of
+            // the already-computed list, it never recomputes bounds.
+            boundsBottomInsetPx={mapExpanded ? PEEK_HEIGHT_PX : undefined}
           />
 
           {/* Collapsed: a transparent tap target expands the map in place —
@@ -1580,16 +1600,27 @@ export function HappyHoursSearchClient({
           )}
         </div>
 
-        {/* Default (collapsed) layout — identical to the pre-map-interaction
-            behaviour: the full list in normal document flow, no sheet. */}
+        {/* Default (collapsed) layout — normal document flow, no sheet.
+            Renders mobileVisibleCards (not sortedCards): once the visitor has
+            panned/zoomed the expanded map, "Done" preserves that map-filtered
+            result set here rather than reverting to the unfiltered list (see
+            mobileVisibleCards above). Before the map has ever reported a
+            viewport, mobileVisibleCards equals sortedCards, so this is
+            unchanged from prior behaviour. */}
         {!mapExpanded &&
           (sortedCards.length === 0 ? (
             <div className="px-4 pb-8">
               <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
             </div>
+          ) : mobileVisibleCards.length === 0 ? (
+            <div className="px-4 pb-8">
+              <p className="text-sm text-gray-400 text-center py-8">
+                Expand the map and pan or zoom out to see venues in this area.
+              </p>
+            </div>
           ) : (
             <div className="px-4 pb-8 space-y-4">
-              {sortedCards.map((card) => (
+              {mobileVisibleCards.map((card) => (
                 <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
               ))}
             </div>
