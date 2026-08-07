@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { canUseRecurringEvents, parseOperatorPlan } from "@/lib/plans";
+import { canManageGrandfatheredRecurringEvent, canUseRecurringEvents, parseOperatorPlan } from "@/lib/plans";
 import { isRecurring } from "./recurrenceUtils";
 import {
   MAX_SLUG_GENERATION_ATTEMPTS,
@@ -116,6 +116,14 @@ function deriveEventFrequency(recurrence: string, firstDate: string): string | n
  * cannot create new recurring events or convert one-time events to recurring, but
  * their existing schedules continue running unaffected.
  *
+ * Grandfathered exception: a platform-seeded event that is currently recurring
+ * (is_seeded_event = true, recurrence != "none") may still be fully edited —
+ * including recurrence changes and publish/unpublish — by a Free-plan operator.
+ * See canManageGrandfatheredRecurringEvent() in src/lib/plans.ts. This is
+ * checked against the row's state in the database *before* this update, so it
+ * never extends to creating a new recurring event or converting a one-time
+ * event (seeded or not) into a recurring one.
+ *
  * @param payload  Event data from the client form.
  * @param currentEventId  Existing event id for updates; null/undefined for inserts.
  */
@@ -139,11 +147,31 @@ export async function saveEventAction(
   // isRecurring() covers ALL recurrence values other than "none", so future
   // options automatically require a paid plan without any additional code.
   if (isRecurring(payload.recurrence) && !canUseRecurringEvents(plan)) {
-    return {
-      error:
-        "Recurring events are available on Pro and Premium plans. " +
-        "Select \"One-time (no repeat)\" or upgrade your plan to schedule recurring events.",
-    };
+    // Grandfathered exception: check the row's *current* state (not the
+    // incoming payload) for a platform-seeded event that is still recurring.
+    // currentEventId is null for inserts, so new recurring events are never
+    // eligible — only an existing seeded-and-recurring row can qualify.
+    let isSeededAndCurrentlyRecurring = false;
+
+    if (currentEventId) {
+      const { data: existing } = await ctx.supabase
+        .from("events")
+        .select("recurrence, is_seeded_event")
+        .eq("id", currentEventId)
+        .eq("created_by_operator_id", ctx.operator.id)
+        .maybeSingle();
+
+      isSeededAndCurrentlyRecurring =
+        !!existing?.is_seeded_event && isRecurring(existing.recurrence ?? "none");
+    }
+
+    if (!canManageGrandfatheredRecurringEvent(plan, isSeededAndCurrentlyRecurring)) {
+      return {
+        error:
+          "Recurring events are available on Pro and Premium plans. " +
+          "Select \"One-time (no repeat)\" or upgrade your plan to schedule recurring events.",
+      };
+    }
   }
 
   const event_time = payload.endTime

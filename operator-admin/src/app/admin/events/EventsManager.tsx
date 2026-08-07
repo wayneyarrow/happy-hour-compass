@@ -185,9 +185,25 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
   // Confirm → server action delete → router.refresh() → reset to idle.
   const handleDelete = async () => {
     if (!selectedId) return;
-    const confirmed = window.confirm(
-      "Delete this event? This action cannot be undone."
-    );
+
+    // Grandfathered seeded recurring events, on the Free plan, warn that
+    // deleting permanently gives up the operator's one grandfathered
+    // recurring-event slot — they'd need Pro/Premium to create another.
+    // Deletion itself is otherwise unrestricted by plan (see deleteEventAction).
+    const isGrandfatheredSeededRecurring =
+      !!selectedEvent &&
+      selectedEvent.is_seeded_event &&
+      isRecurring(selectedEvent.recurrence ?? "none") &&
+      operatorPlan === "free";
+
+    const confirmMessage = isGrandfatheredSeededRecurring
+      ? "Delete recurring event?\n\n" +
+        "This recurring event was provided by Happy Hour Compass when your venue was added to the platform.\n\n" +
+        "Because your venue is on the Free plan, deleting this recurring event permanently removes your grandfathered recurring event. You won't be able to create another recurring event unless you upgrade to Pro or Premium.\n\n" +
+        "This action cannot be undone."
+      : "Delete this event? This action cannot be undone.";
+
+    const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
 
     setIsDeleting(true);

@@ -132,6 +132,26 @@ export function canUseRecurringEvents(plan: OperatorPlan): boolean {
 }
 
 /**
+ * Grandfathered exception to canUseRecurringEvents(): a platform-seeded event
+ * that is *currently* a recurring event (is_seeded_event = true AND
+ * recurrence != "none") may still be fully managed — edited, recurrence
+ * details changed, published/unpublished, deleted — by a Free-plan operator.
+ *
+ * Callers must derive `isSeededAndCurrentlyRecurring` from the row's current
+ * state in the database (never from an in-flight payload), so this can never
+ * be used to create a new recurring event or convert a one-time event —
+ * seeded or not — into a recurring one. If the row is later saved as
+ * one-time, or deleted, it no longer qualifies and the exception does not
+ * re-apply to it.
+ */
+export function canManageGrandfatheredRecurringEvent(
+  plan: OperatorPlan,
+  isSeededAndCurrentlyRecurring: boolean
+): boolean {
+  return canUseRecurringEvents(plan) || isSeededAndCurrentlyRecurring;
+}
+
+/**
  * Custom search tag management beyond the default auto-generated tag set.
  * Allows operators to surface their venue for specific consumer searches.
  */

@@ -8,7 +8,7 @@ import {
   InvalidImageTypeError,
 } from "@/lib/imageProcessing";
 import Link from "next/link";
-import { canUseRecurringEvents } from "@/lib/plans";
+import { canManageGrandfatheredRecurringEvent } from "@/lib/plans";
 import type { OperatorPlan } from "@/lib/plans";
 import {
   type Recurrence,
@@ -263,7 +263,15 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
   // unmounts entirely, so there is no way to submit it a second time.
   const submittingRef = useRef(false);
 
-  const canRecur = canUseRecurringEvents(operatorPlan);
+  // Grandfathered exception: an existing platform-seeded event that is
+  // currently recurring may still be fully managed on a Free plan. Derived
+  // from initialEvent (the row's state as loaded), never from in-session
+  // formState edits, so a one-time event can never be switched to recurring
+  // through this path — only re-selecting/re-loading a still-recurring
+  // seeded row grants it. See canManageGrandfatheredRecurringEvent().
+  const isSeededAndCurrentlyRecurring =
+    !!initialEvent?.is_seeded_event && isRecurring(initialEvent?.recurrence ?? "none");
+  const canRecur = canManageGrandfatheredRecurringEvent(operatorPlan, isSeededAndCurrentlyRecurring);
 
   // Hydrate from server-loaded event data.
   useEffect(() => {
