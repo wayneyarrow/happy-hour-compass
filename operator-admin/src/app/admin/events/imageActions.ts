@@ -18,8 +18,13 @@
  * Routing through resolveOperatorContext() + ctx.supabase fixes this the
  * same way saveEventAction/deleteEventAction and the venue image actions
  * (admin/venue/imageActions.ts) already do: ctx.supabase is the admin
- * (service-role) client during impersonation, which bypasses RLS, with the
- * explicit venue/operator filter below providing the actual scoping.
+ * (service-role) client during impersonation, which bypasses RLS.
+ *
+ * Authorization/scoping is based on the event belonging to the currently
+ * managed venue, not on who created it — created_by_operator_id is NULL for
+ * every platform-seeded event, so it was never a reliable ownership signal
+ * (see saveEventAction/deleteEventAction for the matching fix and full
+ * explanation).
  */
 
 import { revalidatePath } from "next/cache";
@@ -29,6 +34,7 @@ const BUCKET = "venue-images"; // same bucket used for venue photos; events live
 
 export async function uploadEventImageAction(
   eventId: string,
+  venueId: string,
   formData: FormData
 ): Promise<{ error: string | null; imageUrl?: string }> {
   const ctx = await resolveOperatorContext();
@@ -36,6 +42,10 @@ export async function uploadEventImageAction(
   if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     return { error: ctx.operatorError ?? "Could not resolve operator context." };
   }
+
+  // In impersonation, enforce the session's venue rather than the
+  // caller-supplied venueId — matches saveEventAction's targetVenueId.
+  const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
@@ -54,20 +64,21 @@ export async function uploadEventImageAction(
   const { data: urlData } = ctx.supabase.storage.from(BUCKET).getPublicUrl(path);
   const publicUrl = urlData.publicUrl;
 
-  // Case A (operator) scopes by created_by_operator_id; Case B (founder
-  // impersonating an unassigned venue) scopes strictly by the impersonated
-  // venue — same pattern as saveEventAction/deleteEventAction.
-  let updateQuery = ctx.supabase.from("events").update({ image_url: publicUrl }).eq("id", eventId);
-  updateQuery = ctx.operator
-    ? updateQuery.eq("created_by_operator_id", ctx.operator.id)
-    : updateQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
-
-  const { error: updateError } = await updateQuery;
+  const { error: updateError, count } = await ctx.supabase
+    .from("events")
+    .update({ image_url: publicUrl }, { count: "exact" })
+    .eq("id", eventId)
+    .eq("venue_id", targetVenueId);
 
   if (updateError) {
     // Best-effort cleanup of the orphaned storage object.
     await ctx.supabase.storage.from(BUCKET).remove([path]).catch(() => {});
     return { error: `Failed to save image: ${updateError.message}` };
+  }
+
+  if (!count) {
+    await ctx.supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+    return { error: "This event could not be found for your venue." };
   }
 
   revalidatePath("/admin/events");
@@ -76,6 +87,7 @@ export async function uploadEventImageAction(
 
 export async function removeEventImageAction(
   eventId: string,
+  venueId: string,
   imageUrl: string
 ): Promise<{ error: string | null }> {
   const ctx = await resolveOperatorContext();
@@ -84,15 +96,20 @@ export async function removeEventImageAction(
     return { error: ctx.operatorError ?? "Could not resolve operator context." };
   }
 
-  let updateQuery = ctx.supabase.from("events").update({ image_url: null }).eq("id", eventId);
-  updateQuery = ctx.operator
-    ? updateQuery.eq("created_by_operator_id", ctx.operator.id)
-    : updateQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
+  const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
-  const { error: updateError } = await updateQuery;
+  const { error: updateError, count } = await ctx.supabase
+    .from("events")
+    .update({ image_url: null }, { count: "exact" })
+    .eq("id", eventId)
+    .eq("venue_id", targetVenueId);
 
   if (updateError) {
     return { error: `Failed to remove image: ${updateError.message}` };
+  }
+
+  if (!count) {
+    return { error: "This event could not be found for your venue." };
   }
 
   // Best-effort: also delete the file from storage — non-fatal, the DB row

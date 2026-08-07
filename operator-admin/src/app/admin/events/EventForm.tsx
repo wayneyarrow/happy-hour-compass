@@ -511,6 +511,7 @@ export default function EventForm({
 
     const { error: actionError, imageUrl: uploadedUrl } = await uploadEventImageAction(
       currentEventId,
+      venueId,
       formData
     );
 
@@ -531,7 +532,7 @@ export default function EventForm({
     setImageError(null);
     setIsUploadingImage(true);
 
-    const { error: actionError } = await removeEventImageAction(currentEventId, imageUrl ?? "");
+    const { error: actionError } = await removeEventImageAction(currentEventId, venueId, imageUrl ?? "");
 
     if (actionError) {
       console.error("[EventForm] image_url remove failed:", actionError);

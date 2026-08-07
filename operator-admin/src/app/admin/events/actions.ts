@@ -21,28 +21,41 @@ import {
 // Delete event
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function deleteEventAction(eventId: string): Promise<void> {
+/**
+ * @param eventId  Event to delete.
+ * @param venueId  The venue the caller is currently managing (EventsManager's
+ *   own venueId prop). Authorization is based on the event belonging to this
+ *   venue, not on who created it — created_by_operator_id is NULL for every
+ *   platform-seeded event, so scoping by it (the previous behaviour) silently
+ *   matched zero rows for any seeded event on a claimed venue. In
+ *   impersonation, the session's own venue always wins over this
+ *   caller-supplied value — matches saveEventAction's targetVenueId.
+ */
+export async function deleteEventAction(eventId: string, venueId: string): Promise<void> {
   const ctx = await resolveOperatorContext();
 
   if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
     throw new Error(ctx.operatorError ?? "Could not resolve operator.");
   }
 
-  // Case A (operator, claimed venue) or Case B (founder impersonating an
-  // unassigned venue) may both delete — scope strictly by whichever
-  // ownership signal applies so one impersonated venue can never touch
-  // another venue's events. Mirrors the pattern in venueActions.ts /
-  // imageActions.ts.
-  let query = ctx.supabase.from("events").delete().eq("id", eventId);
-  query = ctx.operator
-    ? query.eq("created_by_operator_id", ctx.operator.id)
-    : query.eq("venue_id", ctx.impersonatingVenueId ?? "");
+  const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
-  const { error } = await query;
+  const { error, count } = await ctx.supabase
+    .from("events")
+    .delete({ count: "exact" })
+    .eq("id", eventId)
+    .eq("venue_id", targetVenueId);
 
   if (error) {
     console.error("[deleteEventAction] Delete failed:", error);
     throw new Error("Failed to delete event.");
+  }
+
+  // A 0-row delete is not an error to Postgrest/Supabase — verify explicitly
+  // rather than let the caller believe this succeeded.
+  if (!count) {
+    console.error("[deleteEventAction] Delete matched zero rows:", { eventId, targetVenueId });
+    throw new Error("This event could not be found for your venue. It may have already been deleted.");
   }
 
   revalidatePath("/admin/events");
@@ -130,10 +143,15 @@ function deriveEventFrequency(recurrence: string, firstDate: string): string | n
  * never extends to creating a new recurring event or converting a one-time
  * event (seeded or not) into a recurring one.
  *
- * Founder impersonation (Case B — unassigned venue, ctx.operator is null):
- * inserts/updates are allowed, scoped strictly to the impersonated venue
- * (ctx.impersonatingVenueId) instead of an operator id. created_by_operator_id
- * / updated_by_operator_id are left unset in this mode. Mirrors the pattern in
+ * Update/delete authorization is based on the event belonging to the
+ * currently managed venue (targetVenueId below) — never on who created the
+ * row. created_by_operator_id is NULL for every platform-seeded event, so it
+ * was never a reliable "does this operator own this event" signal; scoping
+ * by it silently matched zero rows for any seeded event on a claimed venue
+ * (see deleteEventAction for the matching fix). created_by_operator_id /
+ * updated_by_operator_id are still stamped on writes purely for attribution
+ * (left unset when there's no real operator — impersonation of an unassigned
+ * venue), never used for authorization. Mirrors the venue-scoping pattern in
  * venueActions.ts / imageActions.ts.
  *
  * Support-mode recurring exception: Case B also bypasses the recurring-event
@@ -190,15 +208,12 @@ export async function saveEventAction(
     let isSeededAndCurrentlyRecurring = false;
 
     if (currentEventId) {
-      let existingQuery = ctx.supabase
+      const { data: existing } = await ctx.supabase
         .from("events")
         .select("recurrence, is_seeded_event")
-        .eq("id", currentEventId);
-      existingQuery = ctx.operator
-        ? existingQuery.eq("created_by_operator_id", ctx.operator.id)
-        : existingQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
-
-      const { data: existing } = await existingQuery.maybeSingle();
+        .eq("id", currentEventId)
+        .eq("venue_id", targetVenueId)
+        .maybeSingle();
 
       isSeededAndCurrentlyRecurring =
         !!existing?.is_seeded_event && isRecurring(existing.recurrence ?? "none");
@@ -243,19 +258,22 @@ export async function saveEventAction(
   };
 
   if (currentEventId) {
-    let updateQuery = ctx.supabase
+    const { error: updateError, count } = await ctx.supabase
       .from("events")
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", currentEventId);
-    updateQuery = ctx.operator
-      ? updateQuery.eq("created_by_operator_id", ctx.operator.id)
-      : updateQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
-
-    const { error: updateError } = await updateQuery;
+      .update({ ...fields, updated_at: new Date().toISOString() }, { count: "exact" })
+      .eq("id", currentEventId)
+      .eq("venue_id", targetVenueId);
 
     if (updateError) {
       console.error("[saveEventAction] Update failed:", updateError);
       return { error: updateError.message || "Failed to save event. Please try again." };
+    }
+
+    // A 0-row update is not an error to Postgrest/Supabase — verify
+    // explicitly rather than report success when nothing actually changed.
+    if (!count) {
+      console.error("[saveEventAction] Update matched zero rows:", { currentEventId, targetVenueId });
+      return { error: "This event could not be found for your venue. It may have been deleted or moved." };
     }
 
     revalidatePath("/admin/events");

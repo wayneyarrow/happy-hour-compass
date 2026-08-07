@@ -215,7 +215,7 @@ export default function EventsManager({
 
     setIsDeleting(true);
     try {
-      await deleteEventAction(selectedId);
+      await deleteEventAction(selectedId, venueId);
       // revalidatePath was called server-side; router.refresh() picks it up.
       router.refresh();
       setSelectedId(null);
