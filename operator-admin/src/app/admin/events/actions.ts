@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { canManageGrandfatheredRecurringEvent, canUseRecurringEvents, parseOperatorPlan } from "@/lib/plans";
+import {
+  canCreateRecurringEventInSupportMode,
+  canManageGrandfatheredRecurringEvent,
+  canUseRecurringEvents,
+  parseOperatorPlan,
+} from "@/lib/plans";
 import { isRecurring } from "./recurrenceUtils";
 import {
   MAX_SLUG_GENERATION_ATTEMPTS,
@@ -23,16 +28,17 @@ export async function deleteEventAction(eventId: string): Promise<void> {
     throw new Error(ctx.operatorError ?? "Could not resolve operator.");
   }
 
-  // Event management requires a known operator (Case B orphan venues have no operator).
-  if (!ctx.operator) {
-    throw new Error("Event management is not available in support mode for unassigned venues.");
-  }
+  // Case A (operator, claimed venue) or Case B (founder impersonating an
+  // unassigned venue) may both delete — scope strictly by whichever
+  // ownership signal applies so one impersonated venue can never touch
+  // another venue's events. Mirrors the pattern in venueActions.ts /
+  // imageActions.ts.
+  let query = ctx.supabase.from("events").delete().eq("id", eventId);
+  query = ctx.operator
+    ? query.eq("created_by_operator_id", ctx.operator.id)
+    : query.eq("venue_id", ctx.impersonatingVenueId ?? "");
 
-  const { error } = await ctx.supabase
-    .from("events")
-    .delete()
-    .eq("id", eventId)
-    .eq("created_by_operator_id", ctx.operator.id);
+  const { error } = await query;
 
   if (error) {
     console.error("[deleteEventAction] Delete failed:", error);
@@ -124,6 +130,25 @@ function deriveEventFrequency(recurrence: string, firstDate: string): string | n
  * never extends to creating a new recurring event or converting a one-time
  * event (seeded or not) into a recurring one.
  *
+ * Founder impersonation (Case B — unassigned venue, ctx.operator is null):
+ * inserts/updates are allowed, scoped strictly to the impersonated venue
+ * (ctx.impersonatingVenueId) instead of an operator id. created_by_operator_id
+ * / updated_by_operator_id are left unset in this mode. Mirrors the pattern in
+ * venueActions.ts / imageActions.ts.
+ *
+ * Support-mode recurring exception: Case B also bypasses the recurring-event
+ * plan check entirely (see canCreateRecurringEventInSupportMode() in
+ * src/lib/plans.ts) — the founder can create and manage recurring events for
+ * an unclaimed venue even though the implicit plan (no operator → "free")
+ * would otherwise forbid it. Every such recurring insert is automatically
+ * stamped is_seeded_event = true, so once the venue is claimed the new
+ * operator inherits it as a grandfathered seeded recurring event through the
+ * existing canManageGrandfatheredRecurringEvent() path — no separate
+ * entitlement system. Claimed-venue impersonation (Case A) and normal
+ * operator logins always have a real ctx.operator and get no bypass; they
+ * follow canUseRecurringEvents(plan) / canManageGrandfatheredRecurringEvent()
+ * exactly as before.
+ *
  * @param payload  Event data from the client form.
  * @param currentEventId  Existing event id for updates; null/undefined for inserts.
  */
@@ -137,16 +162,27 @@ export async function saveEventAction(
     return { error: ctx.operatorError ?? "Could not resolve your operator account." };
   }
 
-  if (!ctx.operator) {
-    return { error: "Event management is not available in support mode for unassigned venues." };
-  }
+  // In impersonation, enforce the session's venue rather than the
+  // caller-supplied payload.venueId — matches uploadVenueImageAction() etc.
+  const targetVenueId = ctx.isImpersonating
+    ? (ctx.sessionVenueId ?? payload.venueId)
+    : payload.venueId;
 
-  const plan = parseOperatorPlan(ctx.operator.plan);
+  const plan = parseOperatorPlan(ctx.operator?.plan);
+
+  // Support-mode exception (Case B only — founder impersonating an unclaimed
+  // venue). Never true for Case A (claimed-venue impersonation) or a normal
+  // operator login, both of which always have ctx.operator set.
+  const isUnclaimedVenueSupportMode = ctx.isImpersonating && !ctx.operator;
 
   // ── Server-side recurring events entitlement ──────────────────────────────
   // isRecurring() covers ALL recurrence values other than "none", so future
   // options automatically require a paid plan without any additional code.
-  if (isRecurring(payload.recurrence) && !canUseRecurringEvents(plan)) {
+  if (
+    isRecurring(payload.recurrence) &&
+    !canUseRecurringEvents(plan) &&
+    !canCreateRecurringEventInSupportMode(isUnclaimedVenueSupportMode)
+  ) {
     // Grandfathered exception: check the row's *current* state (not the
     // incoming payload) for a platform-seeded event that is still recurring.
     // currentEventId is null for inserts, so new recurring events are never
@@ -154,12 +190,15 @@ export async function saveEventAction(
     let isSeededAndCurrentlyRecurring = false;
 
     if (currentEventId) {
-      const { data: existing } = await ctx.supabase
+      let existingQuery = ctx.supabase
         .from("events")
         .select("recurrence, is_seeded_event")
-        .eq("id", currentEventId)
-        .eq("created_by_operator_id", ctx.operator.id)
-        .maybeSingle();
+        .eq("id", currentEventId);
+      existingQuery = ctx.operator
+        ? existingQuery.eq("created_by_operator_id", ctx.operator.id)
+        : existingQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
+
+      const { data: existing } = await existingQuery.maybeSingle();
 
       isSeededAndCurrentlyRecurring =
         !!existing?.is_seeded_event && isRecurring(existing.recurrence ?? "none");
@@ -200,15 +239,19 @@ export async function saveEventAction(
     parking_notes:               payload.parkingNotes || null,
     accessibility_notes:         payload.accessibilityNotes || null,
     teaser:                      payload.teaser || null,
-    updated_by_operator_id:      ctx.operator.id,
+    ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
   };
 
   if (currentEventId) {
-    const { error: updateError } = await ctx.supabase
+    let updateQuery = ctx.supabase
       .from("events")
       .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", currentEventId)
-      .eq("created_by_operator_id", ctx.operator.id);
+      .eq("id", currentEventId);
+    updateQuery = ctx.operator
+      ? updateQuery.eq("created_by_operator_id", ctx.operator.id)
+      : updateQuery.eq("venue_id", ctx.impersonatingVenueId ?? "");
+
+    const { error: updateError } = await updateQuery;
 
     if (updateError) {
       console.error("[saveEventAction] Update failed:", updateError);
@@ -226,7 +269,7 @@ export async function saveEventAction(
   let slug: string;
   try {
     slug = await generateEventSlug(ctx.supabase, {
-      venueId: payload.venueId,
+      venueId: targetVenueId,
       title: payload.title ?? "",
     });
   } catch (err) {
@@ -249,9 +292,15 @@ export async function saveEventAction(
       .insert([{
         ...fields,
         slug,
-        venue_id:                payload.venueId,
-        created_by_operator_id:  ctx.operator.id,
-        is_seeded_event:         false,
+        venue_id:                targetVenueId,
+        ...(ctx.operator ? { created_by_operator_id: ctx.operator.id } : {}),
+        // Recurring events created via unclaimed-venue support mode are
+        // platform-provided content by definition — auto-flag them so a
+        // future claiming operator inherits them as grandfathered seeded
+        // recurring events (see canManageGrandfatheredRecurringEvent()).
+        // One-time events, and anything created outside support mode, keep
+        // the existing false default.
+        is_seeded_event:         isUnclaimedVenueSupportMode && isRecurring(payload.recurrence),
       }])
       .select("id")
       .single();
@@ -269,7 +318,7 @@ export async function saveEventAction(
     if (isUniqueSlugViolation(error) && attempt < MAX_SLUG_GENERATION_ATTEMPTS - 1) {
       try {
         slug = await generateEventSlug(ctx.supabase, {
-          venueId: payload.venueId,
+          venueId: targetVenueId,
           title: payload.title ?? "",
         });
       } catch (err) {

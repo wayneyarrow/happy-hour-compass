@@ -152,6 +152,28 @@ export function canManageGrandfatheredRecurringEvent(
 }
 
 /**
+ * Support-mode exception to canUseRecurringEvents(): while founder
+ * impersonation is actively managing an UNCLAIMED venue via the Control
+ * Panel "Open as Operator" flow (Case B — no operator exists, so there is
+ * no real plan to read; it implicitly defaults to "free"), recurring events
+ * may still be created and managed. This lets the founder maintain seeded
+ * venues — adding/updating weekly specials, etc. — before an operator ever
+ * claims them.
+ *
+ * Callers must derive `isUnclaimedVenueSupportMode` strictly from
+ * ctx.isImpersonating && !ctx.operator (see saveEventAction). It grants no
+ * bypass for claimed-venue impersonation (Case A) or normal operator
+ * logins — both have a real ctx.operator and must continue to follow
+ * canUseRecurringEvents(plan) / canManageGrandfatheredRecurringEvent()
+ * exactly as before.
+ */
+export function canCreateRecurringEventInSupportMode(
+  isUnclaimedVenueSupportMode: boolean
+): boolean {
+  return isUnclaimedVenueSupportMode;
+}
+
+/**
  * Custom search tag management beyond the default auto-generated tag set.
  * Allows operators to surface their venue for specific consumer searches.
  */

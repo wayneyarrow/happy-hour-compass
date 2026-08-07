@@ -47,9 +47,20 @@ export default async function AdminEventsPage() {
 
   const venue = venueData;
 
-  // Events require an assigned operator (EventsManager uses operatorId for writes).
-  // In Case B (orphan venue), show an informational message instead.
-  const canManageEvents = !!operator && !!venue;
+  // True only for founder impersonation of an unclaimed venue (Case B) —
+  // mirrors the isUnclaimedVenueSupportMode check in saveEventAction, so the
+  // client-side recurrence picker isn't gated when the server would actually
+  // allow support-mode recurring event creation. Always false for claimed-
+  // venue impersonation (Case A) and normal operator logins.
+  const isUnclaimedVenueSupportMode = isImpersonating && !operator;
+
+  // Events are manageable whenever a venue was resolved above — either a
+  // claimed venue owned by the current operator (Case A / normal login), or
+  // an unassigned venue under founder impersonation (Case B, operator is
+  // null but the venue lookup above still succeeded via impersonatingVenueId).
+  // EventsManager/EventForm and the save/delete actions handle a null
+  // operator explicitly (see actions.ts) — no separate founder UI needed.
+  const canManageEvents = !!venue;
 
   const { data: eventsData, error: eventsError } =
     canManageEvents
@@ -104,18 +115,6 @@ export default async function AdminEventsPage() {
         </div>
       )}
 
-      {/* Case B: venue found but no operator — event management unavailable */}
-      {isImpersonating && !operator && venue && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-6 text-center">
-          <p className="text-sm font-medium text-gray-700">
-            Event management requires an operator to be assigned to this venue.
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            This venue has no linked operator account. Assign an operator first.
-          </p>
-        </div>
-      )}
-
       {/* Non-fatal event load error */}
       {canManageEvents && eventsError && (
         <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
@@ -124,14 +123,17 @@ export default async function AdminEventsPage() {
         </div>
       )}
 
-      {/* Events manager — list + form (requires operator) */}
+      {/* Events manager — list + form. Ownership scoping (Case A operator vs.
+          Case B founder impersonation of an unassigned venue) is resolved
+          server-side inside the save/delete/image actions via
+          resolveOperatorContext() — no operator id needs to cross the wire. */}
       {!operatorError && canManageEvents && (
         <EventsManager
           initialEvents={initialEvents}
-          operatorId={operator!.id}
           venueId={venue!.id}
-          operatorPlan={parseOperatorPlan(operator!.plan)}
+          operatorPlan={parseOperatorPlan(operator?.plan)}
           isOwner={isOwner}
+          isUnclaimedVenueSupportMode={isUnclaimedVenueSupportMode}
         />
       )}
     </div>

@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@/lib/supabase/browser";
 import {
   processImageFile,
   ImageTooLargeError,
   InvalidImageTypeError,
 } from "@/lib/imageProcessing";
 import Link from "next/link";
-import { canManageGrandfatheredRecurringEvent } from "@/lib/plans";
+import { canCreateRecurringEventInSupportMode, canManageGrandfatheredRecurringEvent } from "@/lib/plans";
 import type { OperatorPlan } from "@/lib/plans";
 import {
   type Recurrence,
@@ -16,6 +15,7 @@ import {
   toRecurrence,
 } from "./recurrenceUtils";
 import { saveEventAction } from "./actions";
+import { uploadEventImageAction, removeEventImageAction } from "./imageActions";
 import { EVENT_TYPE_OPTIONS } from "@/lib/eventTypes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,11 +72,18 @@ export type EventRow = {
 
 type Props = {
   initialEvent?: EventRow | null;
-  operatorId: string;
   venueId: string;
   operatorPlan: OperatorPlan;
   /** Whether the current user is the account owner (controls CTA wording). */
   isOwner: boolean;
+  /**
+   * True only for founder impersonation of an unclaimed venue (Case B — see
+   * saveEventAction). Mirrors the server-side support-mode recurring
+   * exception client-side so the recurrence picker isn't gated when the
+   * server would actually allow it. Always false for claimed-venue
+   * impersonation and normal operator logins.
+   */
+  isUnclaimedVenueSupportMode: boolean;
   /** Called after a successful insert or update with the saved event's id. */
   onSaved?: (eventId: string) => void;
   /** Called when the operator backs out of the initial "New event" step without creating a draft. Only rendered while no draft exists yet. */
@@ -233,7 +240,15 @@ const sectionHeadingCls = "text-xs font-semibold text-gray-500 uppercase trackin
 // component against the newly created row (see its handleSaved), which is
 // the closest equivalent available without introducing new routes/URLs for
 // Events, which is out of scope for this change.
-export default function EventForm({ initialEvent, operatorId, venueId, operatorPlan, isOwner, onSaved, onCancel }: Props) {
+export default function EventForm({
+  initialEvent,
+  venueId,
+  operatorPlan,
+  isOwner,
+  isUnclaimedVenueSupportMode,
+  onSaved,
+  onCancel,
+}: Props) {
   const [formState, setFormState] = useState<EventFormState>(EMPTY);
   const [currentEventId, setCurrentEventId] = useState<string | null>(
     initialEvent?.id ?? null
@@ -271,7 +286,9 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
   // seeded row grants it. See canManageGrandfatheredRecurringEvent().
   const isSeededAndCurrentlyRecurring =
     !!initialEvent?.is_seeded_event && isRecurring(initialEvent?.recurrence ?? "none");
-  const canRecur = canManageGrandfatheredRecurringEvent(operatorPlan, isSeededAndCurrentlyRecurring);
+  const canRecur =
+    canManageGrandfatheredRecurringEvent(operatorPlan, isSeededAndCurrentlyRecurring) ||
+    canCreateRecurringEventInSupportMode(isUnclaimedVenueSupportMode);
 
   // Hydrate from server-loaded event data.
   useEffect(() => {
@@ -489,42 +506,22 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
       return;
     }
 
-    const supabase = createClient();
-    // Always store as .jpg (output is always JPEG after processing).
-    const path = `events/${currentEventId}/${Date.now()}.jpg`;
+    const formData = new FormData();
+    formData.append("file", new File([blob], `${crypto.randomUUID()}.jpg`, { type: "image/jpeg" }));
 
-    const { error: uploadError } = await supabase.storage
-      .from("venue-images")
-      .upload(path, blob, { cacheControl: "3600", upsert: true, contentType: "image/jpeg" });
+    const { error: actionError, imageUrl: uploadedUrl } = await uploadEventImageAction(
+      currentEventId,
+      formData
+    );
 
-    if (uploadError) {
-      console.error("[EventForm] Image upload failed:", uploadError);
-      setImageError(`Upload failed: ${uploadError.message}`);
+    if (actionError || !uploadedUrl) {
+      console.error("[EventForm] Image upload failed:", actionError);
+      setImageError(actionError ?? "Failed to save image. Please try again.");
       setIsUploadingImage(false);
       return;
     }
 
-    const { data: urlData } = supabase.storage
-      .from("venue-images")
-      .getPublicUrl(path);
-    const publicUrl = urlData.publicUrl;
-
-    const { error: updateError } = await supabase
-      .from("events")
-      .update({ image_url: publicUrl })
-      .eq("id", currentEventId)
-      .eq("created_by_operator_id", operatorId);
-
-    if (updateError) {
-      console.error("[EventForm] image_url update failed:", updateError);
-      setImageError(`Failed to save image: ${updateError.message}`);
-      // Best-effort: remove the just-uploaded file to avoid orphans.
-      await supabase.storage.from("venue-images").remove([path]);
-      setIsUploadingImage(false);
-      return;
-    }
-
-    setImageUrl(publicUrl);
+    setImageUrl(uploadedUrl);
     setPublishError(null); // image requirement now met — clear any publish error
     setIsUploadingImage(false);
   };
@@ -534,32 +531,13 @@ export default function EventForm({ initialEvent, operatorId, venueId, operatorP
     setImageError(null);
     setIsUploadingImage(true);
 
-    const supabase = createClient();
+    const { error: actionError } = await removeEventImageAction(currentEventId, imageUrl ?? "");
 
-    const { error: updateError } = await supabase
-      .from("events")
-      .update({ image_url: null })
-      .eq("id", currentEventId)
-      .eq("created_by_operator_id", operatorId);
-
-    if (updateError) {
-      console.error("[EventForm] image_url remove failed:", updateError);
-      setImageError(`Failed to remove image: ${updateError.message}`);
+    if (actionError) {
+      console.error("[EventForm] image_url remove failed:", actionError);
+      setImageError(actionError);
       setIsUploadingImage(false);
       return;
-    }
-
-    // Best-effort: also delete the file from storage.
-    if (imageUrl) {
-      try {
-        const urlObj = new URL(imageUrl);
-        const match = urlObj.pathname.match(/\/public\/[^/]+\/(.+)$/);
-        if (match?.[1]) {
-          await supabase.storage.from("venue-images").remove([match[1]]);
-        }
-      } catch {
-        // Non-fatal — the DB row is already cleared.
-      }
     }
 
     setImageUrl(null);

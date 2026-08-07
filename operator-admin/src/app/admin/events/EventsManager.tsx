@@ -109,13 +109,20 @@ type Mode = "idle" | "creating" | "editing";
 
 type Props = {
   initialEvents: EventRow[];
-  operatorId: string;
   venueId: string;
   operatorPlan: OperatorPlan;
   isOwner: boolean;
+  /** True only for founder impersonation of an unclaimed venue (Case B). */
+  isUnclaimedVenueSupportMode: boolean;
 };
 
-export default function EventsManager({ initialEvents, operatorId, venueId, operatorPlan, isOwner }: Props) {
+export default function EventsManager({
+  initialEvents,
+  venueId,
+  operatorPlan,
+  isOwner,
+  isUnclaimedVenueSupportMode,
+}: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -414,10 +421,10 @@ export default function EventsManager({ initialEvents, operatorId, venueId, oper
               <EventForm
                 key={selectedId ?? "new"}
                 initialEvent={selectedEvent}
-                operatorId={operatorId}
                 venueId={venueId}
                 operatorPlan={operatorPlan}
                 isOwner={isOwner}
+                isUnclaimedVenueSupportMode={isUnclaimedVenueSupportMode}
                 onSaved={handleSaved}
                 onCancel={mode === "creating" ? handleCancelCreate : undefined}
               />
