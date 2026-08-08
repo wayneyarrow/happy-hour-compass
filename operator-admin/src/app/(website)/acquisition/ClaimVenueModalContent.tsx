@@ -83,11 +83,11 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
           before granting access.
         </p>
         <p className="text-[15px] text-gray-600 leading-relaxed mb-6">
-          This usually takes less than 24 hours.
+          We typically review claim and venue submissions within 1–2 business days.
         </p>
 
         <div className="mb-10">
-          <EmailConfirmationNote lead="We&rsquo;ve sent a confirmation email to your inbox." />
+          <EmailConfirmationNote lead="We’ve sent a confirmation email to your inbox." />
         </div>
 
         <button

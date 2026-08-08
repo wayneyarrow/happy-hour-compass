@@ -59,13 +59,13 @@ export default async function ConsumerAuthLayout({ children }: { children: React
                 href="/suggest/owner"
                 className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
               >
-                List your venue
+                Add Your Venue
               </Link>
               <Link
                 href="/login"
                 className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
               >
-                Operator login
+                Business Login
               </Link>
             </div>
           </div>

@@ -92,7 +92,7 @@ export default function AccountProfileForm({
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 bg-gray-50 cursor-default select-all"
             />
             <p className="mt-1 text-xs text-gray-400">
-              Email changes are not supported in V1.
+              We don’t currently support changing your email. Contact us if you need to update it.
             </p>
           </div>
 

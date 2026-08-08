@@ -241,7 +241,7 @@ export const BUSINESS_FAQS: FaqAccordionItem[] = [
     id: "approval-time",
     question: "How long does approval take?",
     answer:
-      "Most claim and add-venue requests are reviewed quickly, typically within one to two business days. You'll be notified as soon as your venue is approved.",
+      "We typically review claim and venue submissions within 1–2 business days. You'll be notified as soon as your venue is approved.",
   },
   {
     id: "update-anytime",

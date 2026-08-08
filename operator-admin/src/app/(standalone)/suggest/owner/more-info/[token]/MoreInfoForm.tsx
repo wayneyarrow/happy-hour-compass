@@ -313,7 +313,7 @@ export default function MoreInfoForm({
               id="info_relationship"
               name="info_relationship"
               rows={3}
-              placeholder="e.g. I've owned and operated The Keg on Burrard since 2018. I can provide a copy of our business license on request."
+              placeholder="e.g. I've owned and operated The Keg on Burrard since 2018. I can provide a copy of our business licence on request."
               className={INPUT + " resize-none"}
             />
             {state.fieldErrors?.info_relationship && (

@@ -40,7 +40,7 @@ export function MarketComingSoon({ marketName }: Props) {
         href="/website-happy-hours"
         className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
       >
-        Explore {activeMarket.name}
+        Explore the {activeMarket.name}
       </Link>
     </div>
   );

@@ -593,7 +593,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           We matched your business automatically — no manual review needed.
         </p>
         <div className="mb-10">
-          <EmailConfirmationNote lead="We&rsquo;ve sent you an account setup email." />
+          <EmailConfirmationNote lead="We’ve sent you an account setup email." />
         </div>
         <button
           type="button"
@@ -627,11 +627,10 @@ export function AddVenueModalContent({ onDone }: Props) {
           Thanks&nbsp;&mdash; we&rsquo;ve got your details
         </h3>
         <p className="text-[15px] text-gray-600 leading-relaxed mb-6 max-w-[290px]">
-          We&rsquo;ll review your submission and get back to you within 2
-          business days.
+          We typically review claim and venue submissions within 1–2 business days.
         </p>
         <div className="mb-10">
-          <EmailConfirmationNote lead="We&rsquo;ve also sent a confirmation email to your inbox." />
+          <EmailConfirmationNote lead="We’ve also sent a confirmation email to your inbox." />
         </div>
         <button
           type="button"

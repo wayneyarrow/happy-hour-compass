@@ -74,7 +74,7 @@ export function ContactUsModalContent({ onDone }: Props) {
           you.
         </p>
         <div className="mb-10">
-          <EmailConfirmationNote lead="We&rsquo;ve sent a confirmation to your inbox." />
+          <EmailConfirmationNote lead="We’ve sent a confirmation to your inbox." />
         </div>
 
         <button
