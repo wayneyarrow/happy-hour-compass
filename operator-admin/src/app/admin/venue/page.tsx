@@ -38,6 +38,8 @@ type AdminVenueRow = {
   menu_url?: string | null;
   is_published?: boolean | null;
   establishment_type?: string | null;
+  /** Assigned seeded placeholder image path (migration 073), if any. */
+  placeholder_image_path?: string | null;
   /** PostgreSQL TEXT[] — returned as string[] by the Supabase client */
   search_tags?: string[] | null;
   cancelled_at?: string | null;
@@ -333,6 +335,7 @@ export default async function AdminVenuePage({
             <VenueImagesSection
               venueId={venue.id}
               establishmentType={venue.establishment_type}
+              placeholderImagePath={venue.placeholder_image_path}
               imageLimit={imageLimit}
               plan={operatorPlan}
               isOwner={isOwner}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ConsumerVenue } from "@/lib/data/venues";
 import { BookmarkButton } from "./BookmarkButton";
 import { haversineKm } from "@/lib/geo";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 
 // Re-export so VenueDiscovery.tsx import continues to work.
 export { haversineKm };
@@ -65,22 +66,6 @@ export function getOpenStatus(
   if (open === null || close === null || close <= open) return null;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   return nowMin >= open && nowMin < close ? "Open Now" : "Closed";
-}
-
-// ─── image helpers ────────────────────────────────────────────────────────────
-
-/**
- * Maps establishment type to a placeholder image path.
- * Mirrors original getVenueImage() logic from index.html.
- */
-function getVenueImageSrc(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery")) return "/images/casual-dining-1.jpg";
-  if (t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
 }
 
 // ─── specials helper ──────────────────────────────────────────────────────────
@@ -196,7 +181,7 @@ export function VenueList({ venues, geoSort = true }: Props) {
   return (
     <ul className="flex flex-col gap-3">
       {sorted.map(({ venue, dist, openStatus }) => {
-        const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
+        const imageSrc = getVenueImageSrc(venue);
         const shortSpecials = getShortSpecials(venue);
 
         return (

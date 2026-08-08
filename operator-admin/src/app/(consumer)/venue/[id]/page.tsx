@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { BookmarkButton } from "../../BookmarkButton";
 import { ShareButton } from "../../event/[id]/ShareButton";
 import { VenueJumpChips } from "./VenueJumpChips";
@@ -33,20 +34,6 @@ const DAY_ORDER = [
   "Thursday", "Friday", "Saturday",
 ] as const;
 
-/**
- * Maps establishment type to a type-based placeholder image path.
- * Mirrors getVenueImage() from the original index.html.
- */
-function getVenueImageSrc(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery")) return "/images/casual-dining-1.jpg";
-  if (t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
-
 // This legacy consumer-app route never supported an authorized unpublished
 // preview — it previously trusted a bare ?preview=true query string to
 // enable includeUnpublished with no authorization check at all, letting
@@ -66,9 +53,6 @@ export default async function VenuePage({ params }: PageProps) {
   if (!venue) {
     notFound();
   }
-
-  // Fallback image when venue has no uploaded images.
-  const fallbackImageSrc = getVenueImageSrc(venue.establishmentType);
 
   // Days with at least one business hours entry, Sun→Sat order.
   const openDays = DAY_ORDER.filter(
@@ -115,7 +99,7 @@ export default async function VenuePage({ params }: PageProps) {
         images={
           venue.images.length > 0
             ? venue.images
-            : [{ url: fallbackImageSrc }]
+            : [{ url: getVenueImageSrc(venue) }]
         }
         venueName={venue.name}
       />

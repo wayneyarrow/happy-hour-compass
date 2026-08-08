@@ -15,6 +15,7 @@ import {
   deleteVenueImageAction,
   reorderVenueImagesAction,
 } from "./imageActions";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,28 +25,14 @@ type MediaRow = {
   sort_order: number;
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Maps establishment type to the same placeholder image path used on the
- * consumer detail page. Mirrors getVenueImageSrc() in venue/[id]/page.tsx.
- */
-function getPlaceholderImageSrc(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery")) return "/images/casual-dining-1.jpg";
-  if (t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type Props = {
   venueId: string | null | undefined;
   /** Used to show the correct placeholder preview when no images are uploaded. */
   establishmentType?: string | null;
+  /** Assigned seeded placeholder image path (venues.placeholder_image_path), if any. */
+  placeholderImagePath?: string | null;
   /** Maximum number of images allowed on this operator's plan. */
   imageLimit: number;
   /** Current operator plan — used for plan-aware upgrade nudges. */
@@ -59,7 +46,15 @@ type Props = {
   isPublished: boolean;
 };
 
-export default function VenueImagesSection({ venueId, establishmentType, imageLimit, plan, isOwner, isPublished }: Props) {
+export default function VenueImagesSection({
+  venueId,
+  establishmentType,
+  placeholderImagePath,
+  imageLimit,
+  plan,
+  isOwner,
+  isPublished,
+}: Props) {
   const [images, setImages] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -324,7 +319,7 @@ export default function VenueImagesSection({ venueId, establishmentType, imageLi
           <div className="w-20 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-amber-200">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={getPlaceholderImageSrc(establishmentType ?? "")}
+              src={getVenueImageSrc({ placeholderImagePath, establishmentType })}
               alt="Current placeholder"
               className="w-full h-full object-cover opacity-75"
             />

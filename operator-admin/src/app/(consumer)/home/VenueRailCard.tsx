@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookmarkButton } from "../BookmarkButton";
 import { getSessionId } from "@/lib/trackingSession";
 import type { ConsumerVenue } from "@/lib/data/venues";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 
 // ─── status helpers ───────────────────────────────────────────────────────────
 
@@ -103,17 +104,6 @@ function computeCardStatus(venue: ConsumerVenue): CardStatus {
   return { hhStatus, businessStatus };
 }
 
-// ─── image helper ─────────────────────────────────────────────────────────────
-
-function getVenueImageSrc(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
-
 // ─── component ────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -146,7 +136,7 @@ export function VenueRailCard({ venue, railName, position }: Props) {
     setStatus(computeCardStatus(venue));
   }, [venue]);
 
-  const imageSrc = venue.images[0]?.url ?? getVenueImageSrc(venue.establishmentType);
+  const imageSrc = getVenueImageSrc(venue);
 
   const hhPill: { label: string; bg: string; color: string } | null =
     status.hhStatus === "today"

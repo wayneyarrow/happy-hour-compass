@@ -40,6 +40,14 @@ export type ConsumerVenue = {
   type: string;
   /** Operator-selected establishment type, e.g. "Pub", "Cocktail Bar". */
   establishmentType: string;
+  /**
+   * Assigned seeded placeholder image path (venues.placeholder_image_path,
+   * migration 073) — relative path under images/venues/, no leading slash,
+   * e.g. "images/venues/pub/venue-pic-pub-4.jpg". Null when no placeholder
+   * has been assigned. Only consulted by getVenueImageSrc() when the venue
+   * has no uploaded images — see src/lib/venuePlaceholderImage.ts.
+   */
+  placeholderImagePath: string | null;
   city: string;
   /** Neighbourhood / district — defaults to "" (not stored in DB) */
   area: string;
@@ -545,6 +553,10 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     name: (row.name as string) ?? "",
     type: "Restaurant",
     establishmentType: (row.establishment_type as string) ?? "Restaurant and Bar",
+    placeholderImagePath:
+      typeof row.placeholder_image_path === "string" && row.placeholder_image_path.trim()
+        ? row.placeholder_image_path
+        : null,
     city: (row.city as string) ?? "",
     area: "",
     latitude: typeof row.lat === "number" ? row.lat : null,
@@ -615,7 +627,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, updated_at, " +
+          "establishment_type, placeholder_image_path, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, updated_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, " +
           // Join operator plan — used by Discover Engine for plan-based weighting.
           // created_by_operator_id is null for seeded/imported venues; operators will be null for those rows.
@@ -713,7 +725,7 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
 const VENUE_DETAIL_SELECT =
   "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-  "establishment_type, claimed_at, google_rating, google_review_count, place_id, is_verified, " +
+  "establishment_type, placeholder_image_path, claimed_at, google_rating, google_review_count, place_id, is_verified, " +
   "search_tags, about_your_venue, updated_at, " +
   // Canonical market/city slugs for the public /{market}/{city}/{slug} venue
   // URL — see ConsumerVenue.marketSlug/citySlug.
@@ -953,7 +965,7 @@ export async function getPublishedVenuesByUuids(
       .select(
         "id, slug, name, address_line1, city, phone, website_url, menu_url, lat, lng, " +
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
-          "establishment_type, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
+          "establishment_type, placeholder_image_path, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, teaser, " +
           "operators!created_by_operator_id(plan), " +
           "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"

@@ -27,20 +27,12 @@ import { MobileActionBar } from "./MobileActionBar";
 import { VenueDetailMap } from "./VenueDetailMap";
 import { ClaimVenueCTA } from "./ClaimVenueCTA";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fallbackImage(type: string): string {
-  const t = type.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar") || t.includes("brewery") || t.includes("pub"))
-    return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -99,7 +91,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
         marketSlug: venue.marketSlug,
         citySlug: venue.citySlug,
         slug: venue.id,
-        ogImage: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+        ogImage: getVenueImageSrc(venue),
       }),
       robots: { index: false, follow: false },
     };
@@ -129,7 +121,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     marketSlug: venue.marketSlug,
     citySlug: venue.citySlug,
     slug: venue.id,
-    ogImage: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+    ogImage: getVenueImageSrc(venue),
   });
 }
 
@@ -285,8 +277,8 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   }
 
   // Page-specific venue structured data — built from the raw venue.images
-  // (never the type-based fallbackImage() used for gallery display below;
-  // a stock photo is not a fact about this venue). Returns null (and
+  // (never getVenueImageSrc()'s placeholder/fallback used for gallery display
+  // below; a stock photo is not a fact about this venue). Returns null (and
   // renders nothing) when the minimum required identity isn't met — see
   // buildVenueLocalBusinessNode's own docstring for the omission rules.
   const venueNode = buildVenueLocalBusinessNode({
@@ -320,11 +312,11 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
     ],
   });
 
-  // Images: real uploaded images or type-based fallback.
+  // Images: real uploaded images or placeholder/type-based fallback.
   const images =
     venue.images.length > 0
       ? venue.images
-      : [{ url: fallbackImage(venue.establishmentType) }];
+      : [{ url: getVenueImageSrc(venue) }];
 
   // Section visibility flags.
   const hasFood = venue.specialsFood.length > 0;
