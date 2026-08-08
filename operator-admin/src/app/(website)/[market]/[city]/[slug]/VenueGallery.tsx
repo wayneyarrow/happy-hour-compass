@@ -100,6 +100,7 @@ function DesktopGallery({
           src={images[0].url}
           alt={venueName}
           loading="eager"
+          fetchPriority="high"
           className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.backgroundColor = "#f3f4f6";
@@ -191,6 +192,7 @@ function MobileGallery({
           src={images[activeIndex]?.url ?? ""}
           alt={venueName}
           loading="eager"
+          fetchPriority="high"
           className="w-full h-full object-cover object-center"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";

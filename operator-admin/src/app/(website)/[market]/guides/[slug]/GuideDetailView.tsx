@@ -129,6 +129,7 @@ export function GuideDetailView({
             <img
               src={guide.hero_image_url}
               alt={guide.title}
+              fetchPriority="high"
               className="w-full h-full object-cover"
             />
           </div>

@@ -53,9 +53,15 @@ export async function uploadEventImageAction(
   const bytes = await file.arrayBuffer();
   const path = `events/${eventId}/${crypto.randomUUID()}.jpg`;
 
+  // 1 year — safe because every upload gets a brand-new crypto.randomUUID()
+  // path (upsert: false above), so a URL's content can never change after
+  // it's created; "replacing" a photo always means a new URL, never an
+  // overwrite. Existing objects uploaded before this change keep their
+  // prior 1-hour cache-control until a separate, deliberate migration
+  // re-uploads them (out of scope here).
   const { error: uploadError } = await ctx.supabase.storage
     .from(BUCKET)
-    .upload(path, bytes, { cacheControl: "3600", upsert: false, contentType: "image/jpeg" });
+    .upload(path, bytes, { cacheControl: "31536000", upsert: false, contentType: "image/jpeg" });
 
   if (uploadError) {
     return { error: `Upload failed: ${uploadError.message}` };

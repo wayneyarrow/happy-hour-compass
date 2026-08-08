@@ -10,6 +10,27 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  // Phase 1B (Lighthouse audit follow-up): the seeded venue placeholder
+  // library under /images/venues/ is committed to git and only ever changes
+  // via a new deploy — there is no runtime "replace this image" affordance
+  // for it the way there is for operator-uploaded Supabase Storage photos.
+  // That makes it safe to cache immutably. Scoped narrowly to this one path
+  // rather than /images/:path* or sitewide, so it doesn't touch caching for
+  // any other static asset (see docs/website — Lighthouse audit + Phase 1B
+  // investigation for the full reasoning).
+  async headers() {
+    return [
+      {
+        source: "/images/venues/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
