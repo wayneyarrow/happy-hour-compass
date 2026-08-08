@@ -10,6 +10,7 @@ import {
   type WebsiteVenueCard,
 } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
 import { EventSearchResults } from "@/app/(website)/website-events/EventSearchResults";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 
 /**
  * Type-specific Collection Landing Page content — the clean boundary
@@ -60,19 +61,6 @@ export function CollectionTypeContent({ model }: Props) {
   }
 }
 
-// ── Card image fallback ──────────────────────────────────────────────────────
-// Same convention already duplicated across the public venue pages, the
-// Saved-venues-full API route, and homepagesRendering.ts (see those files'
-// identical fallbackImage()) — matched here rather than invented.
-
-function fallbackVenueImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar") || t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
-
 // Returns null when the venue has no assigned market/city yet (see
 // buildVenuePublicPath) — no canonical URL exists to link to.
 function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
@@ -83,7 +71,7 @@ function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
     venueUuid: v.venueUuid,
     href,
     name: v.name,
-    image: v.images[0]?.url ?? fallbackVenueImage(v.establishmentType),
+    image: getVenueImageSrc(v),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
     happyHourWeekly: v.happyHourWeekly,

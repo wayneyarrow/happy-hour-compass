@@ -4,6 +4,7 @@ import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { toMarketConfig } from "@/lib/markets";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
@@ -17,20 +18,6 @@ export const metadata: Metadata = {
 
 // force-dynamic ensures the market cookie and venue data are always fresh.
 export const dynamic = "force-dynamic";
-
-/**
- * Maps an establishment type string to a local fallback image path.
- * Mirrors getVenueImageSrc() from app/(consumer)/VenueList.tsx.
- * Used only when a venue has no uploaded images.
- */
-function fallbackImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
 
 export default async function HappyHoursSearchPage({
   searchParams,
@@ -82,7 +69,7 @@ export default async function HappyHoursSearchPage({
       venueUuid: venue.venueUuid,
       href,
       name: venue.name,
-      image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+      image: getVenueImageSrc(venue),
       isVerified: venue.isVerified,
       googleRating: venue.googleRating,
       distanceKm: null,

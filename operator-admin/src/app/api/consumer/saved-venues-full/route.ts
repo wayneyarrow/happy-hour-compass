@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPublishedVenuesByUuids } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import type { WebsiteVenueCard } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
-
-function fallbackImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar")) return "/images/sports-bar-1.jpg";
-  if (t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,7 +38,7 @@ export async function POST(req: NextRequest) {
         venueUuid: venue.venueUuid,
         href,
         name: venue.name,
-        image: venue.images[0]?.url ?? fallbackImage(venue.establishmentType),
+        image: getVenueImageSrc(venue),
         isVerified: venue.isVerified,
         googleRating: venue.googleRating,
         distanceKm: null,

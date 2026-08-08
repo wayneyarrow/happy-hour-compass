@@ -33,23 +33,11 @@ import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/e
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/lib/geo/geography";
 import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
-
-// ── Card image fallback ──────────────────────────────────────────────────────
-// Same convention already duplicated across the public venue pages, the
-// Saved-venues-full API route, and the Guide preview route (see those
-// files' identical fallbackImage()) — matched here rather than invented.
-
-function fallbackVenueImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar") || t.includes("brewery") || t.includes("pub")) return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
 
 // Returns null when the venue has no assigned market/city yet (see
 // buildVenuePublicPath) — no canonical URL exists to link to.
@@ -61,7 +49,7 @@ function venueToSearchResultCard(v: ConsumerVenue): SearchResultCardData | null 
     venueUuid: v.venueUuid,
     href,
     name: v.name,
-    image: fallbackVenueImage(v.establishmentType),
+    image: getVenueImageSrc(v),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
     happyHourWeekly: v.happyHourWeekly,
@@ -180,7 +168,7 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         eyebrow: "Featured Venue",
         title: venue.name,
         secondaryLabel: venue.city || null,
-        imageUrl: venue.images[0]?.url ?? fallbackVenueImage(venue.establishmentType),
+        imageUrl: getVenueImageSrc(venue),
         teaser: venue.teaser,
         ctaLabel: "View Venue",
         ctaHref,

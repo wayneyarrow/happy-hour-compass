@@ -10,6 +10,7 @@ import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "@/app/(website)/[market]/guides/[slug]/GuideDetailView";
 
@@ -44,15 +45,6 @@ export const metadata: Metadata = {
   title: "Preview Guide — Control Panel",
   robots: { index: false, follow: false },
 };
-
-function fallbackImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar") || t.includes("brewery") || t.includes("pub"))
-    return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
 
 export default async function GuidePreviewPage({
   params,
@@ -97,7 +89,7 @@ export default async function GuidePreviewPage({
           venueUuid: v.venueUuid,
           href,
           name: v.name,
-          image: v.images[0]?.url ?? fallbackImage(v.establishmentType),
+          image: getVenueImageSrc(v),
           isVerified: v.isVerified,
           googleRating: v.googleRating,
           happyHourWeekly: v.happyHourWeekly,

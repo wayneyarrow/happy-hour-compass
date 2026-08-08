@@ -12,6 +12,7 @@ import { getGuideFaqs } from "@/lib/data/faqLibrary";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { absoluteUrl } from "@/lib/siteUrl";
 import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { generateGuideSeo } from "@/lib/seo/contentGuideSeo";
@@ -126,17 +127,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-// ─── Small helpers ──────────────────────────────────────────────────────────
-
-function fallbackImage(establishmentType: string): string {
-  const t = establishmentType.toLowerCase();
-  if (t.includes("fine dining") || t.includes("upscale")) return "/images/fine-dining-1.jpg";
-  if (t.includes("sports bar") || t.includes("brewery") || t.includes("pub"))
-    return "/images/sports-bar-1.jpg";
-  if (t.includes("casual")) return "/images/casual-dining-2.jpg";
-  return "/images/casual-dining-1.jpg";
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function GuideDetailPage({ params }: PageProps) {
@@ -234,7 +224,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
           venueUuid: v.venueUuid,
           href,
           name: v.name,
-          image: v.images[0]?.url ?? fallbackImage(v.establishmentType),
+          image: getVenueImageSrc(v),
           isVerified: v.isVerified,
           googleRating: v.googleRating,
           happyHourWeekly: v.happyHourWeekly,
