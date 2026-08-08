@@ -298,9 +298,8 @@ export function WebsiteFooter() {
           {/* Bottom legal row */}
           <div className="mt-12 pt-6 border-t border-gray-800 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-gray-400">
-              © {new Date().getFullYear()} Happy Hour Compass. All rights reserved.
+              © {new Date().getFullYear()} Yellow Lab Software. All rights reserved.
             </p>
-            <p className="text-xs text-gray-400">Powered by Yellow Lab Software.</p>
           </div>
         </div>
       </footer>
