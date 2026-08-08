@@ -44,6 +44,22 @@ export function getStripeClient(): Stripe {
       "[stripe] STRIPE_SECRET_KEY is not set. Add it to .env.local and Vercel project settings."
     );
   }
+  // Fail fast with a diagnosable message rather than letting a malformed
+  // value reach the Stripe SDK, where it only surfaces as an opaque
+  // "Invalid API Key provided: <value>" error from Stripe's API. Seen in
+  // production with a whsec_… value (the webhook signing secret) reaching
+  // this call — STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are separate
+  // env vars (see header comment) and must never be swapped.
+  if (!secretKey.startsWith("sk_")) {
+    const looksLikeWebhookSecret = secretKey.startsWith("whsec_");
+    throw new Error(
+      `[stripe] STRIPE_SECRET_KEY does not look like a Stripe secret key (expected an sk_live_… or sk_test_… value).${
+        looksLikeWebhookSecret
+          ? " It currently holds a whsec_… value — check whether STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET were swapped in the environment configuration."
+          : ""
+      }`
+    );
+  }
 
   _stripe = new Stripe(secretKey, {
     apiVersion: "2026-05-27.dahlia",
