@@ -13,6 +13,7 @@ import {
   getCanonicalUrlWarning,
   getMetaDescriptionWarning,
   getMetaTitleWarning,
+  getPrimaryKeywordWarning,
   type SeoFieldKey,
 } from "@/lib/seo/contentGuideSeo";
 import {
@@ -279,6 +280,7 @@ export default function GuideForm({
   const metaTitleWarning = getMetaTitleWarning(metaTitle);
   const metaDescriptionWarning = getMetaDescriptionWarning(metaDescription);
   const canonicalUrlWarning = getCanonicalUrlWarning(canonicalUrl);
+  const primaryKeywordWarning = getPrimaryKeywordWarning(primaryKeyword);
 
   // ── Related Content count (Card 7A) ──────────────────────────────────────
   // AttachmentsSelector owns its own selection state internally; this is
@@ -558,6 +560,12 @@ export default function GuideForm({
                 placeholder="happy hour patios kelowna"
                 className={inputCls}
               />
+              <p className={hintCls}>
+                Use one primary search phrase. Add additional phrases under Secondary Keywords.
+              </p>
+              {primaryKeywordWarning && (
+                <p className="mt-1 text-xs text-amber-600">{primaryKeywordWarning}</p>
+              )}
             </div>
             <div>
               <label className={labelCls} htmlFor="secondary_keywords">Secondary Keywords</label>
@@ -570,7 +578,9 @@ export default function GuideForm({
                 placeholder="patio happy hour, kelowna drink specials, best patios kelowna"
                 className={inputCls}
               />
-              <p className={hintCls}>Separate with commas or new lines.</p>
+              <p className={hintCls}>
+                Additional search phrases for this guide. Separate with commas or new lines.
+              </p>
             </div>
           </section>
 

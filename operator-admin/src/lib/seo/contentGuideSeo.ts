@@ -66,9 +66,20 @@ export const OG_DESCRIPTION_MAX_LEN = 200;
 
 // ── Small text helpers ───────────────────────────────────────────────────────
 
+/**
+ * Truncates `text` to at most `max` characters (ellipsis included), cutting
+ * at the last whole-word boundary within that budget rather than slicing
+ * mid-word. Falls back to a hard character cut only when no space exists
+ * within the budget (e.g. one very long word) — the result is still
+ * guaranteed to fit within `max`, just without a clean word boundary to
+ * cut at.
+ */
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
+  const hardCut = text.slice(0, max - 1);
+  const lastSpace = hardCut.lastIndexOf(" ");
+  const wordAwareCut = lastSpace > 0 ? hardCut.slice(0, lastSpace) : hardCut;
+  return `${wordAwareCut.trimEnd()}…`;
 }
 
 function normalizeWhitespace(text: string): string {
@@ -99,6 +110,20 @@ function locationInfo(
   return { label: "", source: null };
 }
 
+/**
+ * Whether `locationLabel` is already naturally present in `subject` — used
+ * by the title builders below to avoid appending a redundant location
+ * segment (e.g. a guide titled "...in Kelowna" doesn't also need
+ * " | Kelowna" tacked on). Case-insensitive substring match: location
+ * labels read as a whole phrase in editorial titles ("...in Kelowna",
+ * "Kelowna's Best..."), so a simple substring check is enough without
+ * needing word-boundary parsing.
+ */
+function subjectAlreadyIncludesLocation(subject: string, locationLabel: string): boolean {
+  if (!locationLabel) return false;
+  return subject.toLowerCase().includes(locationLabel.toLowerCase());
+}
+
 // ── Generation ────────────────────────────────────────────────────────────────
 
 export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideSeo {
@@ -115,30 +140,49 @@ export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideS
 
   // ── page_title — full, descriptive; not length-capped like meta_title,
   // since it's the browser tab / page title, not what Google truncates.
+  // Location is only appended when it isn't already naturally present in
+  // the subject (e.g. a title already ending "...in Kelowna" doesn't also
+  // need a trailing "| Kelowna") — see subjectAlreadyIncludesLocation().
   const pageTitleSubject = guideTitle || (keyword ? capitalizeWords(keyword) : "Untitled Guide");
-  const pageTitleParts = [pageTitleSubject, location.label, BRAND].filter(Boolean);
-  const pageTitleSources = ["guide title", location.source, "brand"].filter(
-    (s): s is string => Boolean(s)
-  );
+  const pageTitleLocationRedundant = subjectAlreadyIncludesLocation(pageTitleSubject, location.label);
+  const pageTitleParts = [
+    pageTitleSubject,
+    pageTitleLocationRedundant ? null : location.label,
+    BRAND,
+  ].filter(Boolean);
+  const pageTitleSources = [
+    "guide title",
+    pageTitleLocationRedundant ? null : location.source,
+    "brand",
+  ].filter((s): s is string => Boolean(s));
 
   // ── meta_title — keyword-led when a primary keyword exists (more
   // search-intent-aligned than the editorial guide title), capped short.
+  // Same redundant-location suppression as page_title above.
   const metaTitleSubject = keyword ? capitalizeWords(keyword) : guideTitle || "Untitled Guide";
+  const metaTitleLocationRedundant = subjectAlreadyIncludesLocation(metaTitleSubject, location.label);
   const metaTitleValue = truncate(
-    [metaTitleSubject, location.label].filter(Boolean).join(" | "),
+    [metaTitleSubject, metaTitleLocationRedundant ? null : location.label].filter(Boolean).join(" | "),
     META_TITLE_MAX_LEN
   );
-  const metaTitleSources = [keyword ? "primary keyword" : "guide title", location.source].filter(
-    (s): s is string => Boolean(s)
-  );
+  const metaTitleSources = [
+    keyword ? "primary keyword" : "guide title",
+    metaTitleLocationRedundant ? null : location.source,
+  ].filter((s): s is string => Boolean(s));
 
   // ── og_title — same subject as meta_title, slightly more room, no brand
-  // suffix (buildPageMetadata already sends siteName separately).
+  // suffix (buildPageMetadata already sends siteName separately). Same
+  // redundant-location suppression as page_title/meta_title above.
+  const ogTitleSubject = guideTitle || metaTitleSubject;
+  const ogTitleLocationRedundant = subjectAlreadyIncludesLocation(ogTitleSubject, location.label);
   const ogTitleValue = truncate(
-    [guideTitle || metaTitleSubject, location.label].filter(Boolean).join(" | "),
+    [ogTitleSubject, ogTitleLocationRedundant ? null : location.label].filter(Boolean).join(" | "),
     OG_TITLE_MAX_LEN
   );
-  const ogTitleSources = ["guide title", location.source].filter((s): s is string => Boolean(s));
+  const ogTitleSources = [
+    "guide title",
+    ogTitleLocationRedundant ? null : location.source,
+  ].filter((s): s is string => Boolean(s));
 
   // ── meta_description / og_description share one composed base text:
   // guide intro → editorial section 1 body → legacy guide body → a composed
@@ -197,6 +241,19 @@ export function generateGuideSeo(inputs: ContentGuideSeoInputs): GeneratedGuideS
 // these are pure functions the editor calls live (no server round-trip),
 // since save/redirect happens immediately on success and would otherwise
 // carry the warning off-screen before the admin ever saw it.
+
+/**
+ * Non-blocking nudge for the Primary Keyword field — a comma usually means
+ * more than one search phrase was entered where only one belongs (see
+ * ContentGuideSeoInputs.primaryKeyword and generateGuideSeo()'s `keyword`
+ * usage above, which treats the whole field as a single phrase). Doesn't
+ * split, rewrite, or block saving — just points the editor at Secondary
+ * Keywords, same non-blocking style as the other warnings here.
+ */
+export function getPrimaryKeywordWarning(value: string): string | null {
+  if (!value.includes(",")) return null;
+  return "This looks like more than one phrase. Use one primary search phrase here, and add the rest under Secondary Keywords.";
+}
 
 export function getMetaTitleWarning(value: string): string | null {
   const len = value.trim().length;
