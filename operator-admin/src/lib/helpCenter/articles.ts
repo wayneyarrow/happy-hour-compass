@@ -11,14 +11,15 @@ import type { HowToArticle } from "./types";
  * "Manage your venue information", "Manage your venue images", "Publish or
  * unpublish your venue", "Manage your Happy Hours", "Create an event",
  * "Manage your events", "Understand subscriptions and limits", "Manage
- * users", and "Understand analytics" (below) are the real, approved How-To
- * articles, following the design/content standard established by the
- * Getting Started guides. They're listed first, under the "Managing Your
- * Venue" category, so they display above the Internal Preview category on
- * the landing page — each reuses this same category rather than a new one,
- * since it's still an operator managing a feature area of their venue via
- * the same Operator Admin main menu. The two Internal Preview entries after
- * them are placeholders that exist only to prove the renderer,
+ * users", "Understand analytics", and "Manage your Search Tags" (below) are
+ * the real, approved How-To articles, following the design/content standard
+ * established by the Getting Started guides. They're listed first, under
+ * the "Managing Your Venue" category, so they display above the Internal
+ * Preview category on the landing page — each reuses this same category
+ * rather than a new one, since it's still an operator managing a feature
+ * area of their venue via the same Operator Admin main menu. This is the
+ * final planned real V1 How-To article. The two Internal Preview entries
+ * after them are placeholders that exist only to prove the renderer,
  * optional-section behavior, screenshot presentation, and related-article
  * linking work end-to-end. They are marked
  * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
@@ -706,6 +707,59 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["understand-subscriptions-and-limits"],
+  },
+  {
+    type: "how-to",
+    slug: "manage-search-tags",
+    title: "Manage your Search Tags",
+    summary:
+      "Search tags describe real characteristics of your venue — like Patio or Live Music — so Happy Hour Compass can help match your venue with consumers looking for exactly that. Search tags are included on Pro and Premium.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Understand how Search Tags help your venue",
+        body: [
+          "Search tags describe real characteristics of your venue — like Patio, Wings, or Craft Beer — chosen from a fixed list built into Happy Hour Compass.",
+          "When a consumer filters their search by a tag, or types something like \"patio\" or \"wings\" into the search box, venues with a matching tag are included in what they see — even if that word doesn't appear anywhere else in your listing.",
+          "Search tags affect which venues match a search or filter — they don't affect how high your venue ranks in the results. So the goal isn't to select as many tags as possible, it's to choose the ones that genuinely describe your venue, so the consumers who find you are looking for what you actually offer.",
+          "Like the rest of your listing, tags only apply once your venue is published.",
+        ],
+      },
+      {
+        title: "Choose your Search Tags",
+        body: [
+          "From Operator Admin, select Venue from the main menu, then open Search tags. Search tags are included on Pro and Premium — if your plan doesn't include them yet, you'll see a locked preview like the one below, with a few example tags and the option to change your plan.",
+          "On a plan that includes search tags, select any tag from the list to add it — selected tags fill in amber. Select a tag again to remove it.",
+          "Your current usage is shown as a running count against your plan's allowance. Once you reach it, remaining tags gray out until you remove one to make room — a higher plan can provide room for more, if you need it.",
+          "Select Save tags to save your changes.",
+        ],
+        note: {
+          heading: "Tip",
+          text: "Choose the tags that genuinely describe your venue, rather than selecting every option available to you — accurate tags help match your venue with consumers who are actually looking for what you offer.",
+        },
+        screenshot: {
+          src: "/help/screenshots/search-tags-selection.png",
+          alt: "Search tags section of the Venue page shown on the Free plan, with example tags and a prompt to change your plan.",
+          width: 681,
+          height: 356,
+        },
+      },
+      {
+        title: "See which tags are getting attention",
+        body: [
+          "Once you've added tags, Analytics can show you which ones are getting attention. Top Search Tag shows which of your venue's configured tags consumers selected most often while filtering their search, in the last 30 days.",
+          "It's specifically about tag filtering — not free-text searches, clicks on your venue, or how you rank in results. Top Search Tag is included from Pro.",
+          "If you haven't configured any tags yet, or there's no matching activity yet, Top Search Tag has nothing to show. See Understand analytics for the full picture of what Analytics tracks.",
+        ],
+      },
+    ],
+    closingSection: {
+      heading: "Keep your tags accurate",
+      body: [
+        "As your venue changes — a new patio, a new regular event, a different vibe — revisit Search tags so they still describe what makes your venue worth visiting.",
+      ],
+    },
+    relatedSlugs: ["understand-subscriptions-and-limits", "understand-analytics"],
   },
   {
     type: "how-to",
