@@ -1,47 +1,142 @@
-import type { HelpStep } from "./types";
+import type { HelpSection, HelpStep } from "./types";
 import type { OperatorVenueOrigin } from "./gettingStartedOrigin";
 
 /**
- * Getting Started content — reusable structure only.
+ * Getting Started content.
  *
- * Per the task brief, this is intentionally NOT the final Getting Started
- * guide. Each variant below is a short, scaffold-quality set of steps that
- * proves the architecture can present different content per operator/venue
- * origin (see gettingStartedOrigin.ts). The page renders a "Draft" badge
- * (matching the existing "Coming soon" badge pattern already used in
- * app/admin/home/modules/HelpModule.tsx) so this is never mistaken for
- * reviewed, final content. Replace the copy here — not the surrounding
- * structure — when the real Getting Started guide is written.
+ * The claimed-seed variant (CLAIMED_SEED_CONTENT below) is the first
+ * approved, reviewed Getting Started article — see the task brief for the
+ * approved copy. It is rendered without the "Draft" badge (`isDraft: false`).
+ *
+ * The other two variants (approved_submission, unknown) are still the
+ * original scaffold-quality placeholder copy from the initial Help Center
+ * foundation task — short step lists that prove the per-origin architecture
+ * works, not reviewed content. They keep rendering the "Draft" badge
+ * (`isDraft` defaults to true when omitted) until their own approved copy
+ * lands in a follow-up task.
  */
 export type GettingStartedContent = {
+  /** Overrides the page's default "Getting Started" heading. */
+  title?: string;
   intro: string;
+  /** Unnumbered section rendered before the numbered steps. */
+  leadSection?: HelpSection;
   steps: HelpStep[];
+  /** Unnumbered section rendered after the numbered steps. */
+  closingSection?: HelpSection;
   goodToKnow?: string[];
+  /** Controls the "Draft" badge. Defaults to true (draft) when omitted. */
+  isDraft?: boolean;
 };
 
 const CLAIMED_SEED_CONTENT: GettingStartedContent = {
+  title: "Getting started with your claimed venue",
+  isDraft: false,
   intro:
-    "Your listing was created from imported venue data. Start by reviewing what's already there, then publish once it's accurate.",
+    "Your venue already has information on Happy Hour Compass. Now that you've claimed it, your first job is to review that information, make any necessary updates, and complete your listing.",
+  leadSection: {
+    heading: "Start with Venue Growth & Readiness",
+    body: [
+      "When you sign in, Home takes you to your Venue Growth & Readiness dashboard — your built-in guide for managing your venue on Happy Hour Compass.",
+    ],
+    listIntro: "It helps you:",
+    list: [
+      "see what needs your attention first",
+      "jump directly to the right place to make an update",
+      "keep track of what's complete",
+      "know what to work on next",
+    ],
+    afterList: [
+      "You don't need to figure everything out on your own. Start with anything required for your listing, then work through the recommendations that make your venue more complete and useful to guests.",
+      "As you make changes, the dashboard updates with you. If you're ever unsure what to do next, come back to Home.",
+    ],
+    screenshot: {
+      src: "/help/screenshots/claimed-getting-started-dashboard.png",
+      alt: "Venue Growth & Readiness dashboard overview showing what needs attention and direct links to each area to review.",
+      width: 1107,
+      height: 843,
+    },
+  },
   steps: [
     {
-      title: "Review your imported venue details",
+      title: "Complete anything required to publish",
       body: [
-        "Check your business details, hours, and photo — imported data may be out of date or incomplete.",
+        "Start with anything listed under Required to publish.",
+        "Your venue may already show as Live when you first claim it. That's because Happy Hour Compass may have already added the basic information and a temporary venue image needed to create your listing.",
+        "One of the first things we recommend is uploading your own venue images. Your photos help guests recognize your business and give you control over how your venue's brand and atmosphere are represented on Happy Hour Compass.",
+        "Select the action beside an incomplete item to go directly to the area where you can complete it.",
+      ],
+      note: {
+        heading: "Good to know",
+        text: "Claiming your venue doesn't mean you need to rebuild your listing from scratch. Start by reviewing what's already there, replace temporary content such as the venue image with your own, and update anything that doesn't accurately represent your business.",
+      },
+    },
+    {
+      title: "Review your imported information",
+      body: [
+        "Because your venue existed on Happy Hour Compass before you claimed it, some information was added from publicly available sources.",
+        "Review the items under Important profile items and make sure they accurately represent your business.",
+        "This can include:",
+      ],
+      list: [
+        "business details",
+        "venue type",
+        "business hours",
+        "Happy Hour times",
+        "Happy Hour specials",
+        "website",
+        "phone number",
+      ],
+      afterList: [
+        "Use the action beside each item to review it. Once you're satisfied that the information is correct, mark the item as reviewed.",
+      ],
+      screenshot: {
+        src: "/help/screenshots/claimed-getting-started-review-items.png",
+        alt: "Important profile items list on the Venue Growth & Readiness dashboard, each with an action to review it and mark it reviewed.",
+        width: 1107,
+        height: 784,
+      },
+    },
+    {
+      title: "Improve your listing",
+      body: [
+        "Once the important information is accurate, work through the recommendations under Improve your listing.",
+        "These aren't necessarily required to operate your listing, but completing them can make your venue more useful and discoverable to guests.",
+        "Your dashboard will continue to show what you've completed and what you can improve next.",
       ],
     },
     {
-      title: "Review your happy hour times and specials",
+      title: "Preview what guests see",
       body: [
-        "Confirm the imported happy hour schedule and specials match what you currently offer.",
+        "Use Preview public listing near the top of your dashboard to see your venue the way Happy Hour Compass visitors see it.",
+        "This is a good final check after making changes.",
+        "Make sure the information guests rely on most — especially your Happy Hour, business hours, images and contact details — looks accurate.",
       ],
     },
     {
-      title: "Publish your listing",
+      title: "Use the Operator Admin menu",
       body: [
-        "Once everything looks right, publish from Venue settings so guests can see it.",
+        "Your dashboard gives you shortcuts to important actions, but you can also manage your venue at any time from the main menu:",
+      ],
+      list: [
+        "Venue — manage your business information, hours, links, images and other venue details.",
+        "Happy Hours — manage your Happy Hour schedule and food and drink specials.",
+        "Events — create and manage events at your venue.",
+        "Analytics — see how guests are engaging with your listing.",
+        "Subscription — view your current plan and available features.",
+        "Users — manage the people who can access your venue.",
+        "Help — find instructions and support when you need them.",
       ],
     },
   ],
+  closingSection: {
+    heading: "You're ready to go",
+    body: [
+      "You don't need to complete everything at once.",
+      "Start with Required to publish, review the information Happy Hour Compass already has for your venue, and then work through the remaining recommendations as time allows.",
+      "Your Venue Growth & Readiness dashboard will keep showing you what needs attention.",
+    ],
+  },
 };
 
 const APPROVED_SUBMISSION_CONTENT: GettingStartedContent = {

@@ -26,10 +26,37 @@ export type HelpScreenshot = {
 /** One numbered procedural step. Screenshot is optional per-step. */
 export type HelpStep = {
   title: string;
-  /** One or more short paragraphs. Kept as an array so a step can include
-   *  a brief lead-in plus a clarifying note without smuggling markup into a
-   *  single string. */
+  /** One or more short paragraphs, rendered before `list`. Kept as an array
+   *  so a step can include a brief lead-in plus a clarifying note without
+   *  smuggling markup into a single string. */
   body: string[];
+  /** Optional bullet list rendered after `body` (e.g. the specific fields a
+   *  step asks the operator to review). */
+  list?: string[];
+  /** Optional paragraphs rendered after `list` — for a step whose
+   *  instructions continue past the bullet list. */
+  afterList?: string[];
+  /** Optional labeled callout rendered near the end of the step, after
+   *  `body`/`list`/`afterList` (e.g. a step-scoped "Good to know" note, as
+   *  distinct from the article-level one rendered by HelpInfoSection). */
+  note?: { heading: string; text: string };
+  screenshot?: HelpScreenshot;
+};
+
+/** An unnumbered content block — used for lead-in / closing sections that
+ *  fall outside the numbered step sequence (e.g. Getting Started's intro
+ *  dashboard section, or a closing wrap-up section). Shares HelpStep's
+ *  typography so both read as one system; rendered via HelpSection.tsx. */
+export type HelpSection = {
+  heading: string;
+  body: string[];
+  /** Optional short emphasized lead-in line rendered directly above `list`
+   *  (e.g. "It helps you:"). */
+  listIntro?: string;
+  /** Optional bullet list rendered after `body`/`listIntro`. */
+  list?: string[];
+  /** Optional paragraphs rendered after `list`. */
+  afterList?: string[];
   screenshot?: HelpScreenshot;
 };
 
