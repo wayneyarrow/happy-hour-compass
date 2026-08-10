@@ -60,15 +60,20 @@ export const TO_TIME_OPTIONS: Array<{ value: string; label: string }> = [
 // further narrows by overlap. "today" is a sentinel — not a happyHourWeekly
 // key — resolved at evaluation time via the viewer's current local weekday
 // (todayName / getCurrentDayName()), the same convention On Now already uses.
+// "all" is a second sentinel meaning "no day filter" — it is the default so a
+// fresh visit shows every qualifying venue regardless of which weekday they
+// run Happy Hour on, rather than silently hiding venues with no Happy Hour on
+// today's weekday (see resolveDayName, which resolves "all" to null).
 
-/** Compact, URL-stable Day filter values. "today" is the default and is never written to the URL. */
-export type DayFilterValue = "today" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+/** Compact, URL-stable Day filter values. "all" ("All Days") is the default and is never written to the URL. */
+export type DayFilterValue = "all" | "today" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export const DAY_FILTER_OPTIONS: Array<{
   value: DayFilterValue;
   label: string;
   dayName?: string;
 }> = [
+  { value: "all", label: "All Days" },
   { value: "today", label: "Today" },
   { value: "mon", label: "Monday", dayName: "Monday" },
   { value: "tue", label: "Tuesday", dayName: "Tuesday" },
@@ -79,8 +84,13 @@ export const DAY_FILTER_OPTIONS: Array<{
   { value: "sun", label: "Sunday", dayName: "Sunday" },
 ];
 
-/** Resolves a Day filter value to the actual happyHourWeekly day-name key ("Sunday".."Saturday") to evaluate. */
-export function resolveDayName(value: DayFilterValue, todayName: string): string {
+/**
+ * Resolves a Day filter value to the actual happyHourWeekly day-name key
+ * ("Sunday".."Saturday") to evaluate, or null for "all" (no day filter — every
+ * venue passes the day check regardless of its schedule).
+ */
+export function resolveDayName(value: DayFilterValue, todayName: string): string | null {
+  if (value === "all") return null;
   if (value === "today") return todayName;
   return DAY_FILTER_OPTIONS.find((o) => o.value === value)?.dayName ?? todayName;
 }
@@ -89,8 +99,9 @@ export function resolveDayName(value: DayFilterValue, todayName: string): string
  * Normalizes a raw `?day=` URL value against `?now=` precedence: On Now
  * always wins, so a non-Today day value alongside an active On Now resolves
  * to "today" — mirroring the disabled-Day-control-shows-Today behavior the
- * live On Now toggle itself produces. An unrecognized/missing day code also
- * falls back to "today".
+ * live On Now toggle itself produces. An unrecognized/missing day code falls
+ * back to "all" (the default, unfiltered state) rather than "today", so a
+ * fresh visit or an unrecognized ?day= never silently hides venues.
  */
 export function resolveInitialDayFilter(
   rawDay: string | undefined,
@@ -99,7 +110,7 @@ export function resolveInitialDayFilter(
   if (onNow) return "today";
   return DAY_FILTER_OPTIONS.some((o) => o.value === rawDay)
     ? (rawDay as DayFilterValue)
-    : "today";
+    : "all";
 }
 
 /**

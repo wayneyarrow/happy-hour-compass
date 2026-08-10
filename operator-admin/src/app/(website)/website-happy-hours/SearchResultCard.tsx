@@ -114,16 +114,17 @@ function StarRating({ rating }: { rating: number }) {
  * `effectiveDayName` is the schedule day this card should evaluate against —
  * passed down by callers with a Day filter (HappyHoursSearchClient) so an
  * upcoming card shows the *selected* day's schedule rather than always
- * today's; defaults to the actual current day for callers with no Day
- * filter concept (homepage rail, Guide pages), preserving prior behaviour
- * exactly for them.
+ * today's; null when that Day filter is set to "All Days" (no specific day
+ * selected), and defaults to the actual current day (same as undefined) for
+ * both that case and callers with no Day filter concept at all (homepage
+ * rail, Guide pages), preserving prior behaviour exactly for them.
  */
 function HhStatusDisplay({
   happyHourWeekly,
   effectiveDayName,
 }: {
   happyHourWeekly: Record<string, HHSlot[]>;
-  effectiveDayName?: string;
+  effectiveDayName?: string | null;
 }) {
   const [status, setStatus] = useState<HhStatus | null>(null);
 
@@ -173,10 +174,11 @@ type Props = {
   data: SearchResultCardData;
   /**
    * Which weekday's schedule this card's HH status should evaluate against
-   * — passed by callers with a Day filter (see HhStatusDisplay above).
-   * Omitted by callers with no Day filter concept.
+   * — passed by callers with a Day filter (see HhStatusDisplay above). Null
+   * when that Day filter is set to "All Days". Omitted (undefined) by
+   * callers with no Day filter concept.
    */
-  effectiveDayName?: string;
+  effectiveDayName?: string | null;
 };
 
 export function SearchResultCard({ data, effectiveDayName }: Props) {

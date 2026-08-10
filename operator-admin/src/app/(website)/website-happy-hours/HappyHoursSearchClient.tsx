@@ -137,14 +137,20 @@ function isFiniteHhTime(value: string): boolean {
  * below, where a complete From/To range further narrows this same day's
  * slots by overlap.
  *
+ * `dayName` is null when the Day filter is set to "All Days" (the default —
+ * see resolveDayName) — every venue passes unconditionally in that case, so
+ * this never re-introduces a "has Happy Hour on some day" qualification gate
+ * of its own; venue qualification is decided upstream of this page.
+ *
  * A slot counts only when both start and end are valid: start must parse to
  * a finite time (never "close" — that's only ever an end value); end must
  * either parse to a finite time or be the literal "close".
  */
 function hasValidHappyHourOnDay(
   weekly: Record<string, Array<{ start: string; end: string }>>,
-  dayName: string
+  dayName: string | null
 ): boolean {
+  if (dayName === null) return true;
   const daySlots = weekly[dayName] ?? [];
   return daySlots.some(
     (slot) => isFiniteHhTime(slot.start) && (slot.end === "close" || isFiniteHhTime(slot.end))
@@ -612,7 +618,7 @@ export function HappyHoursSearchClient({
   footerCta,
   enableSearch = false,
   initialQuery = "",
-  initialDay = "today",
+  initialDay = "all",
   initialOnNow = false,
   initialTimeFrom = "",
   initialTimeTo = "",
@@ -628,7 +634,7 @@ export function HappyHoursSearchClient({
   const [topRatedActive, setTopRatedActive] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DayFilterValue>(
-    enableSearch ? initialDay : "today"
+    enableSearch ? initialDay : "all"
   );
   const [filterTimeFrom, setFilterTimeFrom] = useState(enableSearch ? initialTimeFrom : "");
   const [filterTimeTo, setFilterTimeTo] = useState(enableSearch ? initialTimeTo : "");
@@ -655,7 +661,7 @@ export function HappyHoursSearchClient({
   // filtering already happens entirely client-side, so nothing
   // server-rendered actually depends on this URL update except a future hard
   // reload/deep link, which reads it correctly regardless of how it got
-  // there. Every value at its own default ("today" for Day, inactive for
+  // there. Every value at its own default ("all" for Day, inactive for
   // Near Me/On Now/Top Rated, no Type, and the sort each surface starts on)
   // is omitted entirely, matching this page's existing URL-cleanliness
   // convention for `q`. Map bounds/viewport are deliberately never included
@@ -667,7 +673,7 @@ export function HappyHoursSearchClient({
     const timer = setTimeout(() => {
       const parts: string[] = [];
       if (trimmedQuery) parts.push(`q=${encodeURIComponent(trimmedQuery)}`);
-      if (selectedDay !== "today") parts.push(`day=${selectedDay}`);
+      if (selectedDay !== "all") parts.push(`day=${selectedDay}`);
       if (onNowActive) parts.push("now=1");
       if (filterTimeFrom) parts.push(`from=${filterTimeFrom}`);
       if (filterTimeTo) parts.push(`to=${filterTimeTo}`);
@@ -942,16 +948,23 @@ export function HappyHoursSearchClient({
         return false;
       if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
         return false;
-      // Day is an independent filter (Today by default): a venue must have
-      // at least one valid Happy Hour slot on the effective day, regardless
-      // of whether a Time range is set.
+      // Day is an independent filter ("All Days" by default — effectiveDayName
+      // is null and every venue passes this check unconditionally): a venue
+      // must have at least one valid Happy Hour slot on the effective day,
+      // regardless of whether a Time range is set.
       if (!hasValidHappyHourOnDay(card.happyHourWeekly, effectiveDayName)) return false;
       // Time range is active only once both bounds are chosen — a single
       // bound never filters (see requirement: "only one selected → do not
       // filter yet"). Once active, it further narrows the already
-      // Day-filtered result to slots on that same day overlapping the range.
+      // Day-filtered result to slots overlapping the range — on the selected
+      // day only when a specific day is chosen, or across every day of the
+      // week when Day is "All Days" (effectiveDayName === null), since there
+      // is no single day to constrain to in that case.
       if (filterTimeFrom && filterTimeTo) {
-        const weeklyForOverlap = { [effectiveDayName]: card.happyHourWeekly[effectiveDayName] ?? [] };
+        const weeklyForOverlap =
+          effectiveDayName === null
+            ? card.happyHourWeekly
+            : { [effectiveDayName]: card.happyHourWeekly[effectiveDayName] ?? [] };
         if (!hasHappyHourOverlap(weeklyForOverlap, filterTimeFrom, filterTimeTo))
           return false;
       }
@@ -1031,7 +1044,7 @@ export function HappyHoursSearchClient({
     setSelectedType(null);
     setFilterTimeFrom("");
     setFilterTimeTo("");
-    setSelectedDay("today");
+    setSelectedDay("all");
   }
 
   // Option A: turning On Now on forces Day back to Today and disables the
@@ -1175,7 +1188,7 @@ export function HappyHoursSearchClient({
     filterTimeFrom && filterTimeTo
       ? `Time: ${formatTimeRangeDisplay(filterTimeFrom, filterTimeTo)}`
       : "Time";
-  const dayLabel = `Day: ${DAY_FILTER_OPTIONS.find((o) => o.value === selectedDay)?.label ?? "Today"}`;
+  const dayLabel = `Day: ${DAY_FILTER_OPTIONS.find((o) => o.value === selectedDay)?.label ?? "All Days"}`;
 
   const anyFilter =
     !!searchQuery.trim() ||
@@ -1185,7 +1198,7 @@ export function HappyHoursSearchClient({
     !!selectedType ||
     !!filterTimeFrom ||
     !!filterTimeTo ||
-    selectedDay !== "today";
+    selectedDay !== "all";
 
   // ─── render ──────────────────────────────────────────────────────────────
 
@@ -1230,7 +1243,7 @@ export function HappyHoursSearchClient({
           <div ref={dayRef} className="relative flex-shrink-0">
             <ChipButton
               label={dayLabel}
-              active={selectedDay !== "today" || dayOpen}
+              active={selectedDay !== "all" || dayOpen}
               onClick={() => setDayOpen((v) => !v)}
               hasArrow
               ariaExpanded={dayOpen}
