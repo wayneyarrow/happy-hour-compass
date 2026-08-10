@@ -8,17 +8,17 @@ import type { HowToArticle } from "./types";
  * src/app/admin/help/[slug]/page.tsx. Adding a real article later means
  * appending an object here — no new page, no new routing logic.
  *
- * "Manage your venue information" and "Manage your venue images" (below) are
- * the real, approved How-To articles, following the design/content standard
- * established by the Getting Started guides. They're listed first, under the
- * "Managing Your Venue" category, so they display above the Internal Preview
- * category on the landing page. The two Internal Preview entries after them
- * are placeholders that exist only to prove the renderer, optional-section
- * behavior, screenshot presentation, and related-article linking work
- * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
- * "Internal preview" badge) and must not be treated as approved Help Center
- * content — kept for now per the task brief, to be removed once enough real
- * articles exist.
+ * "Manage your venue information", "Manage your venue images", and "Publish
+ * or unpublish your venue" (below) are the real, approved How-To articles,
+ * following the design/content standard established by the Getting Started
+ * guides. They're listed first, under the "Managing Your Venue" category, so
+ * they display above the Internal Preview category on the landing page. The
+ * two Internal Preview entries after them are placeholders that exist only
+ * to prove the renderer, optional-section behavior, screenshot presentation,
+ * and related-article linking work end-to-end. They are marked
+ * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
+ * and must not be treated as approved Help Center content — kept for now per
+ * the task brief, to be removed once enough real articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -166,6 +166,62 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["manage-venue-information"],
+  },
+  {
+    type: "how-to",
+    slug: "publish-unpublish-venue",
+    title: "Publish or unpublish your venue",
+    summary:
+      "The Publish setting controls whether your venue is available to guests on Happy Hour Compass. Publishing makes your listing live and visible in search; unpublishing takes it down without deleting any of your venue information.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Open the Publish section",
+        body: [
+          "From Operator Admin, select Venue from the main menu and scroll down to Publish.",
+          "This is where you control whether your venue is visible to guests on Happy Hour Compass.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/publish-venue-published.png",
+          alt: "Publish section of the Venue page, showing the Publish toggle switched to Published.",
+          width: 723,
+          height: 305,
+        },
+      },
+      {
+        title: "Unpublish your venue",
+        body: [
+          "Switch the setting to Unpublished, then select Save.",
+          "Unpublishing removes your venue from search and hides your public venue page from guests. Your venue information isn't deleted — everything you've entered stays saved in Operator Admin, and you can preview your listing and republish anytime.",
+          "Your venue can also be unpublished automatically — for example, if you remove your only remaining venue image, since a published listing must have at least one image.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/publish-venue-unpublished.png",
+          alt: "Publish section of the Venue page, showing the Publish toggle switched to Unpublished, with a note that the venue is visible only to the operator until published.",
+          width: 723,
+          height: 305,
+        },
+      },
+      {
+        title: "Publish your venue",
+        body: [
+          "Switch the setting to Published, then select Save.",
+          "If your venue doesn't yet meet the requirements to publish, Operator Admin will show you what's missing so you can complete it and try again.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "Your venue needs at least one image and at least one active Happy Hour before it can be published. If any requirements are missing, Operator Admin will show you exactly what to complete.",
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your listing published",
+      body: [
+        "You can publish or unpublish your venue anytime — your venue information is never deleted when you do.",
+        "If your venue becomes unpublished, review the Publish section for anything that needs attention, then republish when you're ready.",
+      ],
+    },
+    relatedSlugs: ["manage-venue-images"],
   },
   {
     type: "how-to",
