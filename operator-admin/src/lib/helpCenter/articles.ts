@@ -10,15 +10,15 @@ import type { HowToArticle } from "./types";
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
  * unpublish your venue", "Manage your Happy Hours", "Create an event",
- * "Manage your events", and "Understand subscriptions and limits" (below)
- * are the real, approved How-To articles, following the design/content
- * standard established by the Getting Started guides. They're listed first,
- * under the "Managing Your Venue" category, so they display above the
- * Internal Preview category on the landing page — each reuses this same
- * category rather than a new one, since it's still an operator managing a
- * feature area of their venue via the same Operator Admin main menu. The two
- * Internal Preview entries after them are placeholders that exist only to
- * prove the renderer, optional-section behavior, screenshot presentation,
+ * "Manage your events", "Understand subscriptions and limits", and "Manage
+ * users" (below) are the real, approved How-To articles, following the
+ * design/content standard established by the Getting Started guides. They're
+ * listed first, under the "Managing Your Venue" category, so they display
+ * above the Internal Preview category on the landing page — each reuses this
+ * same category rather than a new one, since it's still an operator managing
+ * a feature area of their venue via the same Operator Admin main menu. The
+ * two Internal Preview entries after them are placeholders that exist only
+ * to prove the renderer, optional-section behavior, screenshot presentation,
  * and related-article linking work end-to-end. They are marked
  * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
  * and must not be treated as approved Help Center content — kept for now per
@@ -529,6 +529,73 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["manage-venue-images", "manage-happy-hours"],
+  },
+  {
+    type: "how-to",
+    slug: "manage-users",
+    title: "Manage users",
+    summary:
+      "The Users page is where the Admin gives team members access to help manage the venue. Your subscription plan determines how many users your account can have.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Understand your team and plan usage",
+        body: [
+          "From Operator Admin, select Users from the main menu.",
+          "Plan Usage shows how many users your account is currently using against your subscription's allowance.",
+          "Active Users lists everyone with access to your operator account right now. Pending Invitations lists invitations that haven't been accepted yet — these count toward your user allowance too, the same as active users.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "The Admin is the account-level role responsible for users and other account-sensitive actions, like the subscription plan. Team members can help with day-to-day venue management — venue information, images, Happy Hours, specials and events — without needing Admin access.",
+        },
+        screenshot: {
+          src: "/help/screenshots/manage-users-overview.png",
+          alt: "Users page showing Plan Usage with the current plan and user allowance, Active Users with the Admin badge, and Pending Invitations.",
+          width: 710,
+          height: 480,
+        },
+      },
+      {
+        title: "Invite a team member",
+        body: [
+          "When a user slot is available, select Invite User.",
+          "Full name is optional. Email address is required.",
+          "Select Send invite. The invited person receives an email invitation to join your venue's operator account.",
+          "If they're new to Happy Hour Compass, they can create their account directly from the invitation. If they already have an account, they can sign in with it to accept.",
+          "Every invited team member gets the same standard access — there's no role to choose.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "If your account has reached its plan's user allowance, Invite User is unavailable until a slot frees up or you change your plan. Select Change your plan from Plan Usage to see your options.",
+        },
+      },
+      {
+        title: "Manage a pending invitation",
+        body: [
+          "Invitations that haven't been accepted yet appear under Pending Invitations, and count toward your plan's user allowance until they're accepted or cancelled.",
+          "If you no longer need an invitation, select Cancel next to it and confirm. Cancelling removes it from the list and frees up the user slot right away.",
+        ],
+      },
+      {
+        title: "Remove a team member",
+        body: [
+          "Everyone with active access to your operator account appears under Active Users.",
+          "To remove a team member, select Remove next to their name and confirm. Removing them ends their access immediately, and the freed user slot becomes available right away.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "The Admin doesn't have a Remove option next to their own name — this page can't be used to remove the Admin.",
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your team access current",
+      body: [
+        "Review Users whenever your team changes — invite people as you bring them on, and remove access when someone no longer needs it.",
+      ],
+    },
+    relatedSlugs: ["understand-subscriptions-and-limits"],
   },
   {
     type: "how-to",
