@@ -8,17 +8,18 @@ import type { HowToArticle } from "./types";
  * src/app/admin/help/[slug]/page.tsx. Adding a real article later means
  * appending an object here — no new page, no new routing logic.
  *
- * "Manage your venue information", "Manage your venue images", and "Publish
- * or unpublish your venue" (below) are the real, approved How-To articles,
- * following the design/content standard established by the Getting Started
- * guides. They're listed first, under the "Managing Your Venue" category, so
- * they display above the Internal Preview category on the landing page. The
- * two Internal Preview entries after them are placeholders that exist only
- * to prove the renderer, optional-section behavior, screenshot presentation,
- * and related-article linking work end-to-end. They are marked
- * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
- * and must not be treated as approved Help Center content — kept for now per
- * the task brief, to be removed once enough real articles exist.
+ * "Manage your venue information", "Manage your venue images", "Publish or
+ * unpublish your venue", and "Manage your Happy Hours" (below) are the real,
+ * approved How-To articles, following the design/content standard
+ * established by the Getting Started guides. They're listed first, under the
+ * "Managing Your Venue" category, so they display above the Internal Preview
+ * category on the landing page. The two Internal Preview entries after them
+ * are placeholders that exist only to prove the renderer, optional-section
+ * behavior, screenshot presentation, and related-article linking work
+ * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
+ * "Internal preview" badge) and must not be treated as approved Help Center
+ * content — kept for now per the task brief, to be removed once enough real
+ * articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -222,6 +223,84 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["manage-venue-images"],
+  },
+  {
+    type: "how-to",
+    slug: "manage-happy-hours",
+    title: "Manage your Happy Hours",
+    summary:
+      "Happy Hours is where you manage your Happy Hour schedule and the food and drink specials guests see on your listing. Each section saves independently, so select Save in each section you edit.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Add your Happy Hour tagline",
+        body: [
+          "Your tagline is a short, optional summary shown at the top of your Happy Hour listing.",
+          "From Operator Admin, select Happy Hours from the main menu and open Tagline.",
+          "Enter your tagline, then select Save tagline.",
+        ],
+      },
+      {
+        title: "Set your Happy Hour times",
+        body: [
+          "Open Happy Hour Times to set when your Happy Hour is active.",
+          "Set the days and times for your Happy Hour, or select No happy hour for days when you don't offer one. You can add up to two time ranges per day — useful for separate afternoon and late-night Happy Hours.",
+          "When you're finished, select Save times.",
+        ],
+        note: {
+          heading: "Tip: Apply schedule to multiple days",
+          text: "If several days share the same schedule, use Apply schedule to multiple days to set the times once and apply them to the days you choose — quickly select All days, Weekdays, or Weekends. Applying a schedule replaces the existing times for those days, so review your changes, then select Save times.",
+          screenshot: {
+            src: "/help/screenshots/manage-happy-hours-apply-multiple-days.png",
+            alt: "Apply schedule to multiple days panel expanded, showing day selection buttons, All days/Weekdays/Weekends presets, and a start and end time to apply to the selected days.",
+            width: 678,
+            height: 441,
+          },
+        },
+        screenshot: {
+          src: "/help/screenshots/manage-happy-hours-times.png",
+          alt: "Happy Hour Times section showing the weekly schedule, including a day with two time ranges and the collapsed Apply schedule to multiple days panel.",
+          width: 678,
+          height: 901,
+        },
+      },
+      {
+        title: "Add food specials",
+        body: [
+          "Open Food specials to add the food deals guests will see on your listing.",
+          "Select + Add food item to add a row, then enter the item name, price, and any optional notes — like dietary info or portion size. Use the trash icon beside a row to remove it.",
+          "Your plan determines how many food specials you can add. Operator Admin shows your current count and lets you know if you need to upgrade to add more.",
+          "Select Save food specials when you're done.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-happy-hours-food-specials.png",
+          alt: "Food specials section showing three added items with name, price and notes fields, the item count against the plan allowance, and an upgrade prompt at the limit.",
+          width: 663,
+          height: 452,
+        },
+      },
+      {
+        title: "Add drink specials",
+        body: [
+          "Drink specials work the same way as food specials. Open Drink specials, select + Add drink item to add your drink deals, and select Save drink specials when you're done.",
+          "Drink specials have their own separate item count and plan allowance from food specials.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-happy-hours-drink-specials.png",
+          alt: "Drink specials section showing three added items with name, price and notes fields, the item count against the plan allowance, and an upgrade prompt at the limit.",
+          width: 663,
+          height: 452,
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your Happy Hour current",
+      body: [
+        "Update your schedule and specials whenever your Happy Hour changes, so guests always see accurate information.",
+        "Remember that a published venue needs at least one active Happy Hour — removing your last one will unpublish your venue.",
+      ],
+    },
+    relatedSlugs: ["publish-unpublish-venue"],
   },
   {
     type: "how-to",

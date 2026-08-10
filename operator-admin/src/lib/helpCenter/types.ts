@@ -38,8 +38,14 @@ export type HelpStep = {
   afterList?: string[];
   /** Optional labeled callout rendered near the end of the step, after
    *  `body`/`list`/`afterList` (e.g. a step-scoped "Good to know" note, as
-   *  distinct from the article-level one rendered by HelpInfoSection). */
-  note?: { heading: string; text: string };
+   *  distinct from the article-level one rendered by HelpInfoSection). The
+   *  `heading` is free text, not fixed to "Good to know" — e.g. a
+   *  "Tip: ..." heading gets the identical treatment for a product tip
+   *  that deserves the same visual prominence. `screenshot` is optional and
+   *  only needed when a step must show two screenshots (its own, plus one
+   *  illustrating the tip) — mirrors HelpSection's body+screenshot pattern
+   *  rather than introducing a new component. */
+  note?: { heading: string; text: string; screenshot?: HelpScreenshot };
   screenshot?: HelpScreenshot;
 };
 
