@@ -9,12 +9,15 @@ import type { HowToArticle } from "./types";
  * appending an object here — no new page, no new routing logic.
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
- * unpublish your venue", and "Manage your Happy Hours" (below) are the real,
- * approved How-To articles, following the design/content standard
- * established by the Getting Started guides. They're listed first, under the
- * "Managing Your Venue" category, so they display above the Internal Preview
- * category on the landing page. The two Internal Preview entries after them
- * are placeholders that exist only to prove the renderer, optional-section
+ * unpublish your venue", "Manage your Happy Hours", and "Create an event"
+ * (below) are the real, approved How-To articles, following the
+ * design/content standard established by the Getting Started guides. They're
+ * listed first, under the "Managing Your Venue" category, so they display
+ * above the Internal Preview category on the landing page — "Create an
+ * event" reuses this same category rather than a new one, since it's still
+ * an operator managing a feature area of their venue via the same Operator
+ * Admin main menu. The two Internal Preview entries after them are
+ * placeholders that exist only to prove the renderer, optional-section
  * behavior, screenshot presentation, and related-article linking work
  * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
  * "Internal preview" badge) and must not be treated as approved Help Center
@@ -301,6 +304,102 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["publish-unpublish-venue"],
+  },
+  {
+    type: "how-to",
+    slug: "create-event",
+    title: "Create an event",
+    summary:
+      "Create an event to promote something happening at your venue — live music, trivia, a special night, and more. The event details you enter here are what guests see on Happy Hour Compass, so keep them accurate and inviting.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Start a new event",
+        body: [
+          "From Operator Admin, select Events from the main menu, then select + New event.",
+          "Enter your event name and select Continue. This creates your event as a draft — you'll add the schedule, image, and other details next.",
+        ],
+      },
+      {
+        title: "Add the event details",
+        body: [
+          "Under Event Basics, confirm your Event name, then choose an Event type — like Live Music, Trivia, or Food & Drink — that best describes what's happening.",
+          "Add Event details to tell guests more about the event. This is optional, but it helps guests know what to expect.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-event-details.png",
+          alt: "Event Basics section of the event form, showing Event name, Event type, and optional Event details fields.",
+          width: 996,
+          height: 378,
+        },
+      },
+      {
+        title: "Add an event image",
+        body: [
+          "Upload a photo that represents your event — it appears on both the event listing and its detail page.",
+          "An event image isn't required to save your event as a draft, but it is required before you can publish.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-event-image.png",
+          alt: "Event image field showing an uploaded photo with Replace image and Remove image controls.",
+          width: 405,
+          height: 168,
+        },
+      },
+      {
+        title: "Set the event schedule",
+        body: [
+          "Set the Date of first occurrence and choose a Start time — both are required to save your event. End time is optional; if you set one, it must be later in the day than your start time.",
+          "Operator Admin shows a preview of your schedule as you enter it, so you can confirm it reads the way you expect.",
+        ],
+        note: {
+          heading: "Tip: Make an event recurring",
+          text: "If your event happens on a regular schedule, use Repeats to set it as Daily, Weekly, or Monthly instead of re-creating it each time — your date of first occurrence sets the pattern, so a weekly event repeats on that same day of the week. Recurring events are available on plans that include recurring events. If your current plan doesn't include recurring events, you'll see an option to upgrade.",
+        },
+        screenshot: {
+          src: "/help/screenshots/create-event-schedule.png",
+          alt: "Schedule section of the event form, showing Date of first occurrence, Start time, End time, Repeats, and a date and time preview.",
+          width: 962,
+          height: 372,
+        },
+      },
+      {
+        title: "Add ticketing and guest information",
+        body: [
+          "If tickets are required, check Enable Ticket Sales, then add a Ticket URL — a link to the external site where guests can buy tickets, such as Eventbrite. Happy Hour Compass doesn't sell tickets directly; it links guests out to complete their purchase.",
+          "If tickets sell out, check Sold Out to show guests that instead of the ticket link.",
+          "Add a Price to give guests a sense of cost, like Free, $20, or By Donation — this field is optional.",
+          "Use Know Before You Go to add helpful details guests may want before attending, such as age restrictions, reservation information, parking notes, and accessibility information. All of these fields are optional.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-event-ticketing-links.png",
+          alt: "Tickets and Know Before You Go sections of the event form, showing ticketing controls alongside age restriction, reservations, parking notes, and accessibility notes fields.",
+          width: 964,
+          height: 590,
+        },
+      },
+      {
+        title: "Publish the event",
+        body: [
+          "Under Publishing, switch the setting to Published when you're ready for guests to see your event, or leave it Unpublished to keep working on it privately.",
+          "To publish, your event needs an Event type and an Event image — Operator Admin will let you know if either is missing.",
+          "Select Save changes. You'll stay on this event afterward, so you can keep adding details or come back to it anytime from your events list.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-event-publish.png",
+          alt: "Publishing section of the event form, showing the Published/Unpublished toggle and Save changes button.",
+          width: 455,
+          height: 158,
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your event details accurate",
+      body: [
+        "Update your event if its schedule, image, or details change, so guests always see accurate information.",
+        "Accurate event details help guests know what to expect and give your event the best chance of turning into a visit.",
+      ],
+    },
   },
   {
     type: "how-to",
