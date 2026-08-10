@@ -20,7 +20,8 @@
     "backfill:seeded-tags": "tsx scripts/backfillSeededTags.ts",
     "test:emails": "tsx scripts/sendTestEmails.ts",
     "seed:geography": "tsx scripts/seedGeography.ts",
-    "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts"
+    "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts",
+    "refresh:seeded-venues": "tsx scripts/refreshSeededVenues.ts"
   },
   "dependencies": {
     "@next/third-parties": "15.5.19",

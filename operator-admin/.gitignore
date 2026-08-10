@@ -28,3 +28,6 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /blob-report/
+
+# generated operational reports (production data snapshots — never commit)
+/scripts/output/

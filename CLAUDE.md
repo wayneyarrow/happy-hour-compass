@@ -314,3 +314,27 @@ Supabase removes automatic grants for `anon`, `authenticated`, and `service_role
 ### RLS must be enabled on every new table
 
 Always include `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;` even if no permissive policies are added yet. No permissive policy + RLS enabled = inaccessible to all non-service-role callers by default (safe baseline).
+
+---
+
+## Seeded Market Launch Prep — Google Places Refresh Tool
+
+When preparing any previously-seeded market for activation/launch (Central Okanagan was the pilot; this applies equally to Greater Vancouver, Seattle, Toronto, or any future market), run the **Seeded Venue Refresh** tool before the separate manual Happy Hour certification pass:
+
+```
+npm run refresh:seeded-venues -- --market=<market-slug> --dry-run
+npm run refresh:seeded-venues -- --market=<market-slug> --apply   # only after reviewing the dry run
+```
+
+`<market-slug>` is any `markets.slug` already in the database (e.g. `central-okanagan`, `greater-vancouver`) — run with no `--market` to print the valid list. **Dry run is the default and is mandatory before apply** — a normal invocation makes zero database writes; only `--apply` writes anything, and only after the dry-run output has been reviewed.
+
+**What it does:** `operator-admin/scripts/refreshSeededVenues.ts` queries the Google Places API (New) for every venue in the selected market and compares Google's current data against the production row — `place_id`, Google operating status, `business_hours`, `phone`, `website_url`, `google_rating`, `google_review_count`, latitude/longitude, address/postal code, and `google_primary_type`/`google_types`. It reuses the existing proven Get-Place/Text-Search-fallback matching logic (place_id first, then name-similarity + geographic-distance-guarded text search) already used by `scripts/backfillMissingBusinessHours.ts`, `scripts/backfillGoogleRating.ts`, and `searchGooglePlace()` in the operator-submission flow — it does not reinvent that matching algorithm.
+
+**What it explicitly does NOT do:**
+- **Happy Hour data is out of scope.** `hh_times`, `hh_food_details`, `hh_drink_details`, and `hh_tagline` are never read for comparison and never written by this tool — Google Places has no concept of "happy hour." Happy Hour data still requires the separate manual Happy Hour certification workflow (see the Data Hygiene process used for the BTS Cocktail Bar & Kitchen pilot). The tool's CSV output exists to feed that workflow, not replace it.
+- **`establishment_type` is never auto-updated.** It's a curated Happy Hour Compass product field, not a mirror of Google's `primaryType`/`types`. A mismatch is only ever surfaced as a review flag for a human to judge.
+- **Geography is never auto-updated.** Latitude/longitude, address, and postal-code differences are always flag-only — a geographic mismatch can mean a bad Google match as easily as a stale DB value.
+- Never touches `is_published`, `claimed_at`, `claimed_by`, `created_by_operator_id`, `updated_by_operator_id`, `source`, `placeholder_image_path`, media, editorial copy, payment/plan data, guides, or events. `--apply` only ever writes to venues where `source = 'seed' AND claimed_at IS NULL AND created_by_operator_id IS NULL` — once an operator can edit a venue from Operator Admin, this tool must never silently overwrite their data with Google's.
+- Google `CLOSED_TEMPORARILY` / `CLOSED_PERMANENTLY` is never auto-actioned (no auto-unpublish, no delete) — only a prominent review flag.
+
+**Output:** a console dry-run report (per-venue match method/confidence and field-by-field current-vs-Google-vs-proposed, plus a summary with proposed-change counts by field and a manual-review list), and a CSV **"Happy Hour review worksheet"** under `operator-admin/scripts/output/` (gitignored — production data snapshots are never committed). This CSV is the permanent working document for the manual Happy Hour review step of every market launch (run refresh → generate CSV → manual HH review, currently Wayne + ChatGPT → HH import → QA) — not a one-off report. One row per venue, columns grouped to follow that review workflow rather than the database schema: Identification → Google verification → Venue verification (current vs. Google phone/website/business hours, each with a status, plus establishment_type vs. Google's primary type as a flag) → Happy Hour **current** data in human-readable columns (`current_hh_schedule`, `current_food_1_name`/`_price`/`_notes` ×3, `current_drink_1_name`/`_price`/`_notes` ×3 — read-only, never JSON, never compared or modified by this tool) → Happy Hour **new** columns (`new_hh_schedule` as a single field, then `new_food_1_name`/`_price`/`_notes` ×3 and `new_drink_1_name`/`_price`/`_notes` ×3 — structured to exactly mirror the `current_*` item columns rather than free text, always blank on generation, filled in by hand during manual review — so a future HH import tool can map them deterministically into `hh_food_details`/`hh_drink_details` without parsing reviewer prose) → workflow (`manual_notes`, pre-seeded with this run's system review flags; `workflow_status`, blank by default — set by hand to e.g. "Not Started"/"In Review"/"Complete") → a trailing reference group of secondary system columns. Re-running the tool always regenerates a fresh snapshot — it does not read back or merge a previously hand-edited CSV, so save in-progress manual review work before re-running for the same market.
