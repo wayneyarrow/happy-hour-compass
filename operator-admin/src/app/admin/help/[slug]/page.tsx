@@ -9,6 +9,7 @@ import HelpBreadcrumbs from "../components/HelpBreadcrumbs";
 import HelpArticleLayout from "../components/HelpArticleLayout";
 import HelpInfoSection from "../components/HelpInfoSection";
 import HelpSteps from "../components/HelpSteps";
+import HelpSection from "../components/HelpSection";
 import HelpRelatedArticles from "../components/HelpRelatedArticles";
 import HelpNeedSupport from "../components/HelpNeedSupport";
 
@@ -55,6 +56,12 @@ export default async function HelpArticlePage({
         <div className={article.beforeYouStart?.length ? "mt-6" : ""}>
           <HelpSteps steps={article.steps} />
         </div>
+
+        {article.closingSection && (
+          <div className="border-t border-gray-100 pt-5 mt-6">
+            <HelpSection section={article.closingSection} />
+          </div>
+        )}
 
         <HelpInfoSection heading="What happens next?" paragraph={article.whatHappensNext} />
         <HelpInfoSection heading="Good to know" items={article.goodToKnow} />

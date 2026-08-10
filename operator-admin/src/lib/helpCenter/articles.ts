@@ -8,15 +8,95 @@ import type { HowToArticle } from "./types";
  * src/app/admin/help/[slug]/page.tsx. Adding a real article later means
  * appending an object here — no new page, no new routing logic.
  *
- * IMPORTANT: the two entries below are placeholders that exist only to
- * prove the renderer, optional-section behavior, screenshot presentation,
- * and related-article linking work end-to-end. They are marked
- * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
- * and must not be treated as approved Help Center content. The real article
- * inventory will be produced in a follow-up task after Operator Admin is
- * reviewed — replace/remove these once real articles land.
+ * "Manage your venue information" (below) is the first real, approved
+ * How-To article, following the design/content standard established by the
+ * Getting Started guides. It's listed first so it displays above the
+ * Internal Preview category on the landing page. The two Internal Preview
+ * entries after it are placeholders that exist only to prove the renderer,
+ * optional-section behavior, screenshot presentation, and related-article
+ * linking work end-to-end. They are marked `isPlaceholder: true` (rendered
+ * with a visible "Internal preview" badge) and must not be treated as
+ * approved Help Center content — kept for now per the task brief, to be
+ * removed once enough real articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
+  {
+    type: "how-to",
+    slug: "manage-venue-information",
+    title: "Manage your venue information",
+    summary:
+      "Your Venue page is where you manage the core information guests use to understand your business — from your business details and description to your hours and useful links. Keep this information current so guests know what to expect before they visit.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Open your Venue page",
+        body: [
+          "From Operator Admin, select Venue from the main menu.",
+          "The page is divided into sections so you can update different parts of your listing independently.",
+        ],
+      },
+      {
+        title: "Update your business details",
+        body: [
+          "Use Business details to manage the basic information that identifies your venue, including your venue name, location and venue type.",
+          "Review this information carefully, particularly if your venue was originally added to Happy Hour Compass before you took ownership of the listing.",
+          "Select Save details after making changes.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-venue-information-business-details.png",
+          alt: "Business details section of the Venue page, showing venue name, address, contact information and venue type fields.",
+          width: 1078,
+          height: 904,
+        },
+      },
+      {
+        title: "Tell guests about your venue",
+        body: [
+          "Use About your venue to give guests a quick sense of what makes your business worth visiting.",
+          "Keep it useful and concise. Describe the experience, atmosphere or features that help someone decide whether your venue is right for them.",
+        ],
+      },
+      {
+        title: "Keep your business hours accurate",
+        body: [
+          "Use Business hours to keep your regular opening and closing times accurate.",
+          "Review each day of the week and update your hours whenever your regular schedule changes.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "Business hours are your venue's regular operating hours. Your Happy Hour schedule is managed separately under Happy Hours.",
+        },
+        screenshot: {
+          src: "/help/screenshots/manage-venue-information-business-hours.png",
+          alt: "Business hours section of the Venue page, showing open and close times for each day of the week.",
+          width: 1039,
+          height: 834,
+        },
+      },
+      {
+        title: "Add payment information",
+        body: [
+          "Use Payment types to show guests which payment methods your venue accepts.",
+          "Select the methods that apply to your business and save your changes.",
+        ],
+      },
+      {
+        title: "Add useful links",
+        body: [
+          "Use Links to add destinations that help guests learn more about your venue or take the next step.",
+          "Currently, you can add your website and a link to your menu.",
+          "Keep these links current. If a destination changes, update it here so guests aren't sent to an outdated page.",
+        ],
+      },
+    ],
+    closingSection: {
+      heading: "Keep your information current",
+      body: [
+        "Your venue information can be updated anytime.",
+        "Review it whenever your hours, contact details, links or other business information changes so guests always see accurate information on Happy Hour Compass.",
+      ],
+    },
+  },
   {
     type: "how-to",
     slug: "sample-article-renderer-check",

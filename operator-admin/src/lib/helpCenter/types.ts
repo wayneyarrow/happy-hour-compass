@@ -78,6 +78,10 @@ export type HowToArticle = {
   whatHappensNext?: string;
   /** Optional — only rendered when present and non-empty. */
   goodToKnow?: string[];
+  /** Optional unnumbered wrap-up section rendered after the steps (e.g. a
+   *  "Keep your information current" close), reusing the same HelpSection
+   *  established by the Getting Started guides for their closing section. */
+  closingSection?: HelpSection;
   /** Slugs of related articles. Cap of 3 enforced by getRelatedArticles(). */
   relatedSlugs?: string[];
   /**
