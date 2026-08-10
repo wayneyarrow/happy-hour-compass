@@ -23,6 +23,13 @@ export type HelpScreenshot = {
   height: number;
 };
 
+/** One labeled sub-item within a step — a lightweight subordinate heading
+ *  plus a short explanation. See `HelpStep.items`. */
+export type HelpStepItem = {
+  heading: string;
+  text: string;
+};
+
 /** One numbered procedural step. Screenshot is optional per-step. */
 export type HelpStep = {
   title: string;
@@ -30,8 +37,18 @@ export type HelpStep = {
    *  so a step can include a brief lead-in plus a clarifying note without
    *  smuggling markup into a single string. */
   body: string[];
-  /** Optional bullet list rendered after `body` (e.g. the specific fields a
-   *  step asks the operator to review). */
+  /** Optional set of individually-labeled sub-items rendered after `body`,
+   *  before `list` — each with its own lightweight subordinate heading and
+   *  short explanation. Use when a step covers several distinct things
+   *  (e.g. individual metrics, fields, or settings) that benefit from being
+   *  independently scannable, rather than folding them into `body` prose or
+   *  escalating them to separate numbered steps. Visually subordinate to
+   *  the step's own title — renders as bold body-weight text, not a new
+   *  heading level competing with the numbered step. Generic and optional:
+   *  a step that omits `items` renders exactly as before. */
+  items?: HelpStepItem[];
+  /** Optional bullet list rendered after `body`/`items` (e.g. the specific
+   *  fields a step asks the operator to review). */
   list?: string[];
   /** Optional paragraphs rendered after `list` — for a step whose
    *  instructions continue past the bullet list. */

@@ -10,16 +10,17 @@ import type { HowToArticle } from "./types";
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
  * unpublish your venue", "Manage your Happy Hours", "Create an event",
- * "Manage your events", "Understand subscriptions and limits", and "Manage
- * users" (below) are the real, approved How-To articles, following the
- * design/content standard established by the Getting Started guides. They're
- * listed first, under the "Managing Your Venue" category, so they display
- * above the Internal Preview category on the landing page — each reuses this
- * same category rather than a new one, since it's still an operator managing
- * a feature area of their venue via the same Operator Admin main menu. The
- * two Internal Preview entries after them are placeholders that exist only
- * to prove the renderer, optional-section behavior, screenshot presentation,
- * and related-article linking work end-to-end. They are marked
+ * "Manage your events", "Understand subscriptions and limits", "Manage
+ * users", and "Understand analytics" (below) are the real, approved How-To
+ * articles, following the design/content standard established by the
+ * Getting Started guides. They're listed first, under the "Managing Your
+ * Venue" category, so they display above the Internal Preview category on
+ * the landing page — each reuses this same category rather than a new one,
+ * since it's still an operator managing a feature area of their venue via
+ * the same Operator Admin main menu. The two Internal Preview entries after
+ * them are placeholders that exist only to prove the renderer,
+ * optional-section behavior, screenshot presentation, and related-article
+ * linking work end-to-end. They are marked
  * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
  * and must not be treated as approved Help Center content — kept for now per
  * the task brief, to be removed once enough real articles exist.
@@ -593,6 +594,115 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       heading: "Keep your team access current",
       body: [
         "Review Users whenever your team changes — invite people as you bring them on, and remove access when someone no longer needs it.",
+      ],
+    },
+    relatedSlugs: ["understand-subscriptions-and-limits"],
+  },
+  {
+    type: "how-to",
+    slug: "understand-analytics",
+    title: "Understand analytics",
+    summary:
+      "Analytics helps you understand how consumers are discovering and interacting with your venue on Happy Hour Compass. Most of what you see reflects the last 30 days.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Understand your visibility",
+        body: [
+          "From Operator Admin, select Analytics from the main menu. Visibility shows how often consumers are seeing your venue, last 30 days.",
+        ],
+        items: [
+          {
+            heading: "Venue Views",
+            text: "How many times consumers opened your venue page, regardless of how they found it.",
+          },
+          {
+            heading: "Event Views",
+            text: "How many times consumers opened your event pages.",
+          },
+          {
+            heading: "Discover Impressions",
+            text: "How often your venue appeared in the curated rails on the Happy Hour Compass home screen.",
+          },
+          {
+            heading: "Discover Clicks",
+            text: "How many times consumers selected your venue from one of those home-screen rails.",
+          },
+        ],
+        note: {
+          heading: "Good to know",
+          text: "A new or lower-traffic venue may show zeros for a while, or \"—\" for ranking-style metrics like Most Viewed Event until there's enough activity to rank. That's expected, not a problem — the numbers update automatically as consumers find your venue.",
+        },
+        screenshot: {
+          src: "/help/screenshots/analytics-overview.png",
+          alt: "Analytics page showing the current plan and analytics tier, the Visibility section with Venue Views and Event Views alongside locked Discover Impressions and Discover Clicks, and the start of the Engagement section.",
+          width: 819,
+          height: 738,
+        },
+      },
+      {
+        title: "See how consumers engage",
+        body: [
+          "Engagement shows how consumers are interacting with your venue and events, last 30 days.",
+        ],
+        items: [
+          {
+            heading: "Saves",
+            text: "How many times consumers saved your venue. This can be a sign they want to find it again later.",
+          },
+          {
+            heading: "Most Viewed Event",
+            text: "The event that received the most views in the last 30 days, helping you see which event is attracting the most attention.",
+          },
+          {
+            heading: "Top Search Tag",
+            text: "The search tag on your venue that consumers selected most often, in the last 30 days, while filtering their search — a sign of which characteristic is helping people find you.",
+          },
+        ],
+      },
+      {
+        title: "Understand customer intent",
+        body: [
+          "Intent shows actions consumers take when they're interested, last 30 days — each one is a deliberate extra step after finding your venue.",
+        ],
+        items: [
+          {
+            heading: "Website Clicks",
+            text: "How many times consumers selected the link to your website.",
+          },
+          {
+            heading: "Menu Clicks",
+            text: "How many times consumers selected the link to your menu.",
+          },
+          {
+            heading: "Happy Hour Schedule Expands",
+            text: "How many times consumers opened your full Happy Hour schedule.",
+          },
+          {
+            heading: "Business Hours Expands",
+            text: "How many times consumers opened your full business hours.",
+          },
+        ],
+        screenshot: {
+          src: "/help/screenshots/analytics-intent.png",
+          alt: "Engagement section showing Saves, Most Viewed Event, and a locked Top Search Tag, followed by the Intent section showing Website Clicks, Menu Clicks, Happy Hour Schedule Expands, and Business Hours Expands.",
+          width: 745,
+          height: 790,
+        },
+      },
+      {
+        title: "Get more analytics with your plan",
+        body: [
+          "The analytics available to your venue depend on your subscription plan. Your current plan and analytics tier are shown at the top of the page — for example, Free plan — Basic Analytics.",
+          "A metric your plan doesn't include yet appears locked, with a lock icon and a label naming the plan it's part of, like Premium feature or Pro feature. Discover Impressions and Discover Clicks are part of Premium, and Top Search Tag is included from Pro.",
+          "Select Upgrade to Pro or Upgrade to Premium next to a locked metric, or visit Subscription to compare plans and change your plan.",
+        ],
+      },
+    ],
+    closingSection: {
+      heading: "Check back regularly",
+      body: [
+        "Analytics updates automatically as consumers find and interact with your venue, so revisit it regularly to see how your visibility and engagement are trending.",
       ],
     },
     relatedSlugs: ["understand-subscriptions-and-limits"],

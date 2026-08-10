@@ -21,6 +21,16 @@ export default function HelpSteps({ steps }: { steps: HelpStep[] }) {
                 {paragraph}
               </p>
             ))}
+            {step.items && step.items.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {step.items.map((item, ii) => (
+                  <div key={ii}>
+                    <p className="text-sm font-semibold text-gray-900">{item.heading}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed mt-0.5">{item.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             {step.list && step.list.length > 0 && (
               <ul className="space-y-1.5 mt-2">
                 {step.list.map((item, li) => (
