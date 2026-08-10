@@ -4,16 +4,17 @@ import type { OperatorVenueOrigin } from "./gettingStartedOrigin";
 /**
  * Getting Started content.
  *
- * The claimed-seed variant (CLAIMED_SEED_CONTENT below) is the first
- * approved, reviewed Getting Started article — see the task brief for the
- * approved copy. It is rendered without the "Draft" badge (`isDraft: false`).
+ * The claimed-seed variant (CLAIMED_SEED_CONTENT below) is the V1 approved
+ * Help Center design/content reference — see the task brief for the approved
+ * copy. The submitted variant (APPROVED_SUBMISSION_CONTENT) is now also
+ * approved, reviewed copy following that same structure and treatment. Both
+ * render without the "Draft" badge (`isDraft: false`).
  *
- * The other two variants (approved_submission, unknown) are still the
- * original scaffold-quality placeholder copy from the initial Help Center
- * foundation task — short step lists that prove the per-origin architecture
- * works, not reviewed content. They keep rendering the "Draft" badge
- * (`isDraft` defaults to true when omitted) until their own approved copy
- * lands in a follow-up task.
+ * The `unknown` variant is still the original scaffold-quality placeholder
+ * copy from the initial Help Center foundation task — a short step list that
+ * proves the per-origin architecture works, not reviewed content. It keeps
+ * rendering the "Draft" badge (`isDraft` defaults to true when omitted)
+ * until its own approved copy lands in a follow-up task.
  */
 export type GettingStartedContent = {
   /** Overrides the page's default "Getting Started" heading. */
@@ -140,28 +141,106 @@ const CLAIMED_SEED_CONTENT: GettingStartedContent = {
 };
 
 const APPROVED_SUBMISSION_CONTENT: GettingStartedContent = {
+  title: "Getting started with your submitted venue",
+  isDraft: false,
   intro:
-    "Your venue was approved and your account is ready. Start by completing your profile, then publish when you're ready to go live.",
+    "Your venue has been approved and you now have access to Operator Admin. Your next step is to finish setting up your listing and make sure it's ready for guests.",
+  leadSection: {
+    heading: "Start with Venue Growth & Readiness",
+    body: [
+      "When you sign in, Home takes you to your Venue Growth & Readiness dashboard — your built-in guide for getting your venue ready on Happy Hour Compass.",
+    ],
+    listIntro: "It helps you:",
+    list: [
+      "see what you need to complete before your venue can be published",
+      "jump directly to the right place to add or update information",
+      "keep track of what's already complete",
+      "see ways to improve your listing after the essentials are done",
+    ],
+    afterList: [
+      "You don't need to figure out what to do next. Start at the top of the dashboard and work your way through the recommendations.",
+      "As you make changes, the dashboard updates with you. If you're ever unsure what to work on next, come back to Home.",
+    ],
+    screenshot: {
+      src: "/help/screenshots/submitted-getting-started-dashboard.png",
+      alt: "Venue Growth & Readiness dashboard overview for a submitted venue, showing Required to publish items and progress toward publishing.",
+      width: 1162,
+      height: 575,
+    },
+  },
   steps: [
     {
-      title: "Complete your venue profile",
+      title: "Complete anything required to publish",
       body: [
-        "Add your business details, hours, and at least one photo.",
+        "Start with anything listed under Required to publish. These are the essential items your venue needs before it can be published on Happy Hour Compass.",
+        "Select the action beside an incomplete item to go directly to the right place in Operator Admin. Once the requirements are complete, your venue can be made available to guests.",
+      ],
+      note: {
+        heading: "Good to know",
+        text: "You don't need to complete every recommendation before your venue can go live. Focus on Required to publish first. The remaining recommendations help you make your listing more complete and useful to guests.",
+      },
+    },
+    {
+      title: "Review your venue details",
+      body: [
+        "Some of your venue information was carried over from your submission. Take a moment to make sure the important details are still correct.",
+        "Review your business details, including your venue name, address and contact information, and confirm that the venue type accurately describes your business.",
+        "If anything has changed since you submitted your venue, update it before publishing.",
+      ],
+      screenshot: {
+        src: "/help/screenshots/submitted-getting-started-profile-items.png",
+        alt: "Important profile items list for a submitted venue, showing business details and venue type review items.",
+        width: 862,
+        height: 575,
+      },
+    },
+    {
+      title: "Finish your listing",
+      body: [
+        "Once the essentials are complete, work through Finish your listing.",
+        "This is where the dashboard helps you add the information guests are most likely to use when deciding where to go — such as your business hours, Happy Hour specials and menu.",
+        "You don't have to complete everything at once. Add what you have now and come back anytime as your listing evolves.",
       ],
     },
     {
-      title: "Add your happy hour times and specials",
+      title: "Keep improving",
       body: [
-        "Set the days and times you run happy hour, plus your food and drink specials.",
+        "Once your core listing is in place, the dashboard will continue to suggest ways to make it more complete and discoverable.",
+        "Use the recommendations under Keep optimizing to add useful details such as your website, social profiles and other enhancements available to your venue.",
+        "These items aren't required to get started. Work through them as time allows.",
       ],
     },
     {
-      title: "Publish your listing",
+      title: "Preview what guests see",
       body: [
-        "Once your profile is ready, publish from Venue settings so guests can see it.",
+        "Use Preview public listing near the top of your dashboard to see how your venue will appear to Happy Hour Compass visitors.",
+        "Preview your listing as you build it and check the information guests rely on most — especially your Happy Hour, business hours, images and contact details.",
+      ],
+    },
+    {
+      title: "Use the Operator Admin menu",
+      body: [
+        "Your dashboard gives you shortcuts to important actions, but you can also manage your venue at any time from the main menu:",
+      ],
+      list: [
+        "Venue — manage your business information, hours, links, images and other venue details.",
+        "Happy Hours — manage your Happy Hour schedule and food and drink specials.",
+        "Events — create and manage events at your venue.",
+        "Analytics — see how guests are engaging with your listing.",
+        "Subscription — view your current plan and available features.",
+        "Users — manage the people who can access your venue.",
+        "Help — find instructions and support when you need them.",
       ],
     },
   ],
+  closingSection: {
+    heading: "You're ready to go",
+    body: [
+      "You don't need to build the perfect listing all at once.",
+      "Start with Required to publish, review your important venue details, and then work through the remaining recommendations as time allows.",
+      "Your Venue Growth & Readiness dashboard will keep guiding you toward what to do next.",
+    ],
+  },
 };
 
 const UNKNOWN_ORIGIN_CONTENT: GettingStartedContent = {
