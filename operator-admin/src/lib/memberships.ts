@@ -98,7 +98,8 @@ export async function getOperatorMemberships(
 
 /**
  * Returns a pending (status='invited') membership by its invite token.
- * Returns null if the token is invalid, expired, already accepted, or cancelled.
+ * Returns null if the token is invalid, already accepted, or cancelled.
+ * (Invitations have no time-based expiry — status is the only gate.)
  */
 export async function getMembershipByToken(
   token: string

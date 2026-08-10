@@ -15,7 +15,8 @@ function InvalidInvitePage() {
         <div className="bg-white p-8 rounded-xl shadow-md text-center">
           <h1 className="text-xl font-bold text-gray-900 mb-2">Invitation unavailable</h1>
           <p className="text-sm text-gray-500">
-            This invitation link has expired, already been used, or has been cancelled.
+            This invitation link isn&rsquo;t available. It may already have been used,
+            it may have been cancelled, or the link may be invalid.
             Please contact the venue owner to request a new invitation.
           </p>
         </div>

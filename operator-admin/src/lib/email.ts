@@ -1671,7 +1671,7 @@ export async function sendMemberInviteEmail({
             Click the button below to create your password and join the venue&rsquo;s operator account.
           </p>
           ${emailCta(inviteUrl, "Accept invitation &rarr;")}
-          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">This invitation link expires in 7 days. If it expires, ask ${inviterName} to send a new invitation.</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">If this link doesn&rsquo;t work, ask ${inviterName} to send a new invitation.</p>
           <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${inviteUrl}</p>`,
     `You received this email because ${inviterName} invited you to manage a venue on Happy Hour Compass. If you didn&rsquo;t expect this, you can safely ignore it.`
   );
@@ -1683,7 +1683,7 @@ ${inviterName} has invited you to help manage ${venueName} on Happy Hour Compass
 Click the link below to create your password and accept the invitation:
 ${inviteUrl}
 
-This link expires in 7 days. If it expires, ask ${inviterName} to send a new invitation.
+If this link doesn't work, ask ${inviterName} to send a new invitation.
 
 —
 Happy Hour Compass`;

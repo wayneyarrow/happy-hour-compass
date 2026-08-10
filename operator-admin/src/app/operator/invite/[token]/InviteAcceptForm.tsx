@@ -67,8 +67,8 @@ export default function InviteAcceptForm({
       setError("Passwords do not match.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
@@ -226,11 +226,11 @@ export default function InviteAcceptForm({
           <PasswordInput
             id="password"
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimum 6 characters"
+            placeholder="Minimum 8 characters"
             className={inputClass}
           />
         </div>
@@ -243,7 +243,7 @@ export default function InviteAcceptForm({
           <PasswordInput
             id="confirm-password"
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
