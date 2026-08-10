@@ -8,16 +8,17 @@ import type { HowToArticle } from "./types";
  * src/app/admin/help/[slug]/page.tsx. Adding a real article later means
  * appending an object here — no new page, no new routing logic.
  *
- * "Manage your venue information" (below) is the first real, approved
- * How-To article, following the design/content standard established by the
- * Getting Started guides. It's listed first so it displays above the
- * Internal Preview category on the landing page. The two Internal Preview
- * entries after it are placeholders that exist only to prove the renderer,
- * optional-section behavior, screenshot presentation, and related-article
- * linking work end-to-end. They are marked `isPlaceholder: true` (rendered
- * with a visible "Internal preview" badge) and must not be treated as
- * approved Help Center content — kept for now per the task brief, to be
- * removed once enough real articles exist.
+ * "Manage your venue information" and "Manage your venue images" (below) are
+ * the real, approved How-To articles, following the design/content standard
+ * established by the Getting Started guides. They're listed first, under the
+ * "Managing Your Venue" category, so they display above the Internal Preview
+ * category on the landing page. The two Internal Preview entries after them
+ * are placeholders that exist only to prove the renderer, optional-section
+ * behavior, screenshot presentation, and related-article linking work
+ * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
+ * "Internal preview" badge) and must not be treated as approved Help Center
+ * content — kept for now per the task brief, to be removed once enough real
+ * articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -96,6 +97,75 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
         "Review it whenever your hours, contact details, links or other business information changes so guests always see accurate information on Happy Hour Compass.",
       ],
     },
+  },
+  {
+    type: "how-to",
+    slug: "manage-venue-images",
+    title: "Manage your venue images",
+    summary:
+      "Your venue images help guests understand what your business looks and feels like before they visit. Use Venue images to upload your own photography, choose the image that represents your venue first, and remove images you no longer want to use.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Open Venue images",
+        body: [
+          "From Operator Admin, select Venue from the main menu and scroll to Venue images.",
+          "This is where you can add and manage the images used to represent your venue on Happy Hour Compass.",
+        ],
+      },
+      {
+        title: "Upload your images",
+        body: [
+          "Select Upload images and choose the photos you want to add to your venue.",
+          "Your current image count and image allowance are shown in the Venue images section, so you can see how many images you have added and whether you have room for more.",
+          "Happy Hour Compass accepts JPEG, PNG, WebP, and GIF image files.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "If Happy Hour Compass originally provided an image for your venue, replace it with your own photography when you can. Your own images give you control over how your brand, atmosphere and venue are represented to guests.",
+        },
+        screenshot: {
+          src: "/help/screenshots/manage-venue-images-gallery.png",
+          alt: "Venue images gallery showing the upload control, image count, and management controls for each uploaded photo.",
+          width: 724,
+          height: 393,
+        },
+      },
+      {
+        title: "Choose your primary image",
+        body: [
+          "Your primary image is the first image guests see representing your venue.",
+          "To change it, select Set primary on the image you want to use. The selected image becomes your primary image, moves to the front of your gallery, and is identified with the Primary label.",
+          "Choose a clear, representative photo that gives guests a strong first impression of your venue.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-venue-images-primary.png",
+          alt: "Venue images gallery after selecting a different image as primary, showing the Primary label on the newly selected image.",
+          width: 724,
+          height: 393,
+        },
+      },
+      {
+        title: "Remove images you no longer want",
+        body: [
+          "Remove images that are outdated or no longer represent your venue.",
+          "Use the delete control on the image you want to remove and follow any confirmation shown by Operator Admin.",
+          "If you delete your primary image, the next image in your gallery automatically becomes your new primary image.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "Deleting your only remaining image will unpublish your venue, since a published listing must have at least one image. Upload a new image to republish.",
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your images fresh",
+      body: [
+        "Update your venue images whenever your space, branding or guest experience changes.",
+        "A small collection of current, representative photos helps guests know what to expect and gives you control over how your venue appears on Happy Hour Compass.",
+      ],
+    },
+    relatedSlugs: ["manage-venue-information"],
   },
   {
     type: "how-to",
