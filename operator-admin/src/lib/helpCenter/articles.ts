@@ -9,20 +9,20 @@ import type { HowToArticle } from "./types";
  * appending an object here — no new page, no new routing logic.
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
- * unpublish your venue", "Manage your Happy Hours", and "Create an event"
- * (below) are the real, approved How-To articles, following the
- * design/content standard established by the Getting Started guides. They're
- * listed first, under the "Managing Your Venue" category, so they display
- * above the Internal Preview category on the landing page — "Create an
- * event" reuses this same category rather than a new one, since it's still
- * an operator managing a feature area of their venue via the same Operator
- * Admin main menu. The two Internal Preview entries after them are
- * placeholders that exist only to prove the renderer, optional-section
- * behavior, screenshot presentation, and related-article linking work
- * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
- * "Internal preview" badge) and must not be treated as approved Help Center
- * content — kept for now per the task brief, to be removed once enough real
- * articles exist.
+ * unpublish your venue", "Manage your Happy Hours", "Create an event", and
+ * "Manage your events" (below) are the real, approved How-To articles,
+ * following the design/content standard established by the Getting Started
+ * guides. They're listed first, under the "Managing Your Venue" category, so
+ * they display above the Internal Preview category on the landing page —
+ * "Create an event" and "Manage your events" reuse this same category rather
+ * than a new one, since it's still an operator managing a feature area of
+ * their venue via the same Operator Admin main menu. The two Internal
+ * Preview entries after them are placeholders that exist only to prove the
+ * renderer, optional-section behavior, screenshot presentation, and
+ * related-article linking work end-to-end. They are marked
+ * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
+ * and must not be treated as approved Help Center content — kept for now per
+ * the task brief, to be removed once enough real articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -400,6 +400,73 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
         "Accurate event details help guests know what to expect and give your event the best chance of turning into a visit.",
       ],
     },
+  },
+  {
+    type: "how-to",
+    slug: "manage-events",
+    title: "Manage your events",
+    summary:
+      "Events lets you find events you've already created, update their details, preview how they look to guests, change whether they're published, and remove events you no longer need.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Find an event",
+        body: [
+          "From Operator Admin, select Events from the main menu. Your events are listed on the left, grouped by All, Upcoming, Expired, Recurring, Draft, and Published, so you can quickly find the one you're looking for.",
+          "Select an event from the list to open it in the editor on the right.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-events-list.png",
+          alt: "Events list with a Published event selected, showing the filter tabs (All, Upcoming, Expired, Recurring, Draft, Published) and the selected event open in the editor panel.",
+          width: 1881,
+          height: 831,
+        },
+      },
+      {
+        title: "Edit an event",
+        body: [
+          "Update any of the event's information — its details, image, schedule, ticketing, or guest information — the same way you set it up when you created the event. See Create an event for guidance on any of these fields.",
+          "Select Save changes when you're done. You'll return to your events list, where you can select the event again anytime to keep working on it.",
+          "Use Preview, near the top of the editor, to see the event exactly as guests will see it on Happy Hour Compass — even before it's published.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-events-edit.png",
+          alt: "Top of the event editor showing the Preview and Delete event actions above the Event Basics section.",
+          width: 984,
+          height: 744,
+        },
+      },
+      {
+        title: "Publish or unpublish an event",
+        body: [
+          "Under Publishing, switch the setting to Published when you're ready for guests to see the event, or back to Unpublished to take it down without deleting anything.",
+          "To publish, the event needs an Event type and an Event image — Operator Admin will let you know if either is missing.",
+          "Select Save changes to apply the change.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-events-publishing.png",
+          alt: "Publishing section of the event editor showing the Published toggle and Save changes button.",
+          width: 697,
+          height: 199,
+        },
+      },
+      {
+        title: "Delete an event",
+        body: [
+          "Select Delete event, near the top of the editor, to permanently remove an event. You'll be asked to confirm — this action can't be undone.",
+          "If the event is a recurring event that Happy Hour Compass created for your venue, the confirmation will also let you know that deleting it may affect your ability to create another recurring event unless your plan includes them.",
+          "Once deleted, the event is removed from your events list immediately.",
+        ],
+      },
+    ],
+    closingSection: {
+      heading: "Keep your events up to date",
+      body: [
+        "Revisit your events whenever plans change, so guests always see accurate schedules and details.",
+        "An outdated event is easy to update — just select it from your list and make your changes.",
+      ],
+    },
+    relatedSlugs: ["create-event"],
   },
   {
     type: "how-to",
