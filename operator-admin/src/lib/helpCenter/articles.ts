@@ -9,17 +9,17 @@ import type { HowToArticle } from "./types";
  * appending an object here — no new page, no new routing logic.
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
- * unpublish your venue", "Manage your Happy Hours", "Create an event", and
- * "Manage your events" (below) are the real, approved How-To articles,
- * following the design/content standard established by the Getting Started
- * guides. They're listed first, under the "Managing Your Venue" category, so
- * they display above the Internal Preview category on the landing page —
- * "Create an event" and "Manage your events" reuse this same category rather
- * than a new one, since it's still an operator managing a feature area of
- * their venue via the same Operator Admin main menu. The two Internal
- * Preview entries after them are placeholders that exist only to prove the
- * renderer, optional-section behavior, screenshot presentation, and
- * related-article linking work end-to-end. They are marked
+ * unpublish your venue", "Manage your Happy Hours", "Create an event",
+ * "Manage your events", and "Understand subscriptions and limits" (below)
+ * are the real, approved How-To articles, following the design/content
+ * standard established by the Getting Started guides. They're listed first,
+ * under the "Managing Your Venue" category, so they display above the
+ * Internal Preview category on the landing page — each reuses this same
+ * category rather than a new one, since it's still an operator managing a
+ * feature area of their venue via the same Operator Admin main menu. The two
+ * Internal Preview entries after them are placeholders that exist only to
+ * prove the renderer, optional-section behavior, screenshot presentation,
+ * and related-article linking work end-to-end. They are marked
  * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
  * and must not be treated as approved Help Center content — kept for now per
  * the task brief, to be removed once enough real articles exist.
@@ -467,6 +467,68 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["create-event"],
+  },
+  {
+    type: "how-to",
+    slug: "understand-subscriptions-and-limits",
+    title: "Understand subscriptions and limits",
+    summary:
+      "Your venue's subscription plan determines the features and usage allowances available to it. The Subscription page shows your current plan and how much of it you're using.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Check your current plan and usage",
+        body: [
+          "From Operator Admin, select Subscription from the main menu. The Current Plan card shows your plan and status.",
+          "Plan Usage shows how much of your plan you're currently using — Images, Food Specials, Drink Specials, Search Tags, Users, and Active Events — along with any features not included in your current plan.",
+        ],
+        note: {
+          heading: "Good to know",
+          text: "If you reach a limit, Plan Usage will show it clearly. You can remove something you no longer need to make room, or select Change Plan for more capacity.",
+        },
+        screenshot: {
+          src: "/help/screenshots/subscriptions-plan-usage.png",
+          alt: "Subscription page showing the Current Plan card and Plan Usage, including items at their plan limit and a feature not included in the current plan.",
+          width: 833,
+          height: 823,
+        },
+      },
+      {
+        title: "Compare plans",
+        body: [
+          "Select Change Plan to see how Free, Pro, and Premium compare side by side, including pricing and what's included in each.",
+          "Use the comparison to choose the plan that fits your venue.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/subscriptions-compare-plans.png",
+          alt: "Change Plan modal comparing Free, Pro, and Premium plans side by side, with pricing and included features for each.",
+          width: 881,
+          height: 858,
+        },
+      },
+      {
+        title: "Upgrade your plan",
+        body: [
+          "Select the plan you want. You'll see a summary of what you'll unlock, then select Continue to complete payment securely through Stripe.",
+          "After payment, you'll return to Subscription — your upgrade may take a moment to activate.",
+          "If you're already on a paid plan, use Manage Billing on the Subscription page to update your payment method or manage your subscription directly through Stripe.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/subscriptions-confirm-upgrade.png",
+          alt: "Confirmation screen for upgrading to Pro, showing what the plan unlocks and a Continue button that proceeds to Stripe.",
+          width: 881,
+          height: 483,
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Choose the plan that fits your venue",
+      body: [
+        "Your subscription plan can change as your venue's needs change.",
+        "Return to Subscription anytime to review your usage or manage your plan.",
+      ],
+    },
+    relatedSlugs: ["manage-venue-images", "manage-happy-hours"],
   },
   {
     type: "how-to",
