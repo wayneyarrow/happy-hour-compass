@@ -12,6 +12,7 @@ import { MobileMapResultsSheet, PEEK_HEIGHT_PX } from "./MobileMapResultsSheet";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
+import { trackGA4Event } from "@/lib/ga4";
 import {
   TIME_OPTIONS,
   TO_TIME_OPTIONS,
@@ -640,6 +641,12 @@ export function HappyHoursSearchClient({
   const [filterTimeTo, setFilterTimeTo] = useState(enableSearch ? initialTimeTo : "");
   const [sortBy, setSortBy] = useState<SortOption>(collectionOrder ? "collection" : "distance");
 
+  // GA4 discovery_filtered — latches false after the debounced URL-sync
+  // effect's first ever firing for this mounted instance (the initial
+  // page-load sync, not a genuine filter change) so only real subsequent
+  // filter/search changes are counted. See the effect below.
+  const isFirstFilterSyncRef = useRef(true);
+
   // ── dropdown open state ──
   const [typeOpen, setTypeOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -683,6 +690,23 @@ export function HappyHoursSearchClient({
       if (sortBy !== defaultSort) parts.push(`sort=${sortBy}`);
       const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
       window.history.replaceState(null, "", url);
+
+      // GA4 discovery_filtered — fires once per settled (debounced) filter
+      // change, never on the initial mount sync. Sort is intentionally
+      // excluded from the count: it reorders results, it doesn't filter them.
+      if (isFirstFilterSyncRef.current) {
+        isFirstFilterSyncRef.current = false;
+      } else {
+        const filterCount = [
+          !!trimmedQuery,
+          nearMeActive,
+          onNowActive,
+          !!selectedType,
+          selectedDay !== "all",
+          !!(filterTimeFrom && filterTimeTo),
+        ].filter(Boolean).length;
+        trackGA4Event("discovery_filtered", { mode: "happy_hours", filter_count: filterCount });
+      }
     }, SEARCH_URL_SYNC_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [

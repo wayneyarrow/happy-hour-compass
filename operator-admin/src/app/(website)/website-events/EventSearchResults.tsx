@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
@@ -9,6 +9,7 @@ import type { Market } from "@/lib/markets";
 import { EVENT_TYPE_OPTIONS } from "@/lib/eventTypes";
 import { EventSearchCard } from "./EventSearchCard";
 import EventSearchContextHeader from "./EventSearchContextHeader";
+import { trackGA4Event } from "@/lib/ga4";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
 
@@ -578,6 +579,12 @@ export function EventSearchResults({
   const [activeType, setActiveType] = useState<string | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
 
+  // GA4 discovery_filtered — latches false after the debounced URL-sync
+  // effect's first ever firing for this mounted instance (the initial
+  // page-load sync, not a genuine filter change) so only real subsequent
+  // filter changes are counted. See the effect below.
+  const isFirstFilterSyncRef = useRef(true);
+
   function toggleTypePanel() {
     if (calendarOpen) setCalendarOpen(false);
     setTypeOpen((v) => !v);
@@ -607,6 +614,15 @@ export function EventSearchResults({
       if (activeType) parts.push(`type=${encodeURIComponent(activeType)}`);
       const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
       window.history.replaceState(null, "", url);
+
+      // GA4 discovery_filtered — fires once per settled (debounced) filter
+      // change, never on the initial mount sync.
+      if (isFirstFilterSyncRef.current) {
+        isFirstFilterSyncRef.current = false;
+      } else {
+        const filterCount = [!!dateFilter, hasAppliedRange, !!activeType].filter(Boolean).length;
+        trackGA4Event("discovery_filtered", { mode: "events", filter_count: filterCount });
+      }
     }, FILTER_URL_SYNC_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [enableFilterSync, dateFilter, hasAppliedRange, calAppliedStart, calAppliedEnd, activeType, pathname]);

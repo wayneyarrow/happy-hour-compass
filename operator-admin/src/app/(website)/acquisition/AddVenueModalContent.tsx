@@ -13,6 +13,7 @@ import {
 } from "@/app/(consumer)/suggest/owner/actions";
 import type { OwnerFormValues, GoogleMatch } from "@/app/(consumer)/suggest/owner/types";
 import { trackEvent } from "@/lib/analytics";
+import { trackGA4Event } from "@/lib/ga4";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { FieldError } from "@/components/FieldError";
@@ -117,6 +118,7 @@ export function AddVenueModalContent({ onDone }: Props) {
 
   useEffect(() => {
     trackEvent("operator_submission_started");
+    trackGA4Event("venue_submission_started");
   }, []);
 
   /**
@@ -217,7 +219,11 @@ export function AddVenueModalContent({ onDone }: Props) {
         // the same accurate "submitted" confirmation already shown for the
         // no-match/rejected paths, rather than the "confirmed" screen's
         // promise of an account setup email that won't actually be sent.
-        setStep(result.routedStatus === "confirmed_auto" ? "confirmed" : "submitted");
+        const isAutoConfirmed = result.routedStatus === "confirmed_auto";
+        trackGA4Event("venue_submission_completed", {
+          outcome: isAutoConfirmed ? "auto_confirmed" : "manual_review",
+        });
+        setStep(isAutoConfirmed ? "confirmed" : "submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");
       }
@@ -268,6 +274,9 @@ export function AddVenueModalContent({ onDone }: Props) {
           setGeneralError(result.error);
           return;
         }
+        // Rejected-match path always routes to manual review — never
+        // auto-confirmed (see saveOperatorSubmissionAction's routing).
+        trackGA4Event("venue_submission_completed", { outcome: "manual_review" });
         setStep("submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");
@@ -293,6 +302,8 @@ export function AddVenueModalContent({ onDone }: Props) {
           setGeneralError(result.error);
           return;
         }
+        // No-match path always routes to manual review — never auto-confirmed.
+        trackGA4Event("venue_submission_completed", { outcome: "manual_review" });
         setStep("submitted");
       } catch {
         setGeneralError("Something went wrong. Please try again.");

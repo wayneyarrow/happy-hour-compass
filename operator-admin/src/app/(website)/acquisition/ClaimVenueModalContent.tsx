@@ -3,6 +3,7 @@
 import { useState, useActionState, useEffect, useRef } from "react";
 import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[id]/claim/actions";
 import { trackEvent } from "@/lib/analytics";
+import { trackGA4Event } from "@/lib/ga4";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { FieldError } from "@/components/FieldError";
@@ -45,10 +46,14 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
   const [phoneValue, setPhoneValue] = useState("");
   const turnstileRef = useRef<TurnstileHandle>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  // Latches once claim_submitted has fired so a re-render while state.success
+  // stays true (e.g. an unrelated parent re-render) can never fire it twice.
+  const hasFiredSubmitted = useRef(false);
 
   useEffect(() => {
     trackEvent("claim_venue_started");
-  }, []);
+    trackGA4Event("claim_started", { venue_id: venueRouteParam });
+  }, [venueRouteParam]);
 
   useEffect(() => {
     if (state.turnstileFailed) {
@@ -56,6 +61,17 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
       turnstileRef.current?.reset();
     }
   }, [state.turnstileFailed]);
+
+  // GA4 claim_submitted — fires exactly once, only on a genuinely successful
+  // submission (state.success is only ever set true by submitClaimAction
+  // after it writes the claim; a failed validation/server/Turnstile attempt
+  // leaves state.success falsy and sets state.error/turnstileFailed instead).
+  useEffect(() => {
+    if (state.success && !hasFiredSubmitted.current) {
+      hasFiredSubmitted.current = true;
+      trackGA4Event("claim_submitted", { venue_id: venueRouteParam });
+    }
+  }, [state.success, venueRouteParam]);
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
