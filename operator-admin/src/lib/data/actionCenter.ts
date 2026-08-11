@@ -51,6 +51,20 @@ type MediaRow   = { venue_id: string; url: string };
 type SubPlanRow = { operator_id: string; plan_code: string | null };
 type EventRow   = { id: string; title: string | null; venue_id: string; first_date: string | null; is_published: boolean };
 
+// Primary CRM contact row, as read from crm_venue_contacts for the Action
+// Center's "Seeded Venues Needing Claims" report. Internal-only table — see
+// 074_crm_venue_contacts.sql. Only the primary (is_primary = true) contact
+// per venue is fetched here; a venue may have additional non-primary
+// contacts not surfaced by this report.
+type CrmContactRow = {
+  venue_id: string;
+  full_name: string | null;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  outreach_status: string;
+};
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 const SETUP_ITEMS_TOTAL = 6;
@@ -119,6 +133,18 @@ function buildMediaMap(rows: MediaRow[]): Map<string, string[]> {
   return m;
 }
 
+// Keyed by venue_id → its primary CRM contact. The query this feeds already
+// filters to is_primary = true, and the DB enforces at most one primary
+// contact per venue (crm_venue_contacts_one_primary_per_venue_idx), so this
+// is safe as a plain last-write-wins map with no dedup logic needed.
+function buildPrimaryContactMap(rows: CrmContactRow[]): Map<string, CrmContactRow> {
+  const m = new Map<string, CrmContactRow>();
+  for (const row of rows) {
+    m.set(row.venue_id, row);
+  }
+  return m;
+}
+
 export function daysSince(isoDate: string | null): number | null {
   if (!isoDate) return null;
   return Math.floor((Date.now() - new Date(isoDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -160,6 +186,14 @@ export type SeededNeedingClaimsRow = {
   missingItems: string[];
   isPublished: boolean;
   source: string | null;
+  // Primary CRM contact (crm_venue_contacts, is_primary = true), if one has
+  // been recorded for this venue. All null when no primary contact exists —
+  // this is display-only outreach data, never part of the venue/claim model.
+  primaryContactName: string | null;
+  primaryContactRole: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  primaryContactOutreachStatus: string | null;
 };
 
 export type ActiveStillOnboardingRow = {
@@ -410,16 +444,25 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
 
   const venueIds = venues.map((v) => v.id);
 
-  const [r_media, r_venueViews, r_events] = await Promise.all([
+  const [r_media, r_venueViews, r_events, r_crmContacts] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
     supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    // Internal CRM contacts (crm_venue_contacts) — only the primary contact
+    // per venue is needed for this report. Table is service-role-only
+    // (see 074_crm_venue_contacts.sql); createAdminClient() above already
+    // bypasses RLS, so no additional access change is needed here.
+    supabase.from("crm_venue_contacts")
+      .select("venue_id, full_name, role, email, phone, outreach_status")
+      .in("venue_id", venueIds)
+      .eq("is_primary", true),
   ]);
 
   const mediaByVenue   = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const venueViewMap   = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const eventRows      = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds       = eventRows.map((e) => e.id);
+  const primaryContactByVenue = buildPrimaryContactMap((r_crmContacts.data ?? []) as CrmContactRow[]);
 
   let eventViewMap = new Map<string, number>();
   if (eventIds.length > 0) {
@@ -440,6 +483,7 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
 
   return venues.map((v) => {
     const { setupHealthScorePct, missingItems } = computeSetupHealth(v, mediaByVenue);
+    const primaryContact = primaryContactByVenue.get(v.id) ?? null;
     return {
       id: v.id,
       slug: v.slug,
@@ -453,6 +497,11 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
       missingItems,
       isPublished: v.is_published,
       source: v.source,
+      primaryContactName: primaryContact?.full_name ?? null,
+      primaryContactRole: primaryContact?.role ?? null,
+      primaryContactEmail: primaryContact?.email ?? null,
+      primaryContactPhone: primaryContact?.phone ?? null,
+      primaryContactOutreachStatus: primaryContact?.outreach_status ?? null,
     };
   }).sort((a, b) => b.venueViews30d - a.venueViews30d);
 }

@@ -96,12 +96,23 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
   const applyPage   = (p: number)   => { setPage(p); syncUrl(q, sortCol, sortDir, p); };
 
   const handleExport = () => {
-    const headers = ["Venue", "City", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)", "Health Score %", "Missing Setup Items", "Published", "Source"];
+    // Claimed/unclaimed scope is unchanged — this exports exactly the rows
+    // already loaded by getSeededNeedingClaims() (seeded + no operator
+    // attached), the same set rendered in the table above. CRM contact
+    // fields are appended for outreach use; they're display-only and never
+    // affect which venues appear here.
+    const headers = [
+      "Venue", "City", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)",
+      "Health Score %", "Missing Setup Items", "Published", "Source",
+      "Contact Name", "Contact Role", "Contact Email", "Contact Phone", "Outreach Status",
+    ];
     const csvRows = sorted.map((r) => [
       r.name, r.city, String(r.daysSinceSeeded),
       String(r.venueViews30d), String(r.eventViews30d),
       String(r.setupHealthScorePct), r.missingItems.join("; "),
       r.isPublished ? "Yes" : "No", r.source,
+      r.primaryContactName, r.primaryContactRole, r.primaryContactEmail, r.primaryContactPhone,
+      r.primaryContactOutreachStatus,
     ]);
     downloadCsv(`seeded-needing-claims-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv(headers, csvRows));
   };
@@ -146,6 +157,7 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
                     <th className="text-left px-4 py-3"><span className={THS}>Missing Setup</span></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("isPublished")} className={TH}>Published <SortIcon active={sortCol === "isPublished"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><span className={THS}>Source</span></th>
+                    <th className="text-left px-4 py-3"><span className={THS}>Contact</span></th>
                     <th className="text-left px-4 py-3"><span className={THS}>View</span></th>
                   </tr>
                 </thead>
@@ -166,6 +178,18 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
                       </td>
                       <td className="px-4 py-3"><PublishedBadge published={r.isPublished} /></td>
                       <td className="px-4 py-3 text-gray-500 text-xs capitalize">{r.source ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs max-w-[180px]">
+                        {r.primaryContactEmail ? (
+                          <div className="truncate">
+                            {r.primaryContactName && (
+                              <div className="text-gray-700 font-medium truncate">{r.primaryContactName}</div>
+                            )}
+                            <div className="text-gray-500 truncate">{r.primaryContactEmail}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3"><span className="text-xs font-medium text-amber-600">View →</span></td>
                     </tr>
                   ))}
