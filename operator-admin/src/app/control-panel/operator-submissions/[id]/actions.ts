@@ -14,6 +14,7 @@ import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
+import { geocodeStreetAddress } from "@/lib/geo/geocodeAddress";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -409,6 +410,57 @@ export async function approveAndCreateVenueAction(
     );
   }
 
+  // ── Resolve coordinates (lat/lng) ──────────────────────────────────────────
+  // Prefer the Google Places business-name match's coordinates when present
+  // (existing behavior, unchanged). When the match failed (no_match —
+  // google_match_json is null, a real and non-rare outcome, e.g. a
+  // restaurant operating inside a hotel and indexed under the hotel's name)
+  // or otherwise didn't include a location, fall back to geocoding the
+  // submitter's street address directly via geocodeStreetAddress() — the
+  // same Google Places API (New) Text Search integration, extended to
+  // accept a plain address instead of a business name. Never fabricated:
+  // if the fallback also fails, lat/lng are left NULL and the venue is
+  // still created unpublished — the publish-readiness gate
+  // (src/lib/venueReadiness.ts) blocks it from ever going live with
+  // unresolved geography, the same safety net already used for a failed
+  // market/city resolution above.
+  const matchLat = gm?.lat as number | null | undefined;
+  const matchLng = gm?.lng as number | null | undefined;
+
+  let lat: number | null = typeof matchLat === "number" ? matchLat : null;
+  let lng: number | null = typeof matchLng === "number" ? matchLng : null;
+
+  if (lat === null || lng === null) {
+    const submittedStreetAddress = (sub.street_address as string | null) ?? "";
+    if (submittedStreetAddress && resolvedCity && resolvedProvince) {
+      const geocodeResult = await geocodeStreetAddress({
+        streetAddress: submittedStreetAddress,
+        city:          resolvedCity,
+        province:      resolvedProvince,
+      });
+      if (geocodeResult.ok) {
+        lat = geocodeResult.lat;
+        lng = geocodeResult.lng;
+        console.log(
+          "[approveAndCreateVenueAction] Address geocoding fallback succeeded (no Google business match).",
+          { submissionId, venueName, lat, lng, formattedAddress: geocodeResult.formattedAddress }
+        );
+      } else {
+        console.warn(
+          "[approveAndCreateVenueAction] Address geocoding fallback failed — leaving lat/lng NULL. " +
+            "Venue will remain unpublishable until a founder resolves location.",
+          { submissionId, venueName, reason: geocodeResult.reason }
+        );
+      }
+    } else {
+      console.warn(
+        "[approveAndCreateVenueAction] No Google match and insufficient address fields to geocode — " +
+          "leaving lat/lng NULL. Venue will remain unpublishable until a founder resolves location.",
+        { submissionId, venueName }
+      );
+    }
+  }
+
   // ── Create unpublished venue ───────────────────────────────────────────────
   const { data: newVenue, error: venueError } = await supabase
     .from("venues")
@@ -420,8 +472,8 @@ export async function approveAndCreateVenueAction(
       region:               resolvedProvince,
       postal_code:          (gm?.postalCode    as string | null) ?? null,
       country:              (gm?.country       as string | null) ?? null,
-      lat:                  (gm?.lat           as number | null) ?? null,
-      lng:                  (gm?.lng           as number | null) ?? null,
+      lat,
+      lng,
       phone,
       website_url:          (gm?.website       as string | null) ?? (sub.website as string | null) ?? null,
       place_id:             placeId,

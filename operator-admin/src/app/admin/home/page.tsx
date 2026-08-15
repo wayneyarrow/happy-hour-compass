@@ -99,6 +99,8 @@ type HomeVenueRow = {
   postal_code: string | null;
   market_id: string | null;
   city_id: string | null;
+  lat: number | null;
+  lng: number | null;
   phone: string | null;
   website_url: string | null;
   menu_url: string | null;
@@ -116,7 +118,7 @@ type HomeVenueRow = {
 
 const VENUE_SELECT =
   "id, slug, name, is_published, claimed_at, updated_at, address_line1, city, region, postal_code, " +
-  "market_id, city_id, " +
+  "market_id, city_id, lat, lng, " +
   "phone, website_url, menu_url, establishment_type, hh_times, hh_tagline, " +
   "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations, search_tags";
 
