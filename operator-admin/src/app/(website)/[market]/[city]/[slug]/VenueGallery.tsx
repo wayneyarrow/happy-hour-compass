@@ -71,16 +71,123 @@ function AllPhotosOverlay({
   );
 }
 
+// ─── Single-photo lightbox ────────────────────────────────────────────────────
+//
+// Opened by clicking any individual image (primary or secondary) in the
+// desktop gallery — starts on the clicked photo and lets the visitor step
+// forward/backward through every venue image. Distinct from AllPhotosOverlay
+// above (the static "Show all N photos" grid, unchanged) — this is a
+// single-photo-at-a-time view, the piece that was previously missing.
+// Shares the same overlay chrome conventions (fixed inset-0 z-50 bg-black/95,
+// ESC-to-close, role="dialog") as AllPhotosOverlay for visual consistency.
+
+function ImageLightbox({
+  images,
+  venueName,
+  startIndex,
+  onClose,
+}: {
+  images: VenueImage[];
+  venueName: string;
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(startIndex);
+  const hasMultiple = images.length > 1;
+
+  // Close on ESC; step through photos on Left/Right arrows (single-image
+  // venues have nothing to step through, so arrows are disabled there).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      } else if (hasMultiple && e.key === "ArrowLeft") {
+        setActiveIndex((i) => (i - 1 + images.length) % images.length);
+      } else if (hasMultiple && e.key === "ArrowRight") {
+        setActiveIndex((i) => (i + 1) % images.length);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, hasMultiple, images.length]);
+
+  const current = images[activeIndex];
+  if (!current) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photo ${activeIndex + 1} of ${images.length} — ${venueName}`}
+    >
+      <div className="flex items-center justify-between px-4 py-4 shrink-0">
+        <span className="text-white/70 text-sm font-medium">
+          {activeIndex + 1} / {images.length}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close photo"
+          className="flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-md px-1"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+          Close
+        </button>
+      </div>
+
+      <div className="relative flex-1 min-h-0 flex items-center justify-center px-4 pb-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={current.url}
+          alt={activeIndex === 0 ? venueName : ""}
+          className="max-w-full max-h-full object-contain select-none"
+          draggable={false}
+        />
+
+        {hasMultiple && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveIndex((i) => (i - 1 + images.length) % images.length)}
+              aria-label="Previous photo"
+              className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/40 hover:bg-black/60 text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 md:w-6 md:h-6">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveIndex((i) => (i + 1) % images.length)}
+              aria-label="Next photo"
+              className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/40 hover:bg-black/60 text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 md:w-6 md:h-6">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Desktop gallery (Airbnb-style grid) ─────────────────────────────────────
 
 function DesktopGallery({
   images,
   venueName,
   onShowAll,
+  onOpenLightbox,
 }: {
   images: VenueImage[];
   venueName: string;
   onShowAll: () => void;
+  onOpenLightbox: (index: number) => void;
 }) {
   const rightImages = images.slice(1, 5); // up to 4 supporting images
   const showAllBtn = images.length > 5;
@@ -106,21 +213,16 @@ function DesktopGallery({
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
-        {/* "Show all photos" on primary when there's no right grid (≤1 total image) */}
-        {images.length > 1 && !hasRight && (
-          <button
-            type="button"
-            onClick={onShowAll}
-            className="absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-900 hover:bg-white transition-colors shadow-sm border border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-            Show all {images.length} photos
-          </button>
-        )}
+        {/* Invisible full-cover click target — opens the lightbox on this
+            photo. (The previous "Show all photos" button here required
+            images.length > 1 AND !hasRight simultaneously, which is
+            mutually exclusive — it never actually rendered.) */}
+        <button
+          type="button"
+          onClick={() => onOpenLightbox(0)}
+          aria-label={`View photo 1 of ${images.length}`}
+          className="absolute inset-0 w-full h-full cursor-pointer focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-amber-400"
+        />
       </div>
 
       {/* Right column */}
@@ -143,7 +245,19 @@ function DesktopGallery({
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-              {/* "Show all photos" button over the last visible right image */}
+              {/* Invisible full-cover click target — opens the lightbox on
+                  this photo. Previously these secondary images had no
+                  interaction at all (the root cause of the desktop bug). */}
+              <button
+                type="button"
+                onClick={() => onOpenLightbox(i + 1)}
+                aria-label={`View photo ${i + 2} of ${images.length}`}
+                className="absolute inset-0 w-full h-full cursor-pointer focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-amber-400"
+              />
+              {/* "Show all photos" button over the last visible right image —
+                  unchanged; it sits after the click-target button above in
+                  DOM order, so it still stacks on top and keeps taking
+                  priority on this one thumbnail, exactly as before. */}
               {showAllBtn && i === rightImages.length - 1 && (
                 <button
                   type="button"
@@ -254,14 +368,15 @@ function MobileGallery({
 
 export function VenueGallery({ images, venueName }: Props) {
   const [showAll, setShowAll] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Prevent page scroll while the all-photos overlay is open.
+  // Prevent page scroll while either overlay is open.
   useEffect(() => {
-    document.body.style.overflow = showAll ? "hidden" : "";
+    document.body.style.overflow = showAll || lightboxIndex !== null ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [showAll]);
+  }, [showAll, lightboxIndex]);
 
   if (images.length === 0) return null;
 
@@ -272,6 +387,15 @@ export function VenueGallery({ images, venueName }: Props) {
           images={images}
           venueName={venueName}
           onClose={() => setShowAll(false)}
+        />
+      )}
+
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images}
+          venueName={venueName}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
         />
       )}
 
@@ -288,6 +412,7 @@ export function VenueGallery({ images, venueName }: Props) {
           images={images}
           venueName={venueName}
           onShowAll={() => setShowAll(true)}
+          onOpenLightbox={(i) => setLightboxIndex(i)}
         />
       </div>
     </>
