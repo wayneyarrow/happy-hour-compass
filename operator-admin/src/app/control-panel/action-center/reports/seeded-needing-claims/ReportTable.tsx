@@ -9,7 +9,8 @@ import type { SeededNeedingClaimsRow } from "@/lib/data/actionCenter";
 type SortCol =
   | "name" | "city" | "daysSinceSeeded" | "venueViews30d"
   | "eventViews30d" | "setupHealthScorePct" | "isPublished";
-type PubFilter = "all" | "published" | "unpublished";
+type PubFilter  = "all" | "published" | "unpublished";
+type LiveFilter = "all" | "live" | "not-live";
 
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "venueViews30d";
@@ -20,10 +21,11 @@ function readUrlParam(key: string, fb: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fb;
 }
 
-function syncUrl(q: string, pub: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, pub: string, live: string, sort: string, dir: string, page: number) {
   const p = new URLSearchParams();
   if (q)                   p.set("q",    q);
   if (pub !== "all")       p.set("pub",  pub);
+  if (live !== "all")      p.set("live", live);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir  !== "desc")     p.set("dir",  dir);
   if (page > 1)            p.set("page", String(page));
@@ -52,6 +54,7 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
 
   const [q,       setQ]       = useState("");
   const [pub,     setPub]     = useState<PubFilter>("all");
+  const [live,    setLive]    = useState<LiveFilter>("all");
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page,    setPage]    = useState(1);
@@ -59,6 +62,7 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
   useEffect(() => {
     setQ(readUrlParam("q", ""));
     setPub(readUrlParam("pub", "all") as PubFilter);
+    setLive(readUrlParam("live", "all") as LiveFilter);
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir",  "desc") as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
@@ -70,9 +74,11 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
       if (lq && !r.name.toLowerCase().includes(lq) && !(r.city?.toLowerCase().includes(lq) ?? false)) return false;
       if (pub === "published"   && !r.isPublished) return false;
       if (pub === "unpublished" &&  r.isPublished) return false;
+      if (live === "live"     && !r.isLiveOnSite) return false;
+      if (live === "not-live" &&  r.isLiveOnSite) return false;
       return true;
     });
-  }, [rows, q, pub]);
+  }, [rows, q, pub, live]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -97,28 +103,29 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
   const applySort = (col: SortCol) => {
     const dir = col === sortCol && sortDir === "desc" ? "asc" : "desc";
     setSortCol(col); setSortDir(dir); setPage(1);
-    syncUrl(q, pub, col, dir, 1);
+    syncUrl(q, pub, live, col, dir, 1);
   };
-  const applySearch = (val: string) => { setQ(val); setPage(1); syncUrl(val, pub, sortCol, sortDir, 1); };
-  const applyPub    = (val: PubFilter) => { setPub(val); setPage(1); syncUrl(q, val, sortCol, sortDir, 1); };
-  const applyPage   = (p: number)   => { setPage(p); syncUrl(q, pub, sortCol, sortDir, p); };
+  const applySearch = (val: string) => { setQ(val); setPage(1); syncUrl(val, pub, live, sortCol, sortDir, 1); };
+  const applyPub    = (val: PubFilter)  => { setPub(val);  setPage(1); syncUrl(q, val, live, sortCol, sortDir, 1); };
+  const applyLive   = (val: LiveFilter) => { setLive(val); setPage(1); syncUrl(q, pub, val, sortCol, sortDir, 1); };
+  const applyPage   = (p: number)   => { setPage(p); syncUrl(q, pub, live, sortCol, sortDir, p); };
 
   const handleExport = () => {
     // Claimed/unclaimed scope is unchanged — this exports the rows already
     // loaded by getSeededNeedingClaims() (seeded + no operator attached),
-    // narrowed by the active search and Status filter, same as the table
-    // above. CRM contact fields are appended for outreach use; they're
-    // display-only and never affect which venues appear here.
+    // narrowed by the active search, Status filter, and Live on site filter,
+    // same as the table above. CRM contact fields are appended for outreach
+    // use; they're display-only and never affect which venues appear here.
     const headers = [
       "Venue", "City", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)",
-      "Health Score %", "Missing Setup Items", "Published", "Source",
+      "Health Score %", "Missing Setup Items", "Published", "Live on Site", "Source",
       "Contact Name", "Contact Role", "Contact Email", "Contact Phone", "Outreach Status",
     ];
     const csvRows = sorted.map((r) => [
       r.name, r.city, String(r.daysSinceSeeded),
       String(r.venueViews30d), String(r.eventViews30d),
       String(r.setupHealthScorePct), r.missingItems.join("; "),
-      r.isPublished ? "Yes" : "No", r.source,
+      r.isPublished ? "Yes" : "No", r.isLiveOnSite ? "Yes" : "No", r.source,
       r.primaryContactName, r.primaryContactRole, r.primaryContactEmail, r.primaryContactPhone,
       r.primaryContactOutreachStatus,
     ]);
@@ -150,6 +157,18 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
             <option value="all">All</option>
             <option value="published">Published</option>
             <option value="unpublished">Unpublished</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          Live on site
+          <select
+            value={live}
+            onChange={(e) => applyLive(e.target.value as LiveFilter)}
+            className={selectCls}
+          >
+            <option value="all">All</option>
+            <option value="live">Live</option>
+            <option value="not-live">Not live</option>
           </select>
         </label>
         <span className="ml-auto text-sm text-gray-400">{filtered.length} of {rows.length}</span>

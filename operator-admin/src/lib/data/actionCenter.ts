@@ -13,6 +13,7 @@ import {
   maxUsers,
   maxSearchTags,
 } from "@/lib/plans";
+import { getMarketById } from "@/lib/markets";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
 
@@ -185,6 +186,12 @@ export type SeededNeedingClaimsRow = {
   setupHealthScorePct: number;
   missingItems: string[];
   isPublished: boolean;
+  // Short-term operational flag distinguishing "published in the database"
+  // from "actually visible on the live public site" — see
+  // computeIsLiveOnSite() below for the exact rule. Independent of
+  // isPublished; a venue can be isPublished=true and isLiveOnSite=false
+  // (the common case: seeded venues in a coming_soon market).
+  isLiveOnSite: boolean;
   source: string | null;
   // Primary CRM contact (crm_venue_contacts, is_primary = true), if one has
   // been recorded for this venue. All null when no primary contact exists —
@@ -429,17 +436,48 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
 
 // ── Report #1: Seeded Venues Needing Claims ───────────────────────────────────
 
+// market_id/city_id + the joined market slug, needed only by this report to
+// derive isLiveOnSite. Kept local rather than added to VENUE_SELECT/
+// VenueWithSetup — every other report built on those stays untouched.
+// market_geo join mirrors the existing pattern in src/lib/data/venues.ts
+// (getPublishedVenuesForConsumer et al.) rather than inventing a new one.
+type SeededVenueWithGeo = VenueWithSetup & {
+  market_id: string | null;
+  city_id: string | null;
+  market_geo: { slug: string } | null;
+};
+
+/**
+ * "Live on site" — a short-term operational read on whether a venue is
+ * actually visible on the public website today, as opposed to merely
+ * is_published=true in the database. Mirrors the same rule the public site
+ * itself applies (see (website)/[market]/[city]/[slug]/page.tsx and
+ * getActiveMarket()/isNearMarket() call sites): a venue only renders when
+ * it's published, has a resolvable market+city, and that market's launch
+ * status is "active" per src/lib/markets.ts (the hardcoded config that
+ * drives all live behavior — not the DB markets table, which doesn't gate
+ * anything yet). This does not redefine or replace is_published; it's a
+ * second, independent read for outreach triage only.
+ */
+function computeIsLiveOnSite(v: SeededVenueWithGeo): boolean {
+  if (!v.is_published) return false;
+  if (!v.market_id || !v.city_id) return false;
+  const marketSlug = v.market_geo?.slug ?? null;
+  if (!marketSlug) return false;
+  return getMarketById(marketSlug)?.status === "active";
+}
+
 export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
   const { data: venuesData } = await supabase
     .from("venues")
-    .select(VENUE_SELECT)
+    .select(VENUE_SELECT + ", market_id, city_id, market_geo:markets!market_id(slug)")
     .eq("source", "seed")
     .is("created_by_operator_id", null);
 
-  const venues = (venuesData ?? []) as VenueWithSetup[];
+  const venues = (venuesData ?? []) as unknown as SeededVenueWithGeo[];
   if (venues.length === 0) return [];
 
   const venueIds = venues.map((v) => v.id);
@@ -496,6 +534,7 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
       setupHealthScorePct,
       missingItems,
       isPublished: v.is_published,
+      isLiveOnSite: computeIsLiveOnSite(v),
       source: v.source,
       primaryContactName: primaryContact?.full_name ?? null,
       primaryContactRole: primaryContact?.role ?? null,
