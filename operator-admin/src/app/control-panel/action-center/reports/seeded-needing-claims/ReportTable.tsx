@@ -9,6 +9,7 @@ import type { SeededNeedingClaimsRow } from "@/lib/data/actionCenter";
 type SortCol =
   | "name" | "city" | "daysSinceSeeded" | "venueViews30d"
   | "eventViews30d" | "setupHealthScorePct" | "isPublished";
+type PubFilter = "all" | "published" | "unpublished";
 
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "venueViews30d";
@@ -19,9 +20,10 @@ function readUrlParam(key: string, fb: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fb;
 }
 
-function syncUrl(q: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, pub: string, sort: string, dir: string, page: number) {
   const p = new URLSearchParams();
   if (q)                   p.set("q",    q);
+  if (pub !== "all")       p.set("pub",  pub);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir  !== "desc")     p.set("dir",  dir);
   if (page > 1)            p.set("page", String(page));
@@ -49,12 +51,14 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
   const router = useRouter();
 
   const [q,       setQ]       = useState("");
+  const [pub,     setPub]     = useState<PubFilter>("all");
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page,    setPage]    = useState(1);
 
   useEffect(() => {
     setQ(readUrlParam("q", ""));
+    setPub(readUrlParam("pub", "all") as PubFilter);
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir",  "desc") as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
@@ -62,10 +66,13 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
 
   const filtered = useMemo(() => {
     const lq = q.toLowerCase();
-    return rows.filter((r) =>
-      !lq || r.name.toLowerCase().includes(lq) || (r.city?.toLowerCase().includes(lq) ?? false)
-    );
-  }, [rows, q]);
+    return rows.filter((r) => {
+      if (lq && !r.name.toLowerCase().includes(lq) && !(r.city?.toLowerCase().includes(lq) ?? false)) return false;
+      if (pub === "published"   && !r.isPublished) return false;
+      if (pub === "unpublished" &&  r.isPublished) return false;
+      return true;
+    });
+  }, [rows, q, pub]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -90,17 +97,18 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
   const applySort = (col: SortCol) => {
     const dir = col === sortCol && sortDir === "desc" ? "asc" : "desc";
     setSortCol(col); setSortDir(dir); setPage(1);
-    syncUrl(q, col, dir, 1);
+    syncUrl(q, pub, col, dir, 1);
   };
-  const applySearch = (val: string) => { setQ(val); setPage(1); syncUrl(val, sortCol, sortDir, 1); };
-  const applyPage   = (p: number)   => { setPage(p); syncUrl(q, sortCol, sortDir, p); };
+  const applySearch = (val: string) => { setQ(val); setPage(1); syncUrl(val, pub, sortCol, sortDir, 1); };
+  const applyPub    = (val: PubFilter) => { setPub(val); setPage(1); syncUrl(q, val, sortCol, sortDir, 1); };
+  const applyPage   = (p: number)   => { setPage(p); syncUrl(q, pub, sortCol, sortDir, p); };
 
   const handleExport = () => {
-    // Claimed/unclaimed scope is unchanged — this exports exactly the rows
-    // already loaded by getSeededNeedingClaims() (seeded + no operator
-    // attached), the same set rendered in the table above. CRM contact
-    // fields are appended for outreach use; they're display-only and never
-    // affect which venues appear here.
+    // Claimed/unclaimed scope is unchanged — this exports the rows already
+    // loaded by getSeededNeedingClaims() (seeded + no operator attached),
+    // narrowed by the active search and Status filter, same as the table
+    // above. CRM contact fields are appended for outreach use; they're
+    // display-only and never affect which venues appear here.
     const headers = [
       "Venue", "City", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)",
       "Health Score %", "Missing Setup Items", "Published", "Source",
@@ -119,6 +127,9 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
 
   const TH = "group inline-flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700 transition-colors whitespace-nowrap";
   const THS = "text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap";
+  const selectCls =
+    "text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white " +
+    "text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400";
 
   return (
     <div className="space-y-4">
@@ -129,6 +140,18 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
           placeholder="Search venues or city…"
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-60 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          Status
+          <select
+            value={pub}
+            onChange={(e) => applyPub(e.target.value as PubFilter)}
+            className={selectCls}
+          >
+            <option value="all">All</option>
+            <option value="published">Published</option>
+            <option value="unpublished">Unpublished</option>
+          </select>
+        </label>
         <span className="ml-auto text-sm text-gray-400">{filtered.length} of {rows.length}</span>
         <button type="button" onClick={handleExport} disabled={sorted.length === 0}
           className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap">
