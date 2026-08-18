@@ -15,9 +15,22 @@
  *    <GoogleAnalytics> never renders, so every call here is a safe no-op.
  *
  * Scoped to the approved GA4 V1 custom-event set (Claim Venue funnel, Add
- * Venue funnel, discovery filtering — see the GA4 V1 measurement plan).
- * Widening this union is a deliberate measurement-plan decision, not a
- * casual addition.
+ * Venue funnel, discovery filtering, Consumer Signup funnel — see the GA4 V1
+ * measurement plan). Widening this union is a deliberate measurement-plan
+ * decision, not a casual addition.
+ *
+ * Consumer Signup funnel (consumer_signup_started / consumer_signup_completed
+ * / consumer_email_confirmed) — trigger points:
+ *   - consumer_signup_started:   (consumer-auth)/sign-up/page.tsx, once client
+ *     validation passes and createConsumerAccount() is about to be called.
+ *   - consumer_signup_completed: same file, after createConsumerAccount()
+ *     returns { ok: true, isNewSignup: true } — isNewSignup excludes the
+ *     "resubmission while still unconfirmed" resend case (see that action's
+ *     doc comment) so a resend isn't double-counted as a new completion.
+ *   - consumer_email_confirmed:  auth/confirm/page.tsx, only on the
+ *     hash-fragment signup-token path once setSession() succeeds — never on
+ *     the pre-existing-session fallback path, so plain /welcome revisits and
+ *     reloads after the token is consumed can't refire it.
  */
 
 import { sendGAEvent } from "@next/third-parties/google";
@@ -27,7 +40,10 @@ type GA4EventName =
   | "claim_submitted"
   | "venue_submission_started"
   | "venue_submission_completed"
-  | "discovery_filtered";
+  | "discovery_filtered"
+  | "consumer_signup_started"
+  | "consumer_signup_completed"
+  | "consumer_email_confirmed";
 
 type GA4EventParams = Record<string, string | number | boolean | null | undefined>;
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import WebsiteHeader from "@/app/(website)/WebsiteHeader";
 import { getActiveMarket } from "@/lib/activeMarket";
 import {
@@ -8,6 +9,18 @@ import {
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
+
+// Consumer-facing sign-up/sign-in/forgot-password/reset-password pages — a
+// separate route group from (website), so it isn't wrapped by
+// (website)/layout.tsx and doesn't inherit that layout's <GoogleAnalytics>
+// mount. Without this, consumer_signup_started/consumer_signup_completed
+// (fired from sign-up/page.tsx) would never actually reach GA4 in any
+// environment, since sendGAEvent() no-ops until <GoogleAnalytics> has
+// mounted somewhere in the tree. Same env var, same gate, same
+// Operator-Admin/Founder-Control-Panel exclusion as (website)/layout.tsx —
+// those live under entirely separate app/admin and app/control-panel route
+// segments, never under this route group.
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default async function ConsumerAuthLayout({ children }: { children: ReactNode }) {
   const { market } = await getActiveMarket();
@@ -74,6 +87,7 @@ export default async function ConsumerAuthLayout({ children }: { children: React
           </p>
         </div>
       </footer>
+      {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </div>
   );
 }

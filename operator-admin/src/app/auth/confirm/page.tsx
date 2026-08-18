@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import { createConsumerProfile } from "@/app/(consumer-auth)/sign-up/actions";
+import { trackGA4Event } from "@/lib/ga4";
 
 /**
  * /auth/confirm
@@ -43,6 +44,14 @@ import { createConsumerProfile } from "@/app/(consumer-auth)/sign-up/actions";
 export default function AuthConfirmPage() {
   const router = useRouter();
   const [sessionChecked, setSessionChecked] = useState(false);
+  // Latches once consumer_email_confirmed has fired so this effect can never
+  // report it twice for the same mount (e.g. React StrictMode's dev-only
+  // double-invoke). The hash-token branch below only runs at all on the
+  // one-time click-through from the confirmation email — a reload or
+  // revisit after tokens are stripped from the URL (see history.replaceState
+  // below) falls through to the pre-existing-session fallback path instead,
+  // which never reaches this ref.
+  const confirmedTrackedRef = useRef(false);
 
   useEffect(() => {
     async function init() {
@@ -73,6 +82,16 @@ export default function AuthConfirmPage() {
           window.history.replaceState(null, "", window.location.pathname + window.location.search);
 
           if (!sessionError) {
+            // Fire only here: a real Supabase signup-token verification just
+            // succeeded and setSession() just established an authenticated
+            // consumer session. Never fires from Path B below (pre-existing
+            // session / revisited or already-consumed link) or from ordinary
+            // /welcome visits.
+            if (!confirmedTrackedRef.current) {
+              confirmedTrackedRef.current = true;
+              trackGA4Event("consumer_email_confirmed");
+            }
+
             // Resilience measure mirroring /auth/callback's fallback for the
             // PKCE flow: createConsumerAccount's own createConsumerProfile
             // call (sign-up/actions.ts) may have failed transiently. Retry it

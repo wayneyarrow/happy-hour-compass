@@ -6,6 +6,7 @@ import PasswordInput from "@/components/PasswordInput";
 import { createConsumerAccount } from "./actions";
 import { EmailConfirmationNote } from "@/app/(website)/acquisition/emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { trackGA4Event } from "@/lib/ga4";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -53,6 +54,11 @@ export default function SignUpPage() {
     setLoading(true);
     devLog("signup started for email:", email);
 
+    // Fires once client-side validation has passed and a real submission is
+    // about to be sent — not on page load, not on a validation-only retry
+    // (those all return above, before this line).
+    trackGA4Event("consumer_signup_started");
+
     const trimmedName = name.trim() || null;
 
     const result = await createConsumerAccount({
@@ -73,6 +79,14 @@ export default function SignUpPage() {
         turnstileRef.current?.reset();
       }
       return;
+    }
+
+    // Only count a genuinely new account here — a resubmission for a still-
+    // unconfirmed email behaves like a confirmation resend (see
+    // createConsumerAccount's doc comment) and must not be double-counted as
+    // a new completed signup.
+    if (result.isNewSignup) {
+      trackGA4Event("consumer_signup_completed");
     }
 
     setSuccessEmail(email);

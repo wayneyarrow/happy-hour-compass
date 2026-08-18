@@ -52,7 +52,7 @@ export async function createConsumerProfile({
 }
 
 export type CreateConsumerAccountResult =
-  | { ok: true }
+  | { ok: true; isNewSignup: boolean }
   | { ok: false; error: string; turnstileFailed?: boolean };
 
 /**
@@ -138,6 +138,20 @@ export async function createConsumerAccount({
     };
   }
 
+  // ── Analytics: distinguish a brand-new signup from a resend ──────────────
+  // generateLink({ type: "signup" }) for an email that already exists but is
+  // still unconfirmed does not error (see this function's doc comment above)
+  // — it behaves like a confirmation resend, running this entire function
+  // again. That's existing, intentional behavior this task does not change.
+  // For analytics purposes only, linkData.user.created_at (already returned
+  // by the generateLink call above — no extra Supabase call) lets us tell
+  // the two cases apart safely: a brand-new auth user's created_at is ~now,
+  // while a resend's created_at is the original signup time. The caller uses
+  // this to avoid double-counting a resend as a new consumer_signup_completed
+  // GA4 event.
+  const isNewSignup =
+    Math.abs(new Date(linkData.user.created_at).getTime() - new Date(now).getTime()) < 10_000;
+
   // ── Notify founder — fire-and-forget; email failure must not block account
   // creation or the consumer's success screen. Matches submitSuggestionAction's
   // pattern (src/app/(consumer)/suggest/customer/actions.ts): the account is
@@ -205,5 +219,5 @@ export async function createConsumerAccount({
     console.error("[createConsumerAccount] Slack notification not delivered.", { result: slackResult });
   }
 
-  return { ok: true };
+  return { ok: true, isNewSignup };
 }
