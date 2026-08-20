@@ -4,14 +4,19 @@ import { computeBackoffMs, processBrevoOutboxBatch, reclaimStaleProcessingRows }
 import { createFakeOutboxStore, type FakeOutboxRow } from "./support/fakeOutboxStore";
 import { withBrevoEnv } from "./support/testEnv";
 
-function installFakeFetch(handler: () => Response | Promise<Response>) {
+function installFakeFetch(handler: (url: string) => Response | Promise<Response>) {
   const original = globalThis.fetch;
-  let callCount = 0;
-  globalThis.fetch = (async () => {
-    callCount += 1;
-    return handler();
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    urls.push(url);
+    return handler(url);
   }) as typeof fetch;
-  return { restore: () => { globalThis.fetch = original; }, callCount: () => callCount };
+  return {
+    restore: () => { globalThis.fetch = original; },
+    callCount: () => urls.length,
+    urls,
+  };
 }
 
 function seedRow(rows: FakeOutboxRow[], overrides: Partial<FakeOutboxRow> = {}): FakeOutboxRow {
@@ -173,6 +178,135 @@ test("reclaimStaleProcessingRows does not touch a recently-claimed 'processing' 
   const reclaimed = await reclaimStaleProcessingRows(client);
   assert.equal(reclaimed, 0);
   assert.equal(rows[0].status, "processing");
+});
+
+// ── subscribed:false processing (Brevo list-removal branch) ────────────────
+
+test("a subscribed:true row still calls the upsert endpoint (unaffected by the new branch)", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: true } });
+  const fake = installFakeFetch(() => new Response(null, { status: 204 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.completed, 1);
+    assert.equal(fake.urls[0], "https://api.brevo.com/v3/contacts");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row calls the list-removal endpoint, not the upsert endpoint, and completes", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  const fake = installFakeFetch(() => new Response(JSON.stringify({ contacts: { success: [], failure: [] } }), { status: 201 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.completed, 1);
+    assert.equal(rows[0].status, "completed");
+    assert.equal(fake.urls[0], "https://api.brevo.com/v3/contacts/lists/2/contacts/remove");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+// NOTE: Brevo's documented contacts.success/failure schema is a plain array
+// of the requested email(s), with no reason/code field distinguishing
+// "already absent" from a genuine failure. An earlier version of this test
+// assumed an undocumented object shape and asserted the row completes even
+// when Brevo reports the target email as a failure — that assumption was
+// wrong (see client.test.ts's corresponding correction) and has been
+// replaced below with the conservative, documented-safe behavior: a
+// reported per-contact failure is retried, not silently completed.
+
+test("a subscribed:false row where Brevo reports the target email in contacts.failure is retried, not silently completed", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ contacts: { success: [], failure: ["wayne@example.com"] } }), { status: 201 })
+  );
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.retried, 1);
+    assert.equal(result.completed, 0);
+    assert.equal(rows[0].status, "pending");
+    assert.equal(rows[0].last_error_class, "unknown");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row where the failure array contains only an unrelated email still completes", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ contacts: { success: [], failure: ["someone-else@example.com"] } }), { status: 201 })
+  );
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.completed, 1);
+    assert.equal(rows[0].status, "completed");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row uses the row's own environment-specific listId, not a hard-coded one", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "3" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 3, subscribed: false } });
+  const fake = installFakeFetch(() => new Response(null, { status: 201 }));
+  try {
+    await processBrevoOutboxBatch(10, client);
+    assert.equal(fake.urls[0], "https://api.brevo.com/v3/contacts/lists/3/contacts/remove");
+    assert.doesNotMatch(fake.urls[0], /\/lists\/2\//, "must never touch an unrelated/wrong list");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row transient failure is retried, same as the upsert path", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  const fake = installFakeFetch(() => new Response("server error", { status: 500 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.retried, 1);
+    assert.equal(rows[0].status, "pending");
+    assert.equal(rows[0].last_error_class, "transient");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row for a non-allowlisted staging email is blocked before any Brevo call", async () => {
+  const restoreEnv = withBrevoEnv({
+    BREVO_API_KEY: "fake-key",
+    BREVO_CONSUMER_LIST_ID: "3",
+    BREVO_TEST_EMAIL: "wayne@example.com",
+  });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "someone-else@example.com", attributes: {}, listId: 3, subscribed: false } });
+  const fake = installFakeFetch(() => new Response(null, { status: 201 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.blocked, 1);
+    assert.equal(rows[0].status, "blocked");
+    assert.equal(fake.callCount(), 0, "the external-call guard must still apply to the removal path too");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
 });
 
 test("computeBackoffMs is bounded and increases with attempt number, capped at 60 minutes", () => {

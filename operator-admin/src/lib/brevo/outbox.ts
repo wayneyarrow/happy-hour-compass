@@ -1,5 +1,5 @@
 import { sendSlackAlert } from "@/lib/slack";
-import { upsertBrevoContact } from "./client";
+import { upsertBrevoContact, removeBrevoContactFromList } from "./client";
 import { classifyThrown, isRetryable, type BrevoErrorClass } from "./errors";
 import { maskEmail } from "./maskEmail";
 import { getDefaultBrevoAdminClient, type BrevoAdminClient } from "./supabaseAdminClient";
@@ -8,10 +8,21 @@ import { getDefaultBrevoAdminClient, type BrevoAdminClient } from "./supabaseAdm
  * Brevo sync outbox processor — claims and processes due rows from
  * public.brevo_sync_outbox (supabase/migrations/075_brevo_sync_outbox.sql).
  *
- * Called from src/app/api/cron/brevo-sync-outbox/route.ts. Phase 1: no live
- * flow enqueues real rows yet, so in practice this processes zero rows
- * until Phase 2 ships — it exists now so the durable processing primitive
- * and its execution path are both built and tested ahead of that wiring.
+ * Called from src/app/api/cron/brevo-sync-outbox/route.ts. Consumer lifecycle
+ * code (Phase 2A, src/lib/brevo/consumerSync.ts) enqueues the rows this
+ * processes.
+ *
+ * `payload.subscribed` selects the Brevo operation for an `upsert_contact`
+ * row (both still use that one outbox `operation` value — see
+ * 075_brevo_sync_outbox.sql's CHECK constraint; this is a processing-time
+ * branch, not a second outbox operation):
+ *   - true/undefined → upsertBrevoContact(): create-or-update the contact
+ *     and ensure list membership (unchanged Phase 1 behavior).
+ *   - false → removeBrevoContactFromList(): the contact is no longer
+ *     eligible for this HHC list. Never deletes the Brevo contact, never
+ *     touches emailBlacklisted, never touches any other list — see
+ *     client.ts's doc comment for why this is the narrowest correct
+ *     operation for "marketing_consent went false."
  */
 
 type OutboxPayload = {
@@ -141,11 +152,18 @@ async function processOutboxRow(row: OutboxRow, supabase: BrevoAdminClient): Pro
       throw new Error(`Unsupported outbox operation: ${row.operation}`);
     }
 
-    await upsertBrevoContact({
-      email: row.payload.email,
-      attributes: row.payload.attributes,
-      listId: row.payload.listId,
-    });
+    if (row.payload.subscribed === false) {
+      await removeBrevoContactFromList({
+        email: row.payload.email,
+        listId: row.payload.listId,
+      });
+    } else {
+      await upsertBrevoContact({
+        email: row.payload.email,
+        attributes: row.payload.attributes,
+        listId: row.payload.listId,
+      });
+    }
 
     await supabase
       .from("brevo_sync_outbox")
@@ -160,6 +178,7 @@ async function processOutboxRow(row: OutboxRow, supabase: BrevoAdminClient): Pro
     console.log("[brevo/outbox] completed", {
       provider: "brevo",
       operation: row.operation,
+      subscribed: row.payload.subscribed !== false,
       entityType: row.entity_type,
       entityId: row.entity_id,
       outboxId: row.id,
