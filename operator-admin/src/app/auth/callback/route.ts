@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
 
 /**
  * Auth callback route — handles Supabase PKCE code exchange.
@@ -71,6 +72,13 @@ export async function GET(request: NextRequest) {
             console.error("[auth/callback] consumer_profiles fallback insert failed:", profileError.message);
           }
         }
+
+        // Brevo Phase 2A: this is the third (rare) path that can create/
+        // touch a consumer_profiles row — see createConsumerProfile's own
+        // call site (sign-up/actions.ts) for the primary two. Safe to call
+        // whether the insert above ran or the profile already existed.
+        // Never blocks this redirect — see consumerSync.ts.
+        await syncConsumerBrevoEligibility(data.user.id);
       }
 
       return NextResponse.redirect(`${origin}${next}`);

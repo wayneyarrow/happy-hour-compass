@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { sendConsumerSignupConfirmationEmail, sendConsumerSignupFounderNotificationEmail } from "@/lib/email";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
+import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
 import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
@@ -47,6 +48,15 @@ export async function createConsumerProfile({
     console.error("[createConsumerProfile]", error.message, "userId:", userId);
     return error.message;
   }
+
+  // Brevo Phase 2A: re-evaluate this consumer's marketing-sync eligibility
+  // on every profile write. This one call site covers signup (pre-
+  // confirmation, will correctly no-op since the account isn't confirmed
+  // yet), the /auth/confirm retry (post-confirmation — this is where a
+  // newly-eligible consumer actually gets enqueued), and the /auth/callback
+  // fallback, since all three already funnel through createConsumerProfile.
+  // Never blocks or fails this function — see consumerSync.ts.
+  await syncConsumerBrevoEligibility(userId);
 
   return null;
 }

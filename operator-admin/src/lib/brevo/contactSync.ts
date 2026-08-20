@@ -13,7 +13,7 @@ export type BrevoContactDesiredState = {
   entityType: BrevoEntityType;
   /**
    * HHC/Supabase UUID for this entity (consumer_profiles.id / operators.id).
-   * A future processor phase maps this to Brevo's EXT_ID attribute — it is
+   * Automatically written into the payload's EXT_ID attribute below — it is
    * never the upsert key itself (Brevo's native email identifier is used
    * for that, per the approved contact model).
    */
@@ -47,10 +47,9 @@ export function buildDedupeKey(entityType: BrevoEntityType, entityId: string, op
  * Postgres function (supabase/migrations/075_brevo_sync_outbox.sql), which
  * performs the atomic insert-or-coalesce.
  *
- * NOT called from any live signup/account/confirmation flow in Phase 1 —
- * see the Brevo integration foundation report for the exact Phase 1
- * boundary. This function exists so Phase 2 has a single, already-tested
- * entry point to wire up rather than writing to the outbox table directly.
+ * Called from src/lib/brevo/consumerSync.ts (Phase 2A) rather than from
+ * signup/account code directly — see that file for the consumer-specific
+ * eligibility rule and the exact lifecycle hooks that call this.
  */
 export async function enqueueBrevoContactSync(
   desired: BrevoContactDesiredState,
@@ -61,7 +60,9 @@ export async function enqueueBrevoContactSync(
 
   const payload = {
     email: desired.email,
-    attributes: desired.attributes ?? {},
+    // EXT_ID is always the HHC entity UUID — an architectural invariant,
+    // not a per-caller decision (see the approved Brevo contact model).
+    attributes: { ...(desired.attributes ?? {}), EXT_ID: desired.entityId },
     listId: desired.listId,
     subscribed: desired.subscribed,
   };
