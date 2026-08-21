@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   APIProvider,
   Map,
@@ -171,9 +172,16 @@ function MarkerInfoWindow({ marker }: { marker: MapMarker }) {
         </p>
       )}
 
-      {/* CTA */}
+      {/* CTA — a real next/link, not a plain <a>, so this marker-driven
+          navigation is the same client-side transition venue cards already
+          use (SearchResultCard.tsx) and participates in the same map-state
+          restoration on Back (see searchMapState.ts). Safe here specifically
+          because @vis.gl/react-google-maps's InfoWindow renders `children`
+          via a React portal (createPortal) — the DOM node lives inside
+          Google's own InfoWindow layer, but it's still part of the same
+          React fiber tree, so next/link's router context resolves normally. */}
       {marker.href && (
-        <a
+        <Link
           href={marker.href}
           style={{
             display: "block",
@@ -190,7 +198,7 @@ function MarkerInfoWindow({ marker }: { marker: MapMarker }) {
           }}
         >
           View Details →
-        </a>
+        </Link>
       )}
     </div>
   );
@@ -212,6 +220,8 @@ type MapInnardsProps = {
    * `markers`) or on anything the caller derives from `markers`/bounds.
    */
   userLocation?: { lat: number; lng: number } | null;
+  /** See SearchResultsMap's own `initialBounds` doc comment below. */
+  initialBounds?: LatLngBounds | null;
 };
 
 function MapInnards({
@@ -220,12 +230,15 @@ function MapInnards({
   selectedId,
   onSelectId,
   userLocation = null,
+  initialBounds = null,
 }: MapInnardsProps) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
   // Tracks the sorted ID set of the last fitted marker group so we only refit
   // when the visible result set changes (filter changes), not on sort order changes.
   const prevFitKeyRef = useRef("");
+  // Applied at most once per mount — see the initialBounds effect below.
+  const appliedInitialBoundsRef = useRef(false);
 
   // Refit bounds when the coordinate set meaningfully changes. Deliberately
   // keyed only on `markers` (venue pins) — the user-location marker below
@@ -240,6 +253,12 @@ function MapInnards({
     if (fitKey === prevFitKeyRef.current) return;
     prevFitKeyRef.current = fitKey;
 
+    // A restored viewport (see below) takes priority over the very first
+    // auto-fit-to-markers pass — otherwise this effect (which runs on the
+    // same initial mount) would immediately stomp the just-restored view.
+    // Later marker-set changes (a filter change, say) fit normally.
+    if (initialBounds && !appliedInitialBoundsRef.current) return;
+
     if (markers.length === 1) {
       map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
       map.setZoom(15);
@@ -248,7 +267,22 @@ function MapInnards({
       markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
       map.fitBounds(bounds, 60);
     }
-  }, [map, coreLib, markers]);
+  }, [map, coreLib, markers, initialBounds]);
+
+  // Restores a previously-seen viewport (e.g. after a browser Back
+  // navigation remounts this map — see searchMapState.ts) exactly once per
+  // mount. Deliberately does not react to `initialBounds` changing again
+  // later (appliedInitialBoundsRef), so it never fights the visitor's own
+  // subsequent panning/zooming.
+  useEffect(() => {
+    if (!map || !coreLib || !initialBounds || appliedInitialBoundsRef.current) return;
+    appliedInitialBoundsRef.current = true;
+    const bounds = new coreLib.LatLngBounds(
+      { lat: initialBounds.south, lng: initialBounds.west },
+      { lat: initialBounds.north, lng: initialBounds.east }
+    );
+    map.fitBounds(bounds);
+  }, [map, coreLib, initialBounds]);
 
   // Build HHC pin icons + the user-location dot once the core library is
   // ready (Size + Point constructors). Falls back to undefined (default
@@ -438,6 +472,16 @@ type Props = {
    * EventSearchResults) are unaffected unless they opt in.
    */
   userLocation?: { lat: number; lng: number } | null;
+  /**
+   * A previously-reported viewport (e.g. from this same map's own
+   * `onBoundsChanged`, persisted by a caller across a remount) to fit to
+   * once, in place of `marketCenter`/`marketZoom`, as soon as the map is
+   * ready. Applied at most once per mount — later prop changes are ignored,
+   * so it never fights the visitor's own subsequent panning/zooming. Omit or
+   * pass null (default) for existing callers — the map falls back to
+   * `marketCenter`/`marketZoom` exactly as before.
+   */
+  initialBounds?: LatLngBounds | null;
 };
 
 export function SearchResultsMap({
@@ -453,6 +497,7 @@ export function SearchResultsMap({
   zoomControlPosition,
   userLocation = null,
   boundsBottomInsetPx,
+  initialBounds = null,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -520,6 +565,7 @@ export function SearchResultsMap({
             selectedId={selectedId}
             onSelectId={handleSelectId}
             userLocation={userLocation}
+            initialBounds={initialBounds}
           />
           {resizeSignal !== undefined && <MapResizeHandler signal={resizeSignal} />}
         </Map>

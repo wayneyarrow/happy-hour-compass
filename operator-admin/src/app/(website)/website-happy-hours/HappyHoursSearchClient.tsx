@@ -14,6 +14,11 @@ import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
 import { trackGA4Event } from "@/lib/ga4";
 import {
+  saveDesktopMapBounds,
+  saveMobileMapBounds,
+  consumeRestoredMapStateIfPopState,
+} from "./searchMapState";
+import {
   TIME_OPTIONS,
   TO_TIME_OPTIONS,
   MIDNIGHT_VALUE,
@@ -775,6 +780,33 @@ export function HappyHoursSearchClient({
     );
   }, [enableSearch, cards, collectionOrder]);
 
+  // Restores the map viewport (desktop's split-map bounds / mobile's
+  // expanded-map bounds) across the same remount-on-Back described above —
+  // see searchMapState.ts for the full reasoning. Unlike filters, map
+  // viewport is deliberately never URL-encoded, so it can't be recovered from
+  // window.location like the effect above; consumeRestoredMapStateIfPopState()
+  // only returns a value when the browser actually navigated Back/Forward to
+  // get here, so a genuine fresh visit to this page is unaffected and starts
+  // at the default market view exactly as before. initialDesktopBounds/
+  // initialMobileBounds are one-shot seeds passed to <SearchResultsMap> below
+  // to re-fit its camera once; desktopMapBounds/mapBounds themselves are also
+  // seeded here so the venue list is already correctly narrowed on the very
+  // first paint, rather than flashing the full unfiltered set until the map
+  // finishes loading and reports its own bounds.
+  useEffect(() => {
+    if (!enableSearch) return;
+    const restored = consumeRestoredMapStateIfPopState();
+    if (!restored) return;
+    if (restored.desktopBounds) {
+      setDesktopMapBounds(restored.desktopBounds);
+      setInitialDesktopBounds(restored.desktopBounds);
+    }
+    if (restored.mobileBounds) {
+      setMapBounds(restored.mobileBounds);
+      setInitialMobileBounds(restored.mobileBounds);
+    }
+  }, [enableSearch]);
+
   // ── geo state ──
   const [userLocation, setUserLocation] = useState<{
     lat: number;
@@ -806,9 +838,19 @@ export function HappyHoursSearchClient({
   // closes the expanded-map UI; it isn't a "discard my map search" action.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [mapBounds, setMapBounds] = useState<LatLngBounds | null>(null);
+  // One-shot viewport to re-fit the mobile map's camera to on a restored
+  // (Back-navigation) mount — see the restore effect and searchMapState.ts.
+  // Stays null (no effect on SearchResultsMap) for every other mount.
+  const [initialMobileBounds, setInitialMobileBounds] = useState<LatLngBounds | null>(null);
 
   function handleCollapseMap() {
     setMapExpanded(false);
+  }
+
+  /** Wraps setMapBounds so every mobile pan/zoom also write-throughs to the cross-remount store (see searchMapState.ts). */
+  function handleMobileBoundsChanged(bounds: LatLngBounds | null) {
+    setMapBounds(bounds);
+    saveMobileMapBounds(bounds);
   }
 
   // ── desktop map interaction state ──
@@ -824,9 +866,19 @@ export function HappyHoursSearchClient({
   // re-firing on every pan (it only re-fits when filters/search/sort change
   // the underlying result set, never from the user's own map interaction).
   const [desktopMapBounds, setDesktopMapBounds] = useState<LatLngBounds | null>(null);
+  // One-shot viewport to re-fit the desktop map's camera to on a restored
+  // (Back-navigation) mount — see the restore effect and searchMapState.ts.
+  // Stays null (no effect on SearchResultsMap) for every other mount.
+  const [initialDesktopBounds, setInitialDesktopBounds] = useState<LatLngBounds | null>(null);
 
   function handleShowAllOnMap() {
     setDesktopMapBounds(null);
+  }
+
+  /** Wraps setDesktopMapBounds so every pan/zoom also write-throughs to the cross-remount store (see searchMapState.ts). */
+  function handleDesktopBoundsChanged(bounds: LatLngBounds | null) {
+    setDesktopMapBounds(bounds);
+    saveDesktopMapBounds(bounds);
   }
 
   // Rendered pixel height of the map+sheet wrapper while expanded — read
@@ -1545,8 +1597,9 @@ export function HappyHoursSearchClient({
               className="flex-1 rounded-2xl overflow-hidden"
               hoveredMarkerId={hoveredCardId}
               onMarkerClick={handleMarkerClick}
-              onBoundsChanged={setDesktopMapBounds}
+              onBoundsChanged={handleDesktopBoundsChanged}
               userLocation={userLocation}
+              initialBounds={initialDesktopBounds}
             />
           </div>
         </div>
@@ -1575,8 +1628,9 @@ export function HappyHoursSearchClient({
             marketZoom={market.mapZoom}
             className="absolute inset-0"
             gestureHandling={mapExpanded ? "greedy" : "cooperative"}
-            onBoundsChanged={mapExpanded ? setMapBounds : undefined}
+            onBoundsChanged={mapExpanded ? handleMobileBoundsChanged : undefined}
             resizeSignal={mapExpanded}
+            initialBounds={initialMobileBounds}
             // The results sheet permanently anchors to the bottom edge once
             // expanded (even at "peek" height) — Google's default
             // bottom-right zoom control would sit directly behind it, so
