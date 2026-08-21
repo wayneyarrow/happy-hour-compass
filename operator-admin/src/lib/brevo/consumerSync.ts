@@ -92,7 +92,7 @@ export async function syncConsumerBrevoEligibility(
             entityId: consumerId,
             email,
             attributes: buildAttributes((profile?.display_name as string | null) ?? null),
-            listId: config.consumerListId,
+            listIds: [config.consumerListId],
             subscribed: false,
           },
           outboxClient
@@ -139,7 +139,7 @@ async function enqueueEligible(
       entityId: consumerId,
       email: eligibility.email,
       attributes: buildAttributes(eligibility.displayName),
-      listId: config.consumerListId,
+      listIds: [config.consumerListId],
       subscribed: true,
     },
     outboxClient

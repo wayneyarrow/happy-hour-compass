@@ -21,8 +21,16 @@ export type BrevoContactDesiredState = {
   email: string;
   /** Only pre-existing Brevo attributes (FIRSTNAME/LASTNAME) — do not add new custom attribute keys here without confirming they already exist in Brevo. */
   attributes?: Partial<{ FIRSTNAME: string; LASTNAME: string }>;
-  /** Target list. Callers must always source this from config (e.g. getBrevoConfig().consumerListId) — never a literal 2 or 3. */
-  listId: number;
+  /**
+   * Target list(s). Callers must always source these from config (e.g.
+   * `[getBrevoConfig().consumerListId]`) — never a literal 2 or 3. Almost
+   * every caller passes a single-element array; the existing-consumer
+   * welcome backfill (welcomeCohortBackfill.ts) is the one caller that
+   * passes both the ongoing consumer list and the dedicated one-time
+   * historical-welcome list together, for a subscribed:true desired state
+   * only.
+   */
+  listIds: number[];
   /**
    * Desired marketing eligibility. Captured now for forward-compatibility;
    * Phase 1's outbox processor only performs the contact upsert itself —
@@ -63,7 +71,7 @@ export async function enqueueBrevoContactSync(
     // EXT_ID is always the HHC entity UUID — an architectural invariant,
     // not a per-caller decision (see the approved Brevo contact model).
     attributes: { ...(desired.attributes ?? {}), EXT_ID: desired.entityId },
-    listId: desired.listId,
+    listIds: desired.listIds,
     subscribed: desired.subscribed,
   };
 

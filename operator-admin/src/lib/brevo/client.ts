@@ -30,7 +30,16 @@ export type UpsertBrevoContactParams = {
   /** Brevo's native identifier for the contact — email may change over time; this is always the current value. */
   email: string;
   attributes?: BrevoContactAttributes;
-  listId: number;
+  /**
+   * One or more Brevo lists to add/update this contact on in the same call.
+   * Almost every caller passes a single-element array (the ongoing HHC
+   * consumer list). The one exception is the existing-consumer welcome
+   * backfill (src/lib/brevo/welcomeCohortBackfill.ts), which passes both the
+   * ongoing consumer list AND the dedicated one-time historical-welcome list
+   * — Brevo's real /v3/contacts endpoint already accepts multiple list IDs
+   * in one upsert, so this is a direct pass-through, not new API surface.
+   */
+  listIds: number[];
 };
 
 /**
@@ -46,6 +55,13 @@ export type UpsertBrevoContactParams = {
  * turn any of these into a retry/permanent-failure decision.
  */
 export async function upsertBrevoContact(params: UpsertBrevoContactParams): Promise<void> {
+  if (!params.listIds || params.listIds.length === 0) {
+    // A caller bug, not a Brevo/network condition — every real call site
+    // must always target at least one list. Caught here rather than sent to
+    // Brevo as a meaningless empty-list upsert.
+    throw new BrevoApiError("upsertBrevoContact called with an empty listIds array", "invalid_request");
+  }
+
   const config = getBrevoConfig();
 
   // Staging safety choke point. Must run before any network call — see
@@ -55,7 +71,7 @@ export async function upsertBrevoContact(params: UpsertBrevoContactParams): Prom
   const body = {
     email: params.email,
     attributes: params.attributes ?? {},
-    listIds: [params.listId],
+    listIds: params.listIds,
     updateEnabled: true,
   };
 

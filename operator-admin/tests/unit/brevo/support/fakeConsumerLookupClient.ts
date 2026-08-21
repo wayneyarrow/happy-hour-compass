@@ -5,6 +5,12 @@ export type FakeConsumerProfile = {
   email: string | null;
   display_name: string | null;
   marketing_consent: boolean;
+  /**
+   * Optional — only used by the welcome-cohort backfill tests
+   * (fakeWelcomeCohortStore.ts). Absent/undefined everywhere else, matching
+   * production consumer_profiles rows that predate migration 078.
+   */
+  brevo_welcome_backfilled_at?: string | null;
 };
 
 export type FakeAuthUser = {

@@ -15,7 +15,7 @@ test("enqueue succeeds and creates a new pending row", async () => {
       entityType: "consumer",
       entityId: "11111111-1111-1111-1111-111111111111",
       email: "wayne@example.com",
-      listId: 2,
+      listIds: [2],
       subscribed: true,
     },
     client
@@ -32,11 +32,11 @@ test("a duplicate enqueue for the same in-flight entity coalesces into the exist
   const entityId = "22222222-2222-2222-2222-222222222222";
 
   const first = await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId, email: "wayne@example.com", listId: 2, subscribed: true },
+    { entityType: "consumer", entityId, email: "wayne@example.com", listIds: [2], subscribed: true },
     client
   );
   const second = await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId, email: "wayne+updated@example.com", listId: 2, subscribed: false },
+    { entityType: "consumer", entityId, email: "wayne+updated@example.com", listIds: [2], subscribed: false },
     client
   );
 
@@ -52,14 +52,14 @@ test("re-enqueuing after the prior job already completed creates a fresh row (re
   const entityId = "33333333-3333-3333-3333-333333333333";
 
   await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId, email: "wayne@example.com", listId: 2, subscribed: true },
+    { entityType: "consumer", entityId, email: "wayne@example.com", listIds: [2], subscribed: true },
     client
   );
   rows[0].status = "completed";
   rows[0].completed_at = new Date().toISOString();
 
   await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId, email: "wayne@example.com", listId: 2, subscribed: true },
+    { entityType: "consumer", entityId, email: "wayne@example.com", listIds: [2], subscribed: true },
     client
   );
 
@@ -72,13 +72,29 @@ test("enqueue for a different entity never coalesces with an unrelated in-flight
   const { client, rows } = createFakeOutboxStore();
 
   await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId: "aaaaaaaa-0000-0000-0000-000000000001", email: "a@example.com", listId: 2, subscribed: true },
+    { entityType: "consumer", entityId: "aaaaaaaa-0000-0000-0000-000000000001", email: "a@example.com", listIds: [2], subscribed: true },
     client
   );
   await enqueueBrevoContactSync(
-    { entityType: "consumer", entityId: "aaaaaaaa-0000-0000-0000-000000000002", email: "b@example.com", listId: 2, subscribed: true },
+    { entityType: "consumer", entityId: "aaaaaaaa-0000-0000-0000-000000000002", email: "b@example.com", listIds: [2], subscribed: true },
     client
   );
 
   assert.equal(rows.length, 2);
+});
+
+test("multiple listIds are passed through into the outbox payload unchanged (existing-consumer welcome backfill shape)", async () => {
+  const { client, rows } = createFakeOutboxStore();
+  await enqueueBrevoContactSync(
+    {
+      entityType: "consumer",
+      entityId: "44444444-4444-4444-4444-444444444444",
+      email: "wayne@example.com",
+      listIds: [2, 4],
+      subscribed: true,
+    },
+    client
+  );
+
+  assert.deepEqual(rows[0].payload.listIds, [2, 4]);
 });

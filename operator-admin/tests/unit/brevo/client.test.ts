@@ -24,7 +24,7 @@ test("throws BrevoConfigError (and never calls fetch) when config is missing", a
   const fake = installFakeFetch(() => new Response(null, { status: 200 }));
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "wayne@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [2] }),
       BrevoConfigError
     );
     assert.equal(fake.calls.length, 0);
@@ -43,7 +43,7 @@ test("throws BrevoStagingGuardBlockedError (and never calls fetch) for a non-all
   const fake = installFakeFetch(() => new Response(null, { status: 200 }));
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "someone-else@example.com", listId: 3 }),
+      () => upsertBrevoContact({ email: "someone-else@example.com", listIds: [3] }),
       BrevoStagingGuardBlockedError
     );
     assert.equal(fake.calls.length, 0);
@@ -64,7 +64,7 @@ test("succeeds for the allowlisted test email and sends the expected request sha
     await upsertBrevoContact({
       email: "wayne@example.com",
       attributes: { FIRSTNAME: "Wayne" },
-      listId: 3,
+      listIds: [3],
     });
 
     assert.equal(fake.calls.length, 1);
@@ -88,7 +88,7 @@ test("production path (no BREVO_TEST_EMAIL) allows any email through to fetch", 
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const fake = installFakeFetch(() => new Response(null, { status: 201 }));
   try {
-    await upsertBrevoContact({ email: "any-consumer@example.com", listId: 2 });
+    await upsertBrevoContact({ email: "any-consumer@example.com", listIds: [2] });
     assert.equal(fake.calls.length, 1);
   } finally {
     fake.restore();
@@ -103,7 +103,7 @@ test("classifies a 400 response as invalid_request", async () => {
   );
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "bad@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "bad@example.com", listIds: [2] }),
       (err: unknown) => {
         assert.ok(err instanceof BrevoApiError);
         assert.equal(err.errorClass, "invalid_request");
@@ -123,7 +123,7 @@ test("classifies a 401 response as auth", async () => {
   const fake = installFakeFetch(() => new Response(JSON.stringify({ message: "invalid key" }), { status: 401 }));
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "wayne@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [2] }),
       (err: unknown) => {
         assert.ok(err instanceof BrevoApiError);
         assert.equal(err.errorClass, "auth");
@@ -141,7 +141,7 @@ test("classifies a 429 response as transient", async () => {
   const fake = installFakeFetch(() => new Response(JSON.stringify({ message: "too many requests" }), { status: 429 }));
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "wayne@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [2] }),
       (err: unknown) => {
         assert.ok(err instanceof BrevoApiError);
         assert.equal(err.errorClass, "transient");
@@ -159,7 +159,7 @@ test("classifies a 500 response as transient", async () => {
   const fake = installFakeFetch(() => new Response("internal error", { status: 500 }));
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "wayne@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [2] }),
       (err: unknown) => {
         assert.ok(err instanceof BrevoApiError);
         assert.equal(err.errorClass, "transient");
@@ -180,7 +180,7 @@ test("classifies a network failure as transient", async () => {
   }) as typeof fetch;
   try {
     await assert.rejects(
-      () => upsertBrevoContact({ email: "wayne@example.com", listId: 2 }),
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [2] }),
       (err: unknown) => {
         assert.ok(err instanceof BrevoApiError);
         assert.equal(err.errorClass, "transient");
@@ -198,12 +198,44 @@ test("error messages never contain the raw API key", async () => {
   const fake = installFakeFetch(() => new Response(JSON.stringify({ message: "invalid key" }), { status: 401 }));
   try {
     try {
-      await upsertBrevoContact({ email: "wayne@example.com", listId: 2 });
+      await upsertBrevoContact({ email: "wayne@example.com", listIds: [2] });
       assert.fail("expected upsertBrevoContact to throw");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       assert.ok(!message.includes("super-secret-key-value"));
     }
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("upsertBrevoContact rejects an empty listIds array (and never calls fetch)", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(() => new Response(null, { status: 204 }));
+  try {
+    await assert.rejects(
+      () => upsertBrevoContact({ email: "wayne@example.com", listIds: [] }),
+      (err: unknown) => {
+        assert.ok(err instanceof BrevoApiError);
+        assert.equal(err.errorClass, "invalid_request");
+        return true;
+      }
+    );
+    assert.equal(fake.calls.length, 0, "a caller bug must never reach the Brevo API");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("upsertBrevoContact sends multiple listIds together in one call (existing-consumer welcome backfill shape)", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(() => new Response(null, { status: 204 }));
+  try {
+    await upsertBrevoContact({ email: "wayne@example.com", listIds: [2, 4] });
+    const body = JSON.parse(fake.calls[0].init.body as string);
+    assert.deepEqual(body.listIds, [2, 4]);
   } finally {
     fake.restore();
     restoreEnv();

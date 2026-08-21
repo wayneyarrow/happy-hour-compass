@@ -22,7 +22,8 @@
     "test:emails": "tsx scripts/sendTestEmails.ts",
     "seed:geography": "tsx scripts/seedGeography.ts",
     "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts",
-    "refresh:seeded-venues": "tsx scripts/refreshSeededVenues.ts"
+    "refresh:seeded-venues": "tsx scripts/refreshSeededVenues.ts",
+    "backfill:consumer-brevo-welcome-cohort": "tsx scripts/backfillConsumerBrevoWelcomeCohort.ts"
   },
   "dependencies": {
     "@next/third-parties": "15.5.19",

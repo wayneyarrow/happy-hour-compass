@@ -28,7 +28,7 @@ function seedRow(rows: FakeOutboxRow[], overrides: Partial<FakeOutboxRow> = {}):
     entity_id: "11111111-1111-1111-1111-111111111111",
     operation: "upsert_contact",
     dedupe_key: `consumer:upsert_contact:${overrides.entity_id ?? "11111111-1111-1111-1111-111111111111"}`,
-    payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: true },
+    payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: true },
     status: "pending",
     attempt_count: 0,
     max_attempts: 5,
@@ -132,7 +132,7 @@ test("a non-allowlisted email in staging is blocked before any Brevo API call, a
     BREVO_TEST_EMAIL: "wayne@example.com",
   });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "someone-else@example.com", attributes: {}, listId: 3, subscribed: true } });
+  seedRow(rows, { payload: { email: "someone-else@example.com", attributes: {}, listIds: [3], subscribed: true } });
   const fake = installFakeFetch(() => new Response(null, { status: 204 }));
   try {
     const result = await processBrevoOutboxBatch(10, client);
@@ -185,7 +185,7 @@ test("reclaimStaleProcessingRows does not touch a recently-claimed 'processing' 
 test("a subscribed:true row still calls the upsert endpoint (unaffected by the new branch)", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: true } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: true } });
   const fake = installFakeFetch(() => new Response(null, { status: 204 }));
   try {
     const result = await processBrevoOutboxBatch(10, client);
@@ -197,10 +197,40 @@ test("a subscribed:true row still calls the upsert endpoint (unaffected by the n
   }
 });
 
+test("a subscribed:true row with multiple listIds (existing-consumer welcome backfill shape) sends all of them in one upsert call", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2, 4], subscribed: true } });
+  const fake = installFakeFetch(() => new Response(null, { status: 204 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.completed, 1);
+    assert.equal(fake.urls[0], "https://api.brevo.com/v3/contacts");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("a subscribed:false row with more than one listId is a permanent failure, never silently picks the first list", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2, 4], subscribed: false } });
+  const fake = installFakeFetch(() => new Response(null, { status: 201 }));
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(fake.callCount(), 0, "must never call Brevo with an ambiguous multi-list removal");
+    assert.equal(result.failed + result.retried, 1);
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
 test("a subscribed:false row calls the list-removal endpoint, not the upsert endpoint, and completes", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
   const fake = installFakeFetch(() => new Response(JSON.stringify({ contacts: { success: [], failure: [] } }), { status: 201 }));
   try {
     const result = await processBrevoOutboxBatch(10, client);
@@ -225,7 +255,7 @@ test("a subscribed:false row calls the list-removal endpoint, not the upsert end
 test("a subscribed:false row where Brevo reports the target email in contacts.failure is retried, not silently completed", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
   const fake = installFakeFetch(
     () => new Response(JSON.stringify({ contacts: { success: [], failure: ["wayne@example.com"] } }), { status: 201 })
   );
@@ -244,7 +274,7 @@ test("a subscribed:false row where Brevo reports the target email in contacts.fa
 test("a subscribed:false row where the failure array contains only an unrelated email still completes", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
   const fake = installFakeFetch(
     () => new Response(JSON.stringify({ contacts: { success: [], failure: ["someone-else@example.com"] } }), { status: 201 })
   );
@@ -263,7 +293,7 @@ test("a subscribed:false row where the failure array contains only an unrelated 
 test("a subscribed:false row for an already-absent contact (Brevo's real HTTP 400 response) completes, with no retry or failure recorded", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
   const fake = installFakeFetch(
     () => new Response(JSON.stringify({ message: "Contact already removed from list and/or does not exist" }), { status: 400 })
   );
@@ -293,7 +323,7 @@ test("repeated subscribed:false processing for the same already-absent contact r
     // after each already completed) — each must complete cleanly, not fail.
     for (let i = 0; i < 3; i++) {
       rows.length = 0;
-      seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+      seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
       const result = await processBrevoOutboxBatch(10, client);
       assert.equal(result.completed, 1, `iteration ${i} should complete`);
       assert.equal(result.failed, 0, `iteration ${i} should not fail`);
@@ -307,7 +337,7 @@ test("repeated subscribed:false processing for the same already-absent contact r
 test("a subscribed:false row uses the row's own environment-specific listId, not a hard-coded one", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "3" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 3, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [3], subscribed: false } });
   const fake = installFakeFetch(() => new Response(null, { status: 201 }));
   try {
     await processBrevoOutboxBatch(10, client);
@@ -322,7 +352,7 @@ test("a subscribed:false row uses the row's own environment-specific listId, not
 test("a subscribed:false row transient failure is retried, same as the upsert path", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listIds: [2], subscribed: false } });
   const fake = installFakeFetch(() => new Response("server error", { status: 500 }));
   try {
     const result = await processBrevoOutboxBatch(10, client);
@@ -342,7 +372,7 @@ test("a subscribed:false row for a non-allowlisted staging email is blocked befo
     BREVO_TEST_EMAIL: "wayne@example.com",
   });
   const { client, rows } = createFakeOutboxStore();
-  seedRow(rows, { payload: { email: "someone-else@example.com", attributes: {}, listId: 3, subscribed: false } });
+  seedRow(rows, { payload: { email: "someone-else@example.com", attributes: {}, listIds: [3], subscribed: false } });
   const fake = installFakeFetch(() => new Response(null, { status: 201 }));
   try {
     const result = await processBrevoOutboxBatch(10, client);

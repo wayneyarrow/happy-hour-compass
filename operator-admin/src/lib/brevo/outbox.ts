@@ -28,7 +28,15 @@ import { getDefaultBrevoAdminClient, type BrevoAdminClient } from "./supabaseAdm
 type OutboxPayload = {
   email: string;
   attributes?: Record<string, string>;
-  listId: number;
+  /**
+   * One or more target Brevo lists. Every producer today writes exactly one
+   * element EXCEPT the existing-consumer welcome backfill
+   * (welcomeCohortBackfill.ts), which writes two (the ongoing consumer list
+   * + the dedicated historical-welcome list) for a subscribed:true row. A
+   * subscribed:false (removal) row must always carry exactly one — removal
+   * is inherently single-list — enforced defensively below.
+   */
+  listIds: number[];
   subscribed?: boolean;
 };
 
@@ -153,15 +161,25 @@ async function processOutboxRow(row: OutboxRow, supabase: BrevoAdminClient): Pro
     }
 
     if (row.payload.subscribed === false) {
+      // Removal is inherently single-list — never expected to carry more
+      // than one entry (see OutboxPayload.listIds' doc comment). Guarded
+      // rather than silently taking listIds[0] so a future bug producing a
+      // multi-list unsubscribe payload fails loudly instead of silently
+      // dropping a list.
+      if (row.payload.listIds.length !== 1) {
+        throw new Error(
+          `subscribed:false outbox row must target exactly one list, got ${row.payload.listIds.length}`
+        );
+      }
       await removeBrevoContactFromList({
         email: row.payload.email,
-        listId: row.payload.listId,
+        listId: row.payload.listIds[0],
       });
     } else {
       await upsertBrevoContact({
         email: row.payload.email,
         attributes: row.payload.attributes,
-        listId: row.payload.listId,
+        listIds: row.payload.listIds,
       });
     }
 

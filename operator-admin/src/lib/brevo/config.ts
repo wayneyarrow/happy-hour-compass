@@ -63,6 +63,33 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
+ * Reads the dedicated Brevo list ID used ONLY by the one-time historical
+ * existing-consumer welcome cohort backfill
+ * (src/lib/brevo/welcomeCohortBackfill.ts /
+ * scripts/backfillConsumerBrevoWelcomeCohort.ts) — the list Kate targets for
+ * the one-time historical welcome campaign, distinct from the ongoing
+ * BREVO_CONSUMER_LIST_ID every consumer is synced to. Deliberately kept
+ * separate from getBrevoConfig() — matching getBrevoWebhookToken()'s
+ * existing precedent above — so that ordinary consumer lifecycle syncs
+ * (signup, account updates) never depend on, or fail because of, a variable
+ * that is only ever relevant to this one backfill. Like
+ * BREVO_CONSUMER_LIST_ID, this is expected to hold a different value per
+ * Vercel environment (Production vs. Preview) via normal Vercel env var
+ * scoping — no additional environment-switching code is needed here.
+ */
+export function getExistingConsumerWelcomeListId(): number {
+  const raw = process.env.BREVO_EXISTING_CONSUMER_WELCOME_LIST_ID;
+  if (!raw) {
+    throw new BrevoConfigError("BREVO_EXISTING_CONSUMER_WELCOME_LIST_ID is not set.");
+  }
+  const listId = Number(raw);
+  if (!Number.isInteger(listId) || listId <= 0) {
+    throw new BrevoConfigError("BREVO_EXISTING_CONSUMER_WELCOME_LIST_ID must be a positive integer.");
+  }
+  return listId;
+}
+
+/**
  * Reads the inbound webhook authentication token. Kept separate from
  * getBrevoConfig() — the webhook route needs this, the outbound
  * contact-sync path never should touch it.
