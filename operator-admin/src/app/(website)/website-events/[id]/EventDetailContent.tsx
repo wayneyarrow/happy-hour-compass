@@ -18,6 +18,7 @@ import { MakeANightOfIt } from "./MakeANightOfIt";
 import { KnowBeforeYouGo } from "./KnowBeforeYouGo";
 import { BusinessHoursPanel } from "./BusinessHoursPanel";
 import { formatPrice, buildDetailDateLabel } from "./eventFormatters";
+import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 
 /**
  * Shared event detail page body — rendered by both the canonical route
@@ -492,7 +493,7 @@ export function EventDetailContent({
                         }
                       >
                         <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors break-all">
-                          {websiteUrl.replace(/^https?:\/\//, "")}
+                          {formatDisplayUrl(websiteUrl)}
                         </a>
                       </InfoRow>
                     )}

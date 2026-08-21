@@ -28,6 +28,7 @@ import { VenueDetailMap } from "./VenueDetailMap";
 import { ClaimVenueCTA } from "./ClaimVenueCTA";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
+import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -693,7 +694,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 transition-colors break-all"
                     >
-                      {websiteUrl.replace(/^https?:\/\//, "")}
+                      {formatDisplayUrl(websiteUrl)}
                     </a>
                   </InfoRow>
                 )}
