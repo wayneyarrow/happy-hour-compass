@@ -23,13 +23,19 @@
  * Bearer $CRON_SECRET" .../api/cron/brevo-sync-outbox`) for staging
  * testing — which matters because Vercel Cron only executes against
  * Production deployments, not Preview/branch deployments, so the `website`
- * branch has no automatic scheduled trigger for this route today.
+ * branch has no automatic scheduled trigger for this route regardless of
+ * the schedule below.
  *
- * Deliberately NOT done by this task: adding CRON_SECRET to Vercel, and
- * adding a `crons` entry to vercel.json (Vercel Cron requires Production
- * and depends on the project's plan/frequency limits) — see the foundation
- * report's "external configuration required" section. This route is the
- * callable processing primitive that step wires a schedule to.
+ * Scheduled via the `crons` entry in vercel.json — every 10 minutes, well
+ * within Vercel Pro's 1-minute-granularity cron limits (see that file for
+ * the exact cron expression).
+ *
+ * Vercel Cron always calls via GET and automatically attaches
+ * `Authorization: Bearer ${CRON_SECRET}` when that env var is present on
+ * the project — the exact same header shape this route already required
+ * for Wayne's manual calls above, so no route/auth change was needed to
+ * support it. Manual GET/POST calls with a valid bearer token remain fully
+ * supported alongside the schedule.
  *
  * Phase 1: nothing enqueues real rows into brevo_sync_outbox yet (see
  * src/lib/brevo/contactSync.ts), so in current practice this is a safe
