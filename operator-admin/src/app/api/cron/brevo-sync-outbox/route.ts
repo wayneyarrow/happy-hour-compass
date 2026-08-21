@@ -2,7 +2,17 @@
  * GET/POST /api/cron/brevo-sync-outbox
  *
  * Processes due rows in public.brevo_sync_outbox
- * (supabase/migrations/075_brevo_sync_outbox.sql).
+ * (supabase/migrations/075_brevo_sync_outbox.sql) — the outbound sync
+ * direction — and, in the same scheduled run, gives any persisted-but-
+ * unreconciled Brevo unsubscribe events (public.brevo_webhook_events,
+ * `processed_at IS NULL`) a bounded retry opportunity — the inbound
+ * direction (src/lib/brevo/webhookEventsProcessor.ts). Both reuse this one
+ * cron route rather than a second scheduled endpoint: webhookHandler.ts's
+ * inline reconciliation attempt already handles the common case at
+ * delivery time, and Brevo cannot be relied on to redeliver an event HHC
+ * already returned a successful HTTP response for, so this scheduled pass
+ * is what guarantees a failed inline attempt still gets reconciled
+ * eventually, without requiring Wayne to manually retry anything.
  *
  * Auth: requires `Authorization: Bearer ${CRON_SECRET}`. This is Vercel's
  * own documented convention — when a CRON_SECRET env var is present on a
@@ -28,6 +38,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { processBrevoOutboxBatch } from "@/lib/brevo/outbox";
+import { processUnprocessedWebhookEvents } from "@/lib/brevo/webhookEventsProcessor";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -47,7 +58,11 @@ async function handle(request: NextRequest) {
 
   const result = await processBrevoOutboxBatch();
   console.log("[cron/brevo-sync-outbox] batch processed", result);
-  return NextResponse.json({ status: "ok", result });
+
+  const webhookEventsResult = await processUnprocessedWebhookEvents();
+  console.log("[cron/brevo-sync-outbox] webhook events processed", webhookEventsResult);
+
+  return NextResponse.json({ status: "ok", result, webhookEventsResult });
 }
 
 export async function GET(request: NextRequest) {

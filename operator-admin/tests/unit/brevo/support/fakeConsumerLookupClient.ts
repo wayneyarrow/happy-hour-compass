@@ -41,6 +41,27 @@ export function createFakeConsumerLookupClient(opts: {
                 },
               };
             },
+            ilike(column: string, pattern: string) {
+              return {
+                async maybeSingle() {
+                  const target = pattern.toLowerCase();
+                  const row = profiles.find((p) => {
+                    const v = (p as unknown as Record<string, unknown>)[column];
+                    return typeof v === "string" && v.toLowerCase() === target;
+                  });
+                  return { data: row ? ({ ...row } as Record<string, unknown>) : null, error: null };
+                },
+              };
+            },
+          };
+        },
+        update(patch: Record<string, unknown>) {
+          return {
+            async eq(column: string, value: unknown) {
+              const row = profiles.find((p) => (p as unknown as Record<string, unknown>)[column] === value);
+              if (row) Object.assign(row, patch);
+              return { error: null };
+            },
           };
         },
       };

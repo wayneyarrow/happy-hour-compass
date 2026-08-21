@@ -20,7 +20,16 @@ export type BrevoAdminClient = {
 export type BrevoTableClient = {
   update(patch: Record<string, unknown>): BrevoUpdateBuilder;
   insert(row: Record<string, unknown>): BrevoInsertBuilder;
+  select(columns: string): BrevoSelectBuilder;
 };
+
+export type BrevoSelectBuilder = {
+  eq(column: string, value: unknown): BrevoSelectBuilder;
+  is(column: string, value: null): BrevoSelectBuilder;
+  order(column: string, options?: { ascending?: boolean }): BrevoSelectBuilder;
+  limit(count: number): BrevoSelectBuilder;
+  maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
+} & PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>;
 
 export type BrevoUpdateBuilder = {
   eq(column: string, value: unknown): BrevoUpdateBuilder;

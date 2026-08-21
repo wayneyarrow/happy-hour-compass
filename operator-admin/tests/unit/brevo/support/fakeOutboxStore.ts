@@ -48,6 +48,9 @@ export function createFakeOutboxStore(): { client: BrevoAdminClient; rows: FakeO
         insert() {
           throw new Error("fakeOutboxStore: insert() is not used on brevo_sync_outbox in application code");
         },
+        select() {
+          throw new Error("fakeOutboxStore: plain select() is not used on brevo_sync_outbox in application code");
+        },
       };
     },
     async rpc(fn: string, args: Record<string, unknown>) {

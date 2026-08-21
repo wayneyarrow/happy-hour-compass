@@ -49,12 +49,12 @@ export type ConsumerBrevoEligibility =
 export type ConsumerLookupClient = {
   from(table: string): {
     select(columns: string): {
-      eq(
-        column: string,
-        value: unknown
-      ): {
-        maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
-      };
+      eq(column: string, value: unknown): ConsumerLookupFilterResult;
+      /** Case-insensitive match — used for email lookups, since consumer_profiles.email is not guaranteed to be stored lowercased (see consumerConsentReconciliation.ts). */
+      ilike(column: string, pattern: string): ConsumerLookupFilterResult;
+    };
+    update(patch: Record<string, unknown>): {
+      eq(column: string, value: unknown): Promise<{ error: { message: string } | null }>;
     };
   };
   auth: {
@@ -65,6 +65,10 @@ export type ConsumerLookupClient = {
       }>;
     };
   };
+};
+
+type ConsumerLookupFilterResult = {
+  maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
 };
 
 export function getDefaultConsumerLookupClient(): ConsumerLookupClient {
