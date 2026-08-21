@@ -14,6 +14,7 @@ import VenueNotesSection from "./VenueNotesSection";
 import VenueHealthPanel from "./VenueHealthPanel";
 import ReactivateVenuePanel from "./ReactivateVenuePanel";
 import FeaturedInContentSection from "./FeaturedInContentSection";
+import GoogleIdentityPanel from "./GoogleIdentityPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -37,6 +38,10 @@ type VenueDetail = {
   website_url: string | null;
   // Ownership / data context
   place_id: string | null;
+  google_rating: number | null;
+  google_review_count: number | null;
+  google_identity_status: "matched" | "unmatched" | "exempt";
+  google_identity_reason: string | null;
   created_by_operator_id: string | null;
   claimed_by: string | null;
   claimed_at: string | null;
@@ -131,7 +136,9 @@ export default async function ControlPanelVenueDetailPage({
       .select(
         `id, slug, name, is_published, created_at, updated_at,
          address_line1, city, region, postal_code, country, phone, website_url,
-         place_id, created_by_operator_id, claimed_by, claimed_at, is_verified,
+         place_id, google_rating, google_review_count,
+         google_identity_status, google_identity_reason,
+         created_by_operator_id, claimed_by, claimed_at, is_verified,
          internal_boost, spotlight_eligible, exclude_from_discover,
          cancelled_at, cancellation_reason, cancelled_by_operator_id,
          source, hh_times, business_hours, hh_food_details, hh_drink_details,
@@ -201,6 +208,10 @@ export default async function ControlPanelVenueDetailPage({
     phone:                  v.phone as string | null,
     website_url:            v.website_url as string | null,
     place_id:               v.place_id as string | null,
+    google_rating:          v.google_rating as number | null,
+    google_review_count:    v.google_review_count as number | null,
+    google_identity_status: (v.google_identity_status as "matched" | "unmatched" | "exempt" | null) ?? "unmatched",
+    google_identity_reason: v.google_identity_reason as string | null,
     created_by_operator_id: v.created_by_operator_id as string | null,
     claimed_by:             v.claimed_by as string | null,
     claimed_at:             v.claimed_at as string | null,
@@ -387,6 +398,20 @@ export default async function ControlPanelVenueDetailPage({
             </MetaRow>
           </dl>
         </Section>
+
+        {/* B2. Google Identity */}
+        <GoogleIdentityPanel
+          venueId={venue.id}
+          name={venue.name}
+          addressLine1={venue.address_line1}
+          city={venue.city}
+          region={venue.region}
+          placeId={venue.place_id}
+          googleRating={venue.google_rating}
+          googleReviewCount={venue.google_review_count}
+          googleIdentityStatus={venue.google_identity_status}
+          googleIdentityReason={venue.google_identity_reason}
+        />
 
         {/* C. Data / ownership context */}
         <Section title="Data & Ownership">

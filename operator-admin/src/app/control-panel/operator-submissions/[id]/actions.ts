@@ -15,6 +15,11 @@ import { logAuditEvent } from "@/lib/auditLog";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import { geocodeStreetAddress } from "@/lib/geo/geocodeAddress";
+import {
+  reconcileVenueGoogleIdentity,
+  type VenuesGoogleIdentityClient,
+} from "@/lib/google/reconcileVenueGoogleIdentity";
+import { extractGoogleRatingFields } from "@/lib/google/placesMatch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -461,6 +466,19 @@ export async function approveAndCreateVenueAction(
     }
   }
 
+  // ── Google identity fields ─────────────────────────────────────────────────
+  // Mirrors toVenueGoogleFields() in src/lib/google/placesMatch.ts, but this
+  // action already trusts gm (the stored google_match_json) directly for
+  // several other fields above (street/city/province/phone/website) without
+  // re-running the confidence gate — a founder manually approving a
+  // no_match/needs_more_info/rejected_by_user submission is itself the human
+  // confirmation step, including for a "rejected_by_user" submission where
+  // gm may hold a match the operator rejected but the founder has now
+  // reviewed and judged correct. rating/reviewCount are carried the same way
+  // so this path stops silently dropping them the way it previously did.
+  const { google_rating: googleRating, google_review_count: googleReviewCount } =
+    extractGoogleRatingFields(gm);
+
   // ── Create unpublished venue ───────────────────────────────────────────────
   const { data: newVenue, error: venueError } = await supabase
     .from("venues")
@@ -477,6 +495,12 @@ export async function approveAndCreateVenueAction(
       phone,
       website_url:          (gm?.website       as string | null) ?? (sub.website as string | null) ?? null,
       place_id:             placeId,
+      google_rating:        googleRating,
+      google_review_count:  googleReviewCount,
+      // A place_id already resolved here (from gm or the submission) counts
+      // as matched; otherwise the venue starts unmatched and is immediately
+      // handed to automatic reconciliation below before this action returns.
+      google_identity_status: placeId ? "matched" : "unmatched",
       market_id:            geography?.marketId ?? null,
       city_id:              geography?.cityId ?? null,
       is_published:         false,
@@ -499,6 +523,52 @@ export async function approveAndCreateVenueAction(
   }
 
   const venueId = newVenue.id as string;
+
+  // ── Automatic Google identity reconciliation (Part 5) ─────────────────────
+  // This is exactly the class of venue the investigation identified as
+  // permanently stuck (e.g. Perch Sky Lounge): the intake-time Google search
+  // failed to confidently match, and until now nothing ever tried again. A
+  // founder manually approving this submission is the venue's first
+  // guaranteed lifecycle event after intake, so it's the smallest reliable
+  // trigger point — re-run the SAME conservative search + confidence gate
+  // used at submission time (now with the corrected street-number handling)
+  // before finalizing the approval. Best-effort: a failure here (API outage,
+  // no confident candidate) must never block the approval itself — the venue
+  // simply stays "unmatched" for the Founder Control Panel fallback or a
+  // future automatic retry point. Skipped entirely when a place_id was
+  // already resolved above.
+  let reconciliationNote: string | null = null;
+  if (!placeId) {
+    try {
+      const reconcileResult = await reconcileVenueGoogleIdentity({
+        venueId,
+        name: venueName,
+        streetAddress: (sub.street_address as string | null) ?? null,
+        city: resolvedCity,
+        province: resolvedProvince,
+      }, supabase as unknown as VenuesGoogleIdentityClient);
+
+      if (reconcileResult.outcome === "matched") {
+        reconciliationNote =
+          `Automatic Google reconciliation found a confident match at approval time — ` +
+          `place_id ${reconcileResult.placeId}` +
+          (reconcileResult.rating != null
+            ? `, rating ${reconcileResult.rating} (${reconcileResult.reviewCount ?? 0} reviews).`
+            : ".");
+      } else if (reconcileResult.outcome === "no_match") {
+        reconciliationNote =
+          "Automatic Google reconciliation attempted at approval — no confident match found. " +
+          "Google identity remains unmatched; use the Google Identity panel on the venue page to search manually.";
+      }
+      // "skipped" outcomes (insufficient data, etc.) are logged inside
+      // reconcileVenueGoogleIdentity itself — no note needed here.
+    } catch (err) {
+      console.error(
+        "[approveAndCreateVenueAction] Automatic Google reconciliation threw — venue remains unmatched.",
+        { venueId, err }
+      );
+    }
+  }
 
   // ── Provision operator ─────────────────────────────────────────────────────
   // provisionOperatorForVenue handles its own internal rollback (auth user,
@@ -575,7 +645,8 @@ export async function approveAndCreateVenueAction(
     submission_id:    submissionId,
     note:
       `Founder manually approved. Venue created (id: ${venueId}), operator account ` +
-      `provisioned for ${email}. Status → approved.`,
+      `provisioned for ${email}. Status → approved.` +
+      (reconciliationNote ? ` ${reconciliationNote}` : ""),
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });

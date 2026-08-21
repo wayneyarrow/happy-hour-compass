@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { logAuditEvent } from "@/lib/auditLog";
+import {
+  searchGooglePlace,
+  passesConfidenceGate,
+  getGooglePlaceById,
+  toVenueGoogleFields,
+} from "@/lib/google/placesMatch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,6 +20,21 @@ export type VenueNoteState = {
 };
 
 export type VenueActionResult = { success: true } | { success: false; error: string };
+
+/** Result of a manual "Search Google Places" attempt — NOT yet persisted. */
+export type GoogleSearchState = {
+  success?: true;
+  error?: string;
+  candidate?: {
+    placeId: string;
+    name: string | null;
+    formattedAddress: string | null;
+    rating: number | null;
+    reviewCount: number | null;
+  };
+  /** Whether the candidate passes the same confidence gate used at intake/reconciliation. */
+  confident?: boolean;
+};
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 
@@ -184,5 +205,258 @@ export async function reactivateVenueAction(
 
   revalidatePath(`/control-panel/venues/${venueId}`);
   revalidatePath("/control-panel/venues");
+  return { success: true };
+}
+
+// ── Google Identity — Founder manual fallback (Part 6/7) ─────────────────────
+//
+// Covers venues that automatic reconciliation (reconcileVenueGoogleIdentity,
+// invoked from approveAndCreateVenueAction) either never ran for or couldn't
+// confidently resolve. Uses the exact same searchGooglePlace() +
+// passesConfidenceGate() as intake/reconciliation (src/lib/google/placesMatch.ts)
+// so the standard shown to a founder here is never looser than the automatic
+// path — but nothing is EVER persisted without an explicit founder click on
+// "Confirm this listing". Never auto-attaches a nearby/parent/similarly named
+// business.
+
+/**
+ * Runs a Google Places text search for founder review. Does NOT write to the
+ * database — the founder must explicitly confirm the candidate via
+ * confirmVenueGooglePlaceAction before anything is persisted.
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function searchVenueGooglePlaceAction(
+  venueId: string,
+  _prevState: GoogleSearchState,
+  formData: FormData
+): Promise<GoogleSearchState> {
+  const admin = await getAdmin();
+  if (!admin) return { error: "Session expired. Please sign in again." };
+
+  const name          = (formData.get("name")           as string | null)?.trim() ?? "";
+  const streetAddress = (formData.get("street_address")  as string | null)?.trim() ?? "";
+  const city          = (formData.get("city")            as string | null)?.trim() ?? "";
+  const province      = (formData.get("province")        as string | null)?.trim() ?? "";
+
+  if (!name || !city || !province) {
+    return { error: "Name, city, and province are required to search." };
+  }
+
+  const candidate = await searchGooglePlace(name, city, province);
+  if (!candidate || !candidate.placeId) {
+    return { error: "No Google Places result found for these details." };
+  }
+
+  const confident = passesConfidenceGate(
+    { businessName: name, streetAddress, city, province },
+    candidate
+  );
+
+  return {
+    success: true,
+    candidate: {
+      placeId:          candidate.placeId,
+      name:             candidate.name,
+      formattedAddress: candidate.formattedAddress,
+      rating:           candidate.rating,
+      reviewCount:      candidate.reviewCount,
+    },
+    confident,
+  };
+}
+
+/**
+ * Persists a founder-confirmed Google Places match onto the venue.
+ * Re-fetches the place fresh by ID (never trusts client-echoed rating/review
+ * data from the earlier search step) before writing.
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function confirmVenueGooglePlaceAction(
+  venueId: string,
+  _prevState: VenueActionResult,
+  formData: FormData
+): Promise<VenueActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Session expired." };
+
+  const placeId = (formData.get("place_id") as string | null)?.trim() ?? "";
+  if (!placeId) return { success: false, error: "Missing place ID — please search again." };
+
+  const supabase = createAdminClient();
+
+  const { data: venue, error: fetchError } = await supabase
+    .from("venues")
+    .select("id, name")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (fetchError || !venue) return { success: false, error: "Venue not found." };
+  const v = venue as { id: string; name: string };
+
+  const place = await getGooglePlaceById(placeId);
+  if (!place || !place.placeId) {
+    return { success: false, error: "Could not re-verify this Google listing. Please search again." };
+  }
+
+  const fields = toVenueGoogleFields(place);
+
+  const { error } = await supabase.from("venues").update(fields).eq("id", venueId);
+  if (error) {
+    console.error("[confirmVenueGooglePlaceAction]", error.message);
+    return { success: false, error: "Failed to save Google identity. Please try again." };
+  }
+
+  await supabase.from("venue_notes").insert({
+    venue_id: venueId,
+    note:
+      `Founder manually confirmed Google identity — place_id ${fields.place_id}` +
+      (fields.google_rating != null
+        ? `, rating ${fields.google_rating} (${fields.google_review_count ?? 0} reviews).`
+        : "."),
+    created_by:       admin.id,
+    created_by_email: admin.email,
+  });
+
+  await logAuditEvent({
+    actorEmail: admin.email ?? "unknown",
+    action:     "venue_google_identity_confirmed",
+    entityType: "venue",
+    entityId:   venueId,
+    entityName: v.name,
+    details: {
+      place_id:            fields.place_id,
+      google_rating:       fields.google_rating,
+      google_review_count: fields.google_review_count,
+    },
+  });
+
+  revalidatePath(`/control-panel/venues/${venueId}`);
+  return { success: true };
+}
+
+/**
+ * Marks a venue as a legitimate Google-identity exception — HHC has
+ * determined it has no independent Google listing of its own (e.g. a hotel
+ * lounge indexed only under the hotel). Clears any existing place_id/rating
+ * so a mismatched prior attachment can also be corrected through this same
+ * action. Automatic reconciliation skips exempt venues until a founder
+ * deliberately clears the exemption (clearVenueGoogleIdentityExemptionAction).
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function markVenueGoogleIdentityExemptAction(
+  venueId: string,
+  _prevState: VenueActionResult,
+  formData: FormData
+): Promise<VenueActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Session expired." };
+
+  const reason = (formData.get("reason") as string | null)?.trim() || null;
+
+  const supabase = createAdminClient();
+  const { data: venue, error: fetchError } = await supabase
+    .from("venues")
+    .select("id, name, place_id")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (fetchError || !venue) return { success: false, error: "Venue not found." };
+  const v = venue as { id: string; name: string; place_id: string | null };
+
+  const { error } = await supabase
+    .from("venues")
+    .update({
+      google_identity_status: "exempt",
+      google_identity_reason: reason,
+      place_id:            null,
+      google_rating:        null,
+      google_review_count:  null,
+    })
+    .eq("id", venueId);
+
+  if (error) {
+    console.error("[markVenueGoogleIdentityExemptAction]", error.message);
+    return { success: false, error: "Failed to mark venue exempt. Please try again." };
+  }
+
+  await supabase.from("venue_notes").insert({
+    venue_id: venueId,
+    note:
+      (v.place_id
+        ? "Founder cleared a previously attached Google identity and marked this venue as a "
+        : "Founder marked this venue as a ") +
+      "legitimate Google-identity exception (no independent Google listing)." +
+      (reason ? ` Reason: ${reason}` : ""),
+    created_by:       admin.id,
+    created_by_email: admin.email,
+  });
+
+  await logAuditEvent({
+    actorEmail: admin.email ?? "unknown",
+    action:     "venue_google_identity_exempted",
+    entityType: "venue",
+    entityId:   venueId,
+    entityName: v.name,
+    details:    { reason, previous_place_id: v.place_id },
+  });
+
+  revalidatePath(`/control-panel/venues/${venueId}`);
+  return { success: true };
+}
+
+/**
+ * Clears a Google-identity exemption, returning the venue to "unmatched" and
+ * making it eligible for reconciliation again. The only way an exempt venue
+ * can ever become eligible again — deliberate, founder-only.
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function clearVenueGoogleIdentityExemptionAction(
+  venueId: string,
+  _prevState: VenueActionResult,
+  _formData: FormData
+): Promise<VenueActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Session expired." };
+
+  const supabase = createAdminClient();
+  const { data: venue, error: fetchError } = await supabase
+    .from("venues")
+    .select("id, name, google_identity_status")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (fetchError || !venue) return { success: false, error: "Venue not found." };
+  const v = venue as { id: string; name: string; google_identity_status: string | null };
+
+  if (v.google_identity_status !== "exempt") {
+    return { success: false, error: "This venue is not currently marked exempt." };
+  }
+
+  const { error } = await supabase
+    .from("venues")
+    .update({ google_identity_status: "unmatched", google_identity_reason: null })
+    .eq("id", venueId);
+
+  if (error) {
+    console.error("[clearVenueGoogleIdentityExemptionAction]", error.message);
+    return { success: false, error: "Failed to clear exemption. Please try again." };
+  }
+
+  await supabase.from("venue_notes").insert({
+    venue_id:         venueId,
+    note:             "Founder cleared the Google-identity exemption — venue is eligible for reconciliation again.",
+    created_by:       admin.id,
+    created_by_email: admin.email,
+  });
+
+  await logAuditEvent({
+    actorEmail: admin.email ?? "unknown",
+    action:     "venue_google_identity_exemption_cleared",
+    entityType: "venue",
+    entityId:   venueId,
+    entityName: v.name,
+  });
+
+  revalidatePath(`/control-panel/venues/${venueId}`);
   return { success: true };
 }
