@@ -18,10 +18,19 @@ function installFetchSpy() {
   return { restore: () => { globalThis.fetch = original; }, callCount: () => callCount };
 }
 
-test("production + eligible consumer enqueues a subscribed:true outbox row with EXT_ID and FIRSTNAME set", async () => {
+test("production + eligible consumer enqueues a subscribed:true outbox row with EXT_ID, FIRSTNAME, and LASTNAME set", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2", VERCEL_ENV: "production" });
   const lookupClient = createFakeConsumerLookupClient({
-    profiles: [{ id: CONSUMER_ID, email: "wayne@example.com", display_name: "Wayne", marketing_consent: true }],
+    profiles: [
+      {
+        id: CONSUMER_ID,
+        email: "wayne@example.com",
+        display_name: "Wayne Yarrow",
+        first_name: "Wayne",
+        last_name: "Yarrow",
+        marketing_consent: true,
+      },
+    ],
     authUsers: [{ id: CONSUMER_ID, email_confirmed_at: "2026-01-01T00:00:00Z" }],
   });
   const { client: outboxClient, rows } = createFakeOutboxStore();
@@ -36,9 +45,37 @@ test("production + eligible consumer enqueues a subscribed:true outbox row with 
     assert.equal(rows[0].payload.subscribed, true);
     assert.equal((rows[0].payload.attributes as Record<string, string>).EXT_ID, CONSUMER_ID);
     assert.equal((rows[0].payload.attributes as Record<string, string>).FIRSTNAME, "Wayne");
+    assert.equal((rows[0].payload.attributes as Record<string, string>).LASTNAME, "Yarrow");
     assert.equal(fetchSpy.callCount(), 0, "must never call Brevo directly");
   } finally {
     fetchSpy.restore();
+    restoreEnv();
+  }
+});
+
+test("eligible consumer with a first name only omits LASTNAME entirely rather than inventing one", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2", VERCEL_ENV: "production" });
+  const lookupClient = createFakeConsumerLookupClient({
+    profiles: [
+      {
+        id: CONSUMER_ID,
+        email: "wayne@example.com",
+        display_name: "Wayne",
+        first_name: "Wayne",
+        last_name: null,
+        marketing_consent: true,
+      },
+    ],
+    authUsers: [{ id: CONSUMER_ID, email_confirmed_at: "2026-01-01T00:00:00Z" }],
+  });
+  const { client: outboxClient, rows } = createFakeOutboxStore();
+  try {
+    await syncConsumerBrevoEligibility(CONSUMER_ID, { lookupClient, outboxClient });
+
+    const attributes = rows[0].payload.attributes as Record<string, string>;
+    assert.equal(attributes.FIRSTNAME, "Wayne");
+    assert.equal("LASTNAME" in attributes, false, "must never send a fabricated LASTNAME");
+  } finally {
     restoreEnv();
   }
 });

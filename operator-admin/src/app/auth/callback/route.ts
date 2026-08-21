@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
+import { buildConsumerDisplayName } from "@/lib/consumerName";
 
 /**
  * Auth callback route — handles Supabase PKCE code exchange.
@@ -55,12 +56,19 @@ export async function GET(request: NextRequest) {
         if (!existingProfile) {
           const meta = data.user.user_metadata ?? {};
           const now = new Date().toISOString();
+          // meta.display_name is a fallback for metadata written before
+          // structured first_name/last_name existed — see the matching
+          // comment in auth/confirm/page.tsx for the same reasoning.
+          const firstName = meta.first_name ?? meta.display_name ?? null;
+          const lastName = meta.last_name ?? null;
           const { error: profileError } = await adminClient
             .from("consumer_profiles")
             .insert({
               id: data.user.id,
               email: data.user.email ?? "",
-              display_name: meta.display_name ?? null,
+              first_name: firstName,
+              last_name: lastName,
+              display_name: buildConsumerDisplayName(firstName, lastName),
               terms_accepted_at: meta.consumer_terms_accepted_at ?? now,
               privacy_accepted_at: meta.consumer_privacy_accepted_at ?? now,
               marketing_consent: meta.consumer_marketing_consent ?? false,

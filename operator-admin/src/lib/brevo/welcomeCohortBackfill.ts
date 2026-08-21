@@ -3,6 +3,7 @@ import {
   type ConsumerLookupClient,
 } from "./consumerEligibility";
 import { enqueueBrevoContactSync, buildDedupeKey } from "./contactSync";
+import { buildNameAttributes } from "./consumerSync";
 import { isEnqueueAllowedInThisEnvironment } from "./stagingGuard";
 import { getBrevoConfig, getExistingConsumerWelcomeListId, BrevoConfigError } from "./config";
 import type { BrevoAdminClient } from "./supabaseAdminClient";
@@ -219,7 +220,7 @@ export async function runConsumerBrevoWelcomeCohortBackfill(options: {
         entityType: "consumer",
         entityId: row.id,
         email: eligibility.email,
-        attributes: eligibility.displayName ? { FIRSTNAME: eligibility.displayName } : {},
+        attributes: buildNameAttributes(eligibility.firstName, eligibility.lastName),
         listIds: [config.consumerListId, config.existingConsumerWelcomeListId],
         subscribed: true,
       },

@@ -17,7 +17,7 @@ export default async function AccountPage() {
 
   const { data: profile } = await supabase
     .from("consumer_profiles")
-    .select("display_name, email, marketing_consent")
+    .select("display_name, first_name, last_name, email, marketing_consent")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -27,7 +27,11 @@ export default async function AccountPage() {
     redirect("/sign-in?next=/account");
   }
 
+  // display_name is still used here only for the page greeting — the
+  // editable form below uses the structured fields directly.
   const displayName = profile.display_name ?? null;
+  const firstName = profile.first_name ?? null;
+  const lastName = profile.last_name ?? null;
   const email = profile.email;
   const marketingConsent = profile.marketing_consent ?? false;
 
@@ -45,7 +49,8 @@ export default async function AccountPage() {
       <div className="max-w-lg">
         <AccountProfileForm
           email={email}
-          displayName={displayName}
+          firstName={firstName}
+          lastName={lastName}
           marketingConsent={marketingConsent}
         />
       </div>

@@ -40,11 +40,48 @@ test("consented but unconfirmed email -> not eligible, reason unconfirmed_email"
 
 test("confirmed + consented + usable email -> eligible", async () => {
   const client = createFakeConsumerLookupClient({
-    profiles: [{ id: CONSUMER_ID, email: "wayne@example.com", display_name: "Wayne", marketing_consent: true }],
+    profiles: [
+      {
+        id: CONSUMER_ID,
+        email: "wayne@example.com",
+        display_name: "Wayne Yarrow",
+        first_name: "Wayne",
+        last_name: "Yarrow",
+        marketing_consent: true,
+      },
+    ],
     authUsers: [{ id: CONSUMER_ID, email_confirmed_at: "2026-01-01T00:00:00Z" }],
   });
   const result = await evaluateConsumerBrevoEligibility(CONSUMER_ID, client);
-  assert.deepEqual(result, { eligible: true, email: "wayne@example.com", displayName: "Wayne" });
+  assert.deepEqual(result, {
+    eligible: true,
+    email: "wayne@example.com",
+    firstName: "Wayne",
+    lastName: "Yarrow",
+  });
+});
+
+test("confirmed + consented + first name only (no last_name) -> eligible with lastName null", async () => {
+  const client = createFakeConsumerLookupClient({
+    profiles: [
+      {
+        id: CONSUMER_ID,
+        email: "wayne@example.com",
+        display_name: "Wayne",
+        first_name: "Wayne",
+        last_name: null,
+        marketing_consent: true,
+      },
+    ],
+    authUsers: [{ id: CONSUMER_ID, email_confirmed_at: "2026-01-01T00:00:00Z" }],
+  });
+  const result = await evaluateConsumerBrevoEligibility(CONSUMER_ID, client);
+  assert.deepEqual(result, {
+    eligible: true,
+    email: "wayne@example.com",
+    firstName: "Wayne",
+    lastName: null,
+  });
 });
 
 test("profile exists in auth.users lookup as entirely absent -> unconfirmed_email, not a crash", async () => {

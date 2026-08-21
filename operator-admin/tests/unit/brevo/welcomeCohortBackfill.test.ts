@@ -136,7 +136,7 @@ test("4. a consumer with no usable email is excluded and never marked", async ()
 
 test("5. an eligible consumer is queued through the existing durable outbox architecture (not a direct Brevo call)", async () => {
   const restoreEnv = withBrevoEnv({ VERCEL_ENV: "production" });
-  const profiles = [makeProfile({ id: "c1", display_name: "Wayne" })];
+  const profiles = [makeProfile({ id: "c1", display_name: "Wayne Yarrow", first_name: "Wayne", last_name: "Yarrow" })];
   const authUsers = [{ id: "c1", email_confirmed_at: "2026-01-01T00:00:00Z" }];
   const { lookupClient, outboxClient, outboxRows, store } = makeHarness(profiles, authUsers);
 
@@ -151,6 +151,7 @@ test("5. an eligible consumer is queued through the existing durable outbox arch
     assert.equal(payload.email, "c1@example.com");
     assert.equal(payload.attributes.EXT_ID, "c1");
     assert.equal(payload.attributes.FIRSTNAME, "Wayne");
+    assert.equal(payload.attributes.LASTNAME, "Yarrow");
     assert.deepEqual(payload.listIds, [2, 4], "must carry both the ongoing consumer list and the dedicated historical-welcome list");
   } finally {
     restoreEnv();

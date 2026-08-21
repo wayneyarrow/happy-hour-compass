@@ -11,13 +11,15 @@ const INPUT_CLASS =
 
 type Props = {
   email: string;
-  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   marketingConsent: boolean;
 };
 
 export default function AccountProfileForm({
   email,
-  displayName,
+  firstName,
+  lastName,
   marketingConsent,
 }: Props) {
   const router = useRouter();
@@ -60,24 +62,44 @@ export default function AccountProfileForm({
             defaultValue={marketingConsent ? "true" : "false"}
           />
 
-          {/* Name */}
-          <div>
-            <label
-              htmlFor="display_name"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Name{" "}
-              <span className="text-gray-400 font-normal text-xs">(optional)</span>
-            </label>
-            <input
-              id="display_name"
-              name="display_name"
-              type="text"
-              autoComplete="name"
-              defaultValue={displayName ?? ""}
-              placeholder="Your name"
-              className={INPUT_CLASS}
-            />
+          {/* First + Last name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="first_name"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                First name
+              </label>
+              <input
+                id="first_name"
+                name="first_name"
+                type="text"
+                required
+                autoComplete="given-name"
+                defaultValue={firstName ?? ""}
+                placeholder="First name"
+                className={INPUT_CLASS}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="last_name"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Last name{" "}
+                <span className="text-gray-400 font-normal text-xs">(optional)</span>
+              </label>
+              <input
+                id="last_name"
+                name="last_name"
+                type="text"
+                autoComplete="family-name"
+                defaultValue={lastName ?? ""}
+                placeholder="Last name"
+                className={INPUT_CLASS}
+              />
+            </div>
           </div>
 
           {/* Email (read-only) */}

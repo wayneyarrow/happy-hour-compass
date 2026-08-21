@@ -101,10 +101,17 @@ export default function AuthConfirmPage() {
             if (user) {
               const meta = user.user_metadata ?? {};
               const nowIso = new Date().toISOString();
+              // meta.display_name is a fallback for metadata written before
+              // structured first_name/last_name existed (a signup that
+              // started just before this deploy, confirmed just after) —
+              // conservatively carried into firstName rather than lost or
+              // guessed-split, matching the migration's own single-token
+              // rule (never invent a last name).
               const profileError = await createConsumerProfile({
                 userId: user.id,
                 email: user.email ?? "",
-                displayName: meta.display_name ?? null,
+                firstName: meta.first_name ?? meta.display_name ?? null,
+                lastName: meta.last_name ?? null,
                 termsAcceptedAt: meta.consumer_terms_accepted_at ?? nowIso,
                 privacyAcceptedAt: meta.consumer_privacy_accepted_at ?? nowIso,
                 marketingConsent: meta.consumer_marketing_consent ?? false,

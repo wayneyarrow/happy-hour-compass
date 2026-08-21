@@ -38,7 +38,7 @@ export type ConsumerBrevoIneligibleReason =
   | "lookup_failed";
 
 export type ConsumerBrevoEligibility =
-  | { eligible: true; email: string; displayName: string | null }
+  | { eligible: true; email: string; firstName: string | null; lastName: string | null }
   | { eligible: false; reason: ConsumerBrevoIneligibleReason };
 
 /**
@@ -81,7 +81,7 @@ export async function evaluateConsumerBrevoEligibility(
 ): Promise<ConsumerBrevoEligibility> {
   const { data: profile, error: profileError } = await client
     .from("consumer_profiles")
-    .select("id, email, display_name, marketing_consent")
+    .select("id, email, first_name, last_name, marketing_consent")
     .eq("id", consumerId)
     .maybeSingle();
 
@@ -111,5 +111,10 @@ export async function evaluateConsumerBrevoEligibility(
     return { eligible: false, reason: "unconfirmed_email" };
   }
 
-  return { eligible: true, email, displayName: (profile.display_name as string | null) ?? null };
+  return {
+    eligible: true,
+    email,
+    firstName: (profile.first_name as string | null) ?? null,
+    lastName: (profile.last_name as string | null) ?? null,
+  };
 }

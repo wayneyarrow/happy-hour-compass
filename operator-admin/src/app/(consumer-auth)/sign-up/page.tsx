@@ -21,7 +21,8 @@ const CHECKBOX_CLASS =
   "mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 cursor-pointer";
 
 export default function SignUpPage() {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,6 +52,12 @@ export default function SignUpPage() {
       return;
     }
 
+    const trimmedFirstName = firstName.trim();
+    if (!trimmedFirstName) {
+      setError("Please enter your first name.");
+      return;
+    }
+
     setLoading(true);
     devLog("signup started for email:", email);
 
@@ -59,12 +66,13 @@ export default function SignUpPage() {
     // (those all return above, before this line).
     trackGA4Event("consumer_signup_started");
 
-    const trimmedName = name.trim() || null;
+    const trimmedLastName = lastName.trim() || null;
 
     const result = await createConsumerAccount({
       email,
       password,
-      displayName: trimmedName,
+      firstName: trimmedFirstName,
+      lastName: trimmedLastName,
       marketingConsent,
       turnstileToken,
     });
@@ -139,24 +147,44 @@ export default function SignUpPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name (optional) */}
-        <div>
-          <label
-            htmlFor="name"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Name{" "}
-            <span className="text-gray-400 font-normal text-xs">(optional)</span>
-          </label>
-          <input
-            id="name"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            className={INPUT_CLASS}
-          />
+        {/* First + Last name */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label
+              htmlFor="first-name"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              First name
+            </label>
+            <input
+              id="first-name"
+              type="text"
+              required
+              autoComplete="given-name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First name"
+              className={INPUT_CLASS}
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="last-name"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Last name{" "}
+              <span className="text-gray-400 font-normal text-xs">(optional)</span>
+            </label>
+            <input
+              id="last-name"
+              type="text"
+              autoComplete="family-name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last name"
+              className={INPUT_CLASS}
+            />
+          </div>
         </div>
 
         {/* Email */}

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
+import { buildConsumerDisplayName } from "@/lib/consumerName";
 
 export type AccountState = {
   success?: boolean;
@@ -12,8 +13,13 @@ export async function updateAccountProfile(
   _prev: AccountState,
   formData: FormData
 ): Promise<AccountState> {
-  const displayName = ((formData.get("display_name") as string) ?? "").trim() || null;
+  const firstName = ((formData.get("first_name") as string) ?? "").trim();
+  const lastName = ((formData.get("last_name") as string) ?? "").trim() || null;
   const marketingConsent = formData.get("marketing_consent") === "true";
+
+  if (!firstName) {
+    return { error: "First name is required." };
+  }
 
   const supabase = await createClient();
   const {
@@ -33,10 +39,13 @@ export async function updateAccountProfile(
   const previousMarketingConsent = previousProfile?.marketing_consent === true;
 
   const now = new Date().toISOString();
+  const displayName = buildConsumerDisplayName(firstName, lastName);
 
   const { error } = await supabase
     .from("consumer_profiles")
     .update({
+      first_name: firstName,
+      last_name: lastName,
       display_name: displayName,
       marketing_consent: marketingConsent,
       marketing_consent_at: marketingConsent ? now : null,
@@ -48,6 +57,12 @@ export async function updateAccountProfile(
     console.error("[updateAccountProfile]", error.message);
     return { error: "Could not save changes. Please try again." };
   }
+
+  // No existing Auth-metadata synchronization behavior to preserve here —
+  // this action has never written to user_metadata (metadata is only ever
+  // read once, as a bootstrap source, at profile-creation time). Adding a
+  // new sync path is out of this task's narrow scope; consumer_profiles
+  // remains the single source of truth for an existing account's name.
 
   // Brevo Phase 2A: re-evaluate this consumer's marketing-sync eligibility
   // after the write. Never blocks or fails this action — see

@@ -6,6 +6,7 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { sendConsumerSignupConfirmationEmail, sendConsumerSignupFounderNotificationEmail } from "@/lib/email";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
 import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
+import { buildConsumerDisplayName } from "@/lib/consumerName";
 import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
@@ -15,7 +16,8 @@ import {
 export async function createConsumerProfile({
   userId,
   email,
-  displayName,
+  firstName,
+  lastName,
   termsAcceptedAt,
   privacyAcceptedAt,
   marketingConsent,
@@ -23,7 +25,8 @@ export async function createConsumerProfile({
 }: {
   userId: string;
   email: string;
-  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   termsAcceptedAt: string;
   privacyAcceptedAt: string;
   marketingConsent: boolean;
@@ -34,7 +37,9 @@ export async function createConsumerProfile({
     {
       id: userId,
       email,
-      display_name: displayName,
+      first_name: firstName,
+      last_name: lastName,
+      display_name: buildConsumerDisplayName(firstName, lastName),
       terms_accepted_at: termsAcceptedAt,
       privacy_accepted_at: privacyAcceptedAt,
       marketing_consent: marketingConsent,
@@ -97,13 +102,15 @@ export type CreateConsumerAccountResult =
 export async function createConsumerAccount({
   email,
   password,
-  displayName,
+  firstName,
+  lastName,
   marketingConsent,
   turnstileToken,
 }: {
   email: string;
   password: string;
-  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   marketingConsent: boolean;
   turnstileToken: string | null;
 }): Promise<CreateConsumerAccountResult> {
@@ -117,6 +124,7 @@ export async function createConsumerAccount({
 
   const supabase = createAdminClient();
   const now = new Date().toISOString();
+  const displayName = buildConsumerDisplayName(firstName, lastName);
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
     type: "signup",
@@ -124,6 +132,12 @@ export async function createConsumerAccount({
     password,
     options: {
       data: {
+        // Structured fields are the canonical source going forward.
+        // display_name is also stored for backward compatibility with any
+        // code (including the pre-existing auth/confirm and auth/callback
+        // resilience-retry paths) that may still read it from metadata.
+        first_name: firstName,
+        last_name: lastName,
         display_name: displayName,
         consumer_terms_accepted_at: now,
         consumer_privacy_accepted_at: now,
@@ -188,7 +202,8 @@ export async function createConsumerAccount({
   const profileError = await createConsumerProfile({
     userId: linkData.user.id,
     email,
-    displayName,
+    firstName,
+    lastName,
     termsAcceptedAt: now,
     privacyAcceptedAt: now,
     marketingConsent,
@@ -206,7 +221,12 @@ export async function createConsumerAccount({
 
   const emailResult = await sendConsumerSignupConfirmationEmail({
     to: email,
-    firstName: displayName,
+    // Now uses the real structured first name instead of the full
+    // combined display name — a small, in-scope correctness fix enabled
+    // by this task's new structured fields (the greeting previously read
+    // "Hi Mindy Green," for a two-token name; this param has always been
+    // named/typed as a first name only).
+    firstName,
     confirmLink: linkData.properties.action_link,
   });
 

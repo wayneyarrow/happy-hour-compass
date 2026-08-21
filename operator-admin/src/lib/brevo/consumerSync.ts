@@ -78,7 +78,7 @@ export async function syncConsumerBrevoEligibility(
       // every ineligibility branch above.
       const { data: profile } = await lookupClient
         .from("consumer_profiles")
-        .select("id, email, display_name, marketing_consent")
+        .select("id, email, first_name, last_name, marketing_consent")
         .eq("id", consumerId)
         .maybeSingle();
 
@@ -91,7 +91,10 @@ export async function syncConsumerBrevoEligibility(
             entityType: "consumer",
             entityId: consumerId,
             email,
-            attributes: buildAttributes((profile?.display_name as string | null) ?? null),
+            attributes: buildNameAttributes(
+              (profile?.first_name as string | null) ?? null,
+              (profile?.last_name as string | null) ?? null
+            ),
             listIds: [config.consumerListId],
             subscribed: false,
           },
@@ -129,7 +132,7 @@ function enqueueAllowedOrLog(consumerId: string, email: string, config: BrevoCon
 
 async function enqueueEligible(
   consumerId: string,
-  eligibility: { email: string; displayName: string | null },
+  eligibility: { email: string; firstName: string | null; lastName: string | null },
   config: BrevoConfig,
   outboxClient: BrevoAdminClient
 ): Promise<void> {
@@ -138,7 +141,7 @@ async function enqueueEligible(
       entityType: "consumer",
       entityId: consumerId,
       email: eligibility.email,
-      attributes: buildAttributes(eligibility.displayName),
+      attributes: buildNameAttributes(eligibility.firstName, eligibility.lastName),
       listIds: [config.consumerListId],
       subscribed: true,
     },
@@ -147,12 +150,23 @@ async function enqueueEligible(
 }
 
 /**
- * consumer_profiles.display_name is a single free-text field, not split
- * first/last — mirrored into Brevo's FIRSTNAME as-is, matching the existing
- * convention already used for the Resend confirmation email (the full
- * display name is passed as "firstName", never split). LASTNAME is left
- * unset rather than fabricating a split HHC doesn't have.
+ * Maps HHC's structured consumer_profiles.first_name/last_name directly to
+ * Brevo's FIRSTNAME/LASTNAME attributes — the canonical mapping as of the
+ * consumer structured-names task (supabase/migrations/
+ * 079_consumer_structured_names.sql). Either key is simply omitted when the
+ * corresponding value is null (e.g. a legitimate single-name consumer has
+ * no last_name) — never fabricated, and Brevo/the outbox already handle a
+ * missing attribute key cleanly, so there's no need to send an empty
+ * string. Exported so the historical welcome cohort backfill
+ * (welcomeCohortBackfill.ts) can reuse the exact same mapping rather than
+ * duplicating it.
  */
-function buildAttributes(displayName: string | null): { FIRSTNAME?: string } {
-  return displayName ? { FIRSTNAME: displayName } : {};
+export function buildNameAttributes(
+  firstName: string | null,
+  lastName: string | null
+): { FIRSTNAME?: string; LASTNAME?: string } {
+  const attributes: { FIRSTNAME?: string; LASTNAME?: string } = {};
+  if (firstName) attributes.FIRSTNAME = firstName;
+  if (lastName) attributes.LASTNAME = lastName;
+  return attributes;
 }

@@ -4,6 +4,10 @@ export type FakeConsumerProfile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  /** Optional — defaults to undefined (read back as null) for profile literals that predate structured names. */
+  first_name?: string | null;
+  /** See first_name. */
+  last_name?: string | null;
   marketing_consent: boolean;
   /**
    * Optional — only used by the welcome-cohort backfill tests
