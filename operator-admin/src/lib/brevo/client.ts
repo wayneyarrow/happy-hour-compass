@@ -112,25 +112,30 @@ export type RemoveBrevoContactFromListParams = {
  * NOT a contact-delete call — neither is what "marketing_consent went
  * false for the HHC consumer list" means.
  *
- * Per Brevo's documented response schema (confirmed against the official
- * API reference at implementation time), this endpoint responds HTTP 201
+ * Per Brevo's documented response schema, this endpoint responds HTTP 201
  * for the request as a whole, with the body shaped
  * `{ contacts: { success: [...], failure: [...] } }` — plain arrays of the
  * same identifiers passed in the request (email strings here). Brevo's
  * docs do NOT document any further detail on a failure entry (no reason,
- * code, or message field) — there is no documented way to distinguish
- * "already wasn't a member," "unknown contact," and a genuine removal
- * failure from that array alone. Given that documented gap, this function
- * takes the conservative reading: the request succeeding (HTTP 2xx) is
- * necessary but not sufficient — the requested email must NOT appear in
- * `contacts.failure`, or it's surfaced as a (retryable) BrevoApiError
- * rather than silently treated as the desired end state. This is
- * deliberately cautious rather than assumed-safe; the actual real-world
- * behavior (does an already-absent contact appear in `failure`?) is
- * unverified against a live response and is flagged for controlled
- * staging QA — see the Phase 2B follow-up report.
+ * code, or message field), so a documented-but-unverified 2xx-with-failure
+ * response is still treated conservatively as a retryable error below —
+ * that part is unchanged from initial implementation.
  *
- * Never deletes the Brevo contact and never touches any other list.
+ * However, real controlled staging QA against Brevo (2026-08-20, using the
+ * allowlisted BREVO_TEST_EMAIL identity on staging list ID 3) established
+ * that Brevo's actual behavior for an already-absent contact is NOT that
+ * documented 2xx-with-failure shape at all — it is an HTTP 400 with the
+ * exact message "Contact already removed from list and/or does not
+ * exist". Since removing an already-absent contact from this one list IS
+ * the desired end state ("not a member of this list"), that specific,
+ * narrowly-matched 400 is treated as success — see
+ * isAlreadyAbsentFromListError() below. This does not touch
+ * classifyHttpStatus() or any other error path — a 400 with any other
+ * message, or from any other Brevo endpoint, is still classified and
+ * surfaced normally.
+ *
+ * Never deletes the Brevo contact, never uses emailBlacklisted, and never
+ * touches any other list.
  */
 export async function removeBrevoContactFromList(params: RemoveBrevoContactFromListParams): Promise<void> {
   const config = getBrevoConfig();
@@ -166,11 +171,20 @@ export async function removeBrevoContactFromList(params: RemoveBrevoContactFromL
   }
 
   if (!response.ok) {
-    const errorClass = classifyHttpStatus(response.status);
     const errBody = (body ?? {}) as { code?: string; message?: string };
+    const brevoMessage = errBody.message ?? response.statusText;
+
+    // Empirically observed (real staging QA, 2026-08-20): removing an
+    // already-absent contact from a list is NOT the documented
+    // 2xx-with-failure shape — it's this specific HTTP 400. Treat it as
+    // success (the desired end state already holds) rather than a
+    // permanent failure. Narrowly matched: only this status + message
+    // pattern, only inside this function.
+    if (isAlreadyAbsentFromListError(response.status, brevoMessage)) return;
+
     throw new BrevoApiError(
-      `Brevo list removal failed for ${maskEmail(params.email)}: HTTP ${response.status} ${errBody.message ?? response.statusText}`,
-      errorClass,
+      `Brevo list removal failed for ${maskEmail(params.email)}: HTTP ${response.status} ${brevoMessage}`,
+      classifyHttpStatus(response.status),
       response.status,
       errBody.code ?? null
     );
@@ -198,6 +212,20 @@ export async function removeBrevoContactFromList(params: RemoveBrevoContactFromL
       null
     );
   }
+}
+
+/**
+ * True for Brevo's specific, empirically-confirmed "already removed from
+ * list and/or does not exist" HTTP 400 response — the real behavior
+ * observed during controlled staging QA (2026-08-20) for repeated
+ * subscribed:false processing, distinct from the documented (but never
+ * actually observed) 2xx-with-contacts.failure shape handled separately
+ * below. Scoped narrowly to status 400 + this message text so it can never
+ * match an unrelated 400 (e.g. a malformed request) or a different
+ * endpoint's error.
+ */
+function isAlreadyAbsentFromListError(status: number, message: string): boolean {
+  return status === 400 && /already removed from list/i.test(message);
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {

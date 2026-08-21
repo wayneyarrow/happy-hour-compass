@@ -258,6 +258,52 @@ test("a subscribed:false row where the failure array contains only an unrelated 
   }
 });
 
+// ── Already-absent idempotency fix (real staging QA finding, 2026-08-20) ───
+
+test("a subscribed:false row for an already-absent contact (Brevo's real HTTP 400 response) completes, with no retry or failure recorded", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ message: "Contact already removed from list and/or does not exist" }), { status: 400 })
+  );
+  try {
+    const result = await processBrevoOutboxBatch(10, client);
+    assert.equal(result.completed, 1);
+    assert.equal(result.retried, 0);
+    assert.equal(result.failed, 0);
+    assert.equal(rows[0].status, "completed");
+    assert.equal(rows[0].last_error, null);
+    assert.equal(rows[0].last_error_class, null);
+    assert.ok(rows[0].completed_at);
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("repeated subscribed:false processing for the same already-absent contact remains idempotent across multiple rows", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const { client, rows } = createFakeOutboxStore();
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ message: "Contact already removed from list and/or does not exist" }), { status: 400 })
+  );
+  try {
+    // Simulate three separate opt-out enqueues over time (e.g. re-processed
+    // after each already completed) — each must complete cleanly, not fail.
+    for (let i = 0; i < 3; i++) {
+      rows.length = 0;
+      seedRow(rows, { payload: { email: "wayne@example.com", attributes: {}, listId: 2, subscribed: false } });
+      const result = await processBrevoOutboxBatch(10, client);
+      assert.equal(result.completed, 1, `iteration ${i} should complete`);
+      assert.equal(result.failed, 0, `iteration ${i} should not fail`);
+    }
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
 test("a subscribed:false row uses the row's own environment-specific listId, not a hard-coded one", async () => {
   const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "3" });
   const { client, rows } = createFakeOutboxStore();

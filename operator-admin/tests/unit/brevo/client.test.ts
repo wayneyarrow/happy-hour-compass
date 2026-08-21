@@ -402,3 +402,98 @@ test("removeBrevoContactFromList never sends contact attributes (list-removal re
     restoreEnv();
   }
 });
+
+// ── Already-absent idempotency fix (real staging QA finding, 2026-08-20) ───
+// Real Brevo behavior for an already-absent contact is HTTP 400 with the
+// exact message "Contact already removed from list and/or does not exist"
+// — not the documented 2xx-with-contacts.failure shape. Confirmed via
+// controlled QA against the allowlisted staging test identity.
+
+test("removeBrevoContactFromList treats Brevo's real already-absent HTTP 400 response as success", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(
+    () =>
+      new Response(
+        JSON.stringify({ code: "invalid_parameter", message: "Contact already removed from list and/or does not exist" }),
+        { status: 400 }
+      )
+  );
+  try {
+    await assert.doesNotReject(() => removeBrevoContactFromList({ email: "wayne@example.com", listId: 2 }));
+    assert.equal(fake.calls.length, 1, "still makes exactly one request — no extra API call added");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("removeBrevoContactFromList is case-insensitive when matching the already-absent message", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ message: "CONTACT ALREADY REMOVED FROM LIST and/or does not exist" }), { status: 400 })
+  );
+  try {
+    await assert.doesNotReject(() => removeBrevoContactFromList({ email: "wayne@example.com", listId: 2 }));
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("removeBrevoContactFromList does NOT treat an unrelated HTTP 400 as success — genuine 400 errors still surface", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ code: "invalid_parameter", message: "listId is not a valid number" }), { status: 400 })
+  );
+  try {
+    await assert.rejects(
+      () => removeBrevoContactFromList({ email: "wayne@example.com", listId: 999 }),
+      (err: unknown) => {
+        assert.ok(err instanceof BrevoApiError);
+        assert.equal(err.errorClass, "invalid_request");
+        assert.equal(err.status, 400);
+        return true;
+      }
+    );
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("removeBrevoContactFromList does NOT treat this message on a different status code (e.g. 500) as success", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ message: "Contact already removed from list and/or does not exist" }), { status: 500 })
+  );
+  try {
+    await assert.rejects(
+      () => removeBrevoContactFromList({ email: "wayne@example.com", listId: 2 }),
+      (err: unknown) => {
+        assert.ok(err instanceof BrevoApiError);
+        assert.equal(err.errorClass, "transient"); // 5xx — still retryable, unaffected by the narrow 400 exception
+        return true;
+      }
+    );
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
+
+test("removeBrevoContactFromList's already-absent handling never calls the contact-delete endpoint", async () => {
+  const restoreEnv = withBrevoEnv({ BREVO_API_KEY: "fake-key", BREVO_CONSUMER_LIST_ID: "2" });
+  const fake = installFakeFetch(
+    () => new Response(JSON.stringify({ message: "Contact already removed from list and/or does not exist" }), { status: 400 })
+  );
+  try {
+    await removeBrevoContactFromList({ email: "wayne@example.com", listId: 2 });
+    assert.equal(fake.calls.length, 1);
+    assert.match(fake.calls[0].url, /\/contacts\/lists\/2\/contacts\/remove$/);
+    assert.doesNotMatch(fake.calls[0].url, /DELETE/i);
+    assert.notEqual(fake.calls[0].init.method, "DELETE");
+  } finally {
+    fake.restore();
+    restoreEnv();
+  }
+});
