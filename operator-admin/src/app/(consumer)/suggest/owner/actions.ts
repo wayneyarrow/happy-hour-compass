@@ -42,12 +42,14 @@ import type {
 //
 // Flow slug shared by every reportOperationalError()/reportCriticalAcquisitionFailure()
 // call in this file. Stage slugs used below: venue-lookup, venue-insert,
-// operator-provision, submission-insert, venue-submission-link — each named
-// after the actual write/step that failed, not invented. Only genuinely
-// unexpected internal failures that a customer can't self-correct are
-// instrumented here — validation errors, Turnstile failures, Google
-// no-match, and business-rule routing outcomes (pending_review/double_claim/
-// rejected) are deliberately left as-is.
+// submission-insert, venue-submission-link — each named after the actual
+// write/step that failed, not invented. Operator provisioning failures are
+// reported by provisionOperatorForVenue() itself (flow "operator-activation",
+// src/lib/operatorActivation.ts) rather than here — see that call site's
+// comment. Only genuinely unexpected internal failures that a customer
+// can't self-correct are instrumented here — validation errors, Turnstile
+// failures, Google no-match, and business-rule routing outcomes
+// (pending_review/double_claim/rejected) are deliberately left as-is.
 const OPERATOR_SUBMISSION_FLOW = "operator-submission";
 
 // ── Phone formatting ──────────────────────────────────────────────────────────
@@ -487,30 +489,22 @@ export async function saveOperatorSubmissionAction(
     });
 
     if (!provisionResult.ok) {
-      // Sentry-only here (no reportCriticalAcquisitionFailure/Slack): the
-      // shared provisionOperatorForVenue() (src/lib/operatorActivation.ts —
-      // also used by the founder's claim-approval flow) already sends its
-      // own specific #ops-critical alert internally for whichever exact
-      // step failed (auth user creation, operator insert, venue link,
-      // rollback). A second, less-specific alert here would just be
-      // duplicate noise on top of an already-detailed one — see the "Existing
-      // side-effect alerting" section of the task report. This call adds
-      // the missing Sentry + HHC-reference correlation that alert didn't
-      // have, and gives the customer the standard reference message,
-      // without touching operatorActivation.ts (shared with an
-      // out-of-scope flow) or duplicating its Slack coverage.
-      const report = reportOperationalError({
-        error: new Error(provisionResult.error),
-        flow: OPERATOR_SUBMISSION_FLOW,
-        stage: "operator-provision",
-        severity: "critical",
-        context: { venueId },
-      });
+      // No reportOperationalError() call here anymore (previously stage
+      // "operator-provision", added before the shared-caller picture was
+      // clear): provisionOperatorForVenue() (src/lib/operatorActivation.ts
+      // — shared by this flow, two Control Panel approval actions, and
+      // claim approval) now owns Sentry/HHC/Slack reporting for its own
+      // failures internally, one report per occurrence. Reporting again
+      // here would generate a SECOND Sentry event and a SECOND HHC
+      // reference for the exact same underlying failure — provisionResult.error
+      // already IS the standard support-reference customer message
+      // (buildInternalErrorMessage() output) with the correlated HHC id
+      // embedded, so this is now a pure passthrough.
       console.error(
         "[saveOperatorSubmissionAction] Operator provisioning failed — not inserting submission row.",
-        { error: provisionResult.error, hhcErrorId: report.hhcErrorId }
+        { error: provisionResult.error, hhcErrorId: provisionResult.hhcErrorId }
       );
-      return { error: report.customerMessage };
+      return { error: provisionResult.error };
     }
 
     operatorId = provisionResult.authUserId;

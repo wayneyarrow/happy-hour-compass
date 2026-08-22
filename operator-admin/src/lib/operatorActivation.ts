@@ -2,6 +2,33 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
 import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { reportOperationalError } from "@/lib/observability/reportOperationalError";
+
+// ── Observability ────────────────────────────────────────────────────────────
+//
+// This file is shared by FOUR call sites: Add Your Venue
+// (suggest/owner/actions.ts), two founder Control Panel approval actions
+// (control-panel/operator-submissions/[id]/actions.ts), and the founder's
+// claim-approval action (control-panel/claims/[id]/actions.ts). It already
+// had good #ops-critical Slack coverage for every failure branch below
+// before this task — none of that is duplicated. Every branch calls
+// reportOperationalError() (Sentry-only — never reportCriticalFailure(),
+// which would fire a SECOND, competing Slack alert) exactly once, then
+// folds the returned hhcErrorId/sentryEventId into the SAME pre-existing
+// sendSlackAlert() call. Stage "rollback" covers all three rollback
+// helpers (rbAuthUser/rbOperator/rbVenueLink) — which step's rollback
+// failed is carried as safe context (`rollbackStep`), not a separate stage,
+// since it's the same class of failure (an already-failed provisioning
+// attempt's cleanup also failing) regardless of which resource it was.
+//
+// provisionOperatorForVenue()'s failure return now carries `hhcErrorId` and
+// an `error` string that IS the standard buildInternalErrorMessage() output
+// — this makes it the single source of truth for Sentry/HHC/Slack
+// correlation for its own failures. Add Your Venue's outer "operator-provision"
+// reporting (added in an earlier task, before this shared-caller picture was
+// clear) has been removed accordingly — see that file's own comment at the
+// call site for why a second report there would have duplicated this one.
+const OPERATOR_ACTIVATION_FLOW = "operator-activation";
 
 // KNOWN ISSUE: Supabase's GoTrue Admin API intermittently rejects calls with
 // "unrecognized JWT kid <nil> for algorithm ES256" following the platform's
@@ -25,7 +52,10 @@ function isKnownSupabaseJwtKidError(message: string | null | undefined): boolean
  *  6. Call sendEmail(setupLink) — rollback all prior steps on failure.
  *
  * Returns { ok: true, authUserId } on success.
- * Returns { ok: false, error } on any step failure after full rollback.
+ * Returns { ok: false, error, hhcErrorId } on any step failure after full
+ * rollback — `error` is already the standard support-reference customer
+ * message (buildInternalErrorMessage() output) with `hhcErrorId` embedded;
+ * callers should return it as-is rather than re-wrapping it.
  *
  * The sendEmail callback decouples email copy from provisioning logic,
  * allowing claim approvals and operator submissions to use different copy
@@ -46,7 +76,7 @@ export async function provisionOperatorForVenue({
   /** Prefix for all log lines, e.g. "[saveOperatorSubmissionAction]" */
   logTag: string;
   sendEmail: (setupLink: string) => Promise<{ ok: boolean; error?: string }>;
-}): Promise<{ ok: true; authUserId: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; authUserId: string } | { ok: false; error: string; hhcErrorId?: string }> {
   const supabase = createAdminClient();
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
 
@@ -59,12 +89,22 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — auth user rollback failed.`,
         { userId, rollbackError: error.message }
       );
+      const report = reportOperationalError({
+        error: new Error(error.message),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "rollback",
+        severity: "critical",
+        context: { rollbackStep: "auth-user", authUserId: userId, callerFlow: logTag },
+      });
       await sendSlackAlert({
         channel:  "ops-critical",
         severity: "critical",
         title:    "Operator Rollback Failed — Auth User Not Deleted",
         message:  `${context} — auth user rollback failed. Manual cleanup required.`,
-        metadata: { Email: email, "User ID": userId, "Rollback Error": error.message },
+        metadata: {
+          Email: email, "User ID": userId, "Rollback Error": error.message,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
       });
     }
   }
@@ -76,12 +116,22 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — operator rollback failed.`,
         { userId, rollbackError: error.message }
       );
+      const report = reportOperationalError({
+        error: new Error(error.message),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "rollback",
+        severity: "critical",
+        context: { rollbackStep: "operator", authUserId: userId, callerFlow: logTag },
+      });
       await sendSlackAlert({
         channel:  "ops-critical",
         severity: "critical",
         title:    "Operator Rollback Failed — Operator Row Not Deleted",
         message:  `${context} — operator row rollback failed. Manual cleanup required.`,
-        metadata: { Email: email, "User ID": userId, "Rollback Error": error.message },
+        metadata: {
+          Email: email, "User ID": userId, "Rollback Error": error.message,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
       });
     }
   }
@@ -96,12 +146,22 @@ export async function provisionOperatorForVenue({
         `${logTag} CRITICAL: ${context} — venue link rollback failed.`,
         { venueId: vId, rollbackError: error.message }
       );
+      const report = reportOperationalError({
+        error: new Error(error.message),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "rollback",
+        severity: "critical",
+        context: { rollbackStep: "venue-link", venueId: vId, callerFlow: logTag },
+      });
       await sendSlackAlert({
         channel:  "ops-critical",
         severity: "critical",
         title:    "Operator Rollback Failed — Venue Link Not Cleared",
         message:  `${context} — venue link rollback failed. Manual cleanup required.`,
-        metadata: { Email: email, "Venue ID": vId, "Rollback Error": error.message },
+        metadata: {
+          Email: email, "Venue ID": vId, "Rollback Error": error.message,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
       });
     }
   }
@@ -126,16 +186,27 @@ export async function provisionOperatorForVenue({
     const isDuplicate = createUserError.message?.toLowerCase().includes("already");
     if (!isDuplicate) {
       console.error(`${logTag} Auth user creation failed:`, createUserError.message);
+      const report = reportOperationalError({
+        error: new Error(createUserError.message),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "auth-user-create",
+        severity: "critical",
+        context: { venueId, callerFlow: logTag },
+      });
       await sendSlackAlert({
         channel:  "ops-critical",
         severity: "critical",
         title:    "Operator Provisioning Failed — Auth User Creation",
         message:  "Failed to create Supabase Auth user.",
-        metadata: { Email: email, "Venue ID": venueId, Error: createUserError.message, Flow: logTag },
+        metadata: {
+          Email: email, "Venue ID": venueId, Error: createUserError.message, Flow: logTag,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
       });
       return {
         ok: false,
-        error: `Failed to create operator account: ${createUserError.message}`,
+        error: report.customerMessage,
+        hhcErrorId: report.hhcErrorId,
       };
     }
 
@@ -150,18 +221,27 @@ export async function provisionOperatorForVenue({
         `${logTag} Auth user exists but no operator row found.`,
         { email }
       );
+      const report = reportOperationalError({
+        error: new Error("Auth user exists but no operator row found"),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "auth-user-lookup",
+        severity: "critical",
+        context: { venueId, callerFlow: logTag },
+      });
       await sendSlackAlert({
         channel:  "ops-critical",
         severity: "critical",
         title:    "Operator Provisioning Failed — Inconsistent Auth State",
         message:  "Auth user exists but no operator row found. Manual investigation required.",
-        metadata: { Email: email, "Venue ID": venueId, Flow: logTag },
+        metadata: {
+          Email: email, "Venue ID": venueId, Flow: logTag,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
       });
       return {
         ok: false,
-        error:
-          "An account with this email already exists but could not be resolved. " +
-          "Please contact support.",
+        error: report.customerMessage,
+        hhcErrorId: report.hhcErrorId,
       };
     }
 
@@ -186,15 +266,25 @@ export async function provisionOperatorForVenue({
   } else if (operatorError.code !== "23505") {
     // 23505 = unique_violation → operator row already exists from a prior run; skip.
     console.error(`${logTag} Operator insert failed:`, operatorError.message);
+    const report = reportOperationalError({
+      error: new Error(operatorError.message),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "operator-insert",
+      severity: "critical",
+      context: { venueId, authUserId, callerFlow: logTag },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
       title:    "Operator Provisioning Failed — Operator Insert",
       message:  "Failed to insert operator row.",
-      metadata: { Email: email, "Venue ID": venueId, Error: operatorError.message, Flow: logTag },
+      metadata: {
+        Email: email, "Venue ID": venueId, Error: operatorError.message, Flow: logTag,
+        "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
     if (createdNewAuthUser) await rbAuthUser(authUserId, "operator insert failed");
-    return { ok: false, error: "Failed to create operator record. Please try again." };
+    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
   // ── Step 3: One-venue-per-operator invariant ──────────────────────────────
@@ -226,16 +316,26 @@ export async function provisionOperatorForVenue({
       `${logTag} Venue link failed — rolling back:`,
       { venueId, authUserId, error: venueError.message }
     );
+    const report = reportOperationalError({
+      error: new Error(venueError.message),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "venue-link",
+      severity: "critical",
+      context: { venueId, authUserId, callerFlow: logTag },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
       title:    "Operator Provisioning Failed — Venue Link",
       message:  "Failed to link venue to operator. Rolling back.",
-      metadata: { Email: email, "Venue ID": venueId, Error: venueError.message, Flow: logTag },
+      metadata: {
+        Email: email, "Venue ID": venueId, Error: venueError.message, Flow: logTag,
+        "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
     if (createdNewOperator) await rbOperator(authUserId, "venue link failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "venue link failed");
-    return { ok: false, error: "Failed to link venue to operator account. Please try again." };
+    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
   // ── Step 5: Generate Supabase recovery link ───────────────────────────────
@@ -272,17 +372,27 @@ export async function provisionOperatorForVenue({
       `${logTag} generateLink failed — rolling back:`,
       { email, error: linkError?.message }
     );
+    const report = reportOperationalError({
+      error: new Error(linkError?.message ?? "generateLink returned no action_link"),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "activation-link-generate",
+      severity: "critical",
+      context: { venueId, authUserId, callerFlow: logTag },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
       title:    "Operator Provisioning Failed — Setup Link Generation",
       message:  "Failed to generate Supabase recovery link. Rolling back.",
-      metadata: { Email: email, "Venue ID": venueId, Error: linkError?.message ?? "unknown", Flow: logTag },
+      metadata: {
+        Email: email, "Venue ID": venueId, Error: linkError?.message ?? "unknown", Flow: logTag,
+        "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
     await rbVenueLink(venueId, "generateLink failed");
     if (createdNewOperator) await rbOperator(authUserId, "generateLink failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "generateLink failed");
-    return { ok: false, error: "Failed to generate account setup link. Please try again." };
+    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
   // ── Step 6: Send activation email ────────────────────────────────────────
@@ -290,20 +400,33 @@ export async function provisionOperatorForVenue({
   const emailResult = await sendEmail(linkData.properties.action_link);
 
   if (!emailResult.ok) {
-    // Slack escalation already fired by sendTransactionalEmail
-    // (operator_activation / claim_approval → critical → #ops-critical).
+    // Sentry-only here (no reportCriticalFailure/new Slack alert): the
+    // Slack escalation already fires from inside sendTransactionalEmail's
+    // own criticality-based routing (operator_activation / claim_approval
+    // → critical → #ops-critical, src/lib/email.ts's escalateEmailFailure)
+    // — a call this function has no access to enrich, since it happens
+    // deep inside the shared email subsystem behind the sendEmail()
+    // callback. Adding a second Slack alert here would duplicate it.
+    // Reporting to Sentry only still gives this specific occurrence its own
+    // searchable HHC reference, even though the existing Slack alert for it
+    // can't be enriched in this task — see the task report's "activation
+    // email alert treatment" section for why extending escalateEmailFailure
+    // itself is left as a follow-up rather than done here.
+    const report = reportOperationalError({
+      error: new Error(emailResult.error ?? "activation email send failed"),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "activation-email",
+      severity: "critical",
+      context: { venueId, authUserId, callerFlow: logTag },
+    });
     console.error(
       `${logTag} Activation email failed — rolling back.`,
-      { error: emailResult.error }
+      { error: emailResult.error, hhcErrorId: report.hhcErrorId }
     );
     await rbVenueLink(venueId, "email send failed");
     if (createdNewOperator) await rbOperator(authUserId, "email send failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "email send failed");
-    return {
-      ok: false,
-      error:
-        "Activation email could not be sent. Please try again or contact support.",
-    };
+    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
   console.log(`${logTag} Operator provisioning complete.`, { authUserId, venueId });
@@ -369,12 +492,22 @@ export async function completeOperatorAccountActivation({
     // Covers both a genuine DB error and migration 067 not yet being applied
     // (missing column) — either way, no activation was recorded and no
     // notification was sent, so this must be loud rather than log-only.
+    const report = reportOperationalError({
+      error: new Error(updateError.message),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "activation-complete-update",
+      severity: "critical",
+      context: { operatorId },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
       title:    "Operator Account Activation — DB Update Failed",
       message:  "An operator completed account setup, but recording the activation failed (e.g. migration 067 not applied, or a DB error). No internal notification was sent for this activation. The operator's own account setup was not affected.",
-      metadata: { "Operator ID": operatorId, Error: updateError.message },
+      metadata: {
+        "Operator ID": operatorId, Error: updateError.message,
+        "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
     return;
   }
@@ -490,6 +623,13 @@ export async function completeOperatorAccountActivation({
     // can never be automatically retried. Reuses the same ops-critical
     // pattern already established in this file rather than a queue/outbox:
     // a specific, context-rich alert for a human to add the note manually.
+    const report = reportOperationalError({
+      error: new Error(noteError),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "activation-note",
+      severity: "critical",
+      context: { operatorId, venueId, claimId, submissionId },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
@@ -504,6 +644,8 @@ export async function completeOperatorAccountActivation({
         "Claim ID":      claimId ?? "n/a",
         "Submission ID": submissionId ?? "n/a",
         Error:           noteError,
+        "HHC Error":     report.hhcErrorId,
+        "Sentry Event":  report.sentryEventId ?? "unavailable",
       },
     });
   }
@@ -529,7 +671,17 @@ export async function completeOperatorAccountActivation({
     // rbVenueLink and reviewClaimAction's post-provisioning claim-update
     // failure): a specific, context-rich critical alert for manual follow-up,
     // richer than the generic escalateEmailFailure path (which only knows
-    // type/to/error, not which operator or venue this was).
+    // type/to/error, not which operator or venue this was). This IS the sole
+    // alert for this failure — sendOperatorAccountActivatedNotificationEmail
+    // uses criticality "standard" (console-only inside sendTransactionalEmail),
+    // so there is no separate alert to avoid duplicating here.
+    const report = reportOperationalError({
+      error: new Error(emailResult.error ?? "notification email send failed"),
+      flow: OPERATOR_ACTIVATION_FLOW,
+      stage: "activation-notification-email",
+      severity: "critical",
+      context: { operatorId, venueId },
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
@@ -542,6 +694,8 @@ export async function completeOperatorAccountActivation({
         Source:        sourceFlow,
         "Operator ID": operatorId,
         Error:         emailResult.error ?? "unknown",
+        "HHC Error":   report.hhcErrorId,
+        "Sentry Event": report.sentryEventId ?? "unavailable",
       },
     });
   }
