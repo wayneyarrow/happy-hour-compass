@@ -8,29 +8,41 @@ import { isValidHhcErrorReference } from "../../../src/lib/observability/errorRe
 import { sendSlackAlert } from "../../../src/lib/slack";
 
 /**
- * Pins the exact flow/stage/severity/context contract src/lib/subscriptions.ts
- * uses at its three instrumented failure branches — updateOperatorPlan()'s
- * "subscription-upsert" and "operators-plan-sync" stages (flow
- * "operator-plan-update"), and syncStripeSubscription()'s previously-
- * unreported "operators-plan-sync" stage (flow "stripe-subscription", the
- * same flow the Stripe webhook route already uses for that function's
- * primary-write failures) — WITHOUT unit-testing subscriptions.ts's real
- * functions directly (they call the real Supabase admin client with no
- * existing DI seam — same reasoning as webhookSync.test.ts /
- * operatorSubmissionObservability.test.ts / venueClaimObservability.test.ts).
+ * Pins the atomic-RPC entitlement-write architecture in src/lib/subscriptions.ts
+ * (migration 081_operator_plan_entitlement_atomic_sync.sql) — WITHOUT unit-
+ * testing subscriptions.ts's real functions directly (they call the real
+ * Supabase admin client with no existing DI seam — same reasoning as
+ * webhookSync.test.ts / operatorSubmissionObservability.test.ts /
+ * venueClaimObservability.test.ts). Two complementary techniques:
  *
- * Because there is no DI seam, "existing return behavior is unchanged" is
- * verified separately below via a static read of subscriptions.ts's source
- * text (SUBSCRIPTIONS_SOURCE), asserting the exact pre-existing return
- * statements and write count are still present and unchanged — a
- * lightweight regression guard that doesn't require a live Supabase
- * connection.
+ *   1. Dynamic contract-pinning — call reportCriticalFailure() directly with
+ *      the exact flow/stage/context updateOperatorPlan()'s single remaining
+ *      failure branch uses.
+ *   2. Static structural regression — read subscriptions.ts's source text
+ *      and assert the exact shape of both functions: exactly one RPC call
+ *      site per plan-changing path, no lingering two-write fallthrough
+ *      pattern, correct return statements, and (for syncStripeSubscription)
+ *      zero reportCriticalFailure() call sites — ownership for that
+ *      function's plan-changing failure now lives entirely in the Stripe
+ *      webhook route, which these tests also structurally re-verify is
+ *      untouched.
  */
 
 const SUBSCRIPTIONS_SOURCE = readFileSync(
   join(__dirname, "../../../src/lib/subscriptions.ts"),
   "utf8"
 );
+const STRIPE_ROUTE_SOURCE = readFileSync(
+  join(__dirname, "../../../src/app/api/webhooks/stripe/route.ts"),
+  "utf8"
+);
+
+function updateOperatorPlanBody(): string {
+  return SUBSCRIPTIONS_SOURCE.match(/export async function updateOperatorPlan[\s\S]*?\n\}/)![0];
+}
+function syncStripeSubscriptionBody(): string {
+  return SUBSCRIPTIONS_SOURCE.match(/export async function syncStripeSubscription[\s\S]*?\n\}/)![0];
+}
 
 function createFakeSentryClient(): {
   client: SentryCaptureClient;
@@ -69,8 +81,13 @@ function withEnv<T>(env: string | undefined, fn: () => T): T {
   }
 }
 
-/** Strips `//` line comments so structural regexes below don't false-match
- * prose inside a comment (e.g. "...its own returned { ok: false }..."). */
+function contextOf(call: { captureContext: unknown }): Record<string, unknown> | undefined {
+  return (call.captureContext as { contexts?: { hhc_context?: Record<string, unknown> } } | undefined)
+    ?.contexts?.hhc_context;
+}
+
+/** Strips `//` line comments so structural regexes don't false-match prose
+ * inside a comment. */
 function stripLineComments(code: string): string {
   return code
     .split("\n")
@@ -78,25 +95,52 @@ function stripLineComments(code: string): string {
     .join("\n");
 }
 
-function contextOf(call: { captureContext: unknown }): Record<string, unknown> | undefined {
-  return (call.captureContext as { contexts?: { hhc_context?: Record<string, unknown> } } | undefined)
-    ?.contexts?.hhc_context;
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// A. updateOperatorPlan()
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ── updateOperatorPlan() / write 1 — subscription-upsert ───────────────────
+test("updateOperatorPlan(): exactly one RPC call site, no legacy two-write pattern remains", () => {
+  const body = updateOperatorPlanBody();
+  assert.equal((body.match(/\.rpc\("sync_operator_plan_entitlement"/g) ?? []).length, 1);
+  // No more direct writes to either table inside this function — both are
+  // now inside the atomic RPC.
+  assert.doesNotMatch(body, /\.from\("operator_subscriptions"\)/);
+  assert.doesNotMatch(body, /\.from\("operators"\)/);
+  // No more a second, independently-failable branch.
+  assert.doesNotMatch(stripLineComments(body), /if \(opError\)/);
+  assert.doesNotMatch(stripLineComments(body), /if \(subError\)/);
+});
 
-test("operator-plan-update / subscription-upsert: critical, one HHC id, one production Slack alert, safe context", async () => {
+test("updateOperatorPlan(): successful path returns { ok: true } unconditionally", () => {
+  const body = updateOperatorPlanBody();
+  assert.match(body, /\n {2}return \{ ok: true \};\n\}/);
+});
+
+test("updateOperatorPlan(): RPC failure returns { ok: false, error, hhcErrorId } — no legacy false-success branch remains", () => {
+  const body = updateOperatorPlanBody();
+  assert.match(body, /return \{ ok: false, error: error\.message, hhcErrorId: report\.hhcErrorId \};/);
+  // The old "logs the failure but still falls through to ok:true" comment/
+  // shape must not still exist anywhere in this function.
+  assert.doesNotMatch(body, /still updated successfully/);
+});
+
+test("updateOperatorPlan(): exactly one reportCriticalFailure() call site — no duplicate HHC reporting", () => {
+  const body = updateOperatorPlanBody();
+  assert.equal((body.match(/reportCriticalFailure\(\{/g) ?? []).length, 1);
+});
+
+test("operator-plan-update / entitlement-write: critical, one HHC id, one production Slack alert, safe context", async () => {
   const { client } = createFakeSentryClient();
   const { sendSlack, calls } = createFakeSlack();
 
   const report = await withEnv("production", () =>
     reportCriticalFailure(
       {
-        error: new Error("simulated operator_subscriptions upsert failure"),
+        error: new Error("simulated sync_operator_plan_entitlement RPC failure"),
         flow: "operator-plan-update",
-        stage: "subscription-upsert",
+        stage: "entitlement-write",
         title: "Operator Plan Update Failed",
-        technicalSummary: "database write failed (operator_subscriptions upsert)",
+        technicalSummary: "atomic database write failed (operator_subscriptions + operators.plan)",
         context: { operatorId: "op_1", targetPlan: "pro" },
         slackFields: { "Operator ID": "op_1", "Target Plan": "pro" },
       },
@@ -105,104 +149,172 @@ test("operator-plan-update / subscription-upsert: critical, one HHC id, one prod
   );
 
   assert.equal(report.flow, "operator-plan-update");
-  assert.equal(report.stage, "subscription-upsert");
+  assert.equal(report.stage, "entitlement-write");
   assert.equal(report.severity, "critical");
   assert.ok(isValidHhcErrorReference(report.hhcErrorId));
   assert.equal(calls.length, 1);
   assert.equal(calls[0].channel, "ops-critical");
   assert.equal(calls[0].metadata?.["HHC Error"], report.hhcErrorId);
-  assert.equal(calls[0].metadata?.["Operator ID"], "op_1");
-  assert.equal(calls[0].metadata?.["Target Plan"], "pro");
 });
 
-// ── updateOperatorPlan() / write 2 — operators-plan-sync ────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// B. syncStripeSubscription() — plan-changing sync
+// ═══════════════════════════════════════════════════════════════════════════
 
-test("operator-plan-update / operators-plan-sync: critical, one HHC id, one production Slack alert, safe context", async () => {
+test("syncStripeSubscription(): plan-changing branch uses exactly one RPC call site, no legacy two-write pattern", () => {
+  const body = syncStripeSubscriptionBody();
+  assert.equal((body.match(/\.rpc\("sync_operator_plan_entitlement"/g) ?? []).length, 1);
+  assert.doesNotMatch(stripLineComments(body), /if \(opError\)/);
+});
+
+test("syncStripeSubscription(): plan-changing RPC success returns { ok: true }", () => {
+  const body = syncStripeSubscriptionBody();
+  // The RPC-branch success return, distinct from the status-only branch's.
+  const rpcBranch = body.split('sync.planCode !== undefined')[1].split("return { ok: true };")[0];
+  assert.ok(rpcBranch.includes("await supabase.rpc"));
+});
+
+test("syncStripeSubscription(): plan-changing RPC failure returns { ok: false, error } — no partial-success result remains", () => {
+  const body = syncStripeSubscriptionBody();
+  assert.match(body, /if \(error\) \{[\s\S]*?return \{ ok: false, error: error\.message \};/);
+});
+
+test("syncStripeSubscription(): zero reportCriticalFailure() call sites — ownership stays entirely with the Stripe webhook route", () => {
+  // Comments are stripped first — the function's own doc comment mentions
+  // "reportCriticalFailure()" in prose to explain why it's absent, which
+  // would otherwise false-match a naive substring count.
+  const body = stripLineComments(syncStripeSubscriptionBody());
+  assert.equal((body.match(/reportCriticalFailure\(/g) ?? []).length, 0);
+});
+
+test("subscriptions.ts still imports reportCriticalFailure (used once, by updateOperatorPlan only)", () => {
+  assert.match(SUBSCRIPTIONS_SOURCE, /import \{ reportCriticalFailure \} from "@\/lib\/observability\/reportCriticalFailure";/);
+  assert.equal((SUBSCRIPTIONS_SOURCE.match(/reportCriticalFailure\(\{/g) ?? []).length, 1);
+});
+
+test("Stripe webhook route.ts reporting call counts are unchanged — proves no double-reporting was introduced for the now-atomic plan-changing sync", () => {
+  // Baseline established before this task's changes: 5 reportCriticalFailure
+  // call sites (checkout-completed-sync, subscription-updated-sync,
+  // subscription-deleted-sync, invoice-payment-failed-sync, plus the
+  // pre-existing webhook-secret-missing/handler-exception Slack-enrichment
+  // pattern) and 4 reportOperationalError call sites. subscriptions.ts's
+  // refactor added zero new reporting to this file — these counts must not
+  // have moved.
+  assert.equal((STRIPE_ROUTE_SOURCE.match(/await reportCriticalFailure\(\{/g) ?? []).length, 5);
+  assert.equal((STRIPE_ROUTE_SOURCE.match(/reportOperationalError\(\{/g) ?? []).length, 4);
+});
+
+test("stripe-subscription / entitlement-write (via the webhook route's existing ownership): critical, one HHC id, one production Slack alert, safe Stripe context", async () => {
+  // Pins the contract the webhook route already uses for a syncStripeSubscription
+  // failure — unchanged by this task, still the sole reporter for the now-
+  // unified (single) failure mode of a plan-changing sync.
   const { client } = createFakeSentryClient();
   const { sendSlack, calls } = createFakeSlack();
 
   const report = await withEnv("production", () =>
     reportCriticalFailure(
       {
-        error: new Error("simulated operators.plan update failure"),
-        flow: "operator-plan-update",
-        stage: "operators-plan-sync",
-        title: "Operator Plan Update Failed",
-        technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
-        context: { operatorId: "op_2", targetPlan: "free" },
-        slackFields: { "Operator ID": "op_2", "Target Plan": "free" },
-      },
-      { sentryClient: client, sendSlack }
-    )
-  );
-
-  assert.equal(report.flow, "operator-plan-update");
-  assert.equal(report.stage, "operators-plan-sync");
-  assert.equal(report.severity, "critical");
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].channel, "ops-critical");
-});
-
-// ── syncStripeSubscription() / operators-plan-sync (previously unreported) ──
-
-test("stripe-subscription / operators-plan-sync: critical, one HHC id, one production Slack alert, safe Stripe context", async () => {
-  const { client } = createFakeSentryClient();
-  const { sendSlack, calls } = createFakeSlack();
-
-  const report = await withEnv("production", () =>
-    reportCriticalFailure(
-      {
-        error: new Error("simulated operators.plan sync failure (Stripe path)"),
+        error: new Error("simulated syncStripeSubscription failure"),
         flow: "stripe-subscription",
-        stage: "operators-plan-sync",
-        title: "Stripe Subscription Plan Sync Failed",
-        technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
-        context: {
-          operatorId: "op_3",
-          targetPlan: "premium",
-          stripeSubscriptionId: "sub_123",
-          stripeCustomerId: "cus_123",
-        },
-        slackFields: { "Operator ID": "op_3", "Target Plan": "premium", Subscription: "sub_123" },
+        stage: "checkout-completed-sync",
+        title: "Stripe Subscription Sync Failed",
+        technicalSummary: "database sync failed (checkout activation)",
+        context: { stripeEventId: "evt_1", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", planCode: "pro" },
+        slackFields: { "Stripe Event": "evt_1", Subscription: "sub_1", Plan: "pro" },
       },
       { sentryClient: client, sendSlack }
     )
   );
 
   assert.equal(report.flow, "stripe-subscription");
-  assert.equal(report.stage, "operators-plan-sync");
   assert.equal(report.severity, "critical");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].channel, "ops-critical");
-  assert.equal(calls[0].metadata?.["Subscription"], "sub_123");
 });
 
-// ── Distinct occurrences → distinct HHC ids ─────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// C. syncStripeSubscription() — status/period-only sync (no planCode)
+// ═══════════════════════════════════════════════════════════════════════════
 
-test("each of the three failure branches produces its own distinct HHC id", async () => {
+test("syncStripeSubscription(): status/period-only branch never touches operators.plan and never calls the RPC", () => {
+  const body = syncStripeSubscriptionBody();
+  const statusOnlyBranch = body.split("return { ok: true };\n  }")[1] ?? "";
+  assert.ok(statusOnlyBranch.length > 0, "could not isolate the status/period-only branch");
+  assert.doesNotMatch(statusOnlyBranch, /\.from\("operators"\)/);
+  assert.doesNotMatch(statusOnlyBranch, /\.rpc\(/);
+  assert.match(statusOnlyBranch, /\.from\("operator_subscriptions"\)/);
+});
+
+test("syncStripeSubscription(): status/period-only upsert still writes the same fields as before (billing_provider, IDs, status, period dates)", () => {
+  const body = syncStripeSubscriptionBody();
+  const statusOnlyBranch = body.split("return { ok: true };\n  }")[1] ?? "";
+  for (const field of [
+    "billing_provider:",
+    "billing_provider_customer_id:",
+    "billing_provider_subscription_id:",
+    "status:",
+    "current_period_start:",
+    "current_period_end:",
+    "updated_at:",
+  ]) {
+    assert.ok(statusOnlyBranch.includes(field), `expected status-only upsert to still set ${field}`);
+  }
+});
+
+test("syncStripeSubscription(): the gate deciding plan-changing vs status-only sync is unchanged (sync.planCode !== undefined)", () => {
+  const body = syncStripeSubscriptionBody();
+  assert.match(body, /if \(sync\.planCode !== undefined\) \{/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cross-cutting: distinct HHC ids, no fingerprint, privacy, prod-only Slack
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("updateOperatorPlan's failure and the webhook route's own reporting each produce their own distinct HHC id", async () => {
   const { client } = createFakeSentryClient();
   const { sendSlack } = createFakeSlack();
 
   const reports = await withEnv("production", async () => [
     await reportCriticalFailure(
-      { error: new Error("x"), flow: "operator-plan-update", stage: "subscription-upsert", title: "t", technicalSummary: "x" },
+      { error: new Error("x"), flow: "operator-plan-update", stage: "entitlement-write", title: "t", technicalSummary: "x" },
       { sentryClient: client, sendSlack }
     ),
     await reportCriticalFailure(
-      { error: new Error("x"), flow: "operator-plan-update", stage: "operators-plan-sync", title: "t", technicalSummary: "x" },
-      { sentryClient: client, sendSlack }
-    ),
-    await reportCriticalFailure(
-      { error: new Error("x"), flow: "stripe-subscription", stage: "operators-plan-sync", title: "t", technicalSummary: "x" },
+      { error: new Error("x"), flow: "stripe-subscription", stage: "checkout-completed-sync", title: "t", technicalSummary: "x" },
       { sentryClient: client, sendSlack }
     ),
   ]);
 
-  const ids = reports.map(r => r.hhcErrorId);
-  assert.equal(new Set(ids).size, 3);
+  assert.notEqual(reports[0].hhcErrorId, reports[1].hhcErrorId);
 });
 
-// ── Privacy ──────────────────────────────────────────────────────────────────
+test("no fingerprint is ever set for the entitlement-write stage", async () => {
+  const { client, calls } = createFakeSentryClient();
+  const { sendSlack } = createFakeSlack();
+
+  await withEnv("production", () =>
+    reportCriticalFailure(
+      { error: new Error("simulated"), flow: "operator-plan-update", stage: "entitlement-write", title: "t", technicalSummary: "x" },
+      { sentryClient: client, sendSlack }
+    )
+  );
+
+  assert.equal((calls[0].captureContext as { fingerprint?: unknown } | undefined)?.fingerprint, undefined);
+});
+
+test("preview environment does not page production #ops-critical for the entitlement-write stage", async () => {
+  const { client } = createFakeSentryClient();
+  const { sendSlack, calls } = createFakeSlack();
+
+  const report = await withEnv("preview", () =>
+    reportCriticalFailure(
+      { error: new Error("simulated"), flow: "operator-plan-update", stage: "entitlement-write", title: "t", technicalSummary: "x" },
+      { sentryClient: client, sendSlack }
+    )
+  );
+
+  assert.equal(calls.length, 0);
+  assert.equal(report.slackSent, false);
+});
 
 test("subscriptions.ts observability context never includes email, name, or other PII, even if mistakenly passed", async () => {
   const { client, calls: sentryCalls } = createFakeSentryClient();
@@ -213,24 +325,16 @@ test("subscriptions.ts observability context never includes email, name, or othe
       {
         error: new Error("simulated"),
         flow: "operator-plan-update",
-        stage: "subscription-upsert",
+        stage: "entitlement-write",
         title: "t",
         technicalSummary: "x",
         context: {
           operatorId: "op_4",
           targetPlan: "pro",
-          // Type-valid string values for sensitive key names — the runtime
-          // denylist (sanitizeOperationalContext) is what's under test.
-          // "name" (bare, anchored) is dropped by the hardened sanitizer;
-          // "operatorName" deliberately is NOT (same allowance as the
-          // existing venueName/businessName precedent) — not asserted here.
           changedByEmail: "someone@example.com",
           name: "Someone Person",
         },
-        slackFields: {
-          "Operator ID": "op_4",
-          email: "someone@example.com",
-        },
+        slackFields: { "Operator ID": "op_4", email: "someone@example.com" },
       },
       { sentryClient: client, sendSlack }
     )
@@ -242,139 +346,24 @@ test("subscriptions.ts observability context never includes email, name, or othe
   for (const forbidden of ["changedByEmail", "name"]) {
     assert.equal(forbidden in context, false, `Sentry context must not contain "${forbidden}"`);
   }
-
   const metadata = slackCalls[0].metadata ?? {};
   assert.equal(metadata["Operator ID"], "op_4");
   assert.equal("email" in metadata, false);
 });
 
-test("real subscriptions.ts call sites never pass email/name context — confirmed by source read", () => {
-  // Static guard: neither instrumented call site in the real source should
-  // ever pass changedByEmail/operatorEmail/anything name-like — only
-  // operatorId/targetPlan/Stripe IDs, matching the minimal-context rule.
-  // Indentation-agnostic split on the call boundary rather than a single
-  // regex, since the three call sites sit at different nesting depths
-  // (updateOperatorPlan's two calls vs. syncStripeSubscription's one, nested
-  // one level deeper inside `if (sync.planCode !== undefined) { ... }`).
+test("real subscriptions.ts call site never passes email/name context — confirmed by source read", () => {
   const reportBlocks = SUBSCRIPTIONS_SOURCE.split("await reportCriticalFailure({").slice(1);
-  assert.equal(reportBlocks.length, 3, "expected exactly 3 reportCriticalFailure call sites in subscriptions.ts");
-  for (const block of reportBlocks) {
-    const callSite = block.split("});")[0]; // up to this call's closing brace
-    assert.doesNotMatch(callSite, /email/i);
-    assert.doesNotMatch(callSite, /changedBy/i);
-  }
+  assert.equal(reportBlocks.length, 1, "expected exactly 1 reportCriticalFailure call site in subscriptions.ts");
+  const callSite = reportBlocks[0].split("});")[0];
+  assert.doesNotMatch(callSite, /email/i);
+  assert.doesNotMatch(callSite, /changedBy/i);
 });
-
-// ── Grouping ─────────────────────────────────────────────────────────────────
-
-test("no subscriptions.ts stage ever sets a Sentry fingerprint from the HHC id", async () => {
-  const { client, calls } = createFakeSentryClient();
-  const { sendSlack } = createFakeSlack();
-
-  for (const [flow, stage] of [
-    ["operator-plan-update", "subscription-upsert"],
-    ["operator-plan-update", "operators-plan-sync"],
-    ["stripe-subscription", "operators-plan-sync"],
-  ] as const) {
-    await withEnv("production", () =>
-      reportCriticalFailure(
-        { error: new Error("simulated"), flow, stage, title: "t", technicalSummary: "x" },
-        { sentryClient: client, sendSlack }
-      )
-    );
-  }
-
-  for (const call of calls) {
-    assert.equal((call.captureContext as { fingerprint?: unknown } | undefined)?.fingerprint, undefined);
-  }
-});
-
-// ── Environment gating ───────────────────────────────────────────────────────
-
-test("preview environment does not page production #ops-critical for any of the three branches", async () => {
-  const { client } = createFakeSentryClient();
-  const { sendSlack, calls } = createFakeSlack();
-
-  const report = await withEnv("preview", () =>
-    reportCriticalFailure(
-      { error: new Error("simulated"), flow: "operator-plan-update", stage: "operators-plan-sync", title: "t", technicalSummary: "x" },
-      { sentryClient: client, sendSlack }
-    )
-  );
-
-  assert.equal(calls.length, 0);
-  assert.equal(report.slackSent, false);
-});
-
-// ── No new direct Slack call introduced in subscriptions.ts ────────────────
 
 test("subscriptions.ts does not import or call sendSlackAlert directly — Slack stays owned by reportCriticalFailure", () => {
   assert.doesNotMatch(SUBSCRIPTIONS_SOURCE, /sendSlackAlert/);
   assert.doesNotMatch(SUBSCRIPTIONS_SOURCE, /from ["']@\/lib\/slack["']/);
 });
 
-// ── Structural regression guard: return-value/control-flow behavior unchanged ─
-//
-// No DI seam exists for createAdminClient() in this file (see file header),
-// so "existing return behavior is unchanged" is verified here via a static
-// read of the source rather than executing the real functions.
-
-test("updateOperatorPlan() still returns { ok: false, error: subError.message } on write-1 failure", () => {
-  assert.match(SUBSCRIPTIONS_SOURCE, /return \{ ok: false, error: subError\.message \};/);
-});
-
-test("updateOperatorPlan() still returns { ok: true } unconditionally after a write-2 (operators.plan) failure", () => {
-  const fnMatch = SUBSCRIPTIONS_SOURCE.match(
-    /export async function updateOperatorPlan[\s\S]*?\n\}/
-  );
-  assert.ok(fnMatch, "could not locate updateOperatorPlan() in source");
-  const fnBody = fnMatch![0];
-  // The opError branch must never contain its own return statement (i.e. it
-  // must fall through to the function's final `return { ok: true };`).
-  // Comments are stripped first so explanatory prose (e.g. "...its own
-  // returned { ok: false }...") can't false-match this check.
-  const opErrorBlock = fnBody.match(/if \(opError\) \{[\s\S]*?\n {2}\}/);
-  assert.ok(opErrorBlock, "could not locate the opError branch");
-  assert.doesNotMatch(stripLineComments(opErrorBlock![0]), /\breturn\b/);
-  assert.match(fnBody, /\n {2}return \{ ok: true \};\n\}/);
-});
-
-test("syncStripeSubscription() still returns { ok: true } unconditionally after a write-2 (operators.plan) failure", () => {
-  const fnMatch = SUBSCRIPTIONS_SOURCE.match(
-    /export async function syncStripeSubscription[\s\S]*?\n\}/
-  );
-  assert.ok(fnMatch, "could not locate syncStripeSubscription() in source");
-  const fnBody = fnMatch![0];
-  const opErrorBlock = fnBody.match(/if \(opError\) \{[\s\S]*?\n {4}\}/);
-  assert.ok(opErrorBlock, "could not locate the opError branch");
-  assert.doesNotMatch(stripLineComments(opErrorBlock![0]), /\breturn\b/);
-  assert.match(fnBody, /\n {2}return \{ ok: true \};\n\}/);
-});
-
-test("syncStripeSubscription()'s primary-write (subError) failure still returns { ok: false, error } unchanged — this is the branch the Stripe webhook route already instruments, not duplicated here", () => {
-  const fnMatch = SUBSCRIPTIONS_SOURCE.match(
-    /export async function syncStripeSubscription[\s\S]*?\n\}/
-  );
-  assert.ok(fnMatch);
-  const fnBody = fnMatch![0];
-  const subErrorBlock = fnBody.match(/if \(subError\) \{[\s\S]*?\n {2}\}/);
-  assert.ok(subErrorBlock, "could not locate the subError branch");
-  // No reportCriticalFailure call in this branch — it's already owned by the
-  // Stripe webhook route (keyed off this function's returned { ok: false }).
-  assert.doesNotMatch(subErrorBlock![0], /reportCriticalFailure/);
-  assert.match(subErrorBlock![0], /return \{ ok: false, error: subError\.message \};/);
-});
-
-test("exactly two Supabase writes remain in updateOperatorPlan() and syncStripeSubscription() — no write added, removed, or reordered", () => {
-  const updateFn = SUBSCRIPTIONS_SOURCE.match(/export async function updateOperatorPlan[\s\S]*?\n\}/)![0];
-  const syncFn = SUBSCRIPTIONS_SOURCE.match(/export async function syncStripeSubscription[\s\S]*?\n\}/)![0];
-
-  assert.equal((updateFn.match(/\.from\("operator_subscriptions"\)/g) ?? []).length, 1);
-  assert.equal((updateFn.match(/\.from\("operators"\)/g) ?? []).length, 1);
-  assert.equal((syncFn.match(/\.from\("operator_subscriptions"\)/g) ?? []).length, 1);
-  assert.equal((syncFn.match(/\.from\("operators"\)/g) ?? []).length, 1);
-
-  // No transaction/RPC wrapping was introduced.
-  assert.doesNotMatch(updateFn, /\.rpc\(/);
-  assert.doesNotMatch(syncFn, /\.rpc\(/);
+test("both functions call the RPC through the standard createAdminClient() service-role client — no new client/auth path introduced", () => {
+  assert.equal((SUBSCRIPTIONS_SOURCE.match(/createAdminClient\(\)/g) ?? []).length >= 2, true);
 });

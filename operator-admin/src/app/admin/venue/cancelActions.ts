@@ -22,6 +22,18 @@ export type CancellationReason =
 export type CancelVenueState = {
   success?: true;
   error?: string;
+  /**
+   * Set only when the venue was successfully cancelled/unpublished but the
+   * subsequent entitlement downgrade to free failed. The cancellation
+   * itself is real and is never rolled back or misrepresented — this exists
+   * so the caller can't collapse that outcome into either a false "nothing
+   * happened" error or a false complete success. updateOperatorPlan()
+   * already reports this failure critically (Sentry + #ops-critical) with
+   * its own HHC reference — hhcErrorId below propagates that same
+   * reference; it is never regenerated here.
+   */
+  downgradeFailed?: true;
+  hhcErrorId?: string;
 };
 
 type VenueRow = {
@@ -121,14 +133,24 @@ export async function cancelVenueAction(
   // ── Billing: downgrade to free if on a paid plan ───────────────────────────
   // previousPlan is hoisted to this scope (rather than re-fetched) so the
   // #venue-churn Slack notification below can report it.
+  //
+  // downgradeFailed/downgradeHhcErrorId: the venue cancellation above has
+  // already happened and is never rolled back — if the downgrade itself
+  // fails, this action must not claim it didn't (a false "error, nothing
+  // happened" response) or that everything succeeded (a false-success
+  // response, the confirmed bug this fixes). updateOperatorPlan() already
+  // reports the failure critically with its own HHC reference; it is
+  // propagated below, never regenerated.
   let previousPlan = "free";
+  let downgradeFailed = false;
+  let downgradeHhcErrorId: string | undefined;
   if (operatorId) {
     const subscription = await getOperatorSubscription(operatorId);
     previousPlan = subscription?.plan_code ?? "free";
 
     if (previousPlan !== "free") {
-      const { ok } = await updateOperatorPlan(operatorId, "free");
-      if (ok) {
+      const result = await updateOperatorPlan(operatorId, "free");
+      if (result.ok) {
         await logPlanChangeEvent({
           operatorId,
           fromPlan:       previousPlan,
@@ -136,6 +158,14 @@ export async function cancelVenueAction(
           changedByEmail: actorEmail,
           trigger:        "operator_venue_cancellation",
         });
+      } else {
+        // Do not log a plan-change event or fire the #venue-plan-changes/
+        // #venue-churn "previous plan" framing as if the downgrade
+        // succeeded — it didn't. #venue-churn below still fires (the venue
+        // WAS cancelled), but previousPlan is still reported accurately
+        // since the operator's plan did NOT actually change.
+        downgradeFailed = true;
+        downgradeHhcErrorId = result.hhcErrorId;
       }
     }
   }
@@ -185,5 +215,7 @@ export async function cancelVenueAction(
     console.error("[cancelVenueAction] Slack churn notification failed:", err)
   );
 
-  return { success: true };
+  return downgradeFailed
+    ? { success: true, downgradeFailed: true, hhcErrorId: downgradeHhcErrorId }
+    : { success: true };
 }

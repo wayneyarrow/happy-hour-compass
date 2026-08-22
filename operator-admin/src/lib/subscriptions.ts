@@ -16,39 +16,57 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
 
-// ── Observability ────────────────────────────────────────────────────────────
+// ── Atomicity ────────────────────────────────────────────────────────────────
 //
-// "operator-plan-update" covers updateOperatorPlan()'s two entitlement writes
-// (manual admin plan changes, operator-initiated cancellation downgrades —
-// never Stripe). "stripe-subscription" reuses the same flow name the Stripe
-// webhook route (src/app/api/webhooks/stripe/route.ts) already uses for
-// syncStripeSubscription()'s primary-write failures, so both of that
-// function's failure modes correlate under one flow.
+// Both updateOperatorPlan() and syncStripeSubscription() (for a PLAN-CHANGING
+// sync — sync.planCode !== undefined) write through the
+// sync_operator_plan_entitlement() Postgres RPC (migration
+// 081_operator_plan_entitlement_atomic_sync.sql) rather than performing two
+// sequential, independent writes. That RPC atomically upserts
+// operator_subscriptions and updates operators.plan (and, for the Stripe
+// case, every Stripe-specific subscription field — billing provider,
+// customer/subscription IDs, status, period dates — together with
+// operators.plan) in a single Postgres function call: it commits or rolls
+// back as one unit, so it is no longer possible for operator_subscriptions
+// and operators.plan to diverge from a plan-changing write. See the
+// migration's own header for the full design rationale and the
+// operator-plan-entitlement investigation report for the evidence that
+// motivated this — operators.plan is documented as a backward-compatibility
+// cache column, but several real feature-limit enforcement server actions
+// (admin/happy-hours/actions.ts, admin/events/actions.ts,
+// admin/venue/imageActions.ts, admin/users/actions.ts) read it directly, so a
+// divergence there was a genuine entitlement-integrity bug, not cosmetic.
 //
-// Both functions share an identical two-write shape (primary subscription
-// upsert, then a best-effort operators.plan mirror update for feature-gate
-// enforcement — see OPERATOR_SELECT/ctx.operator.plan callers) and,
-// previously, an identical blind spot on the second write: it was logged to
-// console only, and the function still returned success. That write is the
-// field feature-limit enforcement (admin/happy-hours/actions.ts,
-// admin/events/actions.ts, admin/venue/imageActions.ts, admin/users/actions.ts)
-// actually reads, so a silent failure there is a genuine entitlement-integrity
-// gap, not merely cosmetic — see the updateOperatorPlan() investigation report
-// for the full evidence trail.
+// Stripe STATUS/PERIOD-ONLY syncs (sync.planCode === undefined — e.g.
+// invoice.payment_succeeded) do NOT go through the RPC and are unchanged:
+// they never touched operators.plan before and still don't; a single-table
+// operator_subscriptions upsert was already atomic on its own.
 //
-// reportCriticalFailure() is called at the point of each failure but the
-// return value/control flow of both functions is UNCHANGED by this — this is
-// observability-only. updateOperatorPlan()'s write-1 failure still returns
-// { ok: false, error }, and both functions' write-2 failure still returns
-// { ok: true } — that return-contract problem is a separate, not-yet-scoped
-// business-logic fix, not addressed here.
+// ── Observability ownership ─────────────────────────────────────────────────
 //
-// syncStripeSubscription()'s primary-write (subError) failure is already
-// instrumented by the Stripe webhook route itself (keyed off its returned
-// { ok: false }) — this file does NOT duplicate that. Only its previously-
-// unreported operators.plan (opError) failure is instrumented here.
+// updateOperatorPlan() has no other caller-side reporting for its own
+// failures (changePlanAction/cancelVenueAction never instrumented this
+// themselves), so it keeps owning and reporting its own single failure mode
+// here, consolidated into ONE stage ("entitlement-write") now that there is
+// only one write to fail, replacing the previous two stages
+// (subscription-upsert / operators-plan-sync) from before atomicity.
+//
+// syncStripeSubscription()'s plan-changing branch does NOT call
+// reportCriticalFailure() itself. Before this migration, its
+// operators.plan-only failure was the one previously-unreported gap this
+// file instrumented directly — but now that write is part of the SAME atomic
+// RPC call as the primary operator_subscriptions write, which the Stripe
+// webhook route (src/app/api/webhooks/stripe/route.ts) has already owned and
+// reported (with richer, per-branch severity and Stripe-event context this
+// function has no visibility into — e.g. event.id) since the earlier Stripe
+// observability task. There is now only ONE failure mode for a plan-changing
+// Stripe sync, and the webhook route's existing `if (!result.ok)` checks
+// already cover it completely — no change to that file was needed or made.
+// Reporting inside syncStripeSubscription() as well would double-report the
+// same RPC failure. STRIPE_SUBSCRIPTION_FLOW is therefore no longer
+// referenced in this file — the flow name that stage will show up under
+// (still "stripe-subscription") lives entirely in route.ts, unchanged.
 const OPERATOR_PLAN_UPDATE_FLOW = "operator-plan-update";
-const STRIPE_SUBSCRIPTION_FLOW = "stripe-subscription";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -168,9 +186,13 @@ export async function getOperatorPlanCode(operatorId: string): Promise<OperatorP
 /**
  * Manually changes an operator's plan.
  *
- * Updates both operator_subscriptions.plan_code (new source of truth) and
- * operators.plan (backward-compat column) so all existing feature gates
- * continue to work without modification.
+ * Atomically updates both operator_subscriptions.plan_code (canonical
+ * source of truth) and operators.plan (read directly by several real
+ * feature-gate enforcement server actions — see this file's Atomicity
+ * comment above) via the sync_operator_plan_entitlement() RPC (migration
+ * 081). The two writes now commit or roll back together — it is no longer
+ * possible for this function to return { ok: true } while the two
+ * representations diverge.
  *
  * Supported transitions:
  *   free ↔ pro ↔ premium ↔ enterprise (any direction)
@@ -185,65 +207,28 @@ export async function getOperatorPlanCode(operatorId: string): Promise<OperatorP
 export async function updateOperatorPlan(
   operatorId: string,
   newPlan: OperatorPlan
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; hhcErrorId?: string }> {
   const supabase = createAdminClient();
 
-  // Upsert the subscription row: creates it if missing, updates plan_code if present.
-  // onConflict targets the UNIQUE (operator_id) constraint from migration 036.
-  const { error: subError } = await supabase
-    .from("operator_subscriptions")
-    .upsert(
-      {
-        operator_id:      operatorId,
-        plan_code:        newPlan,
-        status:           "active",
-        billing_provider: "manual",
-      },
-      { onConflict: "operator_id" }
-    );
+  const { error } = await supabase.rpc("sync_operator_plan_entitlement", {
+    p_operator_id:      operatorId,
+    p_plan_code:        newPlan,
+    p_status:           "active",
+    p_billing_provider: "manual",
+  });
 
-  if (subError) {
-    console.error("[updateOperatorPlan] subscription upsert failed:", subError.message);
-    await reportCriticalFailure({
-      error: new Error(subError.message),
+  if (error) {
+    console.error("[updateOperatorPlan] atomic entitlement sync failed:", error.message);
+    const report = await reportCriticalFailure({
+      error: new Error(error.message),
       flow: OPERATOR_PLAN_UPDATE_FLOW,
-      stage: "subscription-upsert",
+      stage: "entitlement-write",
       title: "Operator Plan Update Failed",
-      technicalSummary: "database write failed (operator_subscriptions upsert)",
+      technicalSummary: "atomic database write failed (operator_subscriptions + operators.plan)",
       context: { operatorId, targetPlan: newPlan },
       slackFields: { "Operator ID": operatorId, "Target Plan": newPlan },
     });
-    return { ok: false, error: subError.message };
-  }
-
-  // Keep operators.plan in sync for all existing feature gates.
-  const { error: opError } = await supabase
-    .from("operators")
-    .update({ plan: newPlan })
-    .eq("id", operatorId);
-
-  if (opError) {
-    // Subscription is the source of truth and was already updated successfully.
-    // Log the sync failure but don't surface it as an error to the caller —
-    // the next full page load will still read the correct plan from the subscription.
-    //
-    // That return-value behavior is unchanged here (observability-only — see
-    // the file-header comment); operators.plan is what feature-gate
-    // enforcement actually reads, so this failure is reported critical even
-    // though the function still reports { ok: true } to its caller.
-    console.error(
-      "[updateOperatorPlan] operators.plan sync failed (subscription already updated):",
-      opError.message
-    );
-    await reportCriticalFailure({
-      error: new Error(opError.message),
-      flow: OPERATOR_PLAN_UPDATE_FLOW,
-      stage: "operators-plan-sync",
-      title: "Operator Plan Update Failed",
-      technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
-      context: { operatorId, targetPlan: newPlan },
-      slackFields: { "Operator ID": operatorId, "Target Plan": newPlan },
-    });
+    return { ok: false, error: error.message, hhcErrorId: report.hhcErrorId };
   }
 
   return { ok: true };
@@ -264,11 +249,34 @@ export type StripeSync = {
 };
 
 /**
- * Upserts operator_subscriptions from a Stripe webhook event.
+ * Syncs operator_subscriptions (and, when a plan change is present,
+ * operators.plan) from a Stripe webhook event.
  *
- * Always sets billing_provider = 'stripe' and updates billing IDs.
- * When planCode is provided, also syncs operators.plan for feature gating.
- * Upserts rather than updates to handle first-checkout races safely.
+ * Two distinct paths:
+ *
+ *   PLAN-CHANGING sync (sync.planCode !== undefined — checkout activation,
+ *   a subscription-updated event carrying a price change, or a
+ *   subscription-deleted downgrade to free): writes through the
+ *   sync_operator_plan_entitlement() RPC (migration 081), atomically. ALL
+ *   Stripe-specific subscription fields (billing_provider, customer/
+ *   subscription IDs, status, period dates) commit or roll back together
+ *   with plan_code and operators.plan — it is no longer possible for this
+ *   sync to partially commit Stripe subscription state while the
+ *   entitlement write fails, or vice versa. On failure, this function
+ *   returns { ok: false, error } exactly as before — it does NOT call
+ *   reportCriticalFailure() itself; that failure is already owned and
+ *   reported by the Stripe webhook route (src/app/api/webhooks/stripe/
+ *   route.ts), which has richer per-branch severity and Stripe-event
+ *   context this function doesn't have visibility into. See this file's
+ *   Atomicity/Observability ownership comment above for the full reasoning.
+ *
+ *   STATUS/PERIOD-ONLY sync (sync.planCode === undefined — e.g.
+ *   invoice.payment_succeeded, a renewal): unchanged from before this
+ *   migration — a single-table operator_subscriptions upsert, never
+ *   touching operators.plan. Already atomic on its own (one statement).
+ *
+ * Upserts (rather than updates) operator_subscriptions in both paths to
+ * handle first-checkout races safely.
  */
 export async function syncStripeSubscription(
   operatorId: string,
@@ -276,61 +284,50 @@ export async function syncStripeSubscription(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = createAdminClient();
 
-  const patch: Record<string, unknown> = {
-    billing_provider:                 "stripe",
-    billing_provider_customer_id:     sync.customerId,
-    billing_provider_subscription_id: sync.subscriptionId,
-    status:                           sync.status,
-    current_period_start:             sync.periodStart,
-    current_period_end:               sync.periodEnd,
-    updated_at:                       new Date().toISOString(),
-  };
-
   if (sync.planCode !== undefined) {
-    patch.plan_code = parseOperatorPlan(sync.planCode);
+    const plan = parseOperatorPlan(sync.planCode);
+    const { error } = await supabase.rpc("sync_operator_plan_entitlement", {
+      p_operator_id:                      operatorId,
+      p_plan_code:                        plan,
+      p_status:                           sync.status,
+      p_billing_provider:                 "stripe",
+      p_billing_provider_customer_id:     sync.customerId,
+      p_billing_provider_subscription_id: sync.subscriptionId,
+      p_current_period_start:             sync.periodStart,
+      p_current_period_end:               sync.periodEnd,
+    });
+
+    if (error) {
+      // Deliberately no reportCriticalFailure() call here — see the
+      // Observability ownership comment above. The webhook route's existing
+      // `if (!result.ok)` branches already own and report this.
+      console.error("[syncStripeSubscription] atomic entitlement sync failed:", error.message);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
   }
 
+  // Status/period-only sync — never touches operators.plan.
   const { error: subError } = await supabase
     .from("operator_subscriptions")
     .upsert(
-      { operator_id: operatorId, ...patch },
+      {
+        operator_id:                       operatorId,
+        billing_provider:                  "stripe",
+        billing_provider_customer_id:      sync.customerId,
+        billing_provider_subscription_id:  sync.subscriptionId,
+        status:                            sync.status,
+        current_period_start:              sync.periodStart,
+        current_period_end:                sync.periodEnd,
+        updated_at:                        new Date().toISOString(),
+      },
       { onConflict: "operator_id" }
     );
 
   if (subError) {
     console.error("[syncStripeSubscription] upsert failed:", subError.message);
     return { ok: false, error: subError.message };
-  }
-
-  if (sync.planCode !== undefined) {
-    const plan = parseOperatorPlan(sync.planCode);
-    const { error: opError } = await supabase
-      .from("operators")
-      .update({ plan })
-      .eq("id", operatorId);
-
-    if (opError) {
-      // Subscription is already updated — log but don't surface as an error.
-      //
-      // Return-value behavior is unchanged here (observability-only). The
-      // Stripe webhook route already instruments this function's primary
-      // (subError) failure via its own returned { ok: false } — this is the
-      // previously-unreported parallel gap: operators.plan is what
-      // feature-gate enforcement actually reads, so a stale mirror here is
-      // the same entitlement-integrity failure as updateOperatorPlan()'s
-      // operators-plan-sync stage, just reached from the Stripe path instead
-      // of a manual admin/cancellation path.
-      console.error("[syncStripeSubscription] operators.plan sync failed:", opError.message);
-      await reportCriticalFailure({
-        error: new Error(opError.message),
-        flow: STRIPE_SUBSCRIPTION_FLOW,
-        stage: "operators-plan-sync",
-        title: "Stripe Subscription Plan Sync Failed",
-        technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
-        context: { operatorId, targetPlan: plan, stripeSubscriptionId: sync.subscriptionId, stripeCustomerId: sync.customerId },
-        slackFields: { "Operator ID": operatorId, "Target Plan": plan, Subscription: sync.subscriptionId },
-      });
-    }
   }
 
   return { ok: true };

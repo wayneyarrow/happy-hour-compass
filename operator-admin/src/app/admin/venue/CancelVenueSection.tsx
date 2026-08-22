@@ -75,17 +75,44 @@ export default function CancelVenueSection({
   // ── Success: trigger layout re-render so the cancellation guard kicks in ──
   // router.refresh() re-runs server components including the layout, which
   // detects cancelled_at and swaps to the full farewell screen.
+  //
+  // Skipped when downgradeFailed is set — the venue cancellation itself
+  // still succeeded (never rolled back), but the operator needs an actual
+  // chance to read that their plan downgrade failed before being swept into
+  // the farewell screen; they trigger the same refresh manually via the
+  // "Continue" button below once they've seen the message.
   useEffect(() => {
-    if (state.success) {
+    if (state.success && !state.downgradeFailed) {
       router.refresh();
     }
-  }, [state.success, router]);
+  }, [state.success, state.downgradeFailed, router]);
 
   if (state.success) {
     return (
       <div className="mt-10 pt-8 border-t border-gray-200">
         <div className="rounded-xl border border-gray-200 bg-white p-6 text-center">
-          <p className="text-sm text-gray-500">Just a moment…</p>
+          {state.downgradeFailed ? (
+            <>
+              <p className="text-sm font-semibold text-amber-800">Venue cancelled</p>
+              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                Your venue has been cancelled and unpublished, but we weren&rsquo;t able to
+                update your account plan. Our team has already been notified — please
+                contact support if this isn&rsquo;t resolved soon.
+              </p>
+              {state.hhcErrorId && (
+                <p className="text-xs text-gray-400 mt-2">Reference: {state.hhcErrorId}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => router.refresh()}
+                className="mt-4 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700 transition-colors"
+              >
+                Continue
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">Just a moment…</p>
+          )}
         </div>
       </div>
     );
