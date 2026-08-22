@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { resolveSentryEnvironment, resolveSentryRelease } from "@/lib/observability/sentryRuntime";
 
 // Instrument client-side navigations (required for performance tracing).
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
@@ -20,5 +21,13 @@ Sentry.init({
   // Disable in development so local noise doesn't pollute the Sentry project.
   enabled: process.env.NODE_ENV === "production",
 
-  environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? process.env.NODE_ENV,
+  // The browser has no access to the server-only VERCEL_ENV /
+  // VERCEL_GIT_COMMIT_SHA vars — next.config.ts's `env` block re-exposes
+  // them as NEXT_PUBLIC_VERCEL_ENV / NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA at
+  // build time so the client gets the same environment/release tagging as
+  // the server, without requiring a Vercel dashboard change. See
+  // sentryRuntime.ts for why NODE_ENV can't be used for this.
+  environment: resolveSentryEnvironment(process.env.NEXT_PUBLIC_VERCEL_ENV),
+
+  release: resolveSentryRelease(process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA),
 });
