@@ -12,6 +12,14 @@ import {
   TURNSTILE_FAILURE_MESSAGE,
   TURNSTILE_TOKEN_FIELD,
 } from "@/lib/turnstile";
+import { reportCriticalAcquisitionFailure } from "@/lib/observability/reportCriticalFailure";
+
+// Flow slug shared by every reportCriticalAcquisitionFailure() call in this
+// file. Only the unexpected primary-insert failure is instrumented — field
+// validation, Turnstile failure, venue-not-found, already-claimed, and the
+// 23505 "already under review" duplicate-claim outcome are all
+// expected/business-rule paths and are deliberately left as-is.
+const VENUE_CLAIM_FLOW = "venue-claim";
 
 export type ClaimFormState = {
   success?: boolean;
@@ -130,8 +138,16 @@ export async function submitClaimAction(
         error: "A claim request for this venue is already under review.",
       };
     }
-    console.error("[submitClaimAction] Insert error:", insertError);
-    return { error: "Something went wrong. Please try again." };
+    const report = await reportCriticalAcquisitionFailure({
+      error: insertError,
+      flow: VENUE_CLAIM_FLOW,
+      stage: "claim-insert",
+      title: "Venue Claim Failed",
+      technicalSummary: "database write failed (venue_claims insert)",
+      context: { venueId: venueRow.id },
+      slackFields: { Venue: venueRow.name as string, "Venue ID": venueRow.id },
+    });
+    return { error: report.customerMessage };
   }
 
   // ── Send emails — awaited; failure is non-blocking but must be logged ────────

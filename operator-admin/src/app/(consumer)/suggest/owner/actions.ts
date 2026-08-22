@@ -30,11 +30,25 @@ import {
   type GoogleMatch,
 } from "@/lib/google/placesMatch";
 import { linkVenueToSubmission } from "@/lib/google/linkVenueToSubmission";
+import { reportCriticalAcquisitionFailure } from "@/lib/observability/reportCriticalFailure";
+import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 import type {
   LookupResult,
   SavePayload,
   SaveResult,
 } from "./types";
+
+// ── Observability ────────────────────────────────────────────────────────────
+//
+// Flow slug shared by every reportOperationalError()/reportCriticalAcquisitionFailure()
+// call in this file. Stage slugs used below: venue-lookup, venue-insert,
+// operator-provision, submission-insert, venue-submission-link — each named
+// after the actual write/step that failed, not invented. Only genuinely
+// unexpected internal failures that a customer can't self-correct are
+// instrumented here — validation errors, Turnstile failures, Google
+// no-match, and business-rule routing outcomes (pending_review/double_claim/
+// rejected) are deliberately left as-is.
+const OPERATOR_SUBMISSION_FLOW = "operator-submission";
 
 // ── Phone formatting ──────────────────────────────────────────────────────────
 
@@ -335,8 +349,16 @@ export async function saveOperatorSubmissionAction(
       .maybeSingle();
 
     if (lookupError) {
-      console.error("[saveOperatorSubmissionAction] Venue lookup error:", lookupError);
-      return { error: "Something went wrong. Please try again." };
+      const report = await reportCriticalAcquisitionFailure({
+        error: lookupError,
+        flow: OPERATOR_SUBMISSION_FLOW,
+        stage: "venue-lookup",
+        title: "Operator Venue Submission Failed",
+        technicalSummary: "database lookup failed (venues by place_id)",
+        context: { placeId },
+        slackFields: { Venue: match.name ?? formValues.businessName },
+      });
+      return { error: report.customerMessage };
     }
 
     if (!existingVenue) {
@@ -410,8 +432,16 @@ export async function saveOperatorSubmissionAction(
         .single();
 
       if (createError || !newVenue) {
-        console.error("[saveOperatorSubmissionAction] Venue creation error:", createError);
-        return { error: "Something went wrong. Please try again." };
+        const report = await reportCriticalAcquisitionFailure({
+          error: createError ?? new Error("Venue insert returned no row"),
+          flow: OPERATOR_SUBMISSION_FLOW,
+          stage: "venue-insert",
+          title: "Operator Venue Submission Failed",
+          technicalSummary: "database write failed (venues insert)",
+          context: { placeId, matchStatus },
+          slackFields: { Venue: match.name ?? formValues.businessName },
+        });
+        return { error: report.customerMessage };
       }
 
       venueId = newVenue.id;
@@ -457,11 +487,30 @@ export async function saveOperatorSubmissionAction(
     });
 
     if (!provisionResult.ok) {
+      // Sentry-only here (no reportCriticalAcquisitionFailure/Slack): the
+      // shared provisionOperatorForVenue() (src/lib/operatorActivation.ts —
+      // also used by the founder's claim-approval flow) already sends its
+      // own specific #ops-critical alert internally for whichever exact
+      // step failed (auth user creation, operator insert, venue link,
+      // rollback). A second, less-specific alert here would just be
+      // duplicate noise on top of an already-detailed one — see the "Existing
+      // side-effect alerting" section of the task report. This call adds
+      // the missing Sentry + HHC-reference correlation that alert didn't
+      // have, and gives the customer the standard reference message,
+      // without touching operatorActivation.ts (shared with an
+      // out-of-scope flow) or duplicating its Slack coverage.
+      const report = reportOperationalError({
+        error: new Error(provisionResult.error),
+        flow: OPERATOR_SUBMISSION_FLOW,
+        stage: "operator-provision",
+        severity: "critical",
+        context: { venueId },
+      });
       console.error(
         "[saveOperatorSubmissionAction] Operator provisioning failed — not inserting submission row.",
-        { error: provisionResult.error }
+        { error: provisionResult.error, hhcErrorId: report.hhcErrorId }
       );
-      return { error: provisionResult.error };
+      return { error: report.customerMessage };
     }
 
     operatorId = provisionResult.authUserId;
@@ -516,8 +565,20 @@ export async function saveOperatorSubmissionAction(
   }).select("id").single();
 
   if (insertError) {
-    console.error("[saveOperatorSubmissionAction] Insert error:", insertError);
-    return { error: "Something went wrong. Please try again." };
+    // At this point, for routedStatus === "confirmed_auto", the venue AND
+    // operator have already been created successfully — this failure would
+    // otherwise orphan them with no submission row at all, so it's included
+    // in Slack context to help recovery.
+    const report = await reportCriticalAcquisitionFailure({
+      error: insertError,
+      flow: OPERATOR_SUBMISSION_FLOW,
+      stage: "submission-insert",
+      title: "Operator Venue Submission Failed",
+      technicalSummary: "database write failed (operator_submissions insert)",
+      context: { matchStatus, routedStatus, venueId, operatorId },
+      slackFields: { Venue: formValues.businessName, "Venue ID": venueId, "Routed Status": routedStatus },
+    });
+    return { error: report.customerMessage };
   }
 
   // ── Link Case A venue back to its originating submission ─────────────────
@@ -542,12 +603,29 @@ export async function saveOperatorSubmissionAction(
   if (routedStatus === "confirmed_auto" && venueId && insertedSubmission?.id) {
     const linkResult = await linkVenueToSubmission(supabase, venueId, insertedSubmission.id);
     if (!linkResult.ok) {
+      // Sentry-only, severity "operational" (not "critical") and no Slack —
+      // the primary journey has already fully succeeded by this point
+      // (venue, operator, and submission all exist and are correctly
+      // linked forward); this only means the *reverse* attribution link
+      // wasn't backfilled. It must not be reported as a customer-blocking
+      // failure or page #ops-critical, matching the task's explicit
+      // instruction not to reintroduce duplicate-submission risk by
+      // treating this as fatal. Still worth a searchable Sentry event (with
+      // the same recovery details already logged below) for manual
+      // follow-up visibility.
+      const report = reportOperationalError({
+        error: new Error(linkResult.error.message),
+        flow: OPERATOR_SUBMISSION_FLOW,
+        stage: "venue-submission-link",
+        severity: "operational",
+        context: { venueId, submissionId: insertedSubmission.id },
+      });
       console.error(
         "[saveOperatorSubmissionAction] Failed to link venue.source_submission_id to its " +
           "originating submission — venue and submission both exist and are otherwise correctly " +
           "linked (operator_submissions.venue_id is set); only the reverse attribution link is " +
           "missing and needs manual follow-up.",
-        { venueId, submissionId: insertedSubmission.id, error: linkResult.error }
+        { venueId, submissionId: insertedSubmission.id, error: linkResult.error, hhcErrorId: report.hhcErrorId }
       );
     }
   }
