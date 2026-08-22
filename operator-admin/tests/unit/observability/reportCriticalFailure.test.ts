@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   reportCriticalAcquisitionFailure,
+  reportCriticalFailure,
 } from "../../../src/lib/observability/reportCriticalFailure";
 import type {
   SentryCaptureClient,
@@ -302,4 +303,39 @@ test("does not set a Sentry fingerprint from the HHC id (default grouping preser
   );
 
   assert.equal(calls[0].captureContext?.fingerprint, undefined);
+});
+
+// ── Generalization: reportCriticalFailure (generic name) ────────────────────
+//
+// This module was originally acquisition-specific (reportCriticalAcquisitionFailure).
+// Generalized so Stripe payment/subscription failures (and future flows) can
+// reuse the exact same mechanism under a non-acquisition-specific name.
+// reportCriticalAcquisitionFailure is kept as a stable alias for the two
+// existing acquisition-flow call sites — these tests confirm the new name
+// behaves identically, and that both names are simultaneously usable.
+
+test("reportCriticalFailure (generic name) behaves identically to reportCriticalAcquisitionFailure", async () => {
+  const { client, calls: sentryCalls } = createFakeSentryClient();
+  const { sendSlack, calls: slackCalls } = createFakeSlack();
+
+  const report = await withVercelEnv("production", () =>
+    reportCriticalFailure(
+      { ...baseParams, flow: "stripe-subscription", stage: "checkout-completed-sync", title: "Stripe Subscription Sync Failed" },
+      { sentryClient: client, sendSlack }
+    )
+  );
+
+  assert.equal(report.flow, "stripe-subscription");
+  assert.equal(report.stage, "checkout-completed-sync");
+  assert.equal(report.severity, "critical");
+  assert.ok(isValidHhcErrorReference(report.hhcErrorId));
+  assert.equal(sentryCalls.length, 1);
+  assert.equal(sentryCalls[0].captureContext?.tags?.hhc_error_id, report.hhcErrorId);
+  assert.equal(slackCalls.length, 1);
+  assert.equal(slackCalls[0].title, "Stripe Subscription Sync Failed");
+  assert.equal(slackCalls[0].metadata?.["HHC Error"], report.hhcErrorId);
+});
+
+test("reportCriticalFailure and reportCriticalAcquisitionFailure are the same underlying function (alias, not a reimplementation)", () => {
+  assert.equal(reportCriticalAcquisitionFailure, reportCriticalFailure);
 });

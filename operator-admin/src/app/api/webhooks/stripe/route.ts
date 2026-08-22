@@ -30,8 +30,39 @@ import { syncStripeSubscription, getOperatorPlanCode } from "@/lib/subscriptions
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
 import { logPlanChangeEvent } from "@/lib/planChangeEvents";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 
 export const dynamic = "force-dynamic";
+
+// ── Observability ────────────────────────────────────────────────────────────
+//
+// "stripe-webhook" covers structural failures (signature/config/unhandled
+// exception) that already had Slack coverage before this task — those are
+// enriched with Sentry + one HHC reference IN PLACE, reusing the exact same
+// existing sendSlackAlert() call (same channel, same volume) rather than
+// adding a second alert (see the task report's "existing-alert
+// consolidation" section for why).
+//
+// "stripe-subscription" covers DB-sync/payload failures for verified,
+// successfully-received Stripe events — the "customer paid but HHC didn't
+// activate/record it" class of bug. All five DB-sync branches across the
+// five verified event types are now instrumented: checkout.session.completed
+// (both its missing-fields and DB-sync branches), customer.subscription.updated,
+// customer.subscription.deleted, invoice.payment_succeeded, and
+// invoice.payment_failed. Severity is per-branch, based on actual impact —
+// see each branch's inline comment and the task report for the reasoning
+// (in short: anything that changes plan_code, or that hides a failed
+// payment from HHC entirely, is critical; a status/period-date-only
+// refresh that self-corrects on the next event is operational).
+//
+// Every reportCriticalFailure()/reportOperationalError() call here is
+// purely additive: none of them introduce a new throw, change an HTTP
+// status, or alter control flow — see Part 10 of the task report for why
+// that's required (Stripe's retry semantics must never change because
+// observability was added).
+const STRIPE_WEBHOOK_FLOW = "stripe-webhook";
+const STRIPE_SUBSCRIPTION_FLOW = "stripe-subscription";
 
 // ─── Helper: extract a string ID from an expandable Stripe field ───────────────
 
@@ -112,12 +143,30 @@ export async function POST(request: NextRequest) {
     // is short-lived), and this specific misconfiguration silently prevents
     // every plan sync and plan-change notification in this environment. Alert
     // like the unhandled-error path below, rather than only logging.
+    //
+    // This alert already existed before this task and fires once per
+    // incoming event (potentially high-volume during an outage) — adding a
+    // *second*, reportCriticalFailure()-driven Slack call here would double
+    // every one of those alerts. Instead: capture Sentry + one HHC reference
+    // via reportOperationalError() (Sentry-only), and fold that reference
+    // into this SAME existing sendSlackAlert() call so Sentry and Slack
+    // correlate — channel, severity, volume, and message are all unchanged.
+    const report = reportOperationalError({
+      error: new Error("STRIPE_WEBHOOK_SECRET is not set"),
+      flow: STRIPE_WEBHOOK_FLOW,
+      stage: "webhook-secret-missing",
+      severity: "critical",
+    });
     await sendSlackAlert({
       channel:  "ops-critical",
       severity: "critical",
       title:    "Stripe webhook misconfigured",
       message:  "STRIPE_WEBHOOK_SECRET is not set — every Stripe webhook event is being rejected before processing, blocking plan syncs and plan-change notifications in this environment.",
-      metadata: { environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown" },
+      metadata: {
+        environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+        "HHC Error": report.hhcErrorId,
+        "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
@@ -148,14 +197,34 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[webhook/stripe] Unhandled error in handler", event.type, event.id, msg);
+    // Same consolidation reasoning as the missing-webhook-secret branch
+    // above: this alert already existed and fires once per failing event —
+    // enrich it in place with Sentry + one HHC reference rather than
+    // sending a second alert. Sentry capture happens first so the report's
+    // hhcErrorId/sentryEventId are available to fold into this same call.
+    const report = reportOperationalError({
+      error: e,
+      flow: STRIPE_WEBHOOK_FLOW,
+      stage: "handler-exception",
+      severity: "critical",
+      context: { stripeEventId: event.id, stripeEventType: event.type },
+    });
     await sendSlackAlert({
       channel: "ops-critical",
       severity: "critical",
       title: "Stripe webhook handler failed",
       message: `Event ${event.type} (${event.id}) threw an unhandled error.`,
-      metadata: { error: msg, event_id: event.id, event_type: event.type },
+      metadata: {
+        error: msg,
+        event_id: event.id,
+        event_type: event.type,
+        "HHC Error": report.hhcErrorId,
+        "Sentry Event": report.sentryEventId ?? "unavailable",
+      },
     });
-    // Return 500 so Stripe retries delivery.
+    // Return 500 so Stripe retries delivery — unchanged by the reporting
+    // added above (see Part 10 of the task report: nothing here can alter
+    // this status).
     return NextResponse.json({ error: "Handler failed" }, { status: 500 });
   }
 
@@ -197,6 +266,29 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
         console.error("[webhook/stripe] checkout.session.completed: missing required fields — cannot activate plan", {
           operatorId, targetPlan, customerId, subscriptionId, sessionId: session.id,
         });
+        // Stripe considers this checkout complete (money has moved) but HHC
+        // cannot activate it — and unlike a DB-sync failure, there is no
+        // later event to reconcile from: a subscription.updated event would
+        // only arrive for a subscriptionId we don't even have here if that
+        // was the missing field, and operator_id/target_plan are only ever
+        // set by our OWN checkout session creation, so a later event can't
+        // supply them either. Not safely recoverable elsewhere → critical.
+        await reportCriticalFailure({
+          error: new Error(
+            `checkout.session.completed missing required fields: ${[
+              !operatorId ? "operator_id" : null,
+              !targetPlan ? "target_plan" : null,
+              !customerId ? "customer" : null,
+              !subscriptionId ? "subscription" : null,
+            ].filter(Boolean).join(", ")}`
+          ),
+          flow: STRIPE_SUBSCRIPTION_FLOW,
+          stage: "checkout-completed-invalid-payload",
+          title: "Stripe Subscription Sync Failed",
+          technicalSummary: "checkout session missing required fields for activation",
+          context: { stripeEventId: event.id, stripeSessionId: session.id },
+          slackFields: { "Stripe Event": event.id, "Checkout Session": session.id },
+        });
         break;
       }
 
@@ -233,6 +325,32 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] checkout.session.completed: DB sync failed:", result.error);
+        // Highest-priority gap this task exists to close: Stripe has
+        // successfully charged the customer and told us so, but the plan
+        // activation write failed — silently, before this task. No throw
+        // here (see the file-header comment) — this branch's existing
+        // behavior already returns 200 to Stripe either way, and a retry
+        // wouldn't help without human intervention (the event itself
+        // already fully arrived and was valid); the goal is visibility, not
+        // changing that response.
+        await reportCriticalFailure({
+          error: new Error(result.error ?? "syncStripeSubscription failed"),
+          flow: STRIPE_SUBSCRIPTION_FLOW,
+          stage: "checkout-completed-sync",
+          title: "Stripe Subscription Sync Failed",
+          technicalSummary: "database sync failed (checkout activation)",
+          context: {
+            stripeEventId: event.id,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            planCode: targetPlan,
+          },
+          slackFields: {
+            "Stripe Event": event.id,
+            Subscription: subscriptionId,
+            Plan: targetPlan,
+          },
+        });
       } else if (oldPlanForCheckout !== targetPlan) {
         console.log("[webhook/stripe] checkout.session.completed: plan activated successfully →", targetPlan);
         await logPlanChangeEvent({
@@ -304,6 +422,47 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] customer.subscription.updated: DB sync failed:", result.error);
+        // Severity depends on actual impact: when this update carries a
+        // plan (price) change, a failed sync leaves HHC's entitlement
+        // materially inconsistent with what Stripe now has (an upgrade/
+        // downgrade the operator paid for silently didn't take effect) —
+        // critical. When there's no plan change (a period-date/status-only
+        // refresh, e.g. a renewal), a failed sync is comparatively benign —
+        // it's stale but not wrong about entitlement, and typically
+        // self-corrects on the next Stripe event for the same subscription
+        // — operational, Sentry-only, no Slack page.
+        if (planCode) {
+          await reportCriticalFailure({
+            error: new Error(result.error ?? "syncStripeSubscription failed"),
+            flow: STRIPE_SUBSCRIPTION_FLOW,
+            stage: "subscription-updated-sync",
+            title: "Stripe Subscription Sync Failed",
+            technicalSummary: "database sync failed (plan change)",
+            context: {
+              stripeEventId: event.id,
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: sub.id,
+              planCode,
+            },
+            slackFields: {
+              "Stripe Event": event.id,
+              Subscription: sub.id,
+              Plan: planCode,
+            },
+          });
+        } else {
+          reportOperationalError({
+            error: new Error(result.error ?? "syncStripeSubscription failed"),
+            flow: STRIPE_SUBSCRIPTION_FLOW,
+            stage: "subscription-updated-sync",
+            severity: "operational",
+            context: {
+              stripeEventId: event.id,
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: sub.id,
+            },
+          });
+        }
       } else if (planCode && oldPlanForUpdate && planCode !== oldPlanForUpdate) {
         await logPlanChangeEvent({
           operatorId,
@@ -349,6 +508,26 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] customer.subscription.deleted: DB sync failed:", result.error);
+        // Always critical: this event always represents an entitlement
+        // change (downgrade to free), unlike subscription.updated, which
+        // can be a benign period-date-only refresh.
+        await reportCriticalFailure({
+          error: new Error(result.error ?? "syncStripeSubscription failed"),
+          flow: STRIPE_SUBSCRIPTION_FLOW,
+          stage: "subscription-deleted-sync",
+          title: "Stripe Subscription Sync Failed",
+          technicalSummary: "database sync failed (downgrade to free)",
+          context: {
+            stripeEventId: event.id,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: sub.id,
+          },
+          slackFields: {
+            "Stripe Event": event.id,
+            Subscription: sub.id,
+            Plan: "free",
+          },
+        });
       } else {
         await logPlanChangeEvent({
           operatorId,
@@ -400,6 +579,23 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] invoice.payment_succeeded: DB sync failed:", result.error);
+        // Operational, Sentry-only — this sync call never includes
+        // planCode (source-confirmed above: only status + period dates),
+        // and `status` is display-only everywhere in this codebase (the
+        // subscription page's "Past Due"/"Active" badge is its only
+        // consumer — grep confirms nothing gates feature access on it;
+        // only plan_code does, via src/lib/plans.ts, which this call never
+        // touches). A failed sync here leaves the status badge/period
+        // dates stale, not entitlement wrong, and self-corrects on the
+        // next Stripe event for the same subscription — not the "customer
+        // paid but got nothing" class of bug this task targets.
+        reportOperationalError({
+          error: new Error(result.error ?? "syncStripeSubscription failed"),
+          flow: STRIPE_SUBSCRIPTION_FLOW,
+          stage: "invoice-payment-succeeded-sync",
+          severity: "operational",
+          context: { stripeEventId: event.id, stripeInvoiceId: invoice.id, stripeSubscriptionId: subscriptionId },
+        });
       }
       break;
     }
@@ -441,8 +637,33 @@ async function handleEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
 
       if (!result.ok) {
         console.error("[webhook/stripe] invoice.payment_failed: DB sync failed:", result.error);
+        // Critical, and deliberately distinct from the unconditional
+        // "Stripe payment failed" #ops-alerts notification below: that one
+        // is the EXPECTED business event (a customer's card was declined —
+        // fires every time regardless of sync outcome, unchanged by this
+        // task). This one is the opposite-direction risk from
+        // invoice.payment_succeeded's failure: `status` alone doesn't gate
+        // access (see that branch's comment), but failing to record a
+        // failed payment means HHC has no record that this operator is
+        // now behind on payment at all — a silent collections/dunning
+        // blind spot with a real revenue-integrity consequence, unlike
+        // merely being slow to reflect good news. Reported separately, to
+        // #ops-critical, so the two alerts' meanings stay unambiguous:
+        // "a customer's payment failed" vs "HHC failed to notice it."
+        await reportCriticalFailure({
+          error: new Error(result.error ?? "syncStripeSubscription failed"),
+          flow: STRIPE_SUBSCRIPTION_FLOW,
+          stage: "invoice-payment-failed-sync",
+          title: "Stripe Subscription Sync Failed",
+          technicalSummary: "database sync failed (past_due not recorded)",
+          context: { stripeEventId: event.id, stripeInvoiceId: invoice.id, stripeSubscriptionId: sub.id },
+          slackFields: { "Stripe Event": event.id, Subscription: sub.id },
+        });
       }
 
+      // Unconditional, unchanged by this task — the expected business
+      // notification that a customer's payment failed, regardless of
+      // whether the sync above succeeded.
       await sendSlackAlert({
         channel:  "ops-alerts",
         severity: "warning",

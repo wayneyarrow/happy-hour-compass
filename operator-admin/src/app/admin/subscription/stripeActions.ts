@@ -4,6 +4,15 @@ import { resolveOperatorContext } from "@/lib/impersonation";
 import { getMembershipRole } from "@/lib/memberships";
 import { getOperatorSubscription } from "@/lib/subscriptions";
 import { getStripeClient, getStripePriceId } from "@/lib/stripe";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+
+// A legitimate, authenticated, authorized operator directly blocked from
+// ever reaching Stripe to pay is treated the same as an acquisition-flow
+// customer directly blocked mid-journey — critical, same as
+// reportCriticalFailure's other callers. Only reached past every
+// expected/customer-correctable check below (not authenticated, not
+// resolvable, not owner) — those remain untouched and uninstrumented.
+const STRIPE_CHECKOUT_FLOW = "stripe-checkout";
 
 // ─── Shared utility ────────────────────────────────────────────────────────────
 
@@ -63,7 +72,16 @@ export async function createCheckoutSessionAction(
     priceId = getStripePriceId(plan);
   } catch (e) {
     console.error("[createCheckoutSessionAction] price ID error:", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Billing is temporarily unavailable. Please try again later." };
+    const report = await reportCriticalFailure({
+      error: e,
+      flow: STRIPE_CHECKOUT_FLOW,
+      stage: "checkout-precondition",
+      title: "Stripe Checkout Blocked",
+      technicalSummary: "price ID misconfigured",
+      context: { operatorId, plan },
+      slackFields: { Plan: plan, "Operator ID": operatorId },
+    });
+    return { ok: false, error: report.customerMessage };
   }
 
   if (!priceId) {
@@ -75,7 +93,16 @@ export async function createCheckoutSessionAction(
     stripe = getStripeClient();
   } catch (e) {
     console.error("[createCheckoutSessionAction] Stripe client error:", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Billing is temporarily unavailable. Please try again later." };
+    const report = await reportCriticalFailure({
+      error: e,
+      flow: STRIPE_CHECKOUT_FLOW,
+      stage: "checkout-precondition",
+      title: "Stripe Checkout Blocked",
+      technicalSummary: "Stripe client initialization failed",
+      context: { operatorId, plan },
+      slackFields: { Plan: plan, "Operator ID": operatorId },
+    });
+    return { ok: false, error: report.customerMessage };
   }
 
   const appUrl = getAppUrl();
@@ -110,13 +137,35 @@ export async function createCheckoutSessionAction(
     const session = await stripe.checkout.sessions.create(params);
 
     if (!session.url) {
-      return { ok: false, error: "Failed to create checkout session. Please try again." };
+      // Stripe accepted the request and returned a session object but no
+      // URL to redirect to — an anomalous, unexpected shape, not a normal
+      // Stripe error response (which would have thrown into the catch
+      // below instead).
+      const report = await reportCriticalFailure({
+        error: new Error("Stripe checkout.sessions.create returned no url"),
+        flow: STRIPE_CHECKOUT_FLOW,
+        stage: "checkout-session-create",
+        title: "Stripe Checkout Blocked",
+        technicalSummary: "Stripe session created with no redirect url",
+        context: { operatorId, plan, stripeSessionId: session.id },
+        slackFields: { Plan: plan, "Operator ID": operatorId, "Stripe Session": session.id },
+      });
+      return { ok: false, error: report.customerMessage };
     }
 
     return { ok: true, url: session.url };
   } catch (e) {
     console.error("[createCheckoutSessionAction] Stripe error:", e instanceof Error ? e.message : e);
-    return { ok: false, error: "Billing is temporarily unavailable. Please try again later." };
+    const report = await reportCriticalFailure({
+      error: e,
+      flow: STRIPE_CHECKOUT_FLOW,
+      stage: "checkout-session-create",
+      title: "Stripe Checkout Blocked",
+      technicalSummary: "Stripe checkout session creation failed",
+      context: { operatorId, plan },
+      slackFields: { Plan: plan, "Operator ID": operatorId },
+    });
+    return { ok: false, error: report.customerMessage };
   }
 }
 
