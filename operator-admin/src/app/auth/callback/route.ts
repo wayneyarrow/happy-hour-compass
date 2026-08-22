@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { syncConsumerBrevoEligibility } from "@/lib/brevo/consumerSync";
 import { buildConsumerDisplayName } from "@/lib/consumerName";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+
+// Code-exchange failure (line ~95 below) is deliberately NOT instrumented —
+// it's almost always an expired/invalid/already-used link (an expected
+// auth-state outcome, already handled by the existing redirect to
+// /forgot-password?info=link-expired), not a distinguishable internal
+// failure. The consumer_profiles fallback insert below IS instrumented —
+// same "last-resort retry, no further healing" reasoning as
+// createConsumerProfile's isRetryAttempt:true case in sign-up/actions.ts
+// (this route has its own separate, non-refactored insert rather than
+// calling that shared function, but represents the identical concern).
 
 /**
  * Auth callback route — handles Supabase PKCE code exchange.
@@ -78,6 +89,15 @@ export async function GET(request: NextRequest) {
 
           if (profileError) {
             console.error("[auth/callback] consumer_profiles fallback insert failed:", profileError.message);
+            await reportCriticalFailure({
+              error: new Error(profileError.message),
+              flow: "consumer-signup",
+              stage: "profile-create",
+              title: "Consumer Profile Creation Failed",
+              technicalSummary: "database write failed (consumer_profiles fallback insert, retry)",
+              context: { isRetryAttempt: true, userId: data.user.id },
+              slackFields: { "User ID": data.user.id },
+            });
           }
         }
 

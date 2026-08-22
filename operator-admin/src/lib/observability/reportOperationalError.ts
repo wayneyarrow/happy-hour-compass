@@ -93,8 +93,30 @@ export function getDefaultSentryCaptureClient(): SentryCaptureClient {
 // looser JS caller, or a value that changed shape after the types were
 // written). Every drop is logged so misuse is visible during development
 // rather than silently vanishing.
+//
+// The `^((first|last|full)[_-]?)?name$` branch (anchored to match the
+// WHOLE key, unlike every other branch here, which matches anywhere in the
+// key) drops personal-name fields — firstName/first_name/firstname,
+// lastName/last_name/lastname, fullName/full_name/fullname, and a bare
+// "name" — without catching safe entity-name identifiers like `venueName`
+// or `businessName`, which don't start with first/last/full and aren't the
+// bare word "name". Discovered as a gap during Consumer Signup observability
+// work (the first flow whose context is genuinely name-adjacent); hardened
+// here as shared infrastructure rather than patched per-flow.
+//
+// `ssn` was changed from a bare substring match to `(?<![a-z])ssn(?![a-z])`
+// (i.e. not glued directly onto another letter) as a side effect of adding
+// the name-field branch above: `businessName` contains the literal
+// substring "ssN" (busine-SS-N-ame), which the old bare `ssn` match caught
+// as a false positive — exactly the safe entity-name field this change is
+// required to keep allowing. The lookaround still matches "ssn" on its own,
+// with an underscore/hyphen delimiter (`consumer_ssn`), or any other
+// non-letter boundary; it only stops matching an "ssn" glued directly onto
+// another word with no delimiter or case-boundary hint at all (e.g. a
+// hypothetical "consumerSsn") — not a real field anywhere in this codebase,
+// and a reasonable trade-off for a term this app never actually collects.
 const SENSITIVE_CONTEXT_KEY_PATTERN =
-  /email|phone|address|token|password|passwd|secret|api[-_]?key|cookie|signature|ssn|card|auth(?!or)/i;
+  /email|phone|address|token|password|passwd|secret|api[-_]?key|cookie|signature|(?<![a-z])ssn(?![a-z])|card|auth(?!or)|^((first|last|full)[_-]?)?name$/i;
 
 export type OperationalErrorContext = Record<
   string,

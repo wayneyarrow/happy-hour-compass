@@ -116,6 +116,12 @@ export default function AuthConfirmPage() {
                 privacyAcceptedAt: meta.consumer_privacy_accepted_at ?? nowIso,
                 marketingConsent: meta.consumer_marketing_consent ?? false,
                 marketingConsentAt: meta.consumer_marketing_consent_at ?? null,
+                // This IS the last-resort retry (see createConsumerProfile's
+                // own isRetryAttempt doc comment) — a signup-time attempt
+                // already ran and either succeeded (this upsert is then a
+                // safe no-op) or failed. If it fails again here, there is no
+                // further automatic healing.
+                isRetryAttempt: true,
               });
               if (profileError) {
                 console.error("[auth/confirm] createConsumerProfile retry failed:", profileError);

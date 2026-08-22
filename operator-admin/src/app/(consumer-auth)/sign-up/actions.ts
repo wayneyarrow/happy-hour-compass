@@ -12,6 +12,27 @@ import {
   getClientIpFromHeaders,
   TURNSTILE_FAILURE_MESSAGE,
 } from "@/lib/turnstile";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+import { reportOperationalError } from "@/lib/observability/reportOperationalError";
+
+// ── Observability ────────────────────────────────────────────────────────────
+//
+// createConsumerProfile() is the single ownership point for its own
+// consumer_profiles-write failure — it's called from THIS file's signup
+// action, from /auth/confirm/page.tsx's retry, and (via its own parallel
+// inline insert, not a call to this function) from /auth/callback's
+// resilience fallback. See this function's `isRetryAttempt` doc comment for
+// why severity differs between the first (signup-time) attempt and a retry.
+// Only the generateLink failure below (stage "auth-user-create") and the
+// confirmation-email failure (stage "confirmation-email-send", Sentry-only —
+// its Slack alert already lives inside the shared email subsystem, same
+// reasoning as operator-activation's activation-email stage) are
+// instrumented at THIS layer. Turnstile failure, the "account already
+// exists" duplicate case, the standard-criticality founder-notification
+// email, the proactive #consumer-signup Slack notification, and
+// syncConsumerBrevoEligibility() (explicitly out of scope — see the task
+// report) are all deliberately left as-is.
+const CONSUMER_SIGNUP_FLOW = "consumer-signup";
 
 export async function createConsumerProfile({
   userId,
@@ -22,6 +43,7 @@ export async function createConsumerProfile({
   privacyAcceptedAt,
   marketingConsent,
   marketingConsentAt,
+  isRetryAttempt = false,
 }: {
   userId: string;
   email: string;
@@ -31,6 +53,17 @@ export async function createConsumerProfile({
   privacyAcceptedAt: string;
   marketingConsent: boolean;
   marketingConsentAt: string | null;
+  /**
+   * True when this call is the LAST-RESORT retry (from /auth/confirm or
+   * /auth/callback, after the signup-time attempt already failed) rather
+   * than the first attempt made during signup itself. The first attempt
+   * still has this retry safety net ahead of it and can self-heal silently
+   * (Sentry-only, operational). A retry failing means there is no further
+   * automatic healing — the auth user exists and can sign in, but the
+   * profile row never gets created — so it's reported critical with a
+   * production Slack page instead.
+   */
+  isRetryAttempt?: boolean;
 }): Promise<string | null> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("consumer_profiles").upsert(
@@ -51,6 +84,25 @@ export async function createConsumerProfile({
 
   if (error) {
     console.error("[createConsumerProfile]", error.message, "userId:", userId);
+    if (isRetryAttempt) {
+      await reportCriticalFailure({
+        error: new Error(error.message),
+        flow: CONSUMER_SIGNUP_FLOW,
+        stage: "profile-create",
+        title: "Consumer Profile Creation Failed",
+        technicalSummary: "database write failed (consumer_profiles upsert, retry)",
+        context: { isRetryAttempt: true, userId },
+        slackFields: { "User ID": userId },
+      });
+    } else {
+      reportOperationalError({
+        error: new Error(error.message),
+        flow: CONSUMER_SIGNUP_FLOW,
+        stage: "profile-create",
+        severity: "operational",
+        context: { isRetryAttempt: false, userId },
+      });
+    }
     return error.message;
   }
 
@@ -154,12 +206,22 @@ export async function createConsumerAccount({
     // equivalent admin.createUser "already exists" case.
     const isDuplicate = linkError?.message?.toLowerCase().includes("already");
     console.error("[createConsumerAccount] generateLink failed:", linkError?.message);
-    return {
-      ok: false,
-      error: isDuplicate
-        ? "An account with this email already exists. Please sign in instead, or use a different email."
-        : "Something went wrong. Please try again.",
-    };
+    if (isDuplicate) {
+      // Expected outcome, not a failure — a real consumer hit an ordinary
+      // "already registered" case. No Sentry/HHC reporting.
+      return {
+        ok: false,
+        error: "An account with this email already exists. Please sign in instead, or use a different email.",
+      };
+    }
+    const report = await reportCriticalFailure({
+      error: new Error(linkError?.message ?? "generateLink returned no action_link/user"),
+      flow: CONSUMER_SIGNUP_FLOW,
+      stage: "auth-user-create",
+      title: "Consumer Signup Failed",
+      technicalSummary: "Supabase generateLink (signup) failed",
+    });
+    return { ok: false, error: report.customerMessage };
   }
 
   // ── Analytics: distinguish a brand-new signup from a resend ──────────────
@@ -232,11 +294,28 @@ export async function createConsumerAccount({
 
   if (!emailResult.ok) {
     // sendTransactionalEmail already escalates critical failures to
-    // #ops-critical. The account itself was created successfully, so this
-    // doesn't block the user's success screen — matching how a failure here
-    // was already invisible to the app under the previous Supabase-sent-email
-    // flow (Supabase's own email delivery wasn't observable at all before).
-    console.error("[createConsumerAccount] Confirmation email failed:", emailResult.error);
+    // #ops-critical (criticality "critical" — src/lib/email.ts) — that
+    // alert lives inside the shared email subsystem behind
+    // sendConsumerSignupConfirmationEmail, so it can't be enriched from
+    // here without touching that shared code (same reasoning as operator
+    // activation's "activation-email" stage). Sentry-only reporting still
+    // gives this occurrence its own searchable HHC reference. The account
+    // itself was created successfully, so this doesn't block the user's
+    // success screen — matching how a failure here was already invisible
+    // to the app under the previous Supabase-sent-email flow (Supabase's
+    // own email delivery wasn't observable at all before).
+    const report = reportOperationalError({
+      error: new Error(emailResult.error ?? "confirmation email send failed"),
+      flow: CONSUMER_SIGNUP_FLOW,
+      stage: "confirmation-email-send",
+      severity: "critical",
+      context: { userId: linkData.user.id },
+    });
+    console.error(
+      "[createConsumerAccount] Confirmation email failed:",
+      emailResult.error,
+      { hhcErrorId: report.hhcErrorId }
+    );
   }
 
   const slackResult = await sendSlackAcquisitionNotification({

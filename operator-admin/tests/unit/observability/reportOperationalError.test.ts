@@ -263,3 +263,49 @@ test("sanitizeOperationalContext returns undefined for empty/undefined input", (
 test("sanitizeOperationalContext returns undefined when every key was dropped", () => {
   assert.equal(sanitizeOperationalContext({ email: "a@b.com", token: "x" }), undefined);
 });
+
+// ── Personal-name fields (added: Consumer Signup observability hardening) ──
+
+test("sanitizeOperationalContext drops personal first/last/full-name fields in every naming convention", () => {
+  const clean = sanitizeOperationalContext({
+    firstName: "Mindy",
+    first_name: "Mindy",
+    firstname: "Mindy",
+    lastName: "Green",
+    last_name: "Green",
+    lastname: "Green",
+    fullName: "Mindy Green",
+    full_name: "Mindy Green",
+    fullname: "Mindy Green",
+    name: "Mindy Green",
+    safeCount: 3, // must survive
+  });
+
+  assert.deepEqual(clean, { safeCount: 3 });
+});
+
+test("sanitizeOperationalContext still allows safe entity-name identifiers (venueName, businessName)", () => {
+  const clean = sanitizeOperationalContext({
+    venueName: "Casa de Frida",
+    businessName: "BTS Cocktail Bar & Kitchen",
+    displayName: "Mindy G.",
+    userId: "u-123",
+  });
+
+  assert.deepEqual(clean, {
+    venueName: "Casa de Frida",
+    businessName: "BTS Cocktail Bar & Kitchen",
+    displayName: "Mindy G.",
+    userId: "u-123",
+  });
+});
+
+test("sanitizeOperationalContext still catches ssn as its own token or with a delimiter, without breaking businessName", () => {
+  const clean = sanitizeOperationalContext({
+    ssn: "123-45-6789",
+    consumer_ssn: "123-45-6789",
+    businessName: "BTS Cocktail Bar & Kitchen", // must survive — the exact case this ssn fix exists for
+  });
+
+  assert.deepEqual(clean, { businessName: "BTS Cocktail Bar & Kitchen" });
+});
