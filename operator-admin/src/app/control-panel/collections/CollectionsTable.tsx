@@ -9,6 +9,7 @@ import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import type { CollectionSummary, CollectionType, CollectionStatus, CollectionLifecycleFilter } from "@/lib/data/collectionsShared";
 import { RAIL_LABELS, type RailKey } from "@/lib/data/discoverOverridesShared";
 import { restoreCollectionAction, type ArchiveActionState } from "./actions";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,10 +34,6 @@ const TYPE_LABELS: Record<CollectionType, string> = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function algorithmLabel(key: CollectionRow["algorithmKey"]): string {
   if (!key) return "Manual";

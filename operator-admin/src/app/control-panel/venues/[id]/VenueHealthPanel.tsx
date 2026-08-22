@@ -1,4 +1,5 @@
 import { PLAN_LABELS } from "@/lib/plans";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 import type {
   VenueHealthData,
   HealthStatus,
@@ -99,11 +100,6 @@ function Badge({ label, classes }: { label: string; classes: string }) {
       {label}
     </span>
   );
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function fmtRelative(iso: string | null): string {

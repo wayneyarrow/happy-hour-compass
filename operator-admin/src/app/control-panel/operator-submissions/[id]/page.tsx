@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getOperatorSubmissionById, getSubmissionNotes } from "@/lib/data/operatorSubmissions";
+import { formatDateTime } from "@/lib/controlPanelDateTime";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
@@ -9,16 +10,6 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(iso: string | null | undefined, withTime = false): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-US", {
-    month:  "short",
-    day:    "numeric",
-    year:   "numeric",
-    ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}),
-  });
-}
 
 function na(value: string | null | undefined): React.ReactNode {
   if (value == null || value === "") {
@@ -264,7 +255,7 @@ export default async function OperatorSubmissionDetailPage({
               <MetaRow label="Additional notes">
                 {submission.additional_notes || <span className="text-gray-400">None</span>}
               </MetaRow>
-              <MetaRow label="Submitted">{fmt(submission.submitted_at, true)}</MetaRow>
+              <MetaRow label="Submitted">{formatDateTime(submission.submitted_at)}</MetaRow>
             </dl>
           </Section>
 
@@ -468,7 +459,7 @@ export default async function OperatorSubmissionDetailPage({
                 )}
                 {submission.more_info_completed_at && (
                   <MetaRow label="Submitted at">
-                    <span className="text-gray-500">{fmt(submission.more_info_completed_at, true)}</span>
+                    <span className="text-gray-500">{formatDateTime(submission.more_info_completed_at)}</span>
                   </MetaRow>
                 )}
               </dl>

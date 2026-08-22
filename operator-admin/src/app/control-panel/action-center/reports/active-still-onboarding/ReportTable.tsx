@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 import type { ActiveStillOnboardingRow } from "@/lib/data/actionCenter";
 
 type SortCol =
@@ -12,11 +13,6 @@ type SortCol =
 
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "setupHealthScorePct";
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function readUrlParam(key: string, fb: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fb;

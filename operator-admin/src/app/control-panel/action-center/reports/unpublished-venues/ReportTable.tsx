@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 import type { UnpublishedVenueRow } from "@/lib/data/actionCenter";
 
 type SortCol =
@@ -12,11 +13,6 @@ type SortCol =
 
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "setupHealthScorePct";
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function daysSince(iso: string | null): number | null {
   if (!iso) return null;

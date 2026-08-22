@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import StatusBadge from "@/components/StatusBadge";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -26,13 +27,6 @@ type ClaimFilter = "all" | "claimed" | "unclaimed";
 const PAGE_SIZE   = 25;
 const DEFAULT_SORT: SortCol = "updated_at";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
 
 function readUrlParam(key: string, fallback: string): string {
   const p = new URLSearchParams(window.location.search);

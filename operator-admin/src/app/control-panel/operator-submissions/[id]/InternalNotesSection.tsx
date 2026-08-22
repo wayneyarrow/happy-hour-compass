@@ -4,18 +4,9 @@ import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addSubmissionNoteAction, type AddNoteState } from "./actions";
 import type { SubmissionNote } from "@/lib/data/operatorSubmissions";
+import { formatDateTime } from "@/lib/controlPanelDateTime";
 
 const INITIAL_STATE: AddNoteState = {};
-
-function fmtNote(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month:  "short",
-    day:    "numeric",
-    year:   "numeric",
-    hour:   "numeric",
-    minute: "2-digit",
-  });
-}
 
 // ── Note entry ────────────────────────────────────────────────────────────────
 
@@ -27,7 +18,7 @@ function NoteEntry({ note }: { note: SubmissionNote }) {
         {note.note}
       </p>
       <p className="text-[11px] text-gray-400">
-        {fmtNote(note.created_at)} · {author}
+        {formatDateTime(note.created_at)} · {author}
       </p>
     </div>
   );

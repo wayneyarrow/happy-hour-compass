@@ -4,18 +4,9 @@ import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addClaimNoteAction, type AddClaimNoteState } from "./actions";
 import type { ClaimNote } from "@/lib/data/claims";
+import { formatDateTime } from "@/lib/controlPanelDateTime";
 
 const INITIAL_STATE: AddClaimNoteState = {};
-
-function fmtNote(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month:  "short",
-    day:    "numeric",
-    year:   "numeric",
-    hour:   "numeric",
-    minute: "2-digit",
-  });
-}
 
 function NoteEntry({ note }: { note: ClaimNote }) {
   const author =
@@ -27,7 +18,7 @@ function NoteEntry({ note }: { note: ClaimNote }) {
         {note.note}
       </p>
       <p className="text-[11px] text-gray-400">
-        {fmtNote(note.created_at)} · {author}
+        {formatDateTime(note.created_at)} · {author}
       </p>
     </div>
   );

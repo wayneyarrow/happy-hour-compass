@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getOperatorSubmissions } from "@/lib/data/operatorSubmissions";
+import { formatDateTime } from "@/lib/controlPanelDateTime";
 import SubmissionsTable from "./SubmissionsTable";
 
 export const dynamic = "force-dynamic";
@@ -17,16 +18,6 @@ type TabKey = (typeof TABS)[number]["key"];
 
 function isValidTab(tab: string | undefined): tab is TabKey {
   return TABS.some((t) => t.key === tab);
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day:   "numeric",
-    year:  "numeric",
-    hour:  "numeric",
-    minute: "2-digit",
-  });
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -122,8 +113,8 @@ export default async function OperatorSubmissionsPage({
         <SubmissionsTable
           rows={submissions.map((s) => ({
             ...s,
-            submitted: formatDate(s.submitted_at),
-            updated:   formatDate(s.updated_at),
+            submitted: formatDateTime(s.submitted_at),
+            updated:   formatDateTime(s.updated_at),
           }))}
         />
       )}

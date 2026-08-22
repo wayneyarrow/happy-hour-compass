@@ -13,6 +13,11 @@ type SortCol =
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "eventViews30d";
 
+// Intentionally NOT routed through src/lib/controlPanelDateTime's Pacific-time
+// helpers. `eventDate` is `events.first_date`, a plain Postgres DATE with no
+// time-of-day/instant meaning (unlike the TIMESTAMPTZ columns elsewhere in the
+// Control Panel). Applying a timezone conversion to a bare calendar date can
+// shift it to the wrong day, so this formats the stored Y-M-D literally.
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

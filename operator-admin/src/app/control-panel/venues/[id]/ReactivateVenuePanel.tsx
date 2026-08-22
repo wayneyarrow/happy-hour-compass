@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { reactivateVenueAction, type VenueActionResult } from "./actions";
+import { formatDate } from "@/lib/controlPanelDateTime";
 
 type Step = "idle" | "confirm";
 
@@ -36,9 +37,7 @@ export default function ReactivateVenuePanel({
     );
   }
 
-  const fmtDate = new Date(cancelledAt).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
+  const fmtDate = formatDate(cancelledAt);
 
   return (
     <div className="space-y-3">

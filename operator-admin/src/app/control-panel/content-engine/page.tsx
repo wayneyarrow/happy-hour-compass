@@ -4,6 +4,7 @@ export const metadata = { title: "Content Engine" };
 import Link from "next/link";
 import { getContentGuides, type GuideStatus, type GuideType } from "@/lib/data/contentGuides";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 
 // ── Display maps ─────────────────────────────────────────────────────────────
 
@@ -24,13 +25,6 @@ const STATUS_LABELS: Record<GuideStatus, string> = {
   draft: "Draft",
   published: "Published",
 };
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 

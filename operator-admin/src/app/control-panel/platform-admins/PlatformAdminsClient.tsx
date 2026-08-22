@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { PlatformAdmin } from "@/lib/platformAdmins";
+import { formatDateISO } from "@/lib/controlPanelDateTime";
 import {
   invitePlatformAdminAction,
   revokePlatformAdminAction,
@@ -169,7 +170,7 @@ function AdminTable({
                 </td>
                 <td className="px-4 py-3 text-gray-500 hidden md:table-cell whitespace-nowrap">
                   {admin.accepted_at
-                    ? new Date(admin.accepted_at).toLocaleDateString("en-CA")
+                    ? formatDateISO(admin.accepted_at)
                     : <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-4 py-3 text-right">

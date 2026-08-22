@@ -6,16 +6,13 @@ import { SortIcon, Pagination } from "@/components/TableControls";
 import StatusBadge from "@/components/StatusBadge";
 import type { MarketRecord, CityRecord } from "@/lib/geo/types";
 import type { HomepageSummary, HomepageStatus } from "@/lib/data/homepages";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 
 type SortCol = "name" | "status" | "updatedAt";
 type StatusFilter = "all" | HomepageStatus;
 
 const PAGE_SIZE = 25;
 const DEFAULT_SORT: SortCol = "updatedAt";
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function readUrlParam(key: string, fallback: string): string {
   const p = new URLSearchParams(window.location.search);

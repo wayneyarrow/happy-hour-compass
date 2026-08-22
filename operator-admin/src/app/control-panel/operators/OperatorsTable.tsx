@@ -5,6 +5,7 @@ import { SortIcon, Pagination } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
+import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -25,13 +26,6 @@ type SortCol = "email" | "venueName" | "plan" | "created_at" | "updated_at";
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "created_at";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
-}
 
 function readUrlParam(key: string, fallback: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fallback;

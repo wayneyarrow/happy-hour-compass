@@ -1,16 +1,9 @@
 import { getClaimsForReview } from "@/lib/data/claims";
+import { formatDate } from "@/lib/controlPanelDateTime";
 import ClaimsTable from "./ClaimsTable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claims" };
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export default async function ClaimsPage() {
   const { claims, error } = await getClaimsForReview();

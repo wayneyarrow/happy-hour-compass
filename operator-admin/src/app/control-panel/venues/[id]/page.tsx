@@ -15,6 +15,7 @@ import VenueHealthPanel from "./VenueHealthPanel";
 import ReactivateVenuePanel from "./ReactivateVenuePanel";
 import FeaturedInContentSection from "./FeaturedInContentSection";
 import GoogleIdentityPanel from "./GoogleIdentityPanel";
+import { formatDate as fmt } from "@/lib/controlPanelDateTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -68,15 +69,6 @@ type VenueDetail = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function na(value: string | null | undefined): React.ReactNode {
   if (value == null || value === "") {

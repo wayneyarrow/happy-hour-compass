@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
+import { formatDate } from "@/lib/controlPanelDateTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Audit Logs" };
@@ -34,14 +35,6 @@ function formatAction(action: string): string {
     ACTION_LABELS[action] ??
     action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day:   "numeric",
-    year:  "numeric",
-  });
 }
 
 function buildUrl(q: string, page: number): string {

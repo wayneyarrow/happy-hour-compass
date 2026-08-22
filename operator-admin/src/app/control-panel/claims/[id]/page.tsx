@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getClaimById, getClaimNotes } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
+import { formatDateTime } from "@/lib/controlPanelDateTime";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
@@ -9,16 +10,6 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(iso: string | null | undefined, withTime = false): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}),
-  });
-}
 
 function formatAddress(venue: {
   address_line1: string | null;
@@ -239,10 +230,10 @@ export default async function ClaimDetailPage({
               <MetaRow label="IP address">
                 <span className="font-mono text-xs">{claim.ip_address ?? "—"}</span>
               </MetaRow>
-              <MetaRow label="Submitted">{fmt(claim.created_at, true)}</MetaRow>
+              <MetaRow label="Submitted">{formatDateTime(claim.created_at)}</MetaRow>
               {claim.reviewed_at && (
                 <>
-                  <MetaRow label="Reviewed">{fmt(claim.reviewed_at, true)}</MetaRow>
+                  <MetaRow label="Reviewed">{formatDateTime(claim.reviewed_at)}</MetaRow>
                   {claim.reviewed_by && (
                     <MetaRow label="Reviewed by">
                       <span className="font-mono text-xs">{claim.reviewed_by}</span>
@@ -278,7 +269,7 @@ export default async function ClaimDetailPage({
               <MetaRow label="Claimed at">
                 {claim.venue?.claimed_at ? (
                   <span className="text-amber-700 font-medium">
-                    {fmt(claim.venue.claimed_at, true)}
+                    {formatDateTime(claim.venue.claimed_at)}
                   </span>
                 ) : (
                   <span className="text-gray-400">Not yet claimed</span>
@@ -346,7 +337,7 @@ export default async function ClaimDetailPage({
                 )}
                 {claim.more_info_completed_at && (
                   <MetaRow label="Submitted at">
-                    <span className="text-gray-500">{fmt(claim.more_info_completed_at, true)}</span>
+                    <span className="text-gray-500">{formatDateTime(claim.more_info_completed_at)}</span>
                   </MetaRow>
                 )}
               </dl>
