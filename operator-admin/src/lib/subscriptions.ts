@@ -14,6 +14,41 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+
+// ── Observability ────────────────────────────────────────────────────────────
+//
+// "operator-plan-update" covers updateOperatorPlan()'s two entitlement writes
+// (manual admin plan changes, operator-initiated cancellation downgrades —
+// never Stripe). "stripe-subscription" reuses the same flow name the Stripe
+// webhook route (src/app/api/webhooks/stripe/route.ts) already uses for
+// syncStripeSubscription()'s primary-write failures, so both of that
+// function's failure modes correlate under one flow.
+//
+// Both functions share an identical two-write shape (primary subscription
+// upsert, then a best-effort operators.plan mirror update for feature-gate
+// enforcement — see OPERATOR_SELECT/ctx.operator.plan callers) and,
+// previously, an identical blind spot on the second write: it was logged to
+// console only, and the function still returned success. That write is the
+// field feature-limit enforcement (admin/happy-hours/actions.ts,
+// admin/events/actions.ts, admin/venue/imageActions.ts, admin/users/actions.ts)
+// actually reads, so a silent failure there is a genuine entitlement-integrity
+// gap, not merely cosmetic — see the updateOperatorPlan() investigation report
+// for the full evidence trail.
+//
+// reportCriticalFailure() is called at the point of each failure but the
+// return value/control flow of both functions is UNCHANGED by this — this is
+// observability-only. updateOperatorPlan()'s write-1 failure still returns
+// { ok: false, error }, and both functions' write-2 failure still returns
+// { ok: true } — that return-contract problem is a separate, not-yet-scoped
+// business-logic fix, not addressed here.
+//
+// syncStripeSubscription()'s primary-write (subError) failure is already
+// instrumented by the Stripe webhook route itself (keyed off its returned
+// { ok: false }) — this file does NOT duplicate that. Only its previously-
+// unreported operators.plan (opError) failure is instrumented here.
+const OPERATOR_PLAN_UPDATE_FLOW = "operator-plan-update";
+const STRIPE_SUBSCRIPTION_FLOW = "stripe-subscription";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -169,6 +204,15 @@ export async function updateOperatorPlan(
 
   if (subError) {
     console.error("[updateOperatorPlan] subscription upsert failed:", subError.message);
+    await reportCriticalFailure({
+      error: new Error(subError.message),
+      flow: OPERATOR_PLAN_UPDATE_FLOW,
+      stage: "subscription-upsert",
+      title: "Operator Plan Update Failed",
+      technicalSummary: "database write failed (operator_subscriptions upsert)",
+      context: { operatorId, targetPlan: newPlan },
+      slackFields: { "Operator ID": operatorId, "Target Plan": newPlan },
+    });
     return { ok: false, error: subError.message };
   }
 
@@ -182,10 +226,24 @@ export async function updateOperatorPlan(
     // Subscription is the source of truth and was already updated successfully.
     // Log the sync failure but don't surface it as an error to the caller —
     // the next full page load will still read the correct plan from the subscription.
+    //
+    // That return-value behavior is unchanged here (observability-only — see
+    // the file-header comment); operators.plan is what feature-gate
+    // enforcement actually reads, so this failure is reported critical even
+    // though the function still reports { ok: true } to its caller.
     console.error(
       "[updateOperatorPlan] operators.plan sync failed (subscription already updated):",
       opError.message
     );
+    await reportCriticalFailure({
+      error: new Error(opError.message),
+      flow: OPERATOR_PLAN_UPDATE_FLOW,
+      stage: "operators-plan-sync",
+      title: "Operator Plan Update Failed",
+      technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
+      context: { operatorId, targetPlan: newPlan },
+      slackFields: { "Operator ID": operatorId, "Target Plan": newPlan },
+    });
   }
 
   return { ok: true };
@@ -253,7 +311,25 @@ export async function syncStripeSubscription(
 
     if (opError) {
       // Subscription is already updated — log but don't surface as an error.
+      //
+      // Return-value behavior is unchanged here (observability-only). The
+      // Stripe webhook route already instruments this function's primary
+      // (subError) failure via its own returned { ok: false } — this is the
+      // previously-unreported parallel gap: operators.plan is what
+      // feature-gate enforcement actually reads, so a stale mirror here is
+      // the same entitlement-integrity failure as updateOperatorPlan()'s
+      // operators-plan-sync stage, just reached from the Stripe path instead
+      // of a manual admin/cancellation path.
       console.error("[syncStripeSubscription] operators.plan sync failed:", opError.message);
+      await reportCriticalFailure({
+        error: new Error(opError.message),
+        flow: STRIPE_SUBSCRIPTION_FLOW,
+        stage: "operators-plan-sync",
+        title: "Stripe Subscription Plan Sync Failed",
+        technicalSummary: "database write failed (operators.plan sync — enforcement mirror stale)",
+        context: { operatorId, targetPlan: plan, stripeSubscriptionId: sync.subscriptionId, stripeCustomerId: sync.customerId },
+        slackFields: { "Operator ID": operatorId, "Target Plan": plan, Subscription: sync.subscriptionId },
+      });
     }
   }
 
