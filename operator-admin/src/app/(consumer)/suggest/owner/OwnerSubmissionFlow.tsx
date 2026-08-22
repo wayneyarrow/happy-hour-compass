@@ -11,6 +11,7 @@ import { lookupBusinessAction, saveOperatorSubmissionAction } from "./actions";
 import type { OwnerFormValues, GoogleMatch } from "./types";
 import { trackEvent } from "@/lib/analytics";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
+import { resetTurnstileAfterSubmissionError } from "./turnstileRetry";
 
 // ── Step state machine ────────────────────────────────────────────────────────
 // form        — initial 8-field submission form
@@ -150,6 +151,17 @@ export function OwnerSubmissionFlow() {
     turnstileRef.current?.reset();
   }
 
+  /**
+   * Handles a saveOperatorSubmissionAction result/exception that failed for
+   * a reason OTHER than Turnstile (e.g. a database/application error) —
+   * resets the widget/token the same way handleTurnstileFailure does, so a
+   * retry can't reuse an already-consumed token. See turnstileRetry.ts for
+   * the full reasoning (shared with AddVenueModalContent.tsx).
+   */
+  function handleSubmissionError(message: string) {
+    resetTurnstileAfterSubmissionError(message, setGeneralError, setTurnstileToken, turnstileRef);
+  }
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function handleFormSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -230,12 +242,12 @@ export function OwnerSubmissionFlow() {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         setStep("confirmed");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }
@@ -282,12 +294,12 @@ export function OwnerSubmissionFlow() {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         setStep("rejected");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }
@@ -307,12 +319,12 @@ export function OwnerSubmissionFlow() {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         setStep("confirmed");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }

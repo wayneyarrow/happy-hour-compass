@@ -17,6 +17,7 @@ import { trackGA4Event } from "@/lib/ga4";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { FieldError } from "@/components/FieldError";
+import { resetTurnstileAfterSubmissionError } from "@/app/(consumer)/suggest/owner/turnstileRetry";
 
 type Props = {
   onDone: () => void;
@@ -133,6 +134,17 @@ export function AddVenueModalContent({ onDone }: Props) {
     turnstileRef.current?.reset();
   }
 
+  /**
+   * Handles a saveOperatorSubmissionAction result/exception that failed for
+   * a reason OTHER than Turnstile (e.g. a database/application error) —
+   * resets the widget/token the same way handleTurnstileFailure does, so a
+   * retry can't reuse an already-consumed token. See turnstileRetry.ts for
+   * the full reasoning (shared with OwnerSubmissionFlow.tsx).
+   */
+  function handleSubmissionError(message: string) {
+    resetTurnstileAfterSubmissionError(message, setGeneralError, setTurnstileToken, turnstileRef);
+  }
+
   function handleFormSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -208,7 +220,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         // Only "confirmed_auto" (no existing venue for this Google Place ID)
@@ -225,7 +237,7 @@ export function AddVenueModalContent({ onDone }: Props) {
         });
         setStep(isAutoConfirmed ? "confirmed" : "submitted");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }
@@ -271,7 +283,7 @@ export function AddVenueModalContent({ onDone }: Props) {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         // Rejected-match path always routes to manual review — never
@@ -279,7 +291,7 @@ export function AddVenueModalContent({ onDone }: Props) {
         trackGA4Event("venue_submission_completed", { outcome: "manual_review" });
         setStep("submitted");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }
@@ -299,14 +311,14 @@ export function AddVenueModalContent({ onDone }: Props) {
           return;
         }
         if (result.error) {
-          setGeneralError(result.error);
+          handleSubmissionError(result.error);
           return;
         }
         // No-match path always routes to manual review — never auto-confirmed.
         trackGA4Event("venue_submission_completed", { outcome: "manual_review" });
         setStep("submitted");
       } catch {
-        setGeneralError("Something went wrong. Please try again.");
+        handleSubmissionError("Something went wrong. Please try again.");
       }
     });
   }

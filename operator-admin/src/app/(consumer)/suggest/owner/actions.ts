@@ -29,6 +29,7 @@ import {
   toVenueGoogleFields,
   type GoogleMatch,
 } from "@/lib/google/placesMatch";
+import { linkVenueToSubmission } from "@/lib/google/linkVenueToSubmission";
 import type {
   LookupResult,
   SavePayload,
@@ -306,13 +307,19 @@ export async function saveOperatorSubmissionAction(
 
   const supabase = createAdminClient();
 
-  // Generated up front (rather than left to the DB default) so a
-  // confirmed-match venue created below (Case A) can set
-  // venues.source_submission_id BEFORE the operator_submissions row itself
-  // exists — the venue is created first in this flow, then the submission
-  // row is inserted with this same id explicitly, closing the loop. Used
-  // for every routing outcome, not just Case A, so the submission's id is
-  // always known ahead of its own insert.
+  // Generated up front (rather than left to the DB default) so the
+  // submission row inserted later in this flow can be given an explicit,
+  // known id. Used for every routing outcome, not just Case A.
+  //
+  // NOT used to pre-populate venues.source_submission_id on the Case A venue
+  // insert below (that was the bug — venues.source_submission_id has a
+  // NOT DEFERRABLE FK to operator_submissions.id, so inserting a venue that
+  // already points at a not-yet-existing submission row always fails with
+  // Postgres error 23503. Confirmed in production for the Casa de Frida
+  // submission: every confirmed-match venue-creation attempt failed this
+  // way). Case A now creates the venue first with source_submission_id left
+  // NULL, then links it back to this id in a follow-up UPDATE once the
+  // submission row actually exists — see "Link Case A venue" below.
   const pendingSubmissionId = randomUUID();
 
   let routedStatus: string;
@@ -388,7 +395,10 @@ export async function saveOperatorSubmissionAction(
           city_id:       geography?.cityId ?? null,
           is_published:  false,
           source:        "operator_submission",
-          source_submission_id: pendingSubmissionId,
+          // source_submission_id is deliberately NOT set here — see
+          // pendingSubmissionId's comment above. It's backfilled by an
+          // UPDATE below, once the operator_submissions row this venue
+          // originated from actually exists.
           // Google identity fields — place_id/google_rating/google_review_count/
           // google_identity_status all come from the single canonical mapper so
           // this path can never again drop rating/review data the way the
@@ -508,6 +518,38 @@ export async function saveOperatorSubmissionAction(
   if (insertError) {
     console.error("[saveOperatorSubmissionAction] Insert error:", insertError);
     return { error: "Something went wrong. Please try again." };
+  }
+
+  // ── Link Case A venue back to its originating submission ─────────────────
+  // Only Case A ("confirmed_auto") creates a brand-new venue as part of THIS
+  // submission — Case B/C (pending_review/double_claim) link an
+  // already-existing venue that this submission did not originate, so their
+  // source_submission_id must be left exactly as it already was. Deferred to
+  // here (an UPDATE, not part of the venue's own INSERT above) specifically
+  // because venues.source_submission_id has a NOT DEFERRABLE FK to
+  // operator_submissions.id — the submission row has to exist first.
+  //
+  // Best-effort: the submission has already fully succeeded by this point
+  // (venue exists, operator_submissions exists, operator_submissions.venue_id
+  // already correctly points at the venue, and — for confirmed_auto — the
+  // operator has already been provisioned and emailed their setup link). A
+  // failure here only means the *reverse* attribution link
+  // (venues.source_submission_id) wasn't backfilled; it must not fail an
+  // otherwise-successful submission or prompt a retry, which would risk a
+  // duplicate operator/venue. Logged loudly so it's actually visible for
+  // manual follow-up (matches this file's existing convention for the
+  // system-note and email-send steps below, which are equally best-effort).
+  if (routedStatus === "confirmed_auto" && venueId && insertedSubmission?.id) {
+    const linkResult = await linkVenueToSubmission(supabase, venueId, insertedSubmission.id);
+    if (!linkResult.ok) {
+      console.error(
+        "[saveOperatorSubmissionAction] Failed to link venue.source_submission_id to its " +
+          "originating submission — venue and submission both exist and are otherwise correctly " +
+          "linked (operator_submissions.venue_id is set); only the reverse attribution link is " +
+          "missing and needs manual follow-up.",
+        { venueId, submissionId: insertedSubmission.id, error: linkResult.error }
+      );
+    }
   }
 
   console.log("[EMAIL DEBUG] insert succeeded with id:", insertedSubmission?.id, {
