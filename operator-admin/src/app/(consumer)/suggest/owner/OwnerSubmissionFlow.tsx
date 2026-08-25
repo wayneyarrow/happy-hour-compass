@@ -12,6 +12,9 @@ import type { OwnerFormValues, GoogleMatch } from "./types";
 import { trackEvent } from "@/lib/analytics";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { resetTurnstileAfterSubmissionError } from "./turnstileRetry";
+import { isValidProvinceState } from "@/lib/geo/provinceState";
+
+const PROVINCE_FORMAT_ERROR = "Enter a valid province or state.";
 
 // ── Step state machine ────────────────────────────────────────────────────────
 // form        — initial 8-field submission form
@@ -184,7 +187,11 @@ export function OwnerSubmissionFlow() {
     if (!values.businessName)  errors.business_name  = "Required";
     if (!values.streetAddress) errors.street_address = "Required";
     if (!values.city)          errors.city           = "Required";
-    if (!values.province)      errors.province       = "Required";
+    if (!values.province) {
+      errors.province = "Required";
+    } else if (!isValidProvinceState(values.province)) {
+      errors.province = PROVINCE_FORMAT_ERROR;
+    }
     if (!values.firstName)     errors.first_name     = "Required";
     if (!values.lastName)      errors.last_name      = "Required";
     if (!values.position)      errors.position       = "Required";

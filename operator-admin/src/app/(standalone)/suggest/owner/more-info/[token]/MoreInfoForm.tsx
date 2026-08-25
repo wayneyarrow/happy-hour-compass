@@ -189,6 +189,9 @@ export default function MoreInfoForm({
                   autoComplete="address-level1"
                   className={INPUT}
                 />
+                {state.fieldErrors?.province && (
+                  <p className={FIELD_ERROR}>{state.fieldErrors.province}</p>
+                )}
               </div>
             </div>
 

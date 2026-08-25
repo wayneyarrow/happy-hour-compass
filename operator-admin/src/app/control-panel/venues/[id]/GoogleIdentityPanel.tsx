@@ -55,6 +55,26 @@ export default function GoogleIdentityPanel({
   const [showSearch, setShowSearch] = useState(false);
   const [showExemptForm, setShowExemptForm] = useState(false);
 
+  // ── Controlled search-form fields ───────────────────────────────────────
+  //
+  // Local state, seeded once from the venue's current props — deliberately
+  // NOT re-derived from props on every render. This is what lets a
+  // founder's manual correction (e.g. province "Yes" -> "BC") survive the
+  // search action's state update instead of reverting back to the stale
+  // persisted value.
+  //
+  // Why this was broken before: React 19 automatically resets UNCONTROLLED
+  // form fields (`defaultValue`, no `value`/`onChange`) back to their
+  // original defaultValue once any form-action dispatch on that
+  // form completes — by design, so a form "clears" after a normal
+  // submission. Controlled fields (`value` + `onChange`) are exempt from
+  // that reset entirely, which is the documented way to opt out of it. See
+  // the SpearHead Winery investigation for the original repro.
+  const [searchName, setSearchName] = useState(name);
+  const [searchStreetAddress, setSearchStreetAddress] = useState(addressLine1 ?? "");
+  const [searchCity, setSearchCity] = useState(city ?? "");
+  const [searchProvince, setSearchProvince] = useState(region ?? "");
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const boundSearch = (searchVenueGooglePlaceAction as any).bind(null, venueId);
   const [searchState, searchFormAction, searchPending] =
@@ -111,6 +131,15 @@ export default function GoogleIdentityPanel({
   const mapsUrl = placeId
     ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`
     : null;
+
+  /** Closes the search panel and resets any unsaved edits back to the venue's current values. */
+  function closeSearch() {
+    setShowSearch(false);
+    setSearchName(name);
+    setSearchStreetAddress(addressLine1 ?? "");
+    setSearchCity(city ?? "");
+    setSearchProvince(region ?? "");
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
@@ -219,62 +248,85 @@ export default function GoogleIdentityPanel({
               {googleIdentityStatus === "matched" ? "Search a different listing" : "Search Google Places"}
             </button>
           ) : (
-            <form action={searchFormAction} className="space-y-3 border-t border-gray-100 pt-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Business name</label>
-                <input
-                  type="text" name="name" defaultValue={name} required
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Street address</label>
-                <input
-                  type="text" name="street_address" defaultValue={addressLine1 ?? ""}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            // Fragment, not a shared wrapping element: the search form and
+            // the candidate-result card below are SIBLINGS, each with their
+            // own top-level form element. They used to be nested (the confirm form
+            // lived inside the search form) — invalid HTML that made React
+            // throw "A React form was unexpectedly submitted" and silently
+            // prevented confirmVenueGooglePlaceAction from ever running.
+            <>
+              <form action={searchFormAction} className="space-y-3 border-t border-gray-100 pt-4">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">City</label>
+                  <label className="block text-xs text-gray-500 mb-1">Business name</label>
                   <input
-                    type="text" name="city" defaultValue={city ?? ""} required
+                    type="text"
+                    name="name"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    required
                     className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Province</label>
+                  <label className="block text-xs text-gray-500 mb-1">Street address</label>
                   <input
-                    type="text" name="province" defaultValue={region ?? ""} required
+                    type="text"
+                    name="street_address"
+                    value={searchStreetAddress}
+                    onChange={(e) => setSearchStreetAddress(e.target.value)}
                     className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
                   />
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={isAnyPending}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg disabled:opacity-40"
-                >
-                  {searchPending ? "Searching…" : "Search Google Places"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSearch(false)}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">City</label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={searchCity}
+                      onChange={(e) => setSearchCity(e.target.value)}
+                      required
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Province</label>
+                    <input
+                      type="text"
+                      name="province"
+                      value={searchProvince}
+                      onChange={(e) => setSearchProvince(e.target.value)}
+                      required
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={isAnyPending}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg disabled:opacity-40"
+                  >
+                    {searchPending ? "Searching…" : "Search Google Places"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeSearch}
+                    className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                </div>
 
-              {searchState.error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                  {searchState.error}
-                </div>
-              )}
+                {searchState.error && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                    {searchState.error}
+                  </div>
+                )}
+              </form>
 
               {searchState.candidate && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2 mt-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-800">{searchState.candidate.name}</span>
                     {searchState.confident ? (
@@ -311,7 +363,7 @@ export default function GoogleIdentityPanel({
                   </p>
                 </div>
               )}
-            </form>
+            </>
           )}
 
           {/* ── Mark as exempt ────────────────────────────────────────────── */}

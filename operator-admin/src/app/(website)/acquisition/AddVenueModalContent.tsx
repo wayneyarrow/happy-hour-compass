@@ -18,6 +18,9 @@ import { EmailConfirmationNote } from "./emailConfirmationCopy";
 import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { FieldError } from "@/components/FieldError";
 import { resetTurnstileAfterSubmissionError } from "@/app/(consumer)/suggest/owner/turnstileRetry";
+import { isValidProvinceState } from "@/lib/geo/provinceState";
+
+const PROVINCE_FORMAT_ERROR = "Enter a valid province or state.";
 
 type Props = {
   onDone: () => void;
@@ -164,7 +167,11 @@ export function AddVenueModalContent({ onDone }: Props) {
     if (!values.businessName)  errors.business_name  = "Required";
     if (!values.streetAddress) errors.street_address = "Required";
     if (!values.city)          errors.city           = "Required";
-    if (!values.province)      errors.province       = "Required";
+    if (!values.province) {
+      errors.province = "Required";
+    } else if (!isValidProvinceState(values.province)) {
+      errors.province = PROVINCE_FORMAT_ERROR;
+    }
     if (!values.firstName)     errors.first_name     = "Required";
     if (!values.lastName)      errors.last_name      = "Required";
     if (!values.position)      errors.position       = "Required";

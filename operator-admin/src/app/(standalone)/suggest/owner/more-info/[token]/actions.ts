@@ -11,6 +11,7 @@ import {
   TURNSTILE_FAILURE_MESSAGE,
   TURNSTILE_TOKEN_FIELD,
 } from "@/lib/turnstile";
+import { isValidProvinceState } from "@/lib/geo/provinceState";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ export type MoreInfoState = {
   error?: string;
   fieldErrors?: {
     venue_name?: string;
+    province?: string;
     info_phone?: string;
     info_website?: string;
     info_relationship?: string;
@@ -69,6 +71,14 @@ export async function submitMoreInfoAction(
   const fieldErrors: MoreInfoState["fieldErrors"] = {};
 
   if (!venueName)  fieldErrors.venue_name      = "Business name is required.";
+  // province is optional here (unlike the primary intake form) — only
+  // validated for plausibility when the submitter provides a correction.
+  // Same isValidProvinceState() check used at primary intake, so a garbage
+  // value like "Yes" can't enter operator_submissions.province through this
+  // correction path either.
+  if (province && !isValidProvinceState(province)) {
+    fieldErrors.province = "Enter a valid province or state.";
+  }
   if (!infoPhone)  fieldErrors.info_phone      = "Business phone number is required.";
   if (!infoRelation) fieldErrors.info_relationship = "Please describe your relationship to this business.";
 

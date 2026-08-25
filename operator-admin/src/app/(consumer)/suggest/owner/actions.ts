@@ -29,6 +29,7 @@ import {
   toVenueGoogleFields,
   type GoogleMatch,
 } from "@/lib/google/placesMatch";
+import { isValidProvinceState } from "@/lib/geo/provinceState";
 import { linkVenueToSubmission } from "@/lib/google/linkVenueToSubmission";
 import { reportCriticalAcquisitionFailure } from "@/lib/observability/reportCriticalFailure";
 import { reportOperationalError } from "@/lib/observability/reportOperationalError";
@@ -119,7 +120,16 @@ export async function lookupBusinessAction(
   if (!businessName)  fieldErrors.business_name  = "Required";
   if (!streetAddress) fieldErrors.street_address = "Required";
   if (!city)          fieldErrors.city           = "Required";
-  if (!province)      fieldErrors.province       = "Required";
+  if (!province) {
+    fieldErrors.province = "Required";
+  } else if (!isValidProvinceState(province)) {
+    // Client-side validation should already catch this (both public entry
+    // points use the same isValidProvinceState() check) — this is the
+    // authoritative server-side enforcement per the SpearHead investigation:
+    // client validation alone is not sufficient, since lookupBusinessAction
+    // is itself the server boundary invoked before any Google Places call.
+    fieldErrors.province = "Enter a valid province or state.";
+  }
   if (!firstName)     fieldErrors.first_name     = "Required";
   if (!lastName)      fieldErrors.last_name      = "Required";
   if (!position)      fieldErrors.position       = "Required";
