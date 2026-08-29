@@ -3,33 +3,27 @@ import { resolveOperatorVenueOrigin, type OperatorVenueOrigin } from "./gettingS
 
 /**
  * Resolves the current Operator Admin user's venue-origin for the Getting
- * Started guide. Mirrors the operator/impersonation venue-lookup pattern
- * already used in app/admin/home/page.tsx and app/admin/subscription/page.tsx
- * (query by created_by_operator_id, or by impersonatingVenueId in Case B
- * impersonation) rather than introducing a new lookup path.
+ * Started guide. Uses the shared active-venue resolution
+ * (resolveOperatorContext()'s activeVenueId) rather than an independent
+ * created_by_operator_id lookup — an operator may own more than one venue,
+ * so "the" venue is whichever one is currently active, not just any venue
+ * that happens to match.
  */
 export async function getOperatorVenueOrigin(): Promise<{
   origin: OperatorVenueOrigin;
   venueName: string | null;
 }> {
   const ctx = await resolveOperatorContext();
-  const { operator, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator } = ctx;
 
   let venue: { source: string | null; name: string | null } | null = null;
 
-  if (operator) {
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("source, name")
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venue = data as { source: string | null; name: string | null } | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("source, name")
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase.from("venues").select("source, name").eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data } = await query.maybeSingle();
     venue = data as { source: string | null; name: string | null } | null;
   }
 

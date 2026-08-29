@@ -18,6 +18,16 @@ export async function uploadVenueImageAction(
   // In impersonation, enforce the session's venue rather than the caller-supplied venueId.
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
+  // Ownership check (normal mode only — impersonation already pins
+  // targetVenueId to the session's venue above, ignoring the caller-supplied
+  // one entirely). A client-submitted venueId is never trusted on its own —
+  // this must be one of the venues resolveOperatorContext() actually
+  // resolved for this operator, which matters more now that an operator can
+  // own more than one venue.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
+
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
 
@@ -99,6 +109,11 @@ export async function deleteVenueImageAction(
 
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
+  // Never trust a client-submitted venueId on its own — see uploadVenueImageAction.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
+
   const { error: deleteError } = await ctx.supabase
     .from("media")
     .delete()
@@ -168,6 +183,11 @@ export async function reorderVenueImagesAction(
   }
 
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
+
+  // Never trust a client-submitted venueId on its own — see uploadVenueImageAction.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
 
   const results = await Promise.all(
     orderedIds.map((id, i) =>

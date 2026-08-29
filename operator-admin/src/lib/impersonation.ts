@@ -17,12 +17,15 @@
 
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession, OPERATOR_SELECT, type OperatorRow } from "@/lib/ensureOperator";
 import {
   getActiveMembershipForAuthUser,
   getActiveMemberMembershipByEmail,
 } from "@/lib/memberships";
+import { getOperatorVenues, type VenueRow as VenueSummary } from "@/lib/getOperatorVenues";
+import { getActiveVenueIdFromCookie } from "@/lib/activeVenueCookie";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -56,6 +59,14 @@ export type ImpersonationSession = {
  * In normal mode:   supabase = session client, operator from JWT email.
  * In Case A imp:    supabase = admin client, operator from session.operator_id.
  * In Case B imp:    supabase = admin client, operator = null, impersonatingVenueId set.
+ *
+ * Multi-venue support (Phase 1, 2026-08-29): an operator may now legitimately
+ * own more than one venue (see "Multi-venue ownership" note on
+ * provisionOperatorForVenue, src/lib/operatorActivation.ts). `venues` and
+ * `activeVenueId` are the single shared resolution of "which venues can this
+ * request see, and which one is active right now" — every Operator Admin
+ * page/action should read these rather than independently querying
+ * `venues.created_by_operator_id` itself. See resolveVenuesAndActiveVenue().
  */
 export type OperatorContext = {
   supabase: SupabaseClient;
@@ -72,7 +83,112 @@ export type OperatorContext = {
   /** For banner display */
   venueName: string | null;
   operatorEmail: string | null;
+  /**
+   * All venues owned by `operator` (normal mode and Case A impersonation),
+   * or empty in Case B impersonation (no operator to own venues — use
+   * `impersonatingVenueId` directly instead). Never trust a client-submitted
+   * venue id against anything other than this list.
+   */
+  venues: VenueSummary[];
+  /**
+   * The single venue every read/write in this request should operate
+   * against. Server-validated — always either a member of `venues`, or (in
+   * impersonation) the venue the founder is impersonating. `null` means:
+   * zero venues (nothing to show — existing empty-state handling applies),
+   * or 2+ venues with no valid selection yet (caller must redirect to
+   * /admin/select-venue — see assertActiveVenueSelected()).
+   */
+  activeVenueId: string | null;
 };
+
+/** OperatorContext before venues/activeVenueId are resolved — internal only. */
+type OperatorContextBase = Omit<OperatorContext, "venues" | "activeVenueId">;
+
+/**
+ * Decides which venue(s) a request can act on and which one is active.
+ * Centralizes every rule for "which venue(s) can this request act on":
+ *
+ *   - Case A impersonation (operator set): the founder already chose a
+ *     specific venue to impersonate (session.venue_id) — that is always the
+ *     active venue, regardless of how many venues the operator owns. No
+ *     switcher is shown during impersonation.
+ *   - Case B impersonation (orphan venue): no operator, so no owned-venue
+ *     list — activeVenueId is the impersonated venue id directly.
+ *   - Normal mode, 0 venues: activeVenueId is null — existing "no venue"
+ *     empty-state handling in each page is unchanged.
+ *   - Normal mode, 1 venue: that venue is automatically active — no
+ *     selection screen, preserving the current single-venue experience.
+ *   - Normal mode, 2+ venues: activeVenueId comes from the active-venue
+ *     cookie ONLY if it matches one of the operator's actual owned venues —
+ *     a forged/stale/foreign id is treated identically to "no selection".
+ *
+ * The actual decision (given venues + a candidate cookie value, which one is
+ * active) is factored out into the pure computeActiveVenueId() below so it's
+ * unit-testable without a database or cookie store.
+ */
+
+/**
+ * Pure decision function — given who's asking and what venues they own,
+ * decides which single venue (if any) is active. No I/O of its own, so it's
+ * unit-testable without a database or cookie store (see
+ * tests/unit/impersonation/computeActiveVenueId.test.ts) — every branch
+ * documented on resolveVenuesAndActiveVenue() above is pinned there,
+ * including that a cookie value not present in `venues` (forged, stale, or
+ * belonging to a different operator entirely) is rejected exactly like no
+ * selection at all.
+ */
+export function computeActiveVenueId({
+  isImpersonating,
+  hasOperator,
+  sessionVenueId,
+  impersonatingVenueId,
+  venues,
+  cookieVenueId,
+}: {
+  isImpersonating: boolean;
+  hasOperator: boolean;
+  sessionVenueId: string | null;
+  impersonatingVenueId: string | null;
+  venues: VenueSummary[];
+  cookieVenueId: string | null;
+}): string | null {
+  if (isImpersonating) {
+    return hasOperator ? sessionVenueId : impersonatingVenueId;
+  }
+  if (!hasOperator) {
+    return null;
+  }
+  if (venues.length === 1) {
+    return venues[0].id;
+  }
+  if (venues.length > 1) {
+    const isOwned = !!cookieVenueId && venues.some((v) => v.id === cookieVenueId);
+    return isOwned ? cookieVenueId! : null;
+  }
+  return null;
+}
+
+async function resolveVenuesAndActiveVenue(
+  base: Pick<OperatorContextBase, "supabase" | "operator" | "isImpersonating" | "impersonatingVenueId" | "sessionVenueId">
+): Promise<{ venues: VenueSummary[]; activeVenueId: string | null }> {
+  const venues = base.operator
+    ? (await getOperatorVenues(base.supabase, base.operator.id)).venues
+    : [];
+
+  const cookieVenueId =
+    base.isImpersonating || !base.operator ? null : await getActiveVenueIdFromCookie();
+
+  const activeVenueId = computeActiveVenueId({
+    isImpersonating: base.isImpersonating,
+    hasOperator: !!base.operator,
+    sessionVenueId: base.sessionVenueId,
+    impersonatingVenueId: base.impersonatingVenueId,
+    venues,
+    cookieVenueId,
+  });
+
+  return { venues, activeVenueId };
+}
 
 // ── Session creation ──────────────────────────────────────────────────────────
 
@@ -176,6 +292,12 @@ export async function endImpersonationSession(sessionId: string): Promise<void> 
 //   • Case B context  — orphan venue (admin client, operator = null)
 
 export async function resolveOperatorContext(): Promise<OperatorContext> {
+  const base = await resolveOperatorContextBase();
+  const { venues, activeVenueId } = await resolveVenuesAndActiveVenue(base);
+  return { ...base, venues, activeVenueId };
+}
+
+async function resolveOperatorContextBase(): Promise<OperatorContextBase> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(IMP_COOKIE_NAME)?.value;
 
@@ -222,7 +344,7 @@ export async function resolveOperatorContext(): Promise<OperatorContext> {
 
 // ── Internal: build normal (non-impersonation) context ───────────────────────
 
-async function buildNormalContext(): Promise<OperatorContext> {
+async function buildNormalContext(): Promise<OperatorContextBase> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -421,4 +543,30 @@ async function buildNormalContext(): Promise<OperatorContext> {
     venueName: null,
     operatorEmail: null,
   };
+}
+
+// ── Multi-venue gate ──────────────────────────────────────────────────────────
+
+/**
+ * Call once at the top of every venue-scoped Operator Admin page (dashboard,
+ * venue info, happy hours, events, images, analytics, subscription, users,
+ * etc.) immediately after `resolveOperatorContext()`.
+ *
+ * Redirects to /admin/select-venue when the operator owns 2+ venues and none
+ * is currently active (no cookie, or the cookie didn't match an owned venue).
+ * A no-op in every other case:
+ *   - impersonating (activeVenueId is already fixed by the session), or
+ *   - 0 venues (existing empty-state handling in the page itself applies), or
+ *   - 1 venue (auto-selected), or
+ *   - 2+ venues with a valid selection already active.
+ *
+ * The select-venue page and its selection server action must NOT call this
+ * (it would redirect to itself) — they call resolveOperatorContext() and
+ * getOperatorVenues()-derived data directly instead.
+ */
+export function assertActiveVenueSelected(ctx: OperatorContext): void {
+  if (ctx.isImpersonating) return;
+  if (ctx.operator && ctx.venues.length > 1 && !ctx.activeVenueId) {
+    redirect("/admin/select-venue");
+  }
 }

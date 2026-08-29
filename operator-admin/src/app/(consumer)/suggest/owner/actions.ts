@@ -13,6 +13,7 @@ import {
 import {
   sendOperatorSubmissionNotificationEmail,
   sendOperatorActivationEmail,
+  sendVenueAddedToAccountEmail,
   sendOperatorSubmissionConfirmationEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
@@ -484,18 +485,26 @@ export async function saveOperatorSubmissionAction(
   let operatorId: string | null = null;
 
   if (routedStatus === "confirmed_auto" && venueId) {
+    const provisionedVenueName = match?.name ?? formValues.businessName;
     const provisionResult = await provisionOperatorForVenue({
       email:     formValues.email,
       firstName: formValues.firstName,
       lastName:  formValues.lastName,
       venueId,
       logTag:    "[saveOperatorSubmissionAction]",
-      sendEmail: (setupLink) =>
-        sendOperatorActivationEmail({
-          to:        formValues.email,
-          firstName: formValues.firstName,
-          setupLink,
-        }),
+      sendEmail: (setupLink, isReturningOperator) =>
+        isReturningOperator
+          ? sendVenueAddedToAccountEmail({
+              to:        formValues.email,
+              firstName: formValues.firstName,
+              venueName: provisionedVenueName,
+              accessLink: setupLink,
+            })
+          : sendOperatorActivationEmail({
+              to:        formValues.email,
+              firstName: formValues.firstName,
+              setupLink,
+            }),
     });
 
     if (!provisionResult.ok) {

@@ -4,7 +4,7 @@ export const metadata = { title: "Events" };
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import { parseOperatorPlan } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import EventsManager from "./EventsManager";
@@ -17,30 +17,26 @@ export default async function AdminEventsPage() {
   if (!user) redirect("/login");
 
   const ctx = await resolveOperatorContext();
-  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator, operatorError, isImpersonating } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet. No-op otherwise (0/1 venues, or impersonating).
+  assertActiveVenueSelected(ctx);
 
   const currentEmail = user.email ?? operator?.email ?? "";
   const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
   const isOwner = isImpersonating || currentRole === "owner";
 
-  // Load venue — by operator ownership (normal/Case A) or directly by id (Case B).
+  // Load the active venue — server-validated by resolveOperatorContext().
   let venueData: { id: string; name: string } | null = null;
   let venueError: { message: string } | null = null;
 
-  if (operator) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select("id, name")
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venueData = data as { id: string; name: string } | null;
-    venueError = error as { message: string } | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select("id, name")
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase.from("venues").select("id, name").eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data, error } = await query.maybeSingle();
     venueData = data as { id: string; name: string } | null;
     venueError = error as { message: string } | null;
   }

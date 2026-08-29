@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { sendPasswordSetupEmail, sendClaimMoreInfoEmail } from "@/lib/email";
+import { sendPasswordSetupEmail, sendVenueAddedToAccountEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
@@ -249,20 +249,37 @@ export async function reviewClaimAction(
     return { error: "Claim is not linked to a venue — cannot provision operator." };
   }
 
+  // Venue name — needed for the "venue added to your account" copy sent to
+  // returning operators (see sendEmail below). Best-effort: falls back to
+  // generic copy if this lookup fails, which must never block approval.
+  const { data: claimVenueRow } = await supabase
+    .from("venues")
+    .select("name")
+    .eq("id", venueId)
+    .maybeSingle();
+  const claimVenueName = (claimVenueRow?.name as string | null) ?? "Your venue";
+
   // Provision: create auth user, operator row, link venue, generate recovery
-  // link, send setup email. Full rollback on any step failure.
+  // link, send setup/notification email. Full rollback on any step failure.
   const provisionResult = await provisionOperatorForVenue({
     email:     claimEmail,
     firstName,
     lastName,
     venueId,
     logTag:    "[reviewClaimAction]",
-    sendEmail: (setupLink) =>
-      sendPasswordSetupEmail({
-        to:        claimEmail,
-        firstName: firstName || "there",
-        setupLink,
-      }),
+    sendEmail: (setupLink, isReturningOperator) =>
+      isReturningOperator
+        ? sendVenueAddedToAccountEmail({
+            to:        claimEmail,
+            firstName: firstName || "there",
+            venueName: claimVenueName,
+            accessLink: setupLink,
+          })
+        : sendPasswordSetupEmail({
+            to:        claimEmail,
+            firstName: firstName || "there",
+            setupLink,
+          }),
   });
 
   if (!provisionResult.ok) {

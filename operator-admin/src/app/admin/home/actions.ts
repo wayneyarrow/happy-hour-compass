@@ -25,24 +25,19 @@ export async function markReviewedAction(formData: FormData): Promise<void> {
 
   const ctx = await resolveOperatorContext();
 
-  // Resolve the venue scoped to this operator/session.
+  // Resolve the active venue for this operator/session — not "any venue
+  // created_by_operator_id matches" (an operator may now own more than one).
   let venue: VenueReviewRow | null = null;
 
-  if (ctx.operator) {
-    const { data } = await ctx.supabase
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase
       .from("venues")
       .select("id, review_confirmations")
-      .eq("created_by_operator_id", ctx.operator.id)
-      .maybeSingle();
-    venue = data as VenueReviewRow | null;
-  } else if (ctx.isImpersonating && ctx.impersonatingVenueId) {
-    // Case B impersonation (orphan venue — no operator row).
-    // ctx.supabase is an admin client so no RLS applies; scope by venue id.
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("id, review_confirmations")
-      .eq("id", ctx.impersonatingVenueId)
-      .maybeSingle();
+      .eq("id", ctx.activeVenueId);
+    if (ctx.operator) {
+      query = query.eq("created_by_operator_id", ctx.operator.id);
+    }
+    const { data } = await query.maybeSingle();
     venue = data as VenueReviewRow | null;
   }
 

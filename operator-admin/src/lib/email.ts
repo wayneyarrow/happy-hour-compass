@@ -1334,6 +1334,69 @@ Happy Hour Compass`;
   });
 }
 
+// ── Venue added to an existing (already-activated) operator account ──────────
+
+/**
+ * Sent instead of sendPasswordSetupEmail / sendOperatorActivationEmail when
+ * provisionOperatorForVenue() reused an existing operator account that has
+ * already completed account setup (operators.account_activated_at is set) —
+ * i.e. this person is claiming or submitting a *second* venue under the same
+ * email, not setting up their account for the first time. See "Multi-venue
+ * ownership" note on provisionOperatorForVenue (src/lib/operatorActivation.ts).
+ *
+ * accessLink is a plain /login link, not a Supabase recovery token (see the
+ * "Returning operators" note on provisionOperatorForVenue in
+ * src/lib/operatorActivation.ts) — this person already has a password, so
+ * there's nothing to recover/set up, and generating a live recovery token
+ * they don't need would be pointless. No "set up your password" framing
+ * either — the copy just points them at a normal sign-in.
+ */
+export async function sendVenueAddedToAccountEmail({
+  to,
+  firstName,
+  venueName,
+  accessLink,
+}: {
+  to: string;
+  firstName: string;
+  venueName: string;
+  accessLink: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const html = emailLayout(`
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">${venueName} has been added to your account</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            <strong>${venueName}</strong> is now linked to your existing Happy Hour Compass operator account.
+            Click below to sign in — since you manage more than one venue, you&rsquo;ll be asked to choose
+            which one to work on each time you sign in.
+          </p>
+          ${emailCta(accessLink, "Access my venues &rarr;")}
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${accessLink}</p>`,
+    "You received this email because a venue was linked to your Happy Hour Compass account."
+  );
+
+  const text = `Hi ${firstName},
+
+${venueName} is now linked to your existing Happy Hour Compass operator account.
+
+Access your venues:
+${accessLink}
+
+Since you manage more than one venue, you'll be asked to choose which one to work on each time you sign in.
+
+—
+Happy Hour Compass`;
+
+  return sendTransactionalEmail({
+    type:        "operator_venue_added",
+    to,
+    subject:     `${venueName} has been added to your Happy Hour Compass account`,
+    html,
+    text,
+    criticality: "critical",
+  });
+}
+
 // ── Claim more-info request email ────────────────────────────────────────────
 
 /**

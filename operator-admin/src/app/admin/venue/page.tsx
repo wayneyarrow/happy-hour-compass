@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import { parseOperatorPlan, maxSearchTags, maxImages } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
@@ -107,32 +107,30 @@ export default async function AdminVenuePage({
   // Resolve operator context — returns impersonated context when the
   // imp_session_id cookie is present and valid, otherwise normal context.
   const ctx = await resolveOperatorContext();
-  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator, operatorError, isImpersonating } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet. No-op otherwise (0/1 venues, or impersonating).
+  assertActiveVenueSelected(ctx);
 
   const currentEmail = user.email ?? operator?.email ?? "";
   const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
   const isOwner = isImpersonating || currentRole === "owner";
 
-  // Load venue:
-  //   Normal / Case A impersonation: filter by created_by_operator_id
-  //   Case B impersonation (orphan):  filter directly by venue id
+  // Load the active venue — server-validated by resolveOperatorContext()
+  // (ctx.activeVenueId is always either owned by this operator, or the venue
+  // being impersonated). Filtering by id as well as created_by_operator_id
+  // keeps this unambiguous even though an operator may now own more than
+  // one venue.
   let venueData: AdminVenueRow | null = null;
   let venueError: { message: string } | null = null;
 
-  if (operator) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select("*")
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venueData = data as AdminVenueRow | null;
-    venueError = error as { message: string } | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select("*")
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase.from("venues").select("*").eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data, error } = await query.maybeSingle();
     venueData = data as AdminVenueRow | null;
     venueError = error as { message: string } | null;
   }

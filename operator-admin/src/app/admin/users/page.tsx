@@ -3,7 +3,7 @@ export const metadata = { title: "Users" };
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import { getOperatorMemberships, getMembershipRole, countOperatorMembers } from "@/lib/memberships";
 import { maxUsers, parseOperatorPlan } from "@/lib/plans";
 import { getOperatorSubscription } from "@/lib/subscriptions";
@@ -16,6 +16,12 @@ export default async function AdminUsersPage() {
 
   const ctx = await resolveOperatorContext();
   const { operator, operatorError } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet — applied here too for a consistent entry point
+  // into Operator Admin, even though team membership itself stays
+  // operator-level (Phase 1 limitation — see users/actions.ts).
+  assertActiveVenueSelected(ctx);
 
   // Current user email (works for both normal and impersonation sessions)
   const currentEmail = user.email ?? operator?.email ?? "";

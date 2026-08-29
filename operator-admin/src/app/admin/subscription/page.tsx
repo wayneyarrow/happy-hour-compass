@@ -3,7 +3,7 @@ export const metadata = { title: "Subscription" };
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import {
   PLAN_LABELS,
   parseOperatorPlan,
@@ -206,9 +206,17 @@ export default async function AdminSubscriptionPage({
   if (!user) redirect("/login");
 
   const ctx = await resolveOperatorContext();
-  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator, operatorError, isImpersonating } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet. No-op otherwise (0/1 venues, or impersonating).
+  assertActiveVenueSelected(ctx);
 
   // ── Subscription (plan + status + billing) ───────────────────────────────
+  // Phase 1: subscription/plan stays operator-level by design — every venue
+  // this operator owns shares the same plan. See docs from the multi-venue
+  // implementation task for why this is a deliberate, temporary limitation
+  // rather than an oversight; venue-level plans are Phase 2 scope.
   const subscription = operator ? await getOperatorSubscription(operator.id) : null;
   const plan: OperatorPlan =
     subscription?.plan_code ?? parseOperatorPlan(operator?.plan);
@@ -218,22 +226,20 @@ export default async function AdminSubscriptionPage({
   const isStripeBilled    = billingProvider === "stripe" && stripeCustomerId !== null;
 
   // ── Venue usage data ──────────────────────────────────────────────────────
+  // Usage counters (images/events/etc.) are still per-venue — only the plan
+  // itself is operator-wide.
 
   let venue: SubscriptionVenueRow | null = null;
 
-  if (operator) {
-    const { data } = await ctx.supabase
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase
       .from("venues")
       .select("id, hh_food_details, hh_drink_details, search_tags, cancelled_at")
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venue = data as SubscriptionVenueRow | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("id, hh_food_details, hh_drink_details, search_tags, cancelled_at")
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+      .eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data } = await query.maybeSingle();
     venue = data as SubscriptionVenueRow | null;
   }
 

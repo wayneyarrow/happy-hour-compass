@@ -5,7 +5,7 @@ export const metadata = { title: "Home" };
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import {
   computeVenueReadiness,
   computeOperatorImageCount,
@@ -283,25 +283,21 @@ export default async function AdminHomePage() {
   if (!user) redirect("/login");
 
   const ctx = await resolveOperatorContext();
-  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator, operatorError } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet. No-op otherwise (0/1 venues, or impersonating).
+  assertActiveVenueSelected(ctx);
 
   let venue: HomeVenueRow | null = null;
   let venueError: { message: string } | null = null;
 
-  if (operator) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select(VENUE_SELECT)
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venue = data as HomeVenueRow | null;
-    venueError = error as { message: string } | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data, error } = await ctx.supabase
-      .from("venues")
-      .select(VENUE_SELECT)
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase.from("venues").select(VENUE_SELECT).eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data, error } = await query.maybeSingle();
     venue = data as HomeVenueRow | null;
     venueError = error as { message: string } | null;
   }

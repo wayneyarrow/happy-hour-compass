@@ -4,7 +4,7 @@ export const metadata = { title: "Analytics" };
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import {
   PLAN_LABELS,
   ANALYTICS_TIER_LABELS,
@@ -203,7 +203,11 @@ export default async function AdminAnalyticsPage() {
   if (!user) redirect("/login");
 
   const ctx = await resolveOperatorContext();
-  const { operator, operatorError, isImpersonating, impersonatingVenueId } = ctx;
+  const { operator, operatorError, isImpersonating } = ctx;
+
+  // Redirects to /admin/select-venue if this operator owns 2+ venues and
+  // hasn't chosen one yet. No-op otherwise (0/1 venues, or impersonating).
+  assertActiveVenueSelected(ctx);
 
   const currentEmail = user.email ?? operator?.email ?? "";
   const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
@@ -217,22 +221,17 @@ export default async function AdminAnalyticsPage() {
   const isProOrMore = plan === "pro" || isPremium;
 
   // ── Venue ─────────────────────────────────────────────────────────────────
+  // Loaded by the server-validated active venue rather than "any venue
+  // created_by_operator_id matches" — an operator may now own more than one.
 
   let venue: AnalyticsVenueRow | null = null;
 
-  if (operator) {
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("id, name, search_tags")
-      .eq("created_by_operator_id", operator.id)
-      .maybeSingle();
-    venue = data as AnalyticsVenueRow | null;
-  } else if (isImpersonating && impersonatingVenueId) {
-    const { data } = await ctx.supabase
-      .from("venues")
-      .select("id, name, search_tags")
-      .eq("id", impersonatingVenueId)
-      .maybeSingle();
+  if (ctx.activeVenueId) {
+    let query = ctx.supabase.from("venues").select("id, name, search_tags").eq("id", ctx.activeVenueId);
+    if (operator) {
+      query = query.eq("created_by_operator_id", operator.id);
+    }
+    const { data } = await query.maybeSingle();
     venue = data as AnalyticsVenueRow | null;
   }
 

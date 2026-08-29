@@ -44,12 +44,29 @@ function isKnownSupabaseJwtKidError(message: string | null | undefined): boolean
  *
  * Steps (mirrors reviewClaimAction steps 2-6):
  *  1. Create Supabase Auth user (email_confirm: true, no password). If the
- *     user already exists, look up their ID from the operators table (retry).
+ *     user already exists, look up their ID + activation state from the
+ *     operators table (retry).
  *  2. Insert operator row (id = auth user UUID). Idempotent on 23505 conflict.
- *  3. Unlink other venues from this operator (one-venue-per-operator invariant).
- *  4. Link venue: set claimed_by, claimed_at, created_by_operator_id.
- *  5. Generate Supabase recovery link pointing to /operator/create-password.
- *  6. Call sendEmail(setupLink) — rollback all prior steps on failure.
+ *  3. Link venue: set claimed_by, claimed_at, created_by_operator_id. Does
+ *     NOT touch any other venue this operator already owns — see "Multi-venue
+ *     ownership" below.
+ *  4. Resolve the link to send: a real Supabase recovery link (pointing to
+ *     /operator/create-password) for a genuinely new operator, or a plain
+ *     /login link for a returning, already-activated operator — see
+ *     "Returning operators" below.
+ *  5. Call sendEmail(link, isReturningOperator) — rollback all prior steps
+ *     on failure.
+ *
+ * Multi-venue ownership (Phase 1, 2026-08-29):
+ *   This function used to unlink every other venue the operator owned before
+ *   linking the new one — a "one-venue-per-operator" invariant enforced in
+ *   code, not by the schema. That step is intentionally removed. An operator
+ *   can now legitimately own more than one venue: `venues.created_by_operator_id`
+ *   is a plain FK with no uniqueness constraint on the operator side, and
+ *   Operator Admin now resolves an explicit active venue (see
+ *   `src/lib/impersonation.ts`'s OperatorContext.venues/activeVenueId) rather
+ *   than assuming exactly one row matches. Do not reintroduce an unlink step
+ *   here without also revisiting that resolution logic.
  *
  * Returns { ok: true, authUserId } on success.
  * Returns { ok: false, error, hhcErrorId } on any step failure after full
@@ -60,6 +77,15 @@ function isKnownSupabaseJwtKidError(message: string | null | undefined): boolean
  * The sendEmail callback decouples email copy from provisioning logic,
  * allowing claim approvals and operator submissions to use different copy
  * without diverging the core provisioning flow.
+ *
+ * Returning operators (2026-08-30 follow-up to Phase 1 multi-venue support):
+ *   `isReturningOperator` is true when this call reused an existing,
+ *   already-activated operator account (i.e. this is a second-or-later
+ *   venue for someone who has already set a password). In that case no
+ *   Supabase recovery token is generated at all — see Step 4 — and
+ *   `sendEmail` receives a plain /login link instead. Callers should send
+ *   "venue added to your account" copy rather than "set up your password"
+ *   copy in that case (see sendVenueAddedToAccountEmail in src/lib/email.ts).
  */
 export async function provisionOperatorForVenue({
   email,
@@ -75,7 +101,10 @@ export async function provisionOperatorForVenue({
   venueId: string;
   /** Prefix for all log lines, e.g. "[saveOperatorSubmissionAction]" */
   logTag: string;
-  sendEmail: (setupLink: string) => Promise<{ ok: boolean; error?: string }>;
+  sendEmail: (
+    setupLink: string,
+    isReturningOperator: boolean
+  ) => Promise<{ ok: boolean; error?: string }>;
 }): Promise<{ ok: true; authUserId: string } | { ok: false; error: string; hhcErrorId?: string }> {
   const supabase = createAdminClient();
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
@@ -170,6 +199,12 @@ export async function provisionOperatorForVenue({
 
   let authUserId: string;
   let createdNewAuthUser = false;
+  // True when this call reused an existing, already-activated operator
+  // account — i.e. this is a second-or-later venue for someone who has
+  // already completed account setup. Used to pick the right email copy
+  // (see sendEmail's isReturningOperator parameter) rather than telling a
+  // returning operator to "set up" a password they already have.
+  let isReturningOperator = false;
 
   const { data: authData, error: createUserError } =
     await supabase.auth.admin.createUser({
@@ -212,7 +247,7 @@ export async function provisionOperatorForVenue({
 
     const { data: existingOp } = await supabase
       .from("operators")
-      .select("id")
+      .select("id, account_activated_at")
       .eq("email", email)
       .maybeSingle();
 
@@ -246,7 +281,8 @@ export async function provisionOperatorForVenue({
     }
 
     authUserId = existingOp.id as string;
-    console.warn(`${logTag} Auth user already existed — reusing.`, { authUserId });
+    isReturningOperator = !!existingOp.account_activated_at;
+    console.warn(`${logTag} Auth user already existed — reusing.`, { authUserId, isReturningOperator });
   }
 
   // ── Step 2: Insert operator row ───────────────────────────────────────────
@@ -287,17 +323,9 @@ export async function provisionOperatorForVenue({
     return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
-  // ── Step 3: One-venue-per-operator invariant ──────────────────────────────
-  // Unlink any other venues currently owned by this operator before linking
-  // the submission venue. This is a no-op for fresh operators with no prior venues.
-
-  await supabase
-    .from("venues")
-    .update({ created_by_operator_id: null })
-    .eq("created_by_operator_id", authUserId)
-    .neq("id", venueId);
-
-  // ── Step 4: Link venue to operator ────────────────────────────────────────
+  // ── Step 3: Link venue to operator ────────────────────────────────────────
+  // Does not touch any other venue this operator already owns — an operator
+  // may legitimately own multiple venues (Phase 1 multi-venue support).
 
   const now = new Date().toISOString();
 
@@ -338,66 +366,86 @@ export async function provisionOperatorForVenue({
     return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
-  // ── Step 5: Generate Supabase recovery link ───────────────────────────────
-  // Points directly to /operator/create-password. Supabase appends
-  // #access_token=...&type=recovery to this URL so the page can call setSession().
+  // ── Step 4: Resolve the link to send ──────────────────────────────────────
+  //
+  // A returning operator (isReturningOperator) already has a password and an
+  // authenticated way in — they don't need a Supabase recovery token at all.
+  // Sending one anyway would land them on /operator/create-password, which
+  // unconditionally shows a "set/reset your password" form regardless of
+  // context (see that page's own header comment) — misleading for someone
+  // who isn't setting up or recovering anything, and an unnecessary live
+  // recovery token generated for no reason. A plain link to /login is both
+  // simpler and correct here: sendVenueAddedToAccountEmail's copy already
+  // says "sign in" / "Access my venues", which is exactly what this delivers.
+  //
+  // New operators (first venue, no password yet) still need the real
+  // Supabase recovery link — it's the only way they get an authenticated
+  // session and reach /operator/create-password to set a password at all.
 
   const appUrl = getSiteUrl();
-  const redirectTo = `${appUrl}/operator/create-password`;
+  let actionLink: string;
 
-  // Retry only the known transient Supabase JWT/kid failure (see note at top
-  // of file), up to 3 attempts total, short exponential backoff. Any other
-  // error returns immediately on the first attempt.
-  let linkData: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["data"] | null = null;
-  let linkError: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["error"] = null;
+  if (isReturningOperator) {
+    actionLink = `${appUrl}/login`;
+  } else {
+    const redirectTo = `${appUrl}/operator/create-password`;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const result = await supabase.auth.admin.generateLink({
-      type:    "recovery",
-      email,
-      options: { redirectTo },
-    });
-    linkData = result.data;
-    linkError = result.error;
+    // Retry only the known transient Supabase JWT/kid failure (see note at
+    // top of file), up to 3 attempts total, short exponential backoff. Any
+    // other error returns immediately on the first attempt.
+    let linkData: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["data"] | null = null;
+    let linkError: Awaited<ReturnType<typeof supabase.auth.admin.generateLink>>["error"] = null;
 
-    if (!linkError || !isKnownSupabaseJwtKidError(linkError.message)) break;
-    if (attempt < 3) {
-      console.error(`${logTag} generateLink hit known Supabase JWT/kid issue — retrying (attempt ${attempt + 1}/3).`);
-      await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 500));
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const result = await supabase.auth.admin.generateLink({
+        type:    "recovery",
+        email,
+        options: { redirectTo },
+      });
+      linkData = result.data;
+      linkError = result.error;
+
+      if (!linkError || !isKnownSupabaseJwtKidError(linkError.message)) break;
+      if (attempt < 3) {
+        console.error(`${logTag} generateLink hit known Supabase JWT/kid issue — retrying (attempt ${attempt + 1}/3).`);
+        await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 500));
+      }
     }
+
+    if (linkError || !linkData?.properties?.action_link) {
+      console.error(
+        `${logTag} generateLink failed — rolling back:`,
+        { email, error: linkError?.message }
+      );
+      const report = reportOperationalError({
+        error: new Error(linkError?.message ?? "generateLink returned no action_link"),
+        flow: OPERATOR_ACTIVATION_FLOW,
+        stage: "activation-link-generate",
+        severity: "critical",
+        context: { venueId, authUserId, callerFlow: logTag },
+      });
+      await sendSlackAlert({
+        channel:  "ops-critical",
+        severity: "critical",
+        title:    "Operator Provisioning Failed — Setup Link Generation",
+        message:  "Failed to generate Supabase recovery link. Rolling back.",
+        metadata: {
+          Email: email, "Venue ID": venueId, Error: linkError?.message ?? "unknown", Flow: logTag,
+          "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
+        },
+      });
+      await rbVenueLink(venueId, "generateLink failed");
+      if (createdNewOperator) await rbOperator(authUserId, "generateLink failed");
+      if (createdNewAuthUser) await rbAuthUser(authUserId, "generateLink failed");
+      return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
+    }
+
+    actionLink = linkData.properties.action_link;
   }
 
-  if (linkError || !linkData?.properties?.action_link) {
-    console.error(
-      `${logTag} generateLink failed — rolling back:`,
-      { email, error: linkError?.message }
-    );
-    const report = reportOperationalError({
-      error: new Error(linkError?.message ?? "generateLink returned no action_link"),
-      flow: OPERATOR_ACTIVATION_FLOW,
-      stage: "activation-link-generate",
-      severity: "critical",
-      context: { venueId, authUserId, callerFlow: logTag },
-    });
-    await sendSlackAlert({
-      channel:  "ops-critical",
-      severity: "critical",
-      title:    "Operator Provisioning Failed — Setup Link Generation",
-      message:  "Failed to generate Supabase recovery link. Rolling back.",
-      metadata: {
-        Email: email, "Venue ID": venueId, Error: linkError?.message ?? "unknown", Flow: logTag,
-        "HHC Error": report.hhcErrorId, "Sentry Event": report.sentryEventId ?? "unavailable",
-      },
-    });
-    await rbVenueLink(venueId, "generateLink failed");
-    if (createdNewOperator) await rbOperator(authUserId, "generateLink failed");
-    if (createdNewAuthUser) await rbAuthUser(authUserId, "generateLink failed");
-    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
-  }
+  // ── Step 5: Send activation email ────────────────────────────────────────
 
-  // ── Step 6: Send activation email ────────────────────────────────────────
-
-  const emailResult = await sendEmail(linkData.properties.action_link);
+  const emailResult = await sendEmail(actionLink, isReturningOperator);
 
   if (!emailResult.ok) {
     // Sentry-only here (no reportCriticalFailure/new Slack alert): the

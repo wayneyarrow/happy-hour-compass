@@ -47,6 +47,12 @@ export async function uploadEventImageAction(
   // caller-supplied venueId — matches saveEventAction's targetVenueId.
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
+  // Never trust a client-submitted venueId on its own — must be one of the
+  // venues resolveOperatorContext() actually resolved for this operator.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
+
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
 
@@ -103,6 +109,11 @@ export async function removeEventImageAction(
   }
 
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
+
+  // Never trust a client-submitted venueId on its own — see uploadEventImageAction.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
 
   const { error: updateError, count } = await ctx.supabase
     .from("events")

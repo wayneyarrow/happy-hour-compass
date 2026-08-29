@@ -40,6 +40,12 @@ export async function deleteEventAction(eventId: string, venueId: string): Promi
 
   const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
 
+  // Never trust a client-submitted venueId on its own — must be one of the
+  // venues resolveOperatorContext() actually resolved for this operator.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    throw new Error("Venue not found or you don't have permission to manage it.");
+  }
+
   const { error, count } = await ctx.supabase
     .from("events")
     .delete({ count: "exact" })
@@ -185,6 +191,12 @@ export async function saveEventAction(
   const targetVenueId = ctx.isImpersonating
     ? (ctx.sessionVenueId ?? payload.venueId)
     : payload.venueId;
+
+  // Never trust a client-submitted venueId on its own — must be one of the
+  // venues resolveOperatorContext() actually resolved for this operator.
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
 
   const plan = parseOperatorPlan(ctx.operator?.plan);
 

@@ -7,7 +7,12 @@ import AdminSideNav from "./AdminSideNav";
 import AdminMobileNav from "./AdminMobileNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
 import ImpersonationBanner from "./ImpersonationBanner";
-import { IMP_COOKIE_NAME, getValidImpersonationSession } from "@/lib/impersonation";
+import VenueSwitcher from "./VenueSwitcher";
+import {
+  IMP_COOKIE_NAME,
+  getValidImpersonationSession,
+  resolveOperatorContext,
+} from "@/lib/impersonation";
 import { updateOperatorLastSeen } from "@/lib/activityTracking";
 
 export const metadata: Metadata = {
@@ -47,24 +52,25 @@ export default async function AdminLayout({
     ? await getValidImpersonationSession(impSessionId)
     : null;
 
-  // Venue cancellation check — skip during impersonation (CP admin can still view).
-  // Two lightweight indexed queries: operator by email → venue cancelled_at.
-  let isVenueCancelled = false;
-  if (!impSession) {
-    const { data: opRow } = await supabase
-      .from("operators")
-      .select("id")
-      .eq("email", user.email!)
-      .maybeSingle();
+  // Shared operator/venue context — also drives the venue switcher below.
+  // Resolving it here (rather than a bespoke query) means the cancellation
+  // check below is scoped to the operator's ACTIVE venue, not "any venue
+  // this operator happens to own" — correct now that one operator can own
+  // more than one venue (Phase 1 multi-venue support).
+  const ctx = await resolveOperatorContext();
 
-    if (opRow) {
-      const { data: venueRow } = await supabase
-        .from("venues")
-        .select("cancelled_at")
-        .eq("created_by_operator_id", (opRow as { id: string }).id)
-        .maybeSingle();
-      isVenueCancelled = !!(venueRow as { cancelled_at: string | null } | null)?.cancelled_at;
-    }
+  // Venue cancellation check — skip during impersonation (CP admin can still
+  // view) and skip when no active venue is resolved yet (operator owns 2+
+  // venues and hasn't selected one — they're on /admin/select-venue, which
+  // has nothing to cancel-check).
+  let isVenueCancelled = false;
+  if (!impSession && ctx.activeVenueId) {
+    const { data: venueRow } = await supabase
+      .from("venues")
+      .select("cancelled_at")
+      .eq("id", ctx.activeVenueId)
+      .maybeSingle();
+    isVenueCancelled = !!(venueRow as { cancelled_at: string | null } | null)?.cancelled_at;
   }
 
   // Cancelled venue: show farewell screen instead of normal shell.
@@ -141,6 +147,13 @@ export default async function AdminLayout({
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
+          {/* Hidden during impersonation and for single-venue operators —
+              see VenueSwitcher's own guard for the exact condition. */}
+          <VenueSwitcher
+            isImpersonating={ctx.isImpersonating}
+            venues={ctx.venues}
+            activeVenueId={ctx.activeVenueId}
+          />
           <span className="text-sm text-gray-600 hidden sm:block">
             {user.email}
           </span>

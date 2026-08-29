@@ -8,6 +8,7 @@ import {
   sendOperatorSubmissionMoreInfoEmail,
   sendOperatorSubmissionClosedEmail,
   sendOperatorActivationEmail,
+  sendVenueAddedToAccountEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
@@ -584,12 +585,19 @@ export async function approveAndCreateVenueAction(
     lastName,
     venueId,
     logTag: "[approveAndCreateVenueAction]",
-    sendEmail: (setupLink) =>
-      sendOperatorActivationEmail({
-        to:        email,
-        firstName: firstName || "there",
-        setupLink,
-      }),
+    sendEmail: (setupLink, isReturningOperator) =>
+      isReturningOperator
+        ? sendVenueAddedToAccountEmail({
+            to:        email,
+            firstName: firstName || "there",
+            venueName,
+            accessLink: setupLink,
+          })
+        : sendOperatorActivationEmail({
+            to:        email,
+            firstName: firstName || "there",
+            setupLink,
+          }),
   });
 
   if (!provisionResult.ok) {
@@ -861,12 +869,19 @@ export async function resolveExistingVenueMatchAction(
     lastName,
     venueId,
     logTag: "[resolveExistingVenueMatchAction]",
-    sendEmail: (setupLink) =>
-      sendOperatorActivationEmail({
-        to:        email,
-        firstName: firstName || "there",
-        setupLink,
-      }),
+    sendEmail: (setupLink, isReturningOperator) =>
+      isReturningOperator
+        ? sendVenueAddedToAccountEmail({
+            to:        email,
+            firstName: firstName || "there",
+            venueName,
+            accessLink: setupLink,
+          })
+        : sendOperatorActivationEmail({
+            to:        email,
+            firstName: firstName || "there",
+            setupLink,
+          }),
   });
 
   if (!provisionResult.ok) {

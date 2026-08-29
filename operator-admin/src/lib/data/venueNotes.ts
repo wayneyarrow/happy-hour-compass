@@ -11,6 +11,17 @@ import { createAdminClient } from "@/lib/supabase/server";
  * Pass actorEmail to attribute the note to the user who triggered the event
  * (e.g. the owner who changed the plan, the member who accepted the invite).
  * Pass null/undefined for fully automated system events.
+ *
+ * Phase 1 multi-venue limitation (2026-08-29): resolves "the venue" via
+ * `.eq("created_by_operator_id", operatorId).maybeSingle()`, which is
+ * ambiguous for an operator who owns 2+ venues — `maybeSingle()` returns no
+ * row in that case, so the note is silently dropped rather than misfiled
+ * onto the wrong venue. This is intentionally left as a documented gap
+ * rather than reworked to accept an explicit venueId: it's an internal
+ * audit-trail convenience (visible only in the Founder Control Panel), not
+ * a security or data-correctness issue, and every call site (team
+ * invite/accept, plan changes) is operator-level by nature already. Revisit
+ * if/when these events become venue-scoped.
  */
 export async function addSystemVenueNote(
   operatorId: string,

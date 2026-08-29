@@ -1,5 +1,18 @@
 "use server";
 
+/**
+ * Team/user (member) management — operator-level, not venue-level.
+ *
+ * Phase 1 multi-venue note (2026-08-29): membership (operator_memberships)
+ * grants access to an operator account, not to a specific venue. An operator
+ * who owns multiple venues therefore has ONE team, and any member invited
+ * here can access every venue that operator owns via resolveOperatorContext()
+ * — there is no per-venue team scoping in this phase. This is a deliberate,
+ * documented Phase 1 limitation (see the multi-venue implementation task's
+ * report), not an oversight — building per-venue team permissions is
+ * explicitly out of scope until a future phase.
+ */
+
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveOperatorContext } from "@/lib/impersonation";
@@ -67,11 +80,13 @@ export async function inviteUserAction(
   const supabase = createAdminClient();
 
   // Fetch venue name + inviter name up front — needed for email in all paths.
-  const { data: venueData } = await supabase
-    .from("venues")
-    .select("name")
-    .eq("created_by_operator_id", operatorId)
-    .maybeSingle();
+  // Team membership is operator-level (Phase 1 — see file header note), so an
+  // invited member gets access to every venue this operator owns; the name
+  // used in the invite email is just the venue the inviting owner was
+  // actively viewing, not "the" venue (an operator may own more than one).
+  const { data: venueData } = ctx.activeVenueId
+    ? await supabase.from("venues").select("name").eq("id", ctx.activeVenueId).maybeSingle()
+    : { data: null };
   const venueName = (venueData as { name?: string } | null)?.name ?? "your venue";
 
   const inviterName =
