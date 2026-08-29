@@ -10,6 +10,30 @@
  *
  * Usage:
  *   import { getOperatorPlanCode, updateOperatorPlan } from "@/lib/subscriptions";
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * PHASE 2 NOTE (2026-08-29, Phase 2A additive foundation) — read before
+ * treating this file's fallback chain as a pattern to copy:
+ * ─────────────────────────────────────────────────────────────────────────
+ * This file, and the "operator_subscriptions → operators.plan → 'free'"
+ * fallback chain in getOperatorPlanCode() specifically, remain fully live
+ * and unchanged in Phase 2A — every current entitlement check in the
+ * application still reads through here. That fallback chain is correct
+ * TODAY only because every venue an operator owns still shares one plan.
+ *
+ * It stops being a safe pattern the moment Phase 2B allows one operator to
+ * own venues on different plans (e.g. Premium + Free) — at that point there
+ * is no single operators.plan value that could ever be a correct answer for
+ * "this venue's plan," so falling back to it would silently leak one
+ * venue's entitlement onto a sibling. See src/lib/venueSubscriptions.ts
+ * (the Phase 2A venue-scoped counterpart to this file) for the contract
+ * that replaces it: subscription row → its plan_code; no row → 'free';
+ * never operators.plan. operators.plan / operator_subscriptions are not
+ * removed by Phase 2A and are not required to be deleted by Phase 2B either
+ * — but once Phase 2B cuts live entitlement reads over to
+ * venue_subscriptions, this file's role becomes legacy/rollback-reference
+ * only, not a permanent second source powering the product indefinitely
+ * alongside venue-level plans.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
