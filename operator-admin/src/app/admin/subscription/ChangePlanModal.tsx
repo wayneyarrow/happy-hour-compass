@@ -208,8 +208,17 @@ export type ChangePlanModalProps = {
   tagCount:         number;
   userCount:        number;
   isOwner:          boolean;
-  billingProvider:  string | null;
-  stripeCustomerId: string | null;
+  /**
+   * True when the active venue's current plan is billed through a real,
+   * active Stripe subscription (billing_provider === "stripe" AND a
+   * subscription id exists) — the exact same definition changePlanAction.ts
+   * uses to decide whether a Stripe subscription exists to update/cancel.
+   * Drives the Checkout-vs-in-place-update routing decision below; a venue
+   * with a reserved Stripe Customer but no subscription yet (e.g. an
+   * abandoned first checkout) is NOT "currently Stripe-backed" and still
+   * needs a new Checkout Session.
+   */
+  isCurrentlyStripeBacked: boolean;
   /** When true, opens the plan selector on first mount (e.g. from an upgrade link). */
   initialOpen?:     boolean;
 };
@@ -647,10 +656,8 @@ export default function ChangePlanModal({
   tagCount,
   userCount,
   isOwner,
+  isCurrentlyStripeBacked,
   initialOpen,
-  // billingProvider and stripeCustomerId are passed from page.tsx but
-  // not needed inside the modal — plan changes route through Stripe Checkout
-  // for upgrades based solely on the target plan, not the current provider.
 }: ChangePlanModalProps) {
   const router            = useRouter();
   const [isOpen,          setIsOpen]       = useState(false);
@@ -710,14 +717,11 @@ export default function ChangePlanModal({
     if (!selectedPlan || !operatorId) return;
     setActionError(null);
 
-    const isStripeUpgrade =
-      PLAN_RANK[selectedPlan] > PLAN_RANK[visibleCurrentPlan] &&
-      (selectedPlan === "pro" || selectedPlan === "premium");
-
     startTransition(async () => {
-      if (isStripeUpgrade) {
-        // Route paid upgrades through Stripe Checkout.
-        // plan_code is activated by the webhook — NOT this redirect.
+      if (needsNewCheckout) {
+        // First time establishing Stripe billing on this venue — route
+        // through Stripe Checkout. plan_code is activated by the webhook —
+        // NOT this redirect.
         const result = await createCheckoutSessionAction(selectedPlan as "pro" | "premium");
         if (result.ok && result.url) {
           window.location.href = result.url;
@@ -773,6 +777,19 @@ export default function ChangePlanModal({
   const isUpgrade = selectedPlan
     ? PLAN_RANK[selectedPlan] > PLAN_RANK[visibleCurrentPlan]
     : false;
+
+  // Billing-path decision — deliberately independent of isUpgrade/PLAN_RANK.
+  // A brand-new Stripe Checkout Session is only needed to ESTABLISH Stripe
+  // billing on this venue for the first time (target is a Stripe-billable
+  // plan and the venue isn't already Stripe-backed). Any other transition —
+  // including moving BETWEEN two Stripe-billable tiers in either direction
+  // (Pro <-> Premium) — must go through changePlanAction, which already
+  // updates the existing subscription's price in place (or cancels it, for
+  // a move to Free) rather than opening a second concurrent subscription.
+  const needsNewCheckout =
+    !isCurrentlyStripeBacked &&
+    selectedPlan !== null &&
+    (selectedPlan === "pro" || selectedPlan === "premium");
 
   const transitionKey     = selectedPlan ? `${visibleCurrentPlan}->${selectedPlan}` : null;
   const transitionContent = transitionKey ? (TRANSITION_CONTENT[transitionKey] ?? {}) : null;
@@ -869,7 +886,7 @@ export default function ChangePlanModal({
                     transitionContent && (
                       <ConfirmView
                         isUpgrade={isUpgrade}
-                        isStripeCheckout={isUpgrade && (selectedPlan === "pro" || selectedPlan === "premium")}
+                        isStripeCheckout={needsNewCheckout}
                         toPlan={selectedPlan}
                         content={transitionContent}
                         isPending={isPending}

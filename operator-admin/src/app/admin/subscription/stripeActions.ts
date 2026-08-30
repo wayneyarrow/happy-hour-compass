@@ -5,6 +5,7 @@ import { getMembershipRole } from "@/lib/memberships";
 import { getVenueSubscription, reserveVenueStripeCustomer } from "@/lib/venueSubscriptions";
 import { getStripeClient, getStripePriceId } from "@/lib/stripe";
 import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // A legitimate, authenticated, authorized operator directly blocked from
 // ever reaching Stripe to pay is treated the same as an acquisition-flow
@@ -13,26 +14,6 @@ import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure
 // expected/customer-correctable check below (not authenticated, not
 // resolvable, not owner) — those remain untouched and uninstrumented.
 const STRIPE_CHECKOUT_FLOW = "stripe-checkout";
-
-// ─── Shared utility ────────────────────────────────────────────────────────────
-
-/**
- * Preview deployments must never trust a manually-configured APP_URL — it has
- * historically been set to a single fixed value across all Vercel
- * environments (see src/lib/email.ts's header comment for the original
- * incident, where this same pattern sent staging email links to the
- * production deployment). That would leak Preview/Test-mode Stripe Checkout
- * and Customer Portal redirects into the Production admin app. VERCEL_URL is
- * always specific to the deployment actually serving the request, so Preview
- * stays self-contained regardless of how APP_URL is configured.
- */
-function getAppUrl(): string {
-  if (process.env.APP_URL && process.env.VERCEL_ENV !== "preview") {
-    return process.env.APP_URL.replace(/\/$/, "");
-  }
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
 
 // ─── Checkout ──────────────────────────────────────────────────────────────────
 
@@ -132,7 +113,7 @@ export async function createCheckoutSessionAction(
     return { ok: false, error: report.customerMessage };
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
 
   // One Stripe Customer per VENUE — reuse this venue's own customer if it
   // already has one; never read or reuse a sibling venue's customer.
@@ -343,7 +324,7 @@ export async function createPortalSessionAction(): Promise<{ ok: boolean; url?: 
     return { ok: false, error: "Billing is temporarily unavailable. Please try again later." };
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = getSiteUrl();
 
   try {
     const portalSession = await stripe.billingPortal.sessions.create({

@@ -225,6 +225,11 @@ export default async function AdminSubscriptionPage({
   const billingProvider   = subscription?.billing_provider ?? null;
   const stripeCustomerId  = subscription?.billing_provider_customer_id ?? null;
   const isStripeBilled    = billingProvider === "stripe" && stripeCustomerId !== null;
+  // Same definition changePlanAction.ts uses to decide whether a real
+  // Stripe subscription exists to update/cancel — drives ChangePlanModal's
+  // Checkout-vs-in-place-update routing decision (see its header comment).
+  const isCurrentlyStripeBacked =
+    billingProvider === "stripe" && !!subscription?.billing_provider_subscription_id;
 
   // ── Team-seat entitlement (Phase 2B temporary rule) ───────────────────────
   // Team membership stays operator-level (Phase 1) — the "Users" row must
@@ -403,8 +408,7 @@ export default async function AdminSubscriptionPage({
               tagCount={tagCount}
               userCount={userCount}
               isOwner={isOwner}
-              billingProvider={billingProvider}
-              stripeCustomerId={stripeCustomerId}
+              isCurrentlyStripeBacked={isCurrentlyStripeBacked}
               initialOpen={openPlansModal && isOwner}
             />
           </div>
