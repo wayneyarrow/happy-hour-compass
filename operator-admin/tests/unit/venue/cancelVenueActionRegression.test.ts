@@ -4,19 +4,32 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Regression coverage for the cancelVenueAction() false-success fix
- * (src/app/admin/venue/cancelActions.ts). cancelVenueAction() calls
- * resolveOperatorContext()/createAdminClient() directly with no DI seam
- * (same reasoning as every other flow-specific contract test in this repo),
- * so this is a static, structural verification of the actual source text —
- * proving the exact control-flow shape the fix requires, rather than
- * exercising the real Server Action end-to-end.
+ * Regression coverage for cancelVenueAction() (src/app/admin/venue/cancelActions.ts):
+ *   1. the original false-success fix (a downgrade failure must never
+ *      collapse into a bare error response or a false-success response), and
+ *   2. the Phase 2B venue-scoping + Stripe-cancellation-correctness cutover
+ *      — cancelling Venue A must only ever touch Venue A, and a Stripe-
+ *      backed venue's subscription must actually be cancelled at Stripe
+ *      (not just flipped to Free locally while Stripe keeps billing).
+ *
+ * cancelVenueAction() calls resolveOperatorContext()/createAdminClient()/
+ * Stripe directly with no DI seam (same reasoning as every other flow-
+ * specific contract test in this repo), so this is a static, structural
+ * verification of the actual source text — proving the exact control-flow
+ * shape both fixes require, rather than exercising the real Server Action
+ * end-to-end.
  */
 
 const CANCEL_ACTIONS_SOURCE = readFileSync(
   join(__dirname, "../../../src/app/admin/venue/cancelActions.ts"),
   "utf8"
 );
+
+function billingBlock(): string {
+  return CANCEL_ACTIONS_SOURCE
+    .split("// ── Billing: downgrade THIS VENUE to free")[1]
+    .split("// ── Audit log")[0];
+}
 
 test("CancelVenueState carries downgradeFailed + hhcErrorId as optional fields, alongside the pre-existing success/error fields", () => {
   const stateType = CANCEL_ACTIONS_SOURCE.match(/export type CancelVenueState = \{[\s\S]*?\n\};/)![0];
@@ -33,39 +46,59 @@ test("1. successful venue cancellation + successful downgrade still returns plai
   );
 });
 
-test("2a. downgrade failure does NOT collapse into a bare error response — the action still returns success: true (venue was genuinely cancelled)", () => {
-  // The final return is unconditional on downgradeFailed producing an
-  // object that still has success:true in both branches of the ternary —
-  // confirmed by the same regex as the previous test. This test asserts
-  // the negative: there is no separate early-return path that turns a
-  // downgrade failure into `{ error: ... }` instead.
-  const downgradeBlock = CANCEL_ACTIONS_SOURCE.split("// ── Billing: downgrade to free")[1]
-    .split("// ── Audit log")[0];
-  assert.doesNotMatch(downgradeBlock, /return \{ error:/);
+test("2a. downgrade failure (either branch) does NOT collapse into a bare error response — the action still returns success: true (venue was genuinely cancelled)", () => {
+  // The final return (asserted above) is unconditional on downgradeFailed
+  // producing an object that still has success:true in both branches of
+  // the ternary. This test asserts the negative within the billing block
+  // itself: there is no separate early-return path that turns a downgrade/
+  // Stripe-cancel failure into `{ error: ... }` instead.
+  assert.doesNotMatch(billingBlock(), /return \{ error:/);
 });
 
-test("2b. downgrade failure result is checked via result.ok (not ignored like the pre-fix `const { ok } = ...` destructure)", () => {
-  const downgradeBlock = CANCEL_ACTIONS_SOURCE.split("// ── Billing: downgrade to free")[1]
-    .split("// ── Audit log")[0];
-  assert.match(downgradeBlock, /const result = await updateOperatorPlan\(operatorId, "free"\);/);
-  assert.match(downgradeBlock, /if \(result\.ok\) \{/);
-  assert.match(downgradeBlock, /\} else \{/);
+test("2b. Phase 2B: billing branches on whether the venue is Stripe-backed — Stripe-backed venues are actually cancelled at Stripe, manual paid plans are downgraded directly via updateVenuePlan()", () => {
+  const block = billingBlock();
+  assert.match(block, /const isStripeBacked =/);
+  assert.match(block, /if \(isStripeBacked\) \{/);
+  assert.match(block, /stripe\.subscriptions\.cancel\(/);
+  assert.match(block, /const result = await updateVenuePlan\(venueId, "free"\);/);
+  assert.match(block, /if \(result\.ok\) \{/);
 });
 
-test("2c. no duplicate HHC error is generated — downgradeHhcErrorId is only ever assigned from result.hhcErrorId, never from a new reportCriticalFailure/reportOperationalError call in this file", () => {
-  assert.doesNotMatch(CANCEL_ACTIONS_SOURCE, /reportCriticalFailure/);
-  assert.doesNotMatch(CANCEL_ACTIONS_SOURCE, /reportOperationalError/);
-  assert.doesNotMatch(CANCEL_ACTIONS_SOURCE, /generateHhcErrorReference/);
-  assert.match(CANCEL_ACTIONS_SOURCE, /downgradeHhcErrorId = result\.hhcErrorId;/);
+test("2c. Stripe-cancel-failure path reports critically exactly once and assigns downgradeHhcErrorId from that report's reference — never a duplicate/independent HHC id", () => {
+  const block = billingBlock();
+  const stripeBranch = block.split("if (isStripeBacked) {")[1].split("} else {")[0];
+  assert.match(stripeBranch, /await reportCriticalFailure\(\{/);
+  assert.equal((stripeBranch.match(/reportCriticalFailure\(/g) ?? []).length, 1);
+  assert.match(stripeBranch, /downgradeHhcErrorId = report\.hhcErrorId;/);
 });
 
-test("2d. a misleading plan-change event/notification is not emitted when the downgrade fails — logPlanChangeEvent only runs inside the result.ok branch", () => {
-  const downgradeBlock = CANCEL_ACTIONS_SOURCE.split("// ── Billing: downgrade to free")[1]
-    .split("// ── Audit log")[0];
-  const ifBlock = downgradeBlock.match(/if \(result\.ok\) \{([\s\S]*?)\} else \{/)![1];
-  const elseBlock = downgradeBlock.match(/\} else \{([\s\S]*?)\n {6}\}/)![1];
+test("2d. manual-downgrade-failure path never generates its own HHC reference here — downgradeHhcErrorId comes only from updateVenuePlan()'s own result.hhcErrorId (which already reports internally)", () => {
+  const block = billingBlock();
+  const manualBranch = block.split("} else {").slice(1).join("} else {");
+  assert.doesNotMatch(manualBranch, /reportCriticalFailure/);
+  assert.doesNotMatch(manualBranch, /reportOperationalError/);
+  assert.match(manualBranch, /downgradeHhcErrorId = result\.hhcErrorId;/);
+});
+
+test("2e. a misleading plan-change event is not logged for a failed manual downgrade — logPlanChangeEvent only runs inside that branch's result.ok check", () => {
+  const block = billingBlock();
+  const manualBranch = block.split("} else {").slice(1).join("} else {");
+  const ifBlock = manualBranch.match(/if \(result\.ok\) \{([\s\S]*?)\} else \{/)![1];
+  const elseBlock = manualBranch.match(/\} else \{([\s\S]*?)\n {6}\}/)![1];
   assert.match(ifBlock, /await logPlanChangeEvent\(/);
   assert.doesNotMatch(elseBlock, /logPlanChangeEvent/);
+});
+
+test("2f. Phase 2B: a Stripe-backed cancellation does NOT directly write venue_subscriptions or log its own plan_change_events row — the resulting webhook is the sole writer, exactly like every other Stripe-driven plan change", () => {
+  const block = billingBlock();
+  const stripeBranch = block.split("if (isStripeBacked) {")[1].split("} else {")[0];
+  assert.doesNotMatch(stripeBranch, /updateVenuePlan\(/);
+  assert.doesNotMatch(stripeBranch, /logPlanChangeEvent/);
+});
+
+test("Phase 2B: logPlanChangeEvent() call (manual branch) passes both operatorId and venueId — never guesses the venue", () => {
+  const block = billingBlock();
+  assert.match(block, /logPlanChangeEvent\(\{\s*\n\s*operatorId,\s*\n\s*venueId,/);
 });
 
 test("3a. existing auth/ownership/not-found/already-cancelled validation error paths are unchanged", () => {
@@ -88,7 +121,7 @@ test("3a. existing auth/ownership/not-found/already-cancelled validation error p
 
 test("3b. the venues cancel/unpublish write itself is unchanged and still happens before any billing/downgrade logic", () => {
   const venuesUpdateIndex = CANCEL_ACTIONS_SOURCE.indexOf('.from("venues")\n    .update({');
-  const billingIndex = CANCEL_ACTIONS_SOURCE.indexOf("// ── Billing: downgrade to free");
+  const billingIndex = CANCEL_ACTIONS_SOURCE.indexOf("// ── Billing: downgrade THIS VENUE to free");
   assert.ok(venuesUpdateIndex > -1 && billingIndex > -1);
   assert.ok(venuesUpdateIndex < billingIndex, "venue cancellation must still happen before the downgrade attempt");
 });
@@ -103,4 +136,9 @@ test("no changes were made to logAuditEvent, founder email, or the venue_notes i
   assert.match(CANCEL_ACTIONS_SOURCE, /action:\s*"operator_venue_cancelled",/);
   assert.match(CANCEL_ACTIONS_SOURCE, /sendVenueCancellationFounderEmail\(\{/);
   assert.match(CANCEL_ACTIONS_SOURCE, /await adminClient\.from\("venue_notes"\)\.insert\(\{/);
+});
+
+test("Phase 2B: the venue's Stripe Customer is never deleted — only the subscription is cancelled, so a future Checkout can reuse it", () => {
+  assert.doesNotMatch(CANCEL_ACTIONS_SOURCE, /customers\.del\(/);
+  assert.doesNotMatch(CANCEL_ACTIONS_SOURCE, /stripe\.customers\.delete/);
 });

@@ -192,16 +192,42 @@ test("subscriptions.ts still imports reportCriticalFailure (used once, by update
   assert.equal((SUBSCRIPTIONS_SOURCE.match(/reportCriticalFailure\(\{/g) ?? []).length, 1);
 });
 
-test("Stripe webhook route.ts reporting call counts are unchanged — proves no double-reporting was introduced for the now-atomic plan-changing sync", () => {
-  // Baseline established before this task's changes: 5 reportCriticalFailure
-  // call sites (checkout-completed-sync, subscription-updated-sync,
-  // subscription-deleted-sync, invoice-payment-failed-sync, plus the
-  // pre-existing webhook-secret-missing/handler-exception Slack-enrichment
-  // pattern) and 4 reportOperationalError call sites. subscriptions.ts's
-  // refactor added zero new reporting to this file — these counts must not
-  // have moved.
-  assert.equal((STRIPE_ROUTE_SOURCE.match(/await reportCriticalFailure\(\{/g) ?? []).length, 5);
+test("Stripe webhook route.ts reporting call counts match the Phase 2B billing-review baseline", () => {
+  // Baseline as of the Phase 2B billing architecture review: 7 literal
+  // `await reportCriticalFailure({` call sites — the 6 from the original
+  // Phase 2B venue-resolution cutover (5 direct: checkout-completed-invalid-
+  // payload, checkout-completed-sync, subscription-updated-sync's planCode
+  // branch, subscription-deleted-sync, invoice-payment-failed-sync; plus 1
+  // inside the shared reportVenueMismatch() helper, called from all 5 event
+  // branches) PLUS 1 new one added by this review: the
+  // "checkout-completed-possible-duplicate-subscription" guard in
+  // checkout.session.completed, which flags (but does not block) the case
+  // where a venue already had a different active subscription id when a
+  // new checkout.session.completed arrives — see Part 2 of the review.
+  // reportOperationalError call sites remain 4 (webhook-secret-missing,
+  // handler-exception, subscription-updated-sync's non-planCode branch,
+  // invoice-payment-succeeded-sync) — unchanged.
+  assert.equal((STRIPE_ROUTE_SOURCE.match(/await reportCriticalFailure\(\{/g) ?? []).length, 7);
   assert.equal((STRIPE_ROUTE_SOURCE.match(/reportOperationalError\(\{/g) ?? []).length, 4);
+});
+
+test("Stripe webhook route.ts: every event branch resolves venue via metadata/customer/subscription mapping, never via operator_id", () => {
+  // Part 8 of the Phase 2B task: operator_id must never determine
+  // entitlement ownership. Confirms no event branch calls a
+  // resolveVenueBy...(operatorId) style lookup, and that the one
+  // operator-keyed helper this route ever had (resolveOperatorByCustomer)
+  // is gone.
+  assert.doesNotMatch(STRIPE_ROUTE_SOURCE, /resolveOperatorByCustomer/);
+  assert.doesNotMatch(STRIPE_ROUTE_SOURCE, /resolveVenueBy\w*\(\s*operatorId/);
+  assert.match(STRIPE_ROUTE_SOURCE, /function resolveVenueByCustomer/);
+  assert.match(STRIPE_ROUTE_SOURCE, /function resolveVenueBySubscriptionId/);
+});
+
+test("Stripe webhook route.ts: never calls sync_operator_plan_entitlement or writes operators.plan/operator_subscriptions", () => {
+  assert.doesNotMatch(STRIPE_ROUTE_SOURCE, /syncStripeSubscription/);
+  assert.doesNotMatch(STRIPE_ROUTE_SOURCE, /sync_operator_plan_entitlement/);
+  assert.doesNotMatch(STRIPE_ROUTE_SOURCE, /getOperatorPlanCode/);
+  assert.match(STRIPE_ROUTE_SOURCE, /from "@\/lib\/venueSubscriptions"/);
 });
 
 test("stripe-subscription / entitlement-write (via the webhook route's existing ownership): critical, one HHC id, one production Slack alert, safe Stripe context", async () => {

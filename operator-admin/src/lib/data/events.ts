@@ -12,6 +12,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { haversineKm } from "@/lib/discover/discoverEngine";
 import { toMarketConfig, type Market } from "@/lib/markets";
+import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -710,6 +711,12 @@ export type CPFeaturedEventItem = {
   venueExcludeFromDiscover: boolean;
   venueLat: number | null;
   venueLng: number | null;
+  /**
+   * Phase 2B: the EVENT'S OWN VENUE's plan (venue_subscriptions), not the
+   * operator's — a sibling venue under the same operator may hold a
+   * different plan, and an event's featured treatment must follow its own
+   * venue only.
+   */
   operatorPlan: "free" | "pro" | "premium" | "enterprise";
 };
 
@@ -733,8 +740,7 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
           "event_time, event_frequency, " +
           "internal_boost, exclude_from_discover, " +
           "venues!venue_id(" +
-            "id, slug, name, lat, lng, exclude_from_discover, " +
-            "operators!created_by_operator_id(plan)" +
+            `id, slug, name, lat, lng, exclude_from_discover, ${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}` +
           ")"
       )
       .eq("is_published", true)
@@ -757,13 +763,11 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const operator = (venue.operators as Record<string, any> | null) ?? null;
-      const rawPlan = operator?.plan as string | undefined;
-      const plan: CPFeaturedEventItem["operatorPlan"] =
-        rawPlan === "pro" || rawPlan === "premium" || rawPlan === "enterprise"
-          ? rawPlan
-          : "free";
+      // Phase 2B: this event's own venue's plan — never the operator's, and
+      // never a sibling venue's.
+      const plan: CPFeaturedEventItem["operatorPlan"] = resolvePlanCodeFromJoinedField(
+        venue.venue_subscriptions as { plan_code?: unknown } | null
+      );
 
       return [{
         eventUuid:              row.id as string,

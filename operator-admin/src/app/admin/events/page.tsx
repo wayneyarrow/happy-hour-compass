@@ -5,7 +5,6 @@ export const metadata = { title: "Events" };
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
-import { parseOperatorPlan } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import EventsManager from "./EventsManager";
 import EmptyState from "@/components/EmptyState";
@@ -127,7 +126,7 @@ export default async function AdminEventsPage() {
         <EventsManager
           initialEvents={initialEvents}
           venueId={venue!.id}
-          operatorPlan={parseOperatorPlan(operator?.plan)}
+          operatorPlan={ctx.activeVenuePlan}
           isOwner={isOwner}
           isUnclaimedVenueSupportMode={isUnclaimedVenueSupportMode}
         />

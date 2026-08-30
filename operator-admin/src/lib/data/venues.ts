@@ -11,6 +11,7 @@ import {
   type ConsumerEvent,
   getEventsForConsumerVenues,
 } from "@/lib/data/events";
+import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -150,9 +151,14 @@ export type ConsumerVenue = {
    */
   excludeFromDiscover: boolean;
   /**
-   * The operator's current plan tier, joined from the operators table.
-   * Defaults to "free" for seeded/imported venues with no operator.
-   * Used by the Discover Engine for plan-based weighting (not guaranteed placement).
+   * Phase 2B: this venue's OWN plan tier, joined from venue_subscriptions
+   * (not the operator's — a sibling venue under the same operator may hold
+   * a different plan). Defaults to "free" when no venue_subscriptions row
+   * exists (never on a paid plan) — including all seeded/unclaimed venues,
+   * which have no row by construction. Field name kept as `operatorPlan`
+   * to avoid a repo-wide rename of every consumer of this type; the value
+   * itself is venue-scoped. Used by the Discover Engine for plan-based
+   * weighting (not guaranteed placement).
    */
   operatorPlan: "free" | "pro" | "premium" | "enterprise";
 };
@@ -596,12 +602,12 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     internalBoost: typeof row.internal_boost === "number" ? row.internal_boost : 0,
     spotlightEligible: row.spotlight_eligible === true,
     excludeFromDiscover: row.exclude_from_discover === true,
-    // operators is a nested object from the joined operators table; null for seeded venues
-    operatorPlan: (() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const plan = (row.operators as Record<string, any> | null)?.plan;
-      return (plan === "pro" || plan === "premium" || plan === "enterprise") ? plan : "free";
-    })() as "free" | "pro" | "premium" | "enterprise",
+    // Phase 2B: venue_subscriptions is a nested object from the joined
+    // venue_subscriptions table — null when the venue has no row (Free, or
+    // never on a paid plan, including every seeded/unclaimed venue).
+    operatorPlan: resolvePlanCodeFromJoinedField(
+      row.venue_subscriptions as { plan_code?: unknown } | null
+    ),
   };
 }
 
@@ -629,9 +635,13 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
           "establishment_type, placeholder_image_path, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, updated_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, " +
-          // Join operator plan — used by Discover Engine for plan-based weighting.
-          // created_by_operator_id is null for seeded/imported venues; operators will be null for those rows.
-          "operators!created_by_operator_id(plan), " +
+          // Phase 2B: join this venue's OWN plan (venue_subscriptions), not
+          // the operator's — used by Discover Engine for plan-based
+          // weighting. No row means Free, including every seeded/unclaimed
+          // venue (venue_subscriptions is a nullable outer relationship
+          // here, same as the operators join it replaces — a venue with no
+          // row is never excluded from the result set).
+          `${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ` +
           // Canonical market/city slugs for the public /{market}/{city}/{slug}
           // venue URL. Aliased (market_geo/city_geo) to avoid colliding with
           // the plain `city` text column already selected above.
@@ -967,7 +977,9 @@ export async function getPublishedVenuesByUuids(
           "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
           "establishment_type, placeholder_image_path, is_verified, google_rating, google_review_count, search_tags, seeded_tags, created_at, " +
           "internal_boost, spotlight_eligible, exclude_from_discover, teaser, " +
-          "operators!created_by_operator_id(plan), " +
+          // Phase 2B: this venue's OWN plan (venue_subscriptions), not the
+          // operator's — see the other query in this file for full rationale.
+          `${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ` +
           "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"
       )
       .eq("is_published", true)

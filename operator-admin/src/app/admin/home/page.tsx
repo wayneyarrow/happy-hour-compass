@@ -13,7 +13,6 @@ import {
   type ReadinessItem,
 } from "@/lib/venueReadiness";
 import { isOnboardingComplete } from "@/lib/homepagePhase";
-import { parseOperatorPlan } from "@/lib/plans";
 import { computeSuggestedSteps } from "@/lib/suggestedSteps";
 import { computeVenueCompletion } from "@/lib/venueCompletion";
 import { markReviewedAction } from "./actions";
@@ -323,7 +322,8 @@ export default async function AdminHomePage() {
   const isPublished   = !!venue?.is_published;
   const isClaimed     = !!venue?.claimed_at;
   const venueName     = venue?.name ?? "Your venue";
-  const operatorPlan  = parseOperatorPlan(operator?.plan);
+  // Phase 2B: the active venue's own plan, never operator.plan.
+  const operatorPlan  = ctx.activeVenuePlan;
 
   const readiness = venue
     ? computeVenueReadiness({

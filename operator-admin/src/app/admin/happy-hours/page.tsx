@@ -6,7 +6,7 @@ export const metadata = { title: "Happy Hours" };
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
-import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
+import { maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import AccordionSection from "../venue/AccordionSection";
 import HhTimesSection from "./HhTimesSection";
@@ -190,7 +190,8 @@ export default async function AdminHappyHoursPage({
   const foodItems = parseSpecials(venue?.hh_food_details);
   const drinkItems = parseSpecials(venue?.hh_drink_details);
 
-  const operatorPlan = parseOperatorPlan(operator?.plan);
+  // Phase 2B: the active venue's own plan, never operator.plan.
+  const operatorPlan = ctx.activeVenuePlan;
   const foodLimit  = maxFoodSpecials(operatorPlan);
   const drinkLimit = maxDrinkSpecials(operatorPlan);
 

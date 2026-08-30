@@ -11,13 +11,21 @@
  * documented Phase 1 limitation (see the multi-venue implementation task's
  * report), not an oversight — building per-venue team permissions is
  * explicitly out of scope until a future phase.
+ *
+ * Phase 2B seat-limit note: plan is now venue-level, so "this operator's
+ * plan" has no single correct answer any more. inviteUserAction() uses
+ * getOperatorHighestVenuePlan() — a TEMPORARY highest-plan-wins rule across
+ * the operator's currently-manageable (non-cancelled) venues, documented in
+ * full on that function. This affects only the numeric seat limit, not
+ * membership scope/access, which is unchanged from Phase 1.
  */
 
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { getMembershipRole, countOperatorMembers } from "@/lib/memberships";
-import { maxUsers, parseOperatorPlan } from "@/lib/plans";
+import { maxUsers } from "@/lib/plans";
+import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
 import { sendMemberInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
@@ -66,8 +74,12 @@ export async function inviteUserAction(
     return { ok: false, error: "Please enter a valid email address." };
   }
 
-  // Check plan limit
-  const plan = parseOperatorPlan(ctx.operator?.plan);
+  // Check plan limit — Phase 2B temporary rule: highest-plan-wins across the
+  // operator's currently-manageable (non-cancelled) venues. Team membership
+  // remains operator-level (see this file's header note); this is the seat
+  // LIMIT computation only, not a change to who a member can access. See
+  // getOperatorHighestVenuePlan()'s own doc comment for the full rationale.
+  const plan = await getOperatorHighestVenuePlan(operatorId);
   const userLimit = maxUsers(plan);
   const currentCount = await countOperatorMembers(operatorId);
   if (userLimit !== Infinity && currentCount >= userLimit) {

@@ -1,12 +1,21 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { PLANS, parseOperatorPlan } from "@/lib/plans";
-import { getOperatorVenues } from "@/lib/getOperatorVenues";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
 import { sendPlanChangeFounderEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 
 export interface PlanChangeEventPayload {
-  operatorId:                     string;
+  operatorId:                     string | null;
+  /**
+   * Phase 2B: REQUIRED. The exact venue this plan change applies to — never
+   * derived from getOperatorVenues()[0] or any other "first/alphabetical
+   * venue" guess. Every live call site (the three plan-changing Stripe
+   * webhook branches, changePlanAction, cancelVenueAction) always has the
+   * real venue in scope already; making this required (not optional) is
+   * deliberate regression protection against ever reintroducing a guess
+   * here — see tests/unit/subscriptions/planChangeEventsVenueRequired.test.ts.
+   */
+  venueId:                        string;
   fromPlan:                       string;
   toPlan:                         string;
   changedByEmail?:                string | null;
@@ -57,6 +66,7 @@ export async function logPlanChangeEvent(payload: PlanChangeEventPayload): Promi
     const supabase = createAdminClient();
     const { error } = await supabase.from("plan_change_events").insert({
       operator_id:                      payload.operatorId,
+      venue_id:                         payload.venueId,
       from_plan:                        payload.fromPlan,
       to_plan:                          payload.toPlan,
       changed_by_email:                 payload.changedByEmail                ?? null,
@@ -69,6 +79,7 @@ export async function logPlanChangeEvent(payload: PlanChangeEventPayload): Promi
         fromPlan:   payload.fromPlan,
         toPlan:     payload.toPlan,
         operatorId: payload.operatorId,
+        venueId:    payload.venueId,
       });
     }
   } catch (err) {
@@ -88,6 +99,12 @@ export async function logPlanChangeEvent(payload: PlanChangeEventPayload): Promi
  * email are each attempted independently via Promise.allSettled, so one
  * failing never prevents or delays the other, and neither can reject this
  * function (each already resolves to a logged failure instead of throwing).
+ *
+ * Identifies the venue by payload.venueId directly — NEVER by
+ * getOperatorVenues()[0] or any other derived/guessed venue. This was a
+ * confirmed pre-Phase-2B defect (silently wrong for any multi-venue
+ * operator, attributing the notification to whichever venue happened to
+ * sort first); payload.venueId is now the sole source.
  */
 async function notifyFounderOfPlanChange(payload: PlanChangeEventPayload): Promise<void> {
   if (TRIGGERS_WITH_OWN_NOTIFICATION.has(payload.trigger)) return;
@@ -99,14 +116,16 @@ async function notifyFounderOfPlanChange(payload: PlanChangeEventPayload): Promi
   const isUpgrade = PLANS.indexOf(toPlan) > PLANS.indexOf(fromPlan);
 
   const supabase = createAdminClient();
-  const [{ data: operatorRow }, { venues }] = await Promise.all([
-    supabase.from("operators").select("email").eq("id", payload.operatorId).maybeSingle(),
-    getOperatorVenues(supabase, payload.operatorId),
+  const [{ data: operatorRow }, { data: venueRow }] = await Promise.all([
+    payload.operatorId
+      ? supabase.from("operators").select("email").eq("id", payload.operatorId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from("venues").select("id, name").eq("id", payload.venueId).maybeSingle(),
   ]);
 
   const operatorEmail =
     (operatorRow as { email: string } | null)?.email ?? payload.changedByEmail ?? "unknown";
-  const venue = venues[0] ?? null;
+  const venue = venueRow as { id: string; name: string } | null;
 
   // ── Slack ──────────────────────────────────────────────────────────────
   const environment = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown";
@@ -115,8 +134,8 @@ async function notifyFounderOfPlanChange(payload: PlanChangeEventPayload): Promi
   const venueUrl     = venue ? `${getSiteUrl()}/control-panel/venues/${venue.id}` : null;
 
   const lines = [
-    `${emoji} *${changeLabel}* — ${venue?.name ?? "(no venue on file)"}`,
-    `*Venue ID:* ${venue?.id ?? "—"}`,
+    `${emoji} *${changeLabel}* — ${venue?.name ?? "(unknown venue)"}`,
+    `*Venue ID:* ${payload.venueId}`,
     `*Operator:* ${operatorEmail}`,
     `*Plan:* ${fromPlan} → ${toPlan}`,
     `*Trigger:* ${payload.trigger}`,
@@ -143,7 +162,7 @@ async function notifyFounderOfPlanChange(payload: PlanChangeEventPayload): Promi
 
     sendPlanChangeFounderEmail({
       venueName:                     venue?.name ?? null,
-      venueId:                       venue?.id ?? null,
+      venueId:                       payload.venueId,
       operatorEmail,
       fromPlan,
       toPlan,

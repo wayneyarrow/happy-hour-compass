@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import { getOperatorMemberships, getMembershipRole, countOperatorMembers } from "@/lib/memberships";
-import { maxUsers, parseOperatorPlan } from "@/lib/plans";
-import { getOperatorSubscription } from "@/lib/subscriptions";
+import { maxUsers, type OperatorPlan } from "@/lib/plans";
+import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
 import UsersClient from "./UsersClient";
 
 export default async function AdminUsersPage() {
@@ -30,11 +30,12 @@ export default async function AdminUsersPage() {
   let currentRole    = null as Awaited<ReturnType<typeof getMembershipRole>>;
   let totalCount     = 0;
   let userLimit      = 1;
-  let plan           = parseOperatorPlan(operator?.plan);
+  let plan: OperatorPlan = "free";
 
   if (operator) {
-    const subscription = await getOperatorSubscription(operator.id);
-    plan      = subscription?.plan_code ?? parseOperatorPlan(operator.plan);
+    // Phase 2B temporary rule: highest-plan-wins across the operator's
+    // currently-manageable venues (see getOperatorHighestVenuePlan()).
+    plan      = await getOperatorHighestVenuePlan(operator.id);
     userLimit = maxUsers(plan);
 
     [memberships, currentRole, totalCount] = await Promise.all([

@@ -7,8 +7,8 @@ import {
   canCreateRecurringEventInSupportMode,
   canManageGrandfatheredRecurringEvent,
   canUseRecurringEvents,
-  parseOperatorPlan,
 } from "@/lib/plans";
+import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import { isRecurring } from "./recurrenceUtils";
 import {
   MAX_SLUG_GENERATION_ATTEMPTS,
@@ -198,7 +198,11 @@ export async function saveEventAction(
     return { error: "Venue not found or you don't have permission to manage it." };
   }
 
-  const plan = parseOperatorPlan(ctx.operator?.plan);
+  // Phase 2B: entitlement resolves from the TARGET venue's own plan, not
+  // the operator's — preserves every existing grandfathering/support-mode
+  // exception exactly (isUnclaimedVenueSupportMode below is unrelated to
+  // this change).
+  const plan = await getVenuePlanCode(targetVenueId);
 
   // Support-mode exception (Case B only — founder impersonating an unclaimed
   // venue). Never true for Case A (claimed-venue impersonation) or a normal

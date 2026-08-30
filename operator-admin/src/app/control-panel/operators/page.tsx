@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Operators" };
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { highestPlan } from "@/lib/venueSubscriptions";
+import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import OperatorsTable, { type OperatorRow } from "./OperatorsTable";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -9,18 +11,25 @@ import OperatorsTable, { type OperatorRow } from "./OperatorsTable";
 export default async function ControlPanelOperatorsPage() {
   const supabase = createAdminClient();
 
-  // Fetch all operators ordered by most recently created
+  // Fetch all operators ordered by most recently created.
+  // Phase 2B billing review (Part 8): operators.plan is no longer
+  // authoritative once venue-level plans can diverge — it is intentionally
+  // NOT selected/displayed here any more. See highestVenuePlan below.
   const { data: opsData, error: opsError } = await supabase
     .from("operators")
-    .select("id, name, email, is_approved, plan, created_at, updated_at")
+    .select("id, name, email, is_approved, created_at, updated_at")
     .order("created_at", { ascending: false });
 
-  // Fetch venues so we can map operator → venue
+  // Fetch venues so we can map operator → venue(s).
   const { data: venuesData } = await supabase
     .from("venues")
     .select("id, name, slug, created_by_operator_id");
 
-  // Build operator_id → venue map (one venue per operator in beta)
+  // Build operator_id → venue map (one venue per operator FOR DISPLAY —
+  // pre-existing beta simplification, unchanged; a multi-venue operator's
+  // additional venues are not shown as a second row here, same as before
+  // Phase 2B). The plan computation below is separate and considers every
+  // venue the operator owns, not just this displayed one.
   const venueMap = new Map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (venuesData ?? []).map((v: Record<string, any>) => [
@@ -29,21 +38,50 @@ export default async function ControlPanelOperatorsPage() {
     ])
   );
 
-  // Merge venue data into each operator row
+  // Group ALL venue ids by operator, for the highest-venue-plan computation.
+  const venueIdsByOperator = new Map<string, string[]>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const v of (venuesData ?? []) as Record<string, any>[]) {
+    const opId = v.created_by_operator_id as string | null;
+    if (!opId) continue;
+    const list = venueIdsByOperator.get(opId) ?? [];
+    list.push(v.id as string);
+    venueIdsByOperator.set(opId, list);
+  }
+
+  // Batched per-venue plan lookup (venue_subscriptions; no row → 'free') —
+  // one query for every venue across every operator, then reduced to a
+  // highest-plan-per-operator map client-side. Never reads operators.plan.
+  const allVenueIds = (venuesData ?? []).map((v) => v.id as string);
+  const { data: venuePlanRows } = allVenueIds.length > 0
+    ? await supabase.from("venue_subscriptions").select("venue_id, plan_code").in("venue_id", allVenueIds)
+    : { data: [] as { venue_id: string; plan_code: string | null }[] };
+  const planByVenueId = new Map(
+    ((venuePlanRows ?? []) as { venue_id: string; plan_code: string | null }[]).map(
+      (r) => [r.venue_id, parseOperatorPlan(r.plan_code)] as const
+    )
+  );
+
+  function highestVenuePlanForOperator(operatorId: string): OperatorPlan {
+    const venueIds = venueIdsByOperator.get(operatorId) ?? [];
+    return highestPlan(venueIds.map((id) => planByVenueId.get(id) ?? "free"));
+  }
+
+  // Merge venue + plan data into each operator row.
   const operators: OperatorRow[] = (opsData ?? []).map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (op: Record<string, any>) => {
       const venue = venueMap.get(op.id as string) ?? null;
       return {
-        id:          op.id as string,
-        name:        (op.name as string | null) ?? null,
-        email:       op.email as string,
-        is_approved: op.is_approved as boolean,
-        plan:        (op.plan as string) ?? "free",
-        venueName:   venue?.name ?? null,
-        venueSlug:   venue?.slug ?? null,
-        created_at:  op.created_at as string,
-        updated_at:  op.updated_at as string,
+        id:                op.id as string,
+        name:              (op.name as string | null) ?? null,
+        email:             op.email as string,
+        is_approved:       op.is_approved as boolean,
+        highestVenuePlan:  highestVenuePlanForOperator(op.id as string),
+        venueName:         venue?.name ?? null,
+        venueSlug:         venue?.slug ?? null,
+        created_at:        op.created_at as string,
+        updated_at:        op.updated_at as string,
       };
     }
   );

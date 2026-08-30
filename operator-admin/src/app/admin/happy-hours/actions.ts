@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
-import { parseOperatorPlan, maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
+import { maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
+import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import { hasQualifyingHappyHour } from "@/lib/venueReadiness";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
 
@@ -217,7 +218,8 @@ export async function updateFoodSpecialsAction(
     };
   }
 
-  const plan = parseOperatorPlan(ctx.operator?.plan);
+  // Phase 2B: entitlement resolves from the TARGET venue's own plan.
+  const plan = await getVenuePlanCode(venueId);
   const maxItems = maxFoodSpecials(plan);
 
   if (items.length > maxItems) {
@@ -289,7 +291,8 @@ export async function updateDrinkSpecialsAction(
     };
   }
 
-  const plan = parseOperatorPlan(ctx.operator?.plan);
+  // Phase 2B: entitlement resolves from the TARGET venue's own plan.
+  const plan = await getVenuePlanCode(venueId);
   const maxItems = maxDrinkSpecials(plan);
 
   if (items.length > maxItems) {

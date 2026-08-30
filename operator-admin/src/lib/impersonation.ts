@@ -26,6 +26,9 @@ import {
 } from "@/lib/memberships";
 import { getOperatorVenues, type VenueRow as VenueSummary } from "@/lib/getOperatorVenues";
 import { getActiveVenueIdFromCookie } from "@/lib/activeVenueCookie";
+import { getActiveVenuePlan } from "@/lib/activeVenuePlan";
+import type { VenueSubscriptionRow } from "@/lib/venueSubscriptions";
+import type { OperatorPlan } from "@/lib/plans";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -99,10 +102,25 @@ export type OperatorContext = {
    * /admin/select-venue — see assertActiveVenueSelected()).
    */
   activeVenueId: string | null;
+  /**
+   * Phase 2B: the active venue's OWN plan — venue_subscriptions.plan_code if
+   * a row exists, 'free' if not, and 'free' when there is no active venue at
+   * all. NEVER falls back to operator.plan (see src/lib/venueSubscriptions.ts
+   * for why that fallback is unsafe once venues can diverge). This is the
+   * single centralized resolution point every Operator Admin page/action
+   * should read instead of independently querying venue_subscriptions or
+   * reading operator.plan.
+   */
+  activeVenuePlan: OperatorPlan;
+  /** The active venue's raw subscription row, or null for a Free venue with no row. */
+  activeVenueSubscription: VenueSubscriptionRow | null;
 };
 
-/** OperatorContext before venues/activeVenueId are resolved — internal only. */
-type OperatorContextBase = Omit<OperatorContext, "venues" | "activeVenueId">;
+/** OperatorContext before venues/activeVenueId/activeVenuePlan are resolved — internal only. */
+type OperatorContextBase = Omit<
+  OperatorContext,
+  "venues" | "activeVenueId" | "activeVenuePlan" | "activeVenueSubscription"
+>;
 
 /**
  * Decides which venue(s) a request can act on and which one is active.
@@ -170,7 +188,12 @@ export function computeActiveVenueId({
 
 async function resolveVenuesAndActiveVenue(
   base: Pick<OperatorContextBase, "supabase" | "operator" | "isImpersonating" | "impersonatingVenueId" | "sessionVenueId">
-): Promise<{ venues: VenueSummary[]; activeVenueId: string | null }> {
+): Promise<{
+  venues: VenueSummary[];
+  activeVenueId: string | null;
+  activeVenuePlan: OperatorPlan;
+  activeVenueSubscription: VenueSubscriptionRow | null;
+}> {
   const venues = base.operator
     ? (await getOperatorVenues(base.supabase, base.operator.id)).venues
     : [];
@@ -187,7 +210,16 @@ async function resolveVenuesAndActiveVenue(
     cookieVenueId,
   });
 
-  return { venues, activeVenueId };
+  // Phase 2B: resolve the active venue's own plan once here, centrally, so
+  // no individual page/action needs its own venue_subscriptions query.
+  // Case B impersonation (activeVenueId set but no `operator`/`venues` list
+  // to validate against) still resolves correctly — activeVenueId there is
+  // already the founder-selected orphan venue id directly, validated by the
+  // impersonation session itself (see computeActiveVenueId), not by `venues`.
+  const { plan: activeVenuePlan, subscription: activeVenueSubscription } =
+    await getActiveVenuePlan(activeVenueId);
+
+  return { venues, activeVenueId, activeVenuePlan, activeVenueSubscription };
 }
 
 // ── Session creation ──────────────────────────────────────────────────────────
@@ -293,8 +325,9 @@ export async function endImpersonationSession(sessionId: string): Promise<void> 
 
 export async function resolveOperatorContext(): Promise<OperatorContext> {
   const base = await resolveOperatorContextBase();
-  const { venues, activeVenueId } = await resolveVenuesAndActiveVenue(base);
-  return { ...base, venues, activeVenueId };
+  const { venues, activeVenueId, activeVenuePlan, activeVenueSubscription } =
+    await resolveVenuesAndActiveVenue(base);
+  return { ...base, venues, activeVenueId, activeVenuePlan, activeVenueSubscription };
 }
 
 async function resolveOperatorContextBase(): Promise<OperatorContextBase> {

@@ -8,7 +8,6 @@ import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/imperso
 import {
   PLAN_LABELS,
   ANALYTICS_TIER_LABELS,
-  parseOperatorPlan,
   analyticsTier,
   type OperatorPlan,
   type AnalyticsTier,
@@ -213,7 +212,10 @@ export default async function AdminAnalyticsPage() {
   const currentRole = operator ? await getMembershipRole(operator.id, currentEmail) : null;
   const isOwner = isImpersonating || currentRole === "owner";
 
-  const plan = parseOperatorPlan(operator?.plan);
+  // Phase 2B: plan is now the ACTIVE VENUE's own plan, not the operator's —
+  // resolved once, centrally, by resolveOperatorContext(). Never falls back
+  // to operator.plan (see src/lib/venueSubscriptions.ts).
+  const plan = ctx.activeVenuePlan;
   const tier = analyticsTier(plan);
 
   // Plan capability flags

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
-import { parseOperatorPlan, maxSearchTags, maxImages } from "@/lib/plans";
+import { maxSearchTags, maxImages } from "@/lib/plans";
 import { getMembershipRole } from "@/lib/memberships";
 import type { BusinessHours } from "@/app/dashboard/venues/_shared/types";
 import BusinessHoursForm from "@/app/dashboard/venues/[id]/hours/BusinessHoursForm";
@@ -146,7 +146,8 @@ export default async function AdminVenuePage({
 
   // Search tags — TEXT[] column returned as string[] by Supabase client.
   const currentSearchTags = Array.isArray(venue?.search_tags) ? venue.search_tags : [];
-  const operatorPlan = parseOperatorPlan(operator?.plan);
+  // Phase 2B: the active venue's own plan, never operator.plan.
+  const operatorPlan = ctx.activeVenuePlan;
   const tagLimit   = maxSearchTags(operatorPlan);
   const imageLimit = maxImages(operatorPlan);
 
@@ -358,7 +359,6 @@ export default async function AdminVenuePage({
           {!isImpersonating && !venue.cancelled_at && operator && (
             <CancelVenueSection
               venueId={venue.id}
-              operatorId={operator.id}
               currentPlan={operatorPlan}
               isOwner={isOwner}
             />

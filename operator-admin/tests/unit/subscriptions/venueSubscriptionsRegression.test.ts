@@ -91,7 +91,11 @@ test("the file's header explicitly documents the no-operator-fallback contract (
 // B. No live wiring — Phase 2A must not call this file from application code
 // ═══════════════════════════════════════════════════════════════════════════
 
-test("venueSubscriptions.ts is not imported by the live Stripe webhook route or subscription page in Phase 2A", () => {
+test("Phase 2B: venueSubscriptions.ts IS now imported by the live Stripe webhook route and subscription page", () => {
+  // Inverted from the Phase 2A version of this test (which pinned the
+  // OPPOSITE — that nothing live called this file yet). Phase 2B is the
+  // task that wires it in; this test now protects that cutover actually
+  // happened and doesn't silently regress back to unused.
   const webhookSource = readFileSync(
     join(__dirname, "../../../src/app/api/webhooks/stripe/route.ts"),
     "utf8"
@@ -100,11 +104,12 @@ test("venueSubscriptions.ts is not imported by the live Stripe webhook route or 
     join(__dirname, "../../../src/app/admin/subscription/page.tsx"),
     "utf8"
   );
-  assert.doesNotMatch(webhookSource, /venueSubscriptions/);
-  assert.doesNotMatch(subscriptionPageSource, /venueSubscriptions/);
+  assert.match(webhookSource, /from "@\/lib\/venueSubscriptions"/);
+  assert.match(subscriptionPageSource, /ctx\.activeVenuePlan/);
 });
 
-test("changePlanAction.ts and cancelActions.ts are not wired to venue-scoped helpers in Phase 2A", () => {
+test("Phase 2B: changePlanAction.ts and cancelActions.ts ARE now wired to venue-scoped helpers", () => {
+  // Inverted from the Phase 2A version of this test.
   const changePlanSource = readFileSync(
     join(__dirname, "../../../src/app/admin/subscription/changePlanAction.ts"),
     "utf8"
@@ -113,8 +118,55 @@ test("changePlanAction.ts and cancelActions.ts are not wired to venue-scoped hel
     join(__dirname, "../../../src/app/admin/venue/cancelActions.ts"),
     "utf8"
   );
-  assert.doesNotMatch(changePlanSource, /venueSubscriptions/);
-  assert.doesNotMatch(cancelActionsSource, /venueSubscriptions/);
+  assert.match(changePlanSource, /from "@\/lib\/venueSubscriptions"/);
+  assert.match(cancelActionsSource, /from "@\/lib\/venueSubscriptions"/);
+  // And neither calls the legacy operator-level write path any more.
+  assert.doesNotMatch(changePlanSource, /updateOperatorPlan\(/);
+  assert.doesNotMatch(cancelActionsSource, /updateOperatorPlan\(/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D. Phase 2B, Part 19: NO operator-plan fallback in any live entitlement/
+// Stripe/ranking/subscription/cancellation path — the critical acceptance
+// requirement. Every file here is asserted to never read operator.plan (or
+// call the legacy operator-level helpers) for a live decision.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LIVE_ENTITLEMENT_FILES = [
+  "../../../src/app/admin/subscription/page.tsx",
+  "../../../src/app/admin/subscription/changePlanAction.ts",
+  "../../../src/app/admin/subscription/stripeActions.ts",
+  "../../../src/app/admin/venue/cancelActions.ts",
+  "../../../src/app/admin/venue/imageActions.ts",
+  "../../../src/app/admin/venue/searchTagsActions.ts",
+  "../../../src/app/admin/happy-hours/actions.ts",
+  "../../../src/app/admin/happy-hours/page.tsx",
+  "../../../src/app/admin/events/actions.ts",
+  "../../../src/app/admin/events/page.tsx",
+  "../../../src/app/admin/analytics/page.tsx",
+  "../../../src/app/admin/home/page.tsx",
+  "../../../src/app/admin/venue/page.tsx",
+  "../../../src/app/api/webhooks/stripe/route.ts",
+  "../../../src/lib/data/venueHealth.ts",
+  "../../../src/lib/data/founderDashboard.ts",
+  "../../../src/app/admin/users/actions.ts",
+  "../../../src/app/admin/users/page.tsx",
+];
+
+for (const relPath of LIVE_ENTITLEMENT_FILES) {
+  test(`Part 19 regression: ${relPath} never reads operator.plan / calls the legacy operator-level plan helpers`, () => {
+    const source = readFileSync(join(__dirname, relPath), "utf8");
+    assert.doesNotMatch(source, /parseOperatorPlan\(\s*(ctx\.)?operator\??\.plan\s*\)/);
+    assert.doesNotMatch(source, /getOperatorPlanCode\(/);
+    assert.doesNotMatch(source, /updateOperatorPlan\(/);
+    assert.doesNotMatch(source, /syncStripeSubscription\(/);
+  });
+}
+
+test("Part 19 regression: getVenuePlanCode()/getVenueSubscription() still have zero operator-table reads (unchanged invariant from Phase 2A)", () => {
+  const body = fnBody(VENUE_SUBSCRIPTIONS_SOURCE, "getVenuePlanCode");
+  assert.doesNotMatch(body, /\.from\("operators"\)/);
+  assert.doesNotMatch(body, /\.from\("operator_subscriptions"\)/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

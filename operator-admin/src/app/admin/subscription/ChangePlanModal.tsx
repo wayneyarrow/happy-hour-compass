@@ -483,7 +483,9 @@ function ConfirmView({
       <p className="text-sm text-gray-500 mb-6">
         {isStripeCheckout
           ? "You'll be taken to Stripe to complete payment securely."
-          : "Your plan will change immediately."}
+          : isUpgrade
+          ? "Your plan will change immediately."
+          : "Your plan will change immediately. Any active paid subscription will end immediately, and unused time remaining in the current billing period will not be refunded."}
       </p>
 
       {/* Upgrade: what you'll unlock */}
@@ -723,7 +725,7 @@ export default function ChangePlanModal({
           setActionError(result.error ?? "Billing is temporarily unavailable. Please try again later.");
         }
       } else {
-        const result = await changePlanAction(operatorId, selectedPlan);
+        const result = await changePlanAction(selectedPlan);
         if (result.ok) {
           const msg = `You're now on the ${PLAN_LABELS[selectedPlan]} plan.`;
           // Close before setting success so toast doesn't appear inside modal.

@@ -26,12 +26,10 @@ const PAID_PLANS: OperatorPlan[] = ["pro", "premium", "enterprise"];
 
 export default function CancelVenueSection({
   venueId,
-  operatorId,
   currentPlan,
   isOwner,
 }: {
   venueId:     string;
-  operatorId:  string;
   currentPlan: OperatorPlan;
   isOwner:     boolean;
 }) {
@@ -63,7 +61,7 @@ export default function CancelVenueSection({
   function handleSwitchToFree() {
     setSwitchError(null);
     startSwitchTransition(async () => {
-      const result = await changePlanAction(operatorId, "free");
+      const result = await changePlanAction("free");
       if (result.ok) {
         router.push("/admin/subscription");
       } else {
@@ -160,6 +158,8 @@ export default function CancelVenueSection({
             <p className="text-sm text-amber-800 mt-1 leading-relaxed">
               You can switch to the Free plan to stay listed on Happy Hour Compass
               without any cost — your venue will remain active and publicly visible.
+              Any active paid subscription will end immediately, and unused time
+              remaining in the current billing period will not be refunded.
             </p>
           </div>
 
@@ -208,11 +208,7 @@ export default function CancelVenueSection({
             <ul className="mt-3 space-y-1.5 text-sm text-red-700">
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 shrink-0 text-red-400">•</span>
-                Your venue will no longer appear publicly on Happy Hour Compass.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0 text-red-400">•</span>
-                The venue will be unpublished.
+                Your venue will be unpublished immediately and no longer appear publicly on Happy Hour Compass.
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 shrink-0 text-red-400">•</span>
@@ -229,7 +225,7 @@ export default function CancelVenueSection({
               {isPaidPlan && (
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 shrink-0 text-red-400">•</span>
-                  Your paid plan will be downgraded to Free.
+                  Any active paid subscription will end immediately. Unused time remaining in the current billing period will not be refunded.
                 </li>
               )}
             </ul>

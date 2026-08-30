@@ -3,41 +3,48 @@ import { createAdminClient } from "@/lib/supabase/server";
 // ── System note helper ─────────────────────────────────────────────────────────
 
 /**
- * Inserts a system-generated internal note for the venue owned by operatorId.
+ * Inserts a system-generated internal note for a venue.
  *
- * Silently no-ops when the operator has no venue yet. Never throws — note
+ * Silently no-ops when the venue can't be resolved. Never throws — note
  * failures must not block the primary action that triggered them.
  *
  * Pass actorEmail to attribute the note to the user who triggered the event
  * (e.g. the owner who changed the plan, the member who accepted the invite).
  * Pass null/undefined for fully automated system events.
  *
- * Phase 1 multi-venue limitation (2026-08-29): resolves "the venue" via
- * `.eq("created_by_operator_id", operatorId).maybeSingle()`, which is
- * ambiguous for an operator who owns 2+ venues — `maybeSingle()` returns no
- * row in that case, so the note is silently dropped rather than misfiled
- * onto the wrong venue. This is intentionally left as a documented gap
- * rather than reworked to accept an explicit venueId: it's an internal
- * audit-trail convenience (visible only in the Founder Control Panel), not
- * a security or data-correctness issue, and every call site (team
- * invite/accept, plan changes) is operator-level by nature already. Revisit
- * if/when these events become venue-scoped.
+ * Pass explicitVenueId when the caller already knows exactly which venue
+ * the event applies to (e.g. Phase 2B venue-scoped plan changes) — this
+ * skips the operator→venue lookup entirely and is the only correct choice
+ * for a multi-venue operator.
+ *
+ * When explicitVenueId is omitted, falls back to the Phase 1 behavior:
+ * resolves "the venue" via `.eq("created_by_operator_id", operatorId).maybeSingle()`,
+ * which is ambiguous for an operator who owns 2+ venues — `maybeSingle()`
+ * returns no row in that case, so the note is silently dropped rather than
+ * misfiled onto the wrong venue. Kept only for call sites that are still
+ * genuinely operator-level by nature (team invite/accept) and have no
+ * single venue to name.
  */
 export async function addSystemVenueNote(
   operatorId: string,
   note: string,
-  actorEmail?: string | null
+  actorEmail?: string | null,
+  explicitVenueId?: string | null
 ): Promise<void> {
   try {
     const supabase = createAdminClient();
 
-    const { data: venue } = await supabase
-      .from("venues")
-      .select("id")
-      .eq("created_by_operator_id", operatorId)
-      .maybeSingle();
+    let venueId: string | undefined = explicitVenueId ?? undefined;
 
-    const venueId = (venue as { id?: string } | null)?.id;
+    if (!venueId) {
+      const { data: venue } = await supabase
+        .from("venues")
+        .select("id")
+        .eq("created_by_operator_id", operatorId)
+        .maybeSingle();
+      venueId = (venue as { id?: string } | null)?.id;
+    }
+
     if (!venueId) return;
 
     const { error } = await supabase

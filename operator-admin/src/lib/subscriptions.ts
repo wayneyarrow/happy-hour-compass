@@ -12,28 +12,28 @@
  *   import { getOperatorPlanCode, updateOperatorPlan } from "@/lib/subscriptions";
  *
  * ─────────────────────────────────────────────────────────────────────────
- * PHASE 2 NOTE (2026-08-29, Phase 2A additive foundation) — read before
- * treating this file's fallback chain as a pattern to copy:
+ * PHASE 2B NOTE — this file is now LEGACY/ROLLBACK-REFERENCE ONLY
  * ─────────────────────────────────────────────────────────────────────────
- * This file, and the "operator_subscriptions → operators.plan → 'free'"
- * fallback chain in getOperatorPlanCode() specifically, remain fully live
- * and unchanged in Phase 2A — every current entitlement check in the
- * application still reads through here. That fallback chain is correct
- * TODAY only because every venue an operator owns still shares one plan.
+ * As of Phase 2B, no live entitlement, Stripe, Discover-ranking,
+ * subscription-page, or cancellation code path reads or writes through this
+ * file any more. src/lib/venueSubscriptions.ts (venue_subscriptions.plan_code
+ * → plan_code; no row → 'free'; NEVER operators.plan) is the live source for
+ * all of those. This file's functions (getOperatorPlanCode, updateOperatorPlan,
+ * syncStripeSubscription, getOperatorSubscription) are kept fully functional
+ * and unchanged — not because anything still calls them live, but because:
+ *   1. operators.plan / operator_subscriptions remain physically present for
+ *      rollback/history (Phase 2B does not remove or drop them), and this
+ *      file is the only code that knows how to read/write them correctly.
+ *   2. Deployment-window/migration tooling (see migration 086's header) may
+ *      still need to read a legacy row during backfill.
+ *   3. Existing regression tests pin this file's exact behavior as a
+ *      rollback safety net.
  *
- * It stops being a safe pattern the moment Phase 2B allows one operator to
- * own venues on different plans (e.g. Premium + Free) — at that point there
- * is no single operators.plan value that could ever be a correct answer for
- * "this venue's plan," so falling back to it would silently leak one
- * venue's entitlement onto a sibling. See src/lib/venueSubscriptions.ts
- * (the Phase 2A venue-scoped counterpart to this file) for the contract
- * that replaces it: subscription row → its plan_code; no row → 'free';
- * never operators.plan. operators.plan / operator_subscriptions are not
- * removed by Phase 2A and are not required to be deleted by Phase 2B either
- * — but once Phase 2B cuts live entitlement reads over to
- * venue_subscriptions, this file's role becomes legacy/rollback-reference
- * only, not a permanent second source powering the product indefinitely
- * alongside venue-level plans.
+ * Do NOT wire any new live call site to this file. Do NOT resume
+ * dual-writing operators.plan from a venue-scoped write — once two venues
+ * under one operator can hold different plans, there is no single
+ * operators.plan value that could ever be correct, so keeping it "in sync"
+ * is not merely unnecessary but actively meaningless.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";

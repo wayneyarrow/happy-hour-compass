@@ -130,8 +130,7 @@ type ActiveVenueRow = {
 
 type MediaRow = { venue_id: string; url: string };
 type PlanChangeRow = { from_plan: string; to_plan: string; operator_id: string };
-type SubscriptionPlanRow = { operator_id: string; plan_code: string | null };
-type OperatorPlanRow = { id: string; plan: string | null };
+type VenueSubscriptionPlanRow = { venue_id: string; plan_code: string | null };
 
 function safeDivide(numerator: number, denominator: number): ConversionRate {
   return { numerator, denominator };
@@ -222,15 +221,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     supabase.from("event_view_events").select("event_id").gte("viewed_at", t30),
   ]);
 
-  // ── Active venues + the operator ids attached to them ─────────────────────
+  // ── Active venues ──────────────────────────────────────────────────────────
   const activeVenues = (r_activeVenueRows.data ?? []) as ActiveVenueRow[];
-  const activeOperatorIds = [
-    ...new Set(
-      activeVenues
-        .map(v => v.created_by_operator_id)
-        .filter((id): id is string => typeof id === "string")
-    ),
-  ];
 
   // ── Process plan changes (operator-event based — unchanged) ──────────────
   const planChanges = (r_planChanges30d.data ?? []) as PlanChangeRow[];
@@ -263,8 +255,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
 
   const activeVenueIds = activeVenues.map(v => v.id);
 
-  // ── Batch 2: leaderboard names + venue media + operator plan lookup ───────
-  const [r_venueNames, r_eventNames, r_venueMedia, r_subscriptionPlans, r_operatorPlanFallback] = await Promise.all([
+  // ── Batch 2: leaderboard names + venue media + venue plan lookup ─────────
+  const [r_venueNames, r_eventNames, r_venueMedia, r_venuePlans] = await Promise.all([
     topVenueEntries.length > 0
       ? supabase.from("venues").select("id, name").in("id", topVenueEntries.map(([id]) => id))
       : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
@@ -280,20 +272,13 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
           .eq("type", "venue_image")
       : Promise.resolve({ data: [] as MediaRow[] }),
 
-    // Plan-with-fallback lookup, batched for all operators attached to an active
-    // venue. Mirrors the fallback chain in src/lib/subscriptions.ts
-    // getOperatorPlanCode() (operator_subscriptions.plan_code first, then
-    // operators.plan), but batched — that helper fetches one operator at a time
-    // and isn't usable for a dashboard-wide join.
-    // TODO: if another batch dashboard query needs this, extract a
-    // getOperatorPlanCodesBatch() helper into src/lib/subscriptions.ts instead
-    // of duplicating this fallback logic again.
-    activeOperatorIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", activeOperatorIds)
-      : Promise.resolve({ data: [] as SubscriptionPlanRow[] }),
-    activeOperatorIds.length > 0
-      ? supabase.from("operators").select("id, plan").in("id", activeOperatorIds)
-      : Promise.resolve({ data: [] as OperatorPlanRow[] }),
+    // Phase 2B: batched per-VENUE plan lookup (venue_subscriptions; no row
+    // → 'free') — replaces the old per-operator lookup. Each venue's own
+    // plan is used directly; a multi-venue operator's venues are no longer
+    // assumed to share one plan.
+    activeVenueIds.length > 0
+      ? supabase.from("venue_subscriptions").select("venue_id, plan_code").in("venue_id", activeVenueIds)
+      : Promise.resolve({ data: [] as VenueSubscriptionPlanRow[] }),
   ]);
 
   // ── Build leaderboards ────────────────────────────────────────────────────
@@ -321,29 +306,26 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
   const highDemandVenues = [...venueViewCounts.values()].filter(v => v > HIGH_DEMAND_VENUE).length;
   const highDemandEvents = [...eventViewCounts.values()].filter(v => v > HIGH_DEMAND_EVENT).length;
 
-  // ── Resolve effective plan per operator (subscription first, operators.plan
-  //    fallback, 'free' default) — same precedence as getOperatorPlanCode() ──
-  const subscriptionPlanByOperator = new Map(
-    ((r_subscriptionPlans.data ?? []) as SubscriptionPlanRow[]).map(
-      r => [r.operator_id, parseOperatorPlan(r.plan_code)] as const
+  // ── Resolve each venue's own plan (venue_subscriptions; no row → 'free') ──
+  // Phase 2B: never falls back to operators.plan — see
+  // src/lib/venueSubscriptions.ts for why that fallback is unsafe once
+  // venues under one operator can diverge.
+  const planByVenue = new Map(
+    ((r_venuePlans.data ?? []) as VenueSubscriptionPlanRow[]).map(
+      r => [r.venue_id, parseOperatorPlan(r.plan_code)] as const
     )
   );
-  const operatorPlanFallback = new Map(
-    ((r_operatorPlanFallback.data ?? []) as OperatorPlanRow[]).map(
-      r => [r.id, parseOperatorPlan(r.plan)] as const
-    )
-  );
-  function planForOperator(operatorId: string): OperatorPlan {
-    return subscriptionPlanByOperator.get(operatorId) ?? operatorPlanFallback.get(operatorId) ?? "free";
+  function planForVenue(venueId: string): OperatorPlan {
+    return planByVenue.get(venueId) ?? "free";
   }
 
-  // ── Classify active venues by attached operator's plan ────────────────────
+  // ── Classify active venues by their OWN plan ──────────────────────────────
   let freeVenues = 0;
   let proVenues = 0;
   let premiumVenues = 0;
   for (const venue of activeVenues) {
     if (!venue.created_by_operator_id) continue; // query already filters this out
-    const plan = planForOperator(venue.created_by_operator_id);
+    const plan = planForVenue(venue.id);
     if (plan === "free") freeVenues++;
     else if (plan === "pro") proVenues++;
     else if (plan === "premium") premiumVenues++;

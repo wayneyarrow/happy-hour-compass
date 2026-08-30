@@ -1,7 +1,8 @@
 "use server";
 
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { parseOperatorPlan, maxImages } from "@/lib/plans";
+import { maxImages } from "@/lib/plans";
+import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 
 const BUCKET = "venue-images";
 
@@ -45,7 +46,11 @@ export async function uploadVenueImageAction(
     .eq("type", "venue_image");
   const existingCount = existing?.length ?? 0;
 
-  const plan = parseOperatorPlan(ctx.operator?.plan);
+  // Phase 2B: entitlement resolves from the TARGET venue's own plan, not the
+  // operator's — targetVenueId is the actual venue being written to, which
+  // may differ from ctx.activeVenueId in theory, so it is resolved directly
+  // rather than reused from ctx.activeVenuePlan.
+  const plan = await getVenuePlanCode(targetVenueId);
   const imageLimit = maxImages(plan);
 
   if (existingCount >= imageLimit) {

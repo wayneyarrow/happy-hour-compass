@@ -14,7 +14,16 @@ export type OperatorRow = {
   name: string | null;
   email: string;
   is_approved: boolean;
-  plan: string;
+  /**
+   * Phase 2B billing review (Part 8): NOT the operator's own subscription —
+   * plan is venue-level, and a multi-venue operator's venues can hold
+   * different plans. This is the highest plan among that operator's
+   * current venues (see getOperatorHighestVenuePlan()'s doc comment for the
+   * same rule applied to team seats). Labelled "Highest Venue Plan" in the
+   * table header specifically so it is never mistaken for an operator-wide
+   * billing subscription — there is no such thing any more.
+   */
+  highestVenuePlan: string;
   venueName: string | null;
   venueSlug: string | null;
   created_at: string;   // ISO string
@@ -97,7 +106,7 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
           else cmp = a.venueName.localeCompare(b.venueName);
           break;
         case "plan":
-          cmp = a.plan.localeCompare(b.plan);
+          cmp = a.highestVenuePlan.localeCompare(b.highestVenuePlan);
           break;
         case "created_at":
           cmp = a.created_at.localeCompare(b.created_at);
@@ -142,11 +151,11 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
   };
 
   const handleExport = () => {
-    const headers = ["Email", "Venue", "Plan", "Joined", "Updated"];
+    const headers = ["Email", "Venue", "Highest Venue Plan", "Joined", "Updated"];
     const csvRows = sorted.map((op) => [
       op.email,
       op.venueName,
-      PLAN_LABELS[op.plan as OperatorPlan] ?? op.plan,
+      PLAN_LABELS[op.highestVenuePlan as OperatorPlan] ?? op.highestVenuePlan,
       fmtDate(op.created_at),
       fmtDate(op.updated_at),
     ]);
@@ -218,8 +227,8 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
-                    <button onClick={() => applySort("plan")} className={thBtnCls}>
-                      Plan <SortIcon active={sortCol === "plan"} dir={sortDir} />
+                    <button onClick={() => applySort("plan")} className={thBtnCls} title="Highest plan among this operator's current venues — not a single operator-wide subscription">
+                      Highest Venue Plan <SortIcon active={sortCol === "plan"} dir={sortDir} />
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
@@ -241,7 +250,7 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {pageRows.map((op) => {
-                  const planKey     = (op.plan ?? "free") as OperatorPlan;
+                  const planKey     = (op.highestVenuePlan ?? "free") as OperatorPlan;
                   const planVariant = PLAN_BADGE_VARIANT[planKey] ?? "neutral";
                   const planLabel   = PLAN_LABELS[planKey] ?? "Free";
                   return (

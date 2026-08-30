@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import {
   PLAN_LABELS,
-  parseOperatorPlan,
   maxImages,
   maxFoodSpecials,
   maxDrinkSpecials,
@@ -16,7 +15,8 @@ import {
   canUseAdvancedSearchTags,
   type OperatorPlan,
 } from "@/lib/plans";
-import { getOperatorSubscription, type SubscriptionStatus } from "@/lib/subscriptions";
+import type { SubscriptionStatus } from "@/lib/subscriptions";
+import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
 import { parseSpecialItemCount } from "@/lib/venueReadiness";
 import { countOperatorMembers, getMembershipRole } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
@@ -183,6 +183,7 @@ function UtilRow(props: UtilRowProps) {
 
 type SubscriptionVenueRow = {
   id: string;
+  name: string;
   hh_food_details: string | null;
   hh_drink_details: string | null;
   search_tags: string[] | null;
@@ -213,28 +214,34 @@ export default async function AdminSubscriptionPage({
   assertActiveVenueSelected(ctx);
 
   // ── Subscription (plan + status + billing) ───────────────────────────────
-  // Phase 1: subscription/plan stays operator-level by design — every venue
-  // this operator owns shares the same plan. See docs from the multi-venue
-  // implementation task for why this is a deliberate, temporary limitation
-  // rather than an oversight; venue-level plans are Phase 2 scope.
-  const subscription = operator ? await getOperatorSubscription(operator.id) : null;
-  const plan: OperatorPlan =
-    subscription?.plan_code ?? parseOperatorPlan(operator?.plan);
+  // Phase 2B: subscription/plan is now the ACTIVE VENUE's own state,
+  // resolved centrally by resolveOperatorContext() — never operator.plan.
+  // Switching venues via the global Phase 1 venue switcher changes this
+  // page's plan/usage/billing/portal/checkout target automatically, since
+  // it all flows from ctx.activeVenueId.
+  const subscription = ctx.activeVenueSubscription;
+  const plan: OperatorPlan = ctx.activeVenuePlan;
   const status: SubscriptionStatus = subscription?.status ?? "active";
   const billingProvider   = subscription?.billing_provider ?? null;
   const stripeCustomerId  = subscription?.billing_provider_customer_id ?? null;
   const isStripeBilled    = billingProvider === "stripe" && stripeCustomerId !== null;
 
+  // ── Team-seat entitlement (Phase 2B temporary rule) ───────────────────────
+  // Team membership stays operator-level (Phase 1) — the "Users" row must
+  // therefore reflect the SAME highest-plan-wins seat cap used everywhere
+  // else the team limit is enforced (admin/users), not this one venue's own
+  // plan, or switching venues would show a conflicting seat limit for the
+  // exact same shared team. See getOperatorHighestVenuePlan()'s doc comment.
+  const teamPlan = operator ? await getOperatorHighestVenuePlan(operator.id) : plan;
+
   // ── Venue usage data ──────────────────────────────────────────────────────
-  // Usage counters (images/events/etc.) are still per-venue — only the plan
-  // itself is operator-wide.
 
   let venue: SubscriptionVenueRow | null = null;
 
   if (ctx.activeVenueId) {
     let query = ctx.supabase
       .from("venues")
-      .select("id, hh_food_details, hh_drink_details, search_tags, cancelled_at")
+      .select("id, name, hh_food_details, hh_drink_details, search_tags, cancelled_at")
       .eq("id", ctx.activeVenueId);
     if (operator) {
       query = query.eq("created_by_operator_id", operator.id);
@@ -274,7 +281,7 @@ export default async function AdminSubscriptionPage({
   const foodLimit    = maxFoodSpecials(plan);
   const drinkLimit   = maxDrinkSpecials(plan);
   const tagLimit     = maxSearchTags(plan);
-  const userLimit    = maxUsers(plan);
+  const userLimit    = maxUsers(teamPlan);
   const hasRecurring = canUseRecurringEvents(plan);
   const hasTagAccess = canUseAdvancedSearchTags(plan);
 
@@ -340,10 +347,17 @@ export default async function AdminSubscriptionPage({
     <div className="max-w-3xl">
 
       {/* ── Page heading ──────────────────────────────────────────────────── */}
+      {/* Phase 2B: plan is venue-specific — name the active venue explicitly
+          so switching venues via the global switcher is never ambiguous
+          about which restaurant is being paid for. */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Subscription</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">
+          {venue?.name ? `Subscription — ${venue.name}` : "Subscription"}
+        </h2>
         <p className="text-sm text-gray-500">
-          Your current subscription plan and how you&rsquo;re using it.
+          {venue?.name
+            ? `${venue.name}'s current subscription plan and how it's being used.`
+            : "Your current subscription plan and how you’re using it."}
         </p>
       </div>
 
@@ -485,7 +499,6 @@ export default async function AdminSubscriptionPage({
         <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 pb-6">
           <CancelVenueSection
             venueId={venue.id}
-            operatorId={operator.id}
             currentPlan={plan}
             isOwner={isOwner}
           />

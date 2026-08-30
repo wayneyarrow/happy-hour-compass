@@ -1,20 +1,22 @@
 /**
- * Venue-level subscription helpers for Happy Hour Compass — Phase 2A
- * additive foundation (see supabase/migrations/083_venue_subscriptions.sql,
- * 085_venue_plan_entitlement_atomic_sync.sql, and the Phase 2 investigation
- * report for full background).
+ * Venue-level subscription helpers for Happy Hour Compass — Phase 2B LIVE
+ * entitlement/billing source (built as Phase 2A additive foundation; see
+ * supabase/migrations/083_venue_subscriptions.sql,
+ * 085_venue_plan_entitlement_atomic_sync.sql, 086_venue_subscriptions_
+ * cutover_safety.sql, and the Phase 2 investigation report for background).
  *
  * ─────────────────────────────────────────────────────────────────────────
- * PHASE 2A STATUS — READ BEFORE USING OR EXTENDING THIS FILE
+ * PHASE 2B STATUS
  * ─────────────────────────────────────────────────────────────────────────
- * Nothing in this file is called by any live Operator Admin page, server
- * action, or Stripe webhook handler yet. Every current entitlement check in
- * the application still reads operator-level state via
- * src/lib/subscriptions.ts (getOperatorPlanCode, updateOperatorPlan,
- * syncStripeSubscription) — that remains completely unchanged and is what
- * actually powers the live product in Phase 2A. This file exists so Phase
- * 2B can cut real call sites over to venue-scoped plan resolution without a
- * further schema or foundational-code change.
+ * This file is now the LIVE source of truth for plan/entitlement/billing
+ * state, read from every Operator Admin page/action, the Stripe checkout/
+ * webhook/portal actions, Discover ranking, and Control Panel venue
+ * displays. The legacy operator-level equivalents in src/lib/subscriptions.ts
+ * (getOperatorPlanCode, updateOperatorPlan, syncStripeSubscription) remain
+ * present and functionally unchanged, but are no longer called from any live
+ * entitlement/billing path — see that file's own header note and Part 16 of
+ * the Phase 2B task report for the full list of what still legitimately
+ * calls them (migrations, tests, rollback reference only).
  *
  * ─────────────────────────────────────────────────────────────────────────
  * THE ONE RULE THAT MATTERS MOST: NO OPERATOR-LEVEL FALLBACK
@@ -46,7 +48,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
+import { parseOperatorPlan, PLANS, type OperatorPlan } from "@/lib/plans";
 import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
 
 const VENUE_PLAN_UPDATE_FLOW = "venue-plan-update";
@@ -185,6 +187,88 @@ export async function getVenuePlanCode(venueId: string): Promise<OperatorPlan> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// First-checkout customer reservation (Phase 2B review fix)
+//
+// Closes the concurrent-first-checkout race: two simultaneous Checkout
+// requests for the same never-billed venue must never each create their own
+// Stripe Customer (or, worse, each end up tracking a different Stripe
+// subscription while the other silently keeps billing, untracked). See
+// createCheckoutSessionAction() (src/app/admin/subscription/stripeActions.ts)
+// for the caller-side flow this exists for.
+//
+// Deliberately NOT built on sync_venue_plan_entitlement() (migration 085) —
+// that RPC is an UPSERT (ON CONFLICT DO UPDATE), which would let two
+// concurrent callers each "win" and overwrite each other's customer id,
+// reproducing the exact race this function exists to close. A reservation
+// needs the opposite behavior: on conflict, DO NOT overwrite — tell the
+// loser to back off and use the winner's row instead. A plain INSERT
+// relying on the existing UNIQUE(venue_id) constraint (migration 083) is
+// the simplest correct primitive for that — Postgres enforces it atomically
+// with no additional locking/RPC machinery needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ReserveVenueStripeCustomerResult =
+  | { ok: true; reserved: true; row: VenueSubscriptionRow }
+  | { ok: true; reserved: false; row: VenueSubscriptionRow }
+  | { ok: false; error: string };
+
+/**
+ * Atomically reserves `customerId` as venue `venueId`'s Stripe Customer,
+ * ONLY if no venue_subscriptions row exists yet. plan_code is written as
+ * 'free' — a reservation never grants paid entitlement on its own; only a
+ * later webhook-confirmed payment does that.
+ *
+ * `reserved: true`  — this call created the row; caller should use `customerId`
+ *                      (the one it just passed in) going forward.
+ * `reserved: false` — a concurrent call already reserved a row first; caller
+ *                      must use `row.billing_provider_customer_id` instead,
+ *                      and should not treat `customerId` as attached to
+ *                      this venue (the caller is expected to best-effort
+ *                      clean up the now-unused Stripe Customer it created).
+ * `ok: false`       — the reservation failed for a reason other than a
+ *                      concurrent winner (a real DB error). Callers must
+ *                      NOT proceed to Checkout with an unmapped customer —
+ *                      report critically and stop.
+ */
+export async function reserveVenueStripeCustomer(
+  venueId: string,
+  customerId: string
+): Promise<ReserveVenueStripeCustomerResult> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("venue_subscriptions")
+    .insert({
+      venue_id:                     venueId,
+      plan_code:                    "free",
+      status:                       "active",
+      billing_provider:             "stripe",
+      billing_provider_customer_id: customerId,
+    })
+    .select(VENUE_SUBSCRIPTION_SELECT)
+    .single();
+
+  if (!error) {
+    return { ok: true, reserved: true, row: coerceVenueSubscriptionRow(data as unknown as VenueSubscriptionDbRow) };
+  }
+
+  // Postgres 23505 = unique_violation. Fired on venue_subscriptions_venue_id_key
+  // when a concurrent request already reserved this venue first — expected
+  // under real concurrency, not an error condition.
+  if ((error as { code?: string }).code === "23505") {
+    const existing = await getVenueSubscription(venueId);
+    if (existing) return { ok: true, reserved: false, row: existing };
+    // Vanishingly unlikely: the conflict fired but the row is now gone
+    // (e.g. a concurrent delete). Surface as a real error rather than ever
+    // proceeding without a known-good customer mapping.
+    return { ok: false, error: "Venue subscription reservation conflict could not be resolved." };
+  }
+
+  console.error("[reserveVenueStripeCustomer]", error.message);
+  return { ok: false, error: error.message };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Write helpers
 //
 // Both functions below are direct venue-scoped mirrors of updateOperatorPlan()
@@ -311,4 +395,73 @@ export async function syncVenueStripeSubscription(
   }
 
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Team-seat entitlement (Phase 2B temporary rule)
+//
+// Team membership (operator_memberships) remains operator-level — an
+// operator with multiple venues still has ONE team, not one per venue (see
+// src/app/admin/users/actions.ts's header note; per-venue team permissions
+// are explicitly out of scope for Phase 2B — see the task's scope-control
+// list). But once plan is venue-level, "what is this operator's seat limit"
+// has no single correct venue to read from any more.
+//
+// TEMPORARY RULE (documented here, not a permanent architecture decision —
+// see the Phase 2 investigation report, Part 11, for the alternatives
+// considered): the operator's seat limit is maxUsers() of the HIGHEST plan
+// among the venues that operator can currently manage. "Currently manage"
+// excludes cancelled venues specifically so a cancelled venue can never
+// indefinitely inflate the seat count for venues still in active use.
+//
+//   Free + Free    → Free seat cap
+//   Free + Pro     → Pro seat cap
+//   Free + Premium → Premium seat cap
+//   Pro  + Premium → Premium seat cap
+//
+// This does NOT change operator_memberships, invitation ownership,
+// per-venue roles, or access scope — a member's access is still "every
+// venue this operator owns," unchanged from Phase 1. Only the numeric seat
+// LIMIT computation changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolves the highest plan among all of an operator's currently-manageable
+ * (non-cancelled) venues. Returns 'free' if the operator owns no venues, or
+ * only cancelled ones. Used exclusively for the team-seat limit — NOT a
+ * general-purpose "the operator's plan" resolver, and must not be reused as
+ * one (there is no such thing as a single correct operator-wide plan once
+ * venues can diverge — see this file's header).
+ */
+export async function getOperatorHighestVenuePlan(operatorId: string): Promise<OperatorPlan> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("venues")
+    .select("id")
+    .eq("created_by_operator_id", operatorId)
+    .is("cancelled_at", null);
+
+  if (error) {
+    console.error("[getOperatorHighestVenuePlan]", error.message);
+    return "free";
+  }
+
+  const venueIds = ((data ?? []) as { id: string }[]).map((v) => v.id);
+  if (venueIds.length === 0) return "free";
+
+  const plans = await Promise.all(venueIds.map((id) => getVenuePlanCode(id)));
+  return highestPlan(plans);
+}
+
+/**
+ * Pure reduction — the highest-ranked plan in a list, defaulting to 'free'
+ * for an empty list. Extracted for direct unit testing (no I/O), same
+ * rationale as resolvePlanCodeFromVenueSubscription() above.
+ */
+export function highestPlan(plans: OperatorPlan[]): OperatorPlan {
+  return plans.reduce<OperatorPlan>(
+    (best, p) => (PLANS.indexOf(p) > PLANS.indexOf(best) ? p : best),
+    "free"
+  );
 }

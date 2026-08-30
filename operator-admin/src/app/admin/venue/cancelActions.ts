@@ -3,12 +3,14 @@
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/auditLog";
-import { getOperatorSubscription, updateOperatorPlan } from "@/lib/subscriptions";
+import { getVenueSubscription, updateVenuePlan } from "@/lib/venueSubscriptions";
+import { getStripeClient } from "@/lib/stripe";
 import { logPlanChangeEvent } from "@/lib/planChangeEvents";
 import { sendVenueCancellationFounderEmail, CANCELLATION_REASON_LABELS } from "@/lib/email";
 import { getMembershipRole } from "@/lib/memberships";
 import { sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,13 +26,14 @@ export type CancelVenueState = {
   error?: string;
   /**
    * Set only when the venue was successfully cancelled/unpublished but the
-   * subsequent entitlement downgrade to free failed. The cancellation
-   * itself is real and is never rolled back or misrepresented — this exists
-   * so the caller can't collapse that outcome into either a false "nothing
-   * happened" error or a false complete success. updateOperatorPlan()
-   * already reports this failure critically (Sentry + #ops-critical) with
-   * its own HHC reference — hhcErrorId below propagates that same
-   * reference; it is never regenerated here.
+   * subsequent entitlement downgrade (DB write, or the Stripe cancellation
+   * call for a Stripe-backed venue) failed. The cancellation itself is real
+   * and is never rolled back or misrepresented — this exists so the caller
+   * can't collapse that outcome into either a false "nothing happened"
+   * error or a false complete success. Either failure path already reports
+   * critically (Sentry + #ops-critical) with its own HHC reference —
+   * hhcErrorId below propagates that same reference; it is never
+   * regenerated here.
    */
   downgradeFailed?: true;
   hhcErrorId?: string;
@@ -44,8 +47,36 @@ type VenueRow = {
   is_published: boolean | null;
 };
 
+const VENUE_CANCELLATION_FLOW = "venue-cancellation";
+
 // ── Action ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Cancels (unpublishes) a single venue and downgrades ONLY that venue's
+ * billing to Free. Phase 2B: fully venue-scoped — cancelling Venue A never
+ * touches Venue B's plan, Stripe customer, or subscription, even when both
+ * belong to the same operator.
+ *
+ * Stripe cancellation correctness (Phase 2B fix — see the task's Part 15):
+ * the pre-Phase-2B version of this action only ever flipped the local plan
+ * column to Free; it never actually cancelled the real Stripe subscription,
+ * so a Stripe-backed venue's card kept being charged indefinitely after
+ * "cancellation." This version calls stripe.subscriptions.cancel() for a
+ * Stripe-backed venue — billing genuinely stops. The resulting
+ * customer.subscription.deleted webhook (not this action) is the actual
+ * writer of venue_subscriptions.plan_code=free/status=cancelled and the
+ * plan_change_events row for that transition, exactly like every other
+ * Stripe-driven plan change in this codebase (checkout activation is also
+ * only ever written by the webhook, never by the action that initiates it).
+ * A MANUAL (non-Stripe) paid plan has no Stripe object to cancel, so it is
+ * still downgraded directly via updateVenuePlan() here, as before.
+ *
+ * The venue's Stripe Customer itself is never deleted — only the
+ * subscription is cancelled — so the venue can reuse it for a future
+ * Checkout without losing payment-method history (see Part 5/7 of the task:
+ * "no special reactivation feature," a cancelled venue just starts a normal
+ * Checkout again).
+ */
 export async function cancelVenueAction(
   _prevState: CancelVenueState,
   formData: FormData
@@ -130,29 +161,67 @@ export async function cancelVenueAction(
     created_by_email: actorEmail,
   });
 
-  // ── Billing: downgrade to free if on a paid plan ───────────────────────────
+  // ── Billing: downgrade THIS VENUE to free if it's on a paid plan ──────────
   // previousPlan is hoisted to this scope (rather than re-fetched) so the
   // #venue-churn Slack notification below can report it.
   //
   // downgradeFailed/downgradeHhcErrorId: the venue cancellation above has
-  // already happened and is never rolled back — if the downgrade itself
-  // fails, this action must not claim it didn't (a false "error, nothing
-  // happened" response) or that everything succeeded (a false-success
-  // response, the confirmed bug this fixes). updateOperatorPlan() already
-  // reports the failure critically with its own HHC reference; it is
-  // propagated below, never regenerated.
+  // already happened and is never rolled back — if the downgrade/Stripe
+  // cancellation itself fails, this action must not claim it didn't (a
+  // false "error, nothing happened" response) or that everything succeeded
+  // (a false-success response). Both failure paths below already report
+  // critically with their own HHC reference; it is propagated below, never
+  // regenerated.
   let previousPlan = "free";
   let downgradeFailed = false;
   let downgradeHhcErrorId: string | undefined;
-  if (operatorId) {
-    const subscription = await getOperatorSubscription(operatorId);
-    previousPlan = subscription?.plan_code ?? "free";
 
-    if (previousPlan !== "free") {
-      const result = await updateOperatorPlan(operatorId, "free");
+  const subscription = await getVenueSubscription(venueId);
+  previousPlan = subscription?.plan_code ?? "free";
+
+  if (previousPlan !== "free") {
+    const isStripeBacked =
+      subscription?.billing_provider === "stripe" &&
+      !!subscription.billing_provider_subscription_id;
+
+    if (isStripeBacked) {
+      // Actually cancel at Stripe — billing genuinely stops. Do NOT also
+      // write venue_subscriptions here: the resulting
+      // customer.subscription.deleted webhook is the sole writer of the
+      // downgrade + plan_change_events row for this transition, exactly
+      // like every other Stripe-driven plan change in this codebase.
+      try {
+        const stripe = getStripeClient();
+        await stripe.subscriptions.cancel(subscription!.billing_provider_subscription_id!);
+      } catch (e) {
+        console.error("[cancelVenueAction] Stripe subscription cancellation failed:", e);
+        const report = await reportCriticalFailure({
+          error: e,
+          flow: VENUE_CANCELLATION_FLOW,
+          stage: "stripe-subscription-cancel",
+          title: "Venue Cancellation: Stripe Cancel Failed",
+          technicalSummary: "venue unpublished but the real Stripe subscription was not cancelled — billing may continue",
+          context: {
+            venueId,
+            operatorId,
+            stripeSubscriptionId: subscription!.billing_provider_subscription_id,
+          },
+          slackFields: {
+            "Venue ID": venueId,
+            "Stripe Subscription": subscription!.billing_provider_subscription_id ?? "unknown",
+          },
+        });
+        downgradeFailed = true;
+        downgradeHhcErrorId = report.hhcErrorId;
+      }
+    } else {
+      // Manual (non-Stripe) paid plan — no Stripe object exists; downgrade
+      // this venue directly.
+      const result = await updateVenuePlan(venueId, "free");
       if (result.ok) {
         await logPlanChangeEvent({
           operatorId,
+          venueId,
           fromPlan:       previousPlan,
           toPlan:         "free",
           changedByEmail: actorEmail,
@@ -163,7 +232,7 @@ export async function cancelVenueAction(
         // #venue-churn "previous plan" framing as if the downgrade
         // succeeded — it didn't. #venue-churn below still fires (the venue
         // WAS cancelled), but previousPlan is still reported accurately
-        // since the operator's plan did NOT actually change.
+        // since the plan did NOT actually change.
         downgradeFailed = true;
         downgradeHhcErrorId = result.hhcErrorId;
       }

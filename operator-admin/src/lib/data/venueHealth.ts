@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { computeOperatorImageCount } from "@/lib/venueReadiness";
 import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
-import { getOperatorPlanCode } from "@/lib/subscriptions";
+import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import type { OperatorPlan } from "@/lib/plans";
 
 /**
@@ -132,9 +132,10 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
       ? supabase.from("operator_memberships").select("*", { count: "exact", head: true })
           .eq("operator_id", input.operatorId as string).eq("status", "active")
       : Promise.resolve({ count: null as number | null }),
-    // Canonical plan lookup (operator_subscriptions first, operators.plan
-    // fallback, 'free' default) — same helper used everywhere else in the app.
-    isActive ? getOperatorPlanCode(input.operatorId as string) : Promise.resolve(null),
+    // Phase 2B: this VENUE's own plan (venue_subscriptions; no row → 'free'),
+    // never the operator's — a multi-venue operator's venues can now hold
+    // different plans, and this page is about one specific venue.
+    isActive ? getVenuePlanCode(input.venueId) : Promise.resolve(null),
   ]);
 
   // ── Consumer demand: event views require a second query keyed off this
