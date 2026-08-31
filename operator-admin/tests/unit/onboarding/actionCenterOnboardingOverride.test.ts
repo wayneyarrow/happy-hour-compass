@@ -35,7 +35,10 @@ test("VENUE_SELECT fetches onboarding_completed_override_at", () => {
 test("computeSetupHealth() passes manualOverrideActive through to computeVenueSetupStatus and returns onboardingComplete", () => {
   const fn = SOURCE.match(/function computeSetupHealth\([\s\S]*?\n}/)![0];
   assert.match(fn, /!!venue\.onboarding_completed_override_at/);
-  assert.match(fn, /return \{ setupHealthScorePct, missingItems, onboardingComplete \};/);
+  // Phase 2C added onboardingCompletionMode to this return object (reused by
+  // the Venue Funnel's "Complete — Manual" badge) — additive, still includes
+  // the original three fields this test pins.
+  assert.match(fn, /return \{ setupHealthScorePct, missingItems, onboardingComplete, onboardingCompletionMode \};/);
 });
 
 test("getActionCenterSummary() derives stillOnboarding from computeSetupHealth's own onboardingComplete, not missingItems.length", () => {

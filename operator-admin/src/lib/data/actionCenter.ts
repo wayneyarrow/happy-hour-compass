@@ -4,6 +4,7 @@ import {
   parseSpecialItemCount,
 } from "@/lib/venueReadiness";
 import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
+import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import {
   parseOperatorPlan,
   type OperatorPlan,
@@ -19,11 +20,16 @@ import { getMarketById } from "@/lib/markets";
 
 const HIGH_DEMAND_VENUE = 10; // venue views in 30d
 const HIGH_DEMAND_EVENT = 5;  // event views in 30d
-const INACTIVE_DAYS = 30;     // last_seen_at threshold for "inactive"
+// Exported so Venue Funnel (src/lib/data/venueFunnel.ts) can reuse the exact
+// same "how stale counts as inactive" threshold for its soft activity badge,
+// rather than inventing a second number.
+export const INACTIVE_DAYS = 30;     // last_seen_at threshold for "inactive"
 
 // ── Shared internal types ─────────────────────────────────────────────────────
 
-type VenueWithSetup = {
+// Exported so Venue Funnel (src/lib/data/venueFunnel.ts) can reuse the exact
+// same venue row shape/select rather than re-declaring an equivalent one.
+export type VenueWithSetup = {
   id: string;
   slug: string;
   name: string;
@@ -77,15 +83,19 @@ const SETUP_ITEMS_TOTAL = 6;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
-function computeSetupHealth(
+// Exported so Venue Funnel (src/lib/data/venueFunnel.ts) can reuse the exact
+// same setup-health/onboarding computation rather than re-deriving it — see
+// that file for the additional onboardingCompletionMode-driven "Manual"
+// badge and lane-precedence logic built on top of this.
+export function computeSetupHealth(
   venue: Pick<VenueWithSetup, "id" | "is_published" | "hh_times" | "business_hours" | "hh_food_details" | "hh_drink_details" | "onboarding_completed_override_at">,
   mediaByVenue: Map<string, string[]>,
-): { setupHealthScorePct: number; missingItems: string[]; onboardingComplete: boolean } {
+): { setupHealthScorePct: number; missingItems: string[]; onboardingComplete: boolean; onboardingCompletionMode: OnboardingCompletionMode } {
   const imageUrls = mediaByVenue.get(venue.id) ?? [];
   const images = imageUrls.map((url) => ({ url }));
   const imageCount = images.length;
   const operatorImageCount = computeOperatorImageCount(images, supabaseUrl);
-  const { missingItems, onboardingComplete } = computeVenueSetupStatus(
+  const { missingItems, onboardingComplete, onboardingCompletionMode } = computeVenueSetupStatus(
     {
       hh_times:        venue.hh_times,
       business_hours:  venue.business_hours,
@@ -102,7 +112,7 @@ function computeSetupHealth(
   // (returned separately) is what "still onboarding" filters must use.
   const completedCount = SETUP_ITEMS_TOTAL - missingItems.length;
   const setupHealthScorePct = Math.round((completedCount / SETUP_ITEMS_TOTAL) * 100);
-  return { setupHealthScorePct, missingItems, onboardingComplete };
+  return { setupHealthScorePct, missingItems, onboardingComplete, onboardingCompletionMode };
 }
 
 // ── Venue-level plan resolution (Phase 2B correction) ─────────────────────────
@@ -194,7 +204,9 @@ function t30ago(): string {
   return new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-const VENUE_SELECT =
+// Exported so Venue Funnel (src/lib/data/venueFunnel.ts) can fetch the same
+// venue column set rather than re-declaring an equivalent select string.
+export const VENUE_SELECT =
   "id, slug, name, city, is_published, is_verified, source, created_at, updated_at, claimed_at, hh_times, business_hours, hh_food_details, hh_drink_details, created_by_operator_id, onboarding_completed_override_at";
 
 const OPERATOR_SELECT = "id, email, last_seen_at";

@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { label: "Dashboard",          href: "/control-panel/dashboard" },
   { label: "Analytics",          href: "/control-panel/analytics" },
   { label: "Action Center",      href: "/control-panel/action-center" },
+  { label: "Venue Funnel",       href: "/control-panel/venue-funnel" },
   { label: "Claims",             href: "/control-panel/claims" },
   { label: "Submissions",        href: "/control-panel/operator-submissions" },
   { label: "Venues",             href: "/control-panel/venues" },
