@@ -460,3 +460,158 @@ export async function clearVenueGoogleIdentityExemptionAction(
   revalidatePath(`/control-panel/venues/${venueId}`);
   return { success: true };
 }
+
+// ── Manual Onboarding Completion Override (Phase 1B) ──────────────────────────
+//
+// Founder/Admin-only, durable override so a venue can be treated as
+// onboarding-complete even when the strict automatic requirements (happy
+// hour times, business hours, an operator photo, food AND drink specials,
+// published) don't legitimately apply — e.g. a drink-only bar with no food
+// menu to add. Effective onboarding completion is automaticComplete OR
+// manualOverrideActive (computeEffectiveOnboarding(), homepagePhase.ts) —
+// this never falsifies the underlying readiness signals or setup-health
+// percentage, so a manually-completed venue can still show missing items.
+// Reversible: clearOnboardingOverrideAction() below returns the venue to the
+// normal dynamic onboarding calculation.
+
+/**
+ * Marks a venue onboarding-complete regardless of the automatic requirements.
+ * A reason is required — this is a consequential override that changes what
+ * the operator sees and how the venue is counted platform-wide.
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function markOnboardingCompleteAction(
+  venueId: string,
+  _prevState: VenueActionResult,
+  formData: FormData
+): Promise<VenueActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Session expired." };
+
+  const reason = (formData.get("reason") as string | null)?.trim() ?? "";
+  if (!reason) {
+    return { success: false, error: "A reason is required to manually mark onboarding complete." };
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: venue, error: fetchError } = await supabase
+    .from("venues")
+    .select("id, name, onboarding_completed_override_at")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (fetchError || !venue) return { success: false, error: "Venue not found." };
+  const v = venue as { id: string; name: string; onboarding_completed_override_at: string | null };
+
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("venues")
+    .update({
+      onboarding_completed_override_at:       now,
+      onboarding_completed_override_by:       admin.id,
+      onboarding_completed_override_by_email: admin.email,
+      onboarding_completed_override_reason:   reason,
+    })
+    .eq("id", venueId);
+
+  if (error) {
+    console.error("[markOnboardingCompleteAction]", error.message);
+    return { success: false, error: "Failed to mark onboarding complete. Please try again." };
+  }
+
+  await supabase.from("venue_notes").insert({
+    venue_id:         venueId,
+    note:             `Onboarding manually marked complete by Founder/Admin. Reason: ${reason}`,
+    created_by:       admin.id,
+    created_by_email: admin.email,
+  });
+
+  await logAuditEvent({
+    actorEmail: admin.email ?? "unknown",
+    action:     "venue_onboarding_manually_completed",
+    entityType: "venue",
+    entityId:   venueId,
+    entityName: v.name,
+    details:    { reason, previously_overridden: !!v.onboarding_completed_override_at },
+  });
+
+  revalidatePath(`/control-panel/venues/${venueId}`);
+  revalidatePath("/control-panel");
+  revalidatePath("/control-panel/action-center");
+  revalidatePath("/control-panel/action-center/reports/active-still-onboarding");
+  return { success: true };
+}
+
+/**
+ * Clears a manual onboarding-completion override, returning the venue to the
+ * normal dynamic onboarding calculation. If the automatic requirements are
+ * still unmet, the venue immediately goes back to "still onboarding"
+ * everywhere (operator homepage, Founder Dashboard, Action Center).
+ * venueId is bound via .bind(null, venueId).
+ */
+export async function clearOnboardingOverrideAction(
+  venueId: string,
+  _prevState: VenueActionResult,
+  formData: FormData
+): Promise<VenueActionResult> {
+  const admin = await getAdmin();
+  if (!admin) return { success: false, error: "Session expired." };
+
+  const clearReason = (formData.get("reason") as string | null)?.trim() || null;
+
+  const supabase = createAdminClient();
+
+  const { data: venue, error: fetchError } = await supabase
+    .from("venues")
+    .select("id, name, onboarding_completed_override_at")
+    .eq("id", venueId)
+    .maybeSingle();
+
+  if (fetchError || !venue) return { success: false, error: "Venue not found." };
+  const v = venue as { id: string; name: string; onboarding_completed_override_at: string | null };
+
+  if (!v.onboarding_completed_override_at) {
+    return { success: false, error: "This venue does not have a manual onboarding override." };
+  }
+
+  const { error } = await supabase
+    .from("venues")
+    .update({
+      onboarding_completed_override_at:       null,
+      onboarding_completed_override_by:       null,
+      onboarding_completed_override_by_email: null,
+      onboarding_completed_override_reason:   null,
+    })
+    .eq("id", venueId);
+
+  if (error) {
+    console.error("[clearOnboardingOverrideAction]", error.message);
+    return { success: false, error: "Failed to clear manual onboarding completion. Please try again." };
+  }
+
+  await supabase.from("venue_notes").insert({
+    venue_id:         venueId,
+    note:
+      "Manual onboarding completion cleared by Founder/Admin. Venue returned to automatic onboarding status." +
+      (clearReason ? ` Reason: ${clearReason}` : ""),
+    created_by:       admin.id,
+    created_by_email: admin.email,
+  });
+
+  await logAuditEvent({
+    actorEmail: admin.email ?? "unknown",
+    action:     "venue_onboarding_override_cleared",
+    entityType: "venue",
+    entityId:   venueId,
+    entityName: v.name,
+    details:    { reason: clearReason, previous_override_at: v.onboarding_completed_override_at },
+  });
+
+  revalidatePath(`/control-panel/venues/${venueId}`);
+  revalidatePath("/control-panel");
+  revalidatePath("/control-panel/action-center");
+  revalidatePath("/control-panel/action-center/reports/active-still-onboarding");
+  return { success: true };
+}

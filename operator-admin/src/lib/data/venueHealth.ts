@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { computeOperatorImageCount } from "@/lib/venueReadiness";
 import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
+import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import type { OperatorPlan } from "@/lib/plans";
 
@@ -45,6 +46,11 @@ export type VenueHealthInput = {
   operatorEmail: string | null;
   operatorLastSeenAt: string | null;
   venueUpdatedAt: string | null;
+  // Phase 1B — Founder/Admin manual onboarding-completion override (already
+  // fetched on the page via the venues row) — passed in rather than re-queried.
+  onboardingOverrideAt: string | null;
+  onboardingOverrideByEmail: string | null;
+  onboardingOverrideReason: string | null;
 };
 
 export type VenueHealthData = {
@@ -60,6 +66,13 @@ export type VenueHealthData = {
   isActive: boolean;
   isPublished: boolean;
   lifecycleStage: LifecycleStage;
+  // Phase 1B — distinguishes *why* onboarding is (or isn't) complete.
+  // "manual" takes precedence in display even if automatic also happens to
+  // be satisfied — see computeEffectiveOnboarding() in homepagePhase.ts.
+  onboardingCompletionMode: OnboardingCompletionMode;
+  onboardingOverrideAt: string | null;
+  onboardingOverrideByEmail: string | null;
+  onboardingOverrideReason: string | null;
   plan: OperatorPlan | null; // null when venue has no attached operator
 
   // 3. Setup status checklist (same data backing the score above)
@@ -174,7 +187,7 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const operatorImageCount = computeOperatorImageCount(images, supabaseUrl);
 
-  const { onboardingComplete, missingItems } = computeVenueSetupStatus(
+  const { onboardingComplete, onboardingCompletionMode, missingItems } = computeVenueSetupStatus(
     {
       hh_times:         input.hhTimes,
       business_hours:   input.businessHours,
@@ -184,6 +197,7 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
       operatorImageCount,
     },
     input.isPublished,
+    !!input.onboardingOverrideAt,
   );
 
   const setupChecklist: SetupChecklistItem[] = SETUP_ITEMS.map(({ matchLabel, displayLabel }) => ({
@@ -248,6 +262,10 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
     isActive,
     isPublished: input.isPublished,
     lifecycleStage,
+    onboardingCompletionMode,
+    onboardingOverrideAt: input.onboardingOverrideAt,
+    onboardingOverrideByEmail: input.onboardingOverrideByEmail,
+    onboardingOverrideReason: input.onboardingOverrideReason,
     plan: plan as OperatorPlan | null,
 
     setupChecklist,

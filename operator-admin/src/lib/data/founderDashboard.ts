@@ -126,6 +126,8 @@ type ActiveVenueRow = {
   business_hours: Record<string, unknown> | null;
   hh_food_details: string | null;
   hh_drink_details: string | null;
+  /** Phase 1B — Founder/Admin manual onboarding-completion override. Not null = override active. */
+  onboarding_completed_override_at: string | null;
 };
 
 type MediaRow = { venue_id: string; url: string };
@@ -188,7 +190,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     // onboarding-completion checks and the operator-plan lookup below — an
     // active venue and its attached operator are 1:1 (one-venue-per-operator).
     supabase.from("venues")
-      .select("id, created_by_operator_id, is_published, hh_times, business_hours, hh_food_details, hh_drink_details")
+      .select("id, created_by_operator_id, is_published, hh_times, business_hours, hh_food_details, hh_drink_details, onboarding_completed_override_at")
       .not("created_by_operator_id", "is", null),
 
     // operators — Activation usage/engagement + Operational Signals
@@ -367,6 +369,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
         operatorImageCount,
       },
       !!venue.is_published,
+      !!venue.onboarding_completed_override_at,
     );
 
     if (!onboardingComplete) {

@@ -44,3 +44,59 @@ export function isOnboardingComplete(
     signals.hasDrinkSpecials
   );
 }
+
+/**
+ * Distinguishes *why* a venue's onboarding is considered complete (or isn't),
+ * for UI that needs to show more than a bare boolean — e.g. the Founder
+ * Control Panel's "Onboarding: Complete — Manual" state (Phase 1B).
+ *
+ *   "automatic" — every automatic requirement above (isOnboardingComplete())
+ *                  is satisfied on its own merits.
+ *   "manual"    — a Founder/Admin has applied a manual override
+ *                  (venues.onboarding_completed_override_at IS NOT NULL) that
+ *                  makes the venue effectively complete regardless of the
+ *                  automatic requirements. Takes precedence in the returned
+ *                  mode even if the automatic requirements also happen to be
+ *                  satisfied, since the override is the more specific,
+ *                  human-reviewed signal.
+ *   "incomplete"— neither the automatic requirements nor a manual override
+ *                  are satisfied.
+ */
+export type OnboardingCompletionMode = "automatic" | "manual" | "incomplete";
+
+export type EffectiveOnboardingResult = {
+  /** automaticOnboardingComplete OR manualOverrideActive. */
+  onboardingComplete: boolean;
+  onboardingCompletionMode: OnboardingCompletionMode;
+};
+
+/**
+ * Canonical "effective" onboarding calculation — the single place that
+ * combines the automatic, dynamically-computed signal above with a Founder/
+ * Admin manual override (Phase 1B). Every consumer of onboarding-completion
+ * status (computeVenueSetupStatus(), the operator-facing admin/home V1→V2
+ * gate, the Founder Dashboard count, Action Center reports, the Control Panel
+ * venue-detail Health Panel) should route through this function — or through
+ * computeVenueSetupStatus(), which itself calls this — rather than
+ * re-deriving the OR logic independently, so a manual override can never be
+ * respected in one place and ignored in another.
+ *
+ * Does NOT alter the underlying readiness signals or any setup-health
+ * percentage — a manually-completed venue can still show missing items / a
+ * score below 100%. See VenueSetupStatus.missingItems.
+ */
+export function computeEffectiveOnboarding(
+  signals: VenueReadinessSignals,
+  isPublished: boolean,
+  manualOverrideActive: boolean
+): EffectiveOnboardingResult {
+  const automaticComplete = isOnboardingComplete(signals, isPublished);
+  const onboardingComplete = automaticComplete || manualOverrideActive;
+  const onboardingCompletionMode: OnboardingCompletionMode = manualOverrideActive
+    ? "manual"
+    : automaticComplete
+      ? "automatic"
+      : "incomplete";
+
+  return { onboardingComplete, onboardingCompletionMode };
+}

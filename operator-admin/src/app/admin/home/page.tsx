@@ -12,7 +12,7 @@ import {
   parseSpecialItemCount,
   type ReadinessItem,
 } from "@/lib/venueReadiness";
-import { isOnboardingComplete } from "@/lib/homepagePhase";
+import { computeEffectiveOnboarding } from "@/lib/homepagePhase";
 import { computeSuggestedSteps } from "@/lib/suggestedSteps";
 import { computeVenueCompletion } from "@/lib/venueCompletion";
 import { markReviewedAction } from "./actions";
@@ -92,6 +92,8 @@ type HomeVenueRow = {
   is_published: boolean | null;
   claimed_at: string | null;
   updated_at: string | null;
+  /** Phase 1B — Founder/Admin manual onboarding-completion override. Not null = override active. */
+  onboarding_completed_override_at: string | null;
   address_line1: string | null;
   city: string | null;
   region: string | null;
@@ -119,7 +121,8 @@ const VENUE_SELECT =
   "id, slug, name, is_published, claimed_at, updated_at, address_line1, city, region, postal_code, " +
   "market_id, city_id, lat, lng, " +
   "phone, website_url, menu_url, establishment_type, hh_times, hh_tagline, " +
-  "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations, search_tags";
+  "hh_food_details, hh_drink_details, business_hours, payment_types, review_confirmations, search_tags, " +
+  "onboarding_completed_override_at";
 
 // ── Keys for claimed-venue imported-data review tasks ─────────────────────────
 // Used to split strongRecommendations into review tasks vs standard improvements.
@@ -391,7 +394,16 @@ export default async function AdminHomePage() {
   //
   // introSeen: true when the operator has already dismissed the banner (DB flag),
   // or when there is no operator row (Case B impersonation — skip banner).
-  if (readiness && isOnboardingComplete(readiness.signals, isPublished)) {
+  // Phase 1B: a Founder/Admin manual onboarding-completion override makes the
+  // operator leave the V1 checklist exactly as if they'd completed onboarding
+  // normally — see computeEffectiveOnboarding() in homepagePhase.ts, the same
+  // canonical calculation the Founder Dashboard / Action Center / Control
+  // Panel Health Panel all route through via computeVenueSetupStatus().
+  const { onboardingComplete } = readiness
+    ? computeEffectiveOnboarding(readiness.signals, isPublished, !!venue?.onboarding_completed_override_at)
+    : { onboardingComplete: false };
+
+  if (readiness && onboardingComplete) {
     // Fetch event count — only needed on V2. head:true returns count with no rows.
     const { count: rawEventsCount } = await ctx.supabase
       .from("events")

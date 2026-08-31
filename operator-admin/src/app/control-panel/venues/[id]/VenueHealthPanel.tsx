@@ -66,6 +66,18 @@ const LIFECYCLE_LABEL: Record<LifecycleStage, string> = {
   not_active:          "Not Active",
 };
 
+/**
+ * Phase 1B: when onboarding is complete via a Founder/Admin manual override
+ * rather than the automatic requirements, say so here too — this row must
+ * never disagree with the Onboarding section's own "Complete — Manual" state.
+ */
+function onboardingLabel(data: VenueHealthData): string {
+  if (data.lifecycleStage === "onboarding_complete" && data.onboardingCompletionMode === "manual") {
+    return "Onboarding Complete — Manual";
+  }
+  return LIFECYCLE_LABEL[data.lifecycleStage];
+}
+
 const ACTIVITY_BADGE: Record<OperatorActivityStatus, { label: string; classes: string }> = {
   active:           { label: "Active",           classes: "bg-green-50 text-green-700 border border-green-200" },
   inactive:         { label: "Inactive",          classes: "bg-amber-50 text-amber-700 border border-amber-200" },
@@ -146,7 +158,7 @@ export default function VenueHealthPanel({ data }: { data: VenueHealthData }) {
           </Row>
           <Row label="Verified"><YesNo value={data.isVerified} /></Row>
           <Row label="Active"><YesNo value={data.isActive} /></Row>
-          <Row label="Onboarding">{LIFECYCLE_LABEL[data.lifecycleStage]}</Row>
+          <Row label="Onboarding">{onboardingLabel(data)}</Row>
           <Row label="Current Plan">
             {data.plan ? (
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${planBadgeClasses}`}>

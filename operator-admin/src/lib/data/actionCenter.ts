@@ -39,6 +39,8 @@ type VenueWithSetup = {
   hh_food_details: string | null;
   hh_drink_details: string | null;
   created_by_operator_id: string | null;
+  /** Phase 1B — Founder/Admin manual onboarding-completion override. Not null = override active. */
+  onboarding_completed_override_at: string | null;
 };
 
 type OperatorRow = {
@@ -73,14 +75,14 @@ const SETUP_ITEMS_TOTAL = 6;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
 function computeSetupHealth(
-  venue: Pick<VenueWithSetup, "id" | "is_published" | "hh_times" | "business_hours" | "hh_food_details" | "hh_drink_details">,
+  venue: Pick<VenueWithSetup, "id" | "is_published" | "hh_times" | "business_hours" | "hh_food_details" | "hh_drink_details" | "onboarding_completed_override_at">,
   mediaByVenue: Map<string, string[]>,
-): { setupHealthScorePct: number; missingItems: string[] } {
+): { setupHealthScorePct: number; missingItems: string[]; onboardingComplete: boolean } {
   const imageUrls = mediaByVenue.get(venue.id) ?? [];
   const images = imageUrls.map((url) => ({ url }));
   const imageCount = images.length;
   const operatorImageCount = computeOperatorImageCount(images, supabaseUrl);
-  const { missingItems } = computeVenueSetupStatus(
+  const { missingItems, onboardingComplete } = computeVenueSetupStatus(
     {
       hh_times:        venue.hh_times,
       business_hours:  venue.business_hours,
@@ -90,10 +92,14 @@ function computeSetupHealth(
       operatorImageCount,
     },
     venue.is_published,
+    !!venue.onboarding_completed_override_at,
   );
+  // Setup health score is the raw, automatic percentage — deliberately NEVER
+  // forced to 100% by a manual override (Phase 1B). onboardingComplete
+  // (returned separately) is what "still onboarding" filters must use.
   const completedCount = SETUP_ITEMS_TOTAL - missingItems.length;
   const setupHealthScorePct = Math.round((completedCount / SETUP_ITEMS_TOTAL) * 100);
-  return { setupHealthScorePct, missingItems };
+  return { setupHealthScorePct, missingItems, onboardingComplete };
 }
 
 function buildPlanMap(
@@ -156,7 +162,7 @@ function t30ago(): string {
 }
 
 const VENUE_SELECT =
-  "id, slug, name, city, is_published, is_verified, source, created_at, updated_at, claimed_at, hh_times, business_hours, hh_food_details, hh_drink_details, created_by_operator_id";
+  "id, slug, name, city, is_published, is_verified, source, created_at, updated_at, claimed_at, hh_times, business_hours, hh_food_details, hh_drink_details, created_by_operator_id, onboarding_completed_override_at";
 
 const OPERATOR_SELECT = "id, email, plan, last_seen_at";
 
@@ -374,8 +380,7 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
   let upgradeOpportunities = 0;
 
   for (const venue of activeVenues) {
-    const { setupHealthScorePct, missingItems } = computeSetupHealth(venue, mediaByVenue);
-    const onboardingComplete = missingItems.length === 0;
+    const { setupHealthScorePct, onboardingComplete } = computeSetupHealth(venue, mediaByVenue);
     if (!onboardingComplete) stillOnboarding++;
 
     const opId = venue.created_by_operator_id;
@@ -578,8 +583,8 @@ export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingR
   const rows: ActiveStillOnboardingRow[] = [];
 
   for (const v of venues) {
-    const { setupHealthScorePct, missingItems } = computeSetupHealth(v, mediaByVenue);
-    if (missingItems.length === 0) continue; // onboarding complete — skip
+    const { setupHealthScorePct, missingItems, onboardingComplete } = computeSetupHealth(v, mediaByVenue);
+    if (onboardingComplete) continue; // onboarding complete (automatic or manual override) — skip
 
     const opId  = v.created_by_operator_id!;
     const op    = opById.get(opId);

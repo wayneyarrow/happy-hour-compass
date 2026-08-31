@@ -15,6 +15,7 @@ import VenueHealthPanel from "./VenueHealthPanel";
 import ReactivateVenuePanel from "./ReactivateVenuePanel";
 import FeaturedInContentSection from "./FeaturedInContentSection";
 import GoogleIdentityPanel from "./GoogleIdentityPanel";
+import OnboardingOverrideControl from "./OnboardingOverrideControl";
 import { formatDate as fmt } from "@/lib/controlPanelDateTime";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,10 @@ type VenueDetail = {
   business_hours: Record<string, unknown> | null;
   hh_food_details: string | null;
   hh_drink_details: string | null;
+  // Phase 1B — Founder/Admin manual onboarding-completion override
+  onboarding_completed_override_at: string | null;
+  onboarding_completed_override_by_email: string | null;
+  onboarding_completed_override_reason: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -134,6 +139,8 @@ export default async function ControlPanelVenueDetailPage({
          internal_boost, spotlight_eligible, exclude_from_discover,
          cancelled_at, cancellation_reason, cancelled_by_operator_id,
          source, hh_times, business_hours, hh_food_details, hh_drink_details,
+         onboarding_completed_override_at, onboarding_completed_override_by_email,
+         onboarding_completed_override_reason,
          operators!created_by_operator_id(plan, name, email, last_seen_at)`
       )
       .eq("id", id)
@@ -223,6 +230,9 @@ export default async function ControlPanelVenueDetailPage({
     business_hours:         v.business_hours as Record<string, unknown> | null,
     hh_food_details:        v.hh_food_details as string | null,
     hh_drink_details:       v.hh_drink_details as string | null,
+    onboarding_completed_override_at:       v.onboarding_completed_override_at as string | null,
+    onboarding_completed_override_by_email: v.onboarding_completed_override_by_email as string | null,
+    onboarding_completed_override_reason:   v.onboarding_completed_override_reason as string | null,
   };
 
   const health = await getVenueHealthData({
@@ -239,6 +249,9 @@ export default async function ControlPanelVenueDetailPage({
     operatorEmail: venue.operator_email,
     operatorLastSeenAt: venue.operator_last_seen_at,
     venueUpdatedAt: venue.updated_at,
+    onboardingOverrideAt: venue.onboarding_completed_override_at,
+    onboardingOverrideByEmail: venue.onboarding_completed_override_by_email,
+    onboardingOverrideReason: venue.onboarding_completed_override_reason,
   });
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
@@ -364,6 +377,17 @@ export default async function ControlPanelVenueDetailPage({
           )}
 
         </Section>
+
+        {/* A2. Onboarding — manual completion override (Phase 1B) */}
+        <OnboardingOverrideControl
+          venueId={venue.id}
+          onboardingCompletionMode={health.onboardingCompletionMode}
+          setupHealthScorePct={health.setupHealthScorePct}
+          missingItems={health.setupChecklist.filter((i) => !i.completed).map((i) => i.label)}
+          overrideAt={venue.onboarding_completed_override_at}
+          overrideByEmail={venue.onboarding_completed_override_by_email}
+          overrideReason={venue.onboarding_completed_override_reason}
+        />
 
         {/* B. Location / contact */}
         <Section title="Location & Contact">
