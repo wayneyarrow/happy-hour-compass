@@ -46,12 +46,15 @@ type VenueWithSetup = {
 type OperatorRow = {
   id: string;
   email: string | null;
-  plan: string | null;
   last_seen_at: string | null;
 };
 
 type MediaRow   = { venue_id: string; url: string };
-type SubPlanRow = { operator_id: string; plan_code: string | null };
+// Phase 2B — venue-level plan/subscription row (venue_subscriptions is the
+// sole canonical source; see buildVenuePlanMap() below). Only the 3 columns
+// every call site actually needs are selected — never the full
+// venue_subscriptions row shape (VenueSubscriptionRow in venueSubscriptions.ts).
+export type VenueSubRow = { venue_id: string; plan_code: string | null; status: string | null };
 type EventRow   = { id: string; title: string | null; venue_id: string; first_date: string | null; is_published: boolean };
 
 // Primary CRM contact row, as read from crm_venue_contacts for the Action
@@ -102,16 +105,46 @@ function computeSetupHealth(
   return { setupHealthScorePct, missingItems, onboardingComplete };
 }
 
-function buildPlanMap(
-  subs: SubPlanRow[],
-  operators: OperatorRow[],
-): Map<string, OperatorPlan> {
-  const subMap = new Map(subs.map((r) => [r.operator_id, parseOperatorPlan(r.plan_code)]));
-  const result = new Map<string, OperatorPlan>();
-  for (const op of operators) {
-    result.set(op.id, subMap.get(op.id) ?? parseOperatorPlan(op.plan));
+// ── Venue-level plan resolution (Phase 2B correction) ─────────────────────────
+//
+// venue_subscriptions is the sole canonical source of a venue's plan
+// (src/lib/venueSubscriptions.ts) — operator_subscriptions and operators.plan
+// are legacy operator-level fields and must never be consulted for a
+// per-venue plan decision. That file's own header explains why: once one
+// operator can own venues on different plans (Landing = Premium, Il Mercato =
+// Free), there is no single operator-level value that could ever be correct
+// for "this venue's plan" — falling back to one would silently leak one
+// venue's paid entitlement onto a sibling Free venue, or vice versa. Every
+// function below previously resolved plan via the operator-level
+// buildPlanMap()/operator_subscriptions path — a stale, pre-Phase-2B-cutover
+// pattern this fixes.
+//
+// buildVenuePlanMap() mirrors resolvePlanCodeFromVenueSubscription()'s
+// contract exactly (row exists → its plan_code; no row → absent from the
+// map, callers use `?? "free"`) — see that function's doc comment for the
+// full rationale. It is intentionally a local, batched map rather than a
+// call to the exported venueSubscriptions.ts helpers: getVenuePlanCode() is
+// one DB round-trip per venue, and calling it once per venue in every report
+// below would reintroduce an N+1 query; a single `.in("venue_id", [...])`
+// fetch keyed into this map is the batched equivalent.
+//
+// Additionally treats a 'cancelled' subscription as Free regardless of its
+// stored plan_code (product rule, Phase 2B Action Center correction task) —
+// a cancelled subscription must never be treated as actively paid. In every
+// currently-possible write path (manual cancellation via cancelVenueAction,
+// and the Stripe customer.subscription.deleted webhook handler)
+// plan_code is already reset to 'free' the instant status becomes
+// 'cancelled', so this is a defensive safety net against a theoretical
+// write-path gap, not a change to any real observed state. 'past_due' is
+// deliberately NOT downgraded here — a past-due paid subscription still
+// resolves to its paid plan; Past Due is a separate warning badge for a
+// future UI, never a silent downgrade to Free.
+export function buildVenuePlanMap(rows: VenueSubRow[]): Map<string, OperatorPlan> {
+  const m = new Map<string, OperatorPlan>();
+  for (const row of rows) {
+    m.set(row.venue_id, row.status === "cancelled" ? "free" : parseOperatorPlan(row.plan_code));
   }
-  return result;
+  return m;
 }
 
 function buildVenueViewMap(rows: { venue_id: string }[]): Map<string, number> {
@@ -164,7 +197,7 @@ function t30ago(): string {
 const VENUE_SELECT =
   "id, slug, name, city, is_published, is_verified, source, created_at, updated_at, claimed_at, hh_times, business_hours, hh_food_details, hh_drink_details, created_by_operator_id, onboarding_completed_override_at";
 
-const OPERATOR_SELECT = "id, email, plan, last_seen_at";
+const OPERATOR_SELECT = "id, email, last_seen_at";
 
 // ── Public row types ──────────────────────────────────────────────────────────
 
@@ -352,24 +385,22 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     activeVenues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
   )];
 
-  const [r_media, r_subs, r_ops, r_memberships] = await Promise.all([
+  const [r_media, r_subs, r_memberships] = await Promise.all([
     activeVenues.length > 0
       ? supabase.from("media").select("venue_id, url")
           .in("venue_id", activeVenues.map((v) => v.id)).eq("type", "venue_image")
       : Promise.resolve({ data: [] as MediaRow[] }),
-    activeOpIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", activeOpIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
-    activeOpIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", activeOpIds)
-      : Promise.resolve({ data: [] as OperatorRow[] }),
+    activeVenues.length > 0
+      ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status")
+          .in("venue_id", activeVenues.map((v) => v.id))
+      : Promise.resolve({ data: [] as VenueSubRow[] }),
     activeOpIds.length > 0
       ? supabase.from("operator_memberships").select("operator_id").in("operator_id", activeOpIds).eq("status", "active")
       : Promise.resolve({ data: [] as { operator_id: string }[] }),
   ]);
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const planMap = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], (r_ops.data ?? []) as OperatorRow[]);
+  const planMap = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
 
   const memberCountByOp = new Map<string, number>();
   for (const { operator_id } of (r_memberships.data ?? []) as { operator_id: string }[]) {
@@ -385,7 +416,7 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
 
     const opId = venue.created_by_operator_id;
     if (opId && venue.is_published) {
-      const plan = planMap.get(opId) ?? "free";
+      const plan = planMap.get(venue.id) ?? "free";
       if ((plan === "free" || plan === "pro") && setupHealthScorePct >= 90) {
         const imageCount = (mediaByVenue.get(venue.id) ?? []).length;
         const foodCount  = parseSpecialItemCount(venue.hh_food_details);
@@ -564,19 +595,18 @@ export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingR
   if (venues.length === 0) return [];
 
   const opIds = [...new Set(venues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id))];
+  const venueIds = venues.map((v) => v.id);
 
   const [r_media, r_subs, r_ops] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venues.map((v) => v.id)).eq("type", "venue_image"),
-    opIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
+    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
     opIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
   ]);
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const planMap      = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], (r_ops.data ?? []) as OperatorRow[]);
+  const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById = new Map<string, OperatorRow>();
   for (const op of (r_ops.data ?? []) as OperatorRow[]) opById.set(op.id, op);
 
@@ -588,7 +618,7 @@ export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingR
 
     const opId  = v.created_by_operator_id!;
     const op    = opById.get(opId);
-    const plan  = planMap.get(opId) ?? "free";
+    const plan  = planMap.get(v.id) ?? "free";
 
     rows.push({
       id: v.id,
@@ -627,20 +657,23 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
 
   const opIds = operators.map((o) => o.id);
 
-  const [r_venues, r_subs] = await Promise.all([
-    supabase.from("venues").select(VENUE_SELECT).in("created_by_operator_id", opIds),
-    supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds),
-  ]);
+  const { data: venuesData } = await supabase
+    .from("venues").select(VENUE_SELECT).in("created_by_operator_id", opIds);
 
-  const venues = (r_venues.data ?? []) as VenueWithSetup[];
+  const venues = (venuesData ?? []) as VenueWithSetup[];
   if (venues.length === 0) return [];
 
   const venueIds = venues.map((v) => v.id);
 
-  const [r_media, r_venueViews, r_events] = await Promise.all([
+  // venue_subscriptions must be keyed by venue_id (Phase 2B correction), so
+  // it can only be fetched once venueIds is known — moved into this second
+  // batch alongside the other venue-keyed queries rather than the opIds-keyed
+  // batch above.
+  const [r_media, r_venueViews, r_events, r_subs] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
     supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
   ]);
 
   const eventRows  = (r_events.data ?? []) as { id: string; venue_id: string }[];
@@ -660,13 +693,13 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
-  const planMap      = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById       = new Map(operators.map((o) => [o.id, o]));
 
   return venues.map((v) => {
     const { setupHealthScorePct } = computeSetupHealth(v, mediaByVenue);
     const op   = opById.get(v.created_by_operator_id ?? "");
-    const plan = planMap.get(v.created_by_operator_id ?? "") ?? "free";
+    const plan = planMap.get(v.id) ?? "free";
     return {
       id: v.id,
       slug: v.slug,
@@ -709,9 +742,7 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
     opIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
-    opIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
   ]);
 
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
@@ -732,13 +763,13 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const operators    = (r_ops.data ?? []) as OperatorRow[];
-  const planMap      = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById       = new Map(operators.map((o) => [o.id, o]));
 
   return venues.map((v) => {
     const { setupHealthScorePct, missingItems } = computeSetupHealth(v, mediaByVenue);
     const op   = opById.get(v.created_by_operator_id ?? "");
-    const plan = v.created_by_operator_id ? (planMap.get(v.created_by_operator_id) ?? "free") : null;
+    const plan = v.created_by_operator_id ? (planMap.get(v.id) ?? "free") : null;
     return {
       id: v.id,
       slug: v.slug,
@@ -778,9 +809,7 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
 
   const [r_media, r_subs, r_ops, r_venueViews, r_memberships] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", allVenueIds).eq("type", "venue_image"),
-    allOpIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", allOpIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", allVenueIds),
     allOpIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", allOpIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
@@ -792,7 +821,12 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
 
   const mediaByVenue  = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const operators     = (r_ops.data ?? []) as OperatorRow[];
-  const planMap       = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  // Phase 2B correction: plan is resolved per-venue from venue_subscriptions,
+  // never per-operator — an operator who owns venues on different plans
+  // (e.g. Landing = Premium, Il Mercato = Free) must have each venue
+  // evaluated against ITS OWN plan's entitlement limits, not a single
+  // operator-wide plan.
+  const planMap       = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const venueViewMap  = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const opById        = new Map(operators.map((o) => [o.id, o]));
 
@@ -806,7 +840,7 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
 
   for (const v of allVenues) {
     const opId = v.created_by_operator_id!;
-    const plan = planMap.get(opId) ?? "free";
+    const plan = planMap.get(v.id) ?? "free";
 
     if (plan !== "free" && plan !== "pro") continue;
 
@@ -873,9 +907,7 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
 
   const [r_media, r_subs, r_ops, r_events] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    opIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
     opIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
@@ -899,7 +931,7 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const operators    = (r_ops.data ?? []) as OperatorRow[];
-  const planMap      = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById       = new Map(operators.map((o) => [o.id, o]));
 
   return venues.map((v) => {
@@ -910,7 +942,7 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
       slug: v.slug,
       name: v.name,
       city: v.city,
-      plan: opId ? (planMap.get(opId) ?? "free") : null,
+      plan: opId ? (planMap.get(v.id) ?? "free") : null,
       setupHealthScorePct,
       venueViews30d: venueViewMap.get(v.id) ?? 0,
       eventViews30d: eventViewsByVenue.get(v.id) ?? 0,
@@ -952,25 +984,17 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   const { data: venuesData } = await supabase.from("venues").select(VENUE_SELECT).in("id", venueIds);
   const venues = (venuesData ?? []) as VenueWithSetup[];
 
-  const opIds = [...new Set(
-    venues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
-  )];
-
-  const [r_media, r_subs, r_ops] = await Promise.all([
+  const [r_media, r_subs] = await Promise.all([
     venueIds.length > 0
       ? supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image")
       : Promise.resolve({ data: [] as MediaRow[] }),
-    opIds.length > 0
-      ? supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds)
-      : Promise.resolve({ data: [] as SubPlanRow[] }),
-    opIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
-      : Promise.resolve({ data: [] as OperatorRow[] }),
+    venueIds.length > 0
+      ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds)
+      : Promise.resolve({ data: [] as VenueSubRow[] }),
   ]);
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const operators    = (r_ops.data ?? []) as OperatorRow[];
-  const planMap      = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const venueById    = new Map(venues.map((v) => [v.id, v]));
 
   return events.map((e) => {
@@ -985,7 +1009,7 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
       venueSlug: venue.slug,
       venueName: venue.name,
       city: venue.city,
-      plan: opId ? (planMap.get(opId) ?? "free") : null,
+      plan: opId ? (planMap.get(venue.id) ?? "free") : null,
       venueSetupHealthScorePct: setupHealthScorePct,
       eventViews30d: eventViewMap.get(e.id) ?? 0,
       eventDate: e.first_date,
@@ -1079,8 +1103,8 @@ export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTa
   if (opIds.length === 0) return [];
 
   const [r_subs, r_ops] = await Promise.all([
-    supabase.from("operator_subscriptions").select("operator_id, plan_code").in("operator_id", opIds),
-    supabase.from("operators").select("id, email, plan, last_seen_at, name, first_name, last_name").in("id", opIds),
+    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venues.map((v) => v.id)),
+    supabase.from("operators").select("id, email, last_seen_at, name, first_name, last_name").in("id", opIds),
   ]);
 
   type OperatorWithNameRow = OperatorRow & {
@@ -1090,7 +1114,7 @@ export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTa
   };
 
   const operators = (r_ops.data ?? []) as OperatorWithNameRow[];
-  const planMap    = buildPlanMap((r_subs.data ?? []) as SubPlanRow[], operators);
+  const planMap    = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById     = new Map(operators.map((o) => [o.id, o]));
 
   const rows: UnusedSearchTagsRow[] = [];
@@ -1099,7 +1123,7 @@ export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTa
     const opId = v.created_by_operator_id;
     if (!opId) continue;
 
-    const plan = planMap.get(opId) ?? "free";
+    const plan = planMap.get(v.id) ?? "free";
     if (plan !== "pro" && plan !== "premium") continue; // paid plans only
 
     const limit = maxSearchTags(plan);
