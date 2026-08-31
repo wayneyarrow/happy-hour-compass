@@ -74,6 +74,31 @@ import type { VenueSubscriptionStatus } from "@/lib/venueSubscriptions";
 /** Phase 2C product decision — see task spec. Named, not a scattered magic number. */
 export const SETUP_STALLED_AFTER_DAYS = 3;
 
+/**
+ * Phase 2E — historical Funnel start boundary.
+ *
+ * HHC's venue_claims/operator_submissions tables carry records from the
+ * pre-launch development/testing period (throwaway test emails like
+ * "hoho@hslkjash.com", clustered within a few hours on 2026-04-02) —
+ * legitimate history, but not real venue-lifecycle activity. The Placery
+ * (operator_submissions.id = 6de945ea-a3b7-4283-bc0d-e84061df871f,
+ * submitted_at = 2026-08-15T17:05:29.215Z) is the first real HHC operator
+ * submission and marks the true beginning of the Venue Funnel.
+ *
+ * Scope: this boundary applies ONLY to the two raw Entry-state queries
+ * (venue_claims.created_at, operator_submissions.submitted_at) — it is
+ * INCLUSIVE (The Placery itself must remain eligible) and is intentionally
+ * NOT applied to venues.created_at anywhere. Many legitimate venues were
+ * seeded before this date and are legitimately claimed/onboarding today;
+ * excluding them by venue creation date would remove real inventory, not
+ * historical noise. See getVenueFunnelData()'s active-venues query, which
+ * deliberately does not reference this constant at all.
+ *
+ * Named and centralized here — never duplicate this literal timestamp
+ * elsewhere in this file or scatter it across multiple queries.
+ */
+export const VENUE_FUNNEL_START_AT = "2026-08-15T17:05:29.215Z";
+
 // ── Entry-state status lists (Phase 2A-verified exact enums) ─────────────────
 
 /**
@@ -330,11 +355,17 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
     supabase
       .from("venue_claims")
       .select("id, venue_id, first_name, last_name, email, created_at, status, venues(name, city, claimed_at)")
-      .in("status", ACTIVE_CLAIM_STATUSES),
+      .in("status", ACTIVE_CLAIM_STATUSES)
+      .gte("created_at", VENUE_FUNNEL_START_AT),
     supabase
       .from("operator_submissions")
       .select("id, venue_name, city, first_name, last_name, email, submitted_at, venue_id")
-      .in("status", ACTIVE_SUBMISSION_STATUSES),
+      .in("status", ACTIVE_SUBMISSION_STATUSES)
+      .gte("submitted_at", VENUE_FUNNEL_START_AT),
+    // NOT filtered by VENUE_FUNNEL_START_AT — see that constant's doc
+    // comment. Many legitimate venues were seeded before the Funnel start
+    // and are legitimately claimed/onboarding today; the boundary excludes
+    // pre-launch Entry-state test noise only, never downstream inventory.
     supabase
       .from("venues")
       .select(VENUE_SELECT)
