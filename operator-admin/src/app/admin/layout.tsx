@@ -14,6 +14,8 @@ import {
   resolveOperatorContext,
 } from "@/lib/impersonation";
 import { updateOperatorLastSeen } from "@/lib/activityTracking";
+import { hasOperatorAccess } from "@/lib/operatorAccess";
+import { shouldBlockAdminAccess } from "@/lib/accessOutcome";
 
 export const metadata: Metadata = {
   title: {
@@ -51,6 +53,25 @@ export default async function AdminLayout({
   const impSession = impSessionId
     ? await getValidImpersonationSession(impSessionId)
     : null;
+
+  // Authorization gate — a signed-in identity with no Business/Operator
+  // access (owner OR active member) must never reach Operator Admin, and
+  // critically must never reach resolveOperatorContext() below: its final
+  // fallback (ensureOperatorForSession) auto-provisions a brand-new
+  // `operators` row for ANY authenticated user with no existing operator or
+  // membership row — a safety net for genuine operators whose owner row is
+  // unexpectedly missing (see ensureOperator.ts's header comment), never
+  // intended to silently turn a Consumer-only identity into an Operator
+  // just because they navigated to /admin/*. Skipped during impersonation —
+  // a Founder/CP-admin's own identity is never expected to have Business
+  // access itself; that path is authorized separately via the impersonation
+  // session cookie, not this check. Mirrors the same check already used at
+  // the Business Login form (src/app/login/page.tsx) — see
+  // src/lib/operatorAccess.ts's header comment.
+  const isOperator = !!user.email && (await hasOperatorAccess(user.email));
+  if (shouldBlockAdminAccess({ isImpersonating: !!impSession, hasOperatorAccess: isOperator })) {
+    redirect("/login");
+  }
 
   // Shared operator/venue context — also drives the venue switcher below.
   // Resolving it here (rather than a bespoke query) means the cancellation

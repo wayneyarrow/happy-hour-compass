@@ -1,6 +1,14 @@
 "use server";
 
-import { resolveOperatorContext } from "@/lib/impersonation";
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import {
+  IMP_COOKIE_NAME,
+  getValidImpersonationSession,
+  resolveOperatorContext,
+} from "@/lib/impersonation";
+import { hasOperatorAccess } from "@/lib/operatorAccess";
+import { shouldBlockAdminAccess } from "@/lib/accessOutcome";
 import { DAYS_OF_WEEK, TIME_24H_RE } from "../../_shared/hoursUtils";
 import type {
   BusinessHours,
@@ -60,6 +68,34 @@ export async function updateBusinessHoursAction(
 
   if (Object.keys(errors).length > 0) {
     return { errors, hours };
+  }
+
+  // ── Business-access gate — before resolveOperatorContext() ─────────────────
+  // resolveOperatorContext()'s non-impersonating fallback is
+  // ensureOperatorForSession(), which auto-provisions an `operators` row for
+  // any authenticated identity with none — it must never be reached by a
+  // Consumer-only (or otherwise non-Operator) identity just because this
+  // action was invoked. Checked independently of impersonation status,
+  // exactly like admin/layout.tsx: a Founder/CP-admin's own identity is
+  // never expected to have Business access itself, so impersonating callers
+  // are exempt from this check (their authorization is the session cookie).
+  const cookieStore = await cookies();
+  const impSessionId = cookieStore.get(IMP_COOKIE_NAME)?.value;
+  const impSession = impSessionId ? await getValidImpersonationSession(impSessionId) : null;
+
+  if (!impSession) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const isOperator = !!user?.email && (await hasOperatorAccess(user.email));
+    if (shouldBlockAdminAccess({ isImpersonating: false, hasOperatorAccess: isOperator })) {
+      return {
+        errors: { form: "This account doesn't have Business/Operator access." },
+        hours,
+      };
+    }
   }
 
   // ── Resolve operator context (impersonation-aware) ─────────────────────────

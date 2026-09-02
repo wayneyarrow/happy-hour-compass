@@ -5,6 +5,8 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
+import { resolveCurrentUserAccess } from "@/lib/postAuthAccess";
+import { resolveLoginOutcome, type LoginOutcome } from "@/lib/accessOutcome";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,24 +16,96 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Set only once authentication has actually succeeded but this identity
+  // has no Business/Operator access — see resolveLoginOutcome
+  // (src/lib/accessOutcome.ts). Consumer and Operator share one Auth
+  // identity store, so a correct password is not by itself enough to grant
+  // Operator Admin access.
+  const [wrongContext, setWrongContext] = useState<LoginOutcome | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setWrongContext(null);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
     if (error) {
       setErrorMsg(error.message);
-    } else {
-      router.push("/admin/home");
-      router.refresh();
+      setLoading(false);
+      return;
     }
 
+    const access = await resolveCurrentUserAccess();
+    const outcome = resolveLoginOutcome("business", access);
     setLoading(false);
+
+    if (outcome !== "granted") {
+      setWrongContext(outcome);
+      return;
+    }
+
+    router.push("/admin/home");
+    router.refresh();
+  }
+
+  if (wrongContext) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/logo.png"
+              alt="Happy Hour Compass"
+              width={80}
+              height={80}
+              className="rounded-xl"
+            />
+          </div>
+          <div className="bg-white p-8 rounded-xl shadow-md text-center">
+            {wrongContext === "wrong-context" ? (
+              <>
+                <h1 className="text-xl font-bold text-gray-900 mb-2">This is a Consumer account</h1>
+                <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                  {email} is set up as a Happy Hour Compass Consumer account
+                  for discovering happy hours, not a Business account. This
+                  email isn&rsquo;t associated with a venue on Happy Hour
+                  Compass.
+                </p>
+                <a
+                  href="/business"
+                  className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                >
+                  Learn about listing your business →
+                </a>
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-bold text-gray-900 mb-2">No Business account found</h1>
+                <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                  We couldn&rsquo;t find a Business account for {email}.
+                  If you manage a venue on Happy Hour Compass, contact{" "}
+                  <a href="mailto:hello@happyhourcompass.com" className="underline">
+                    hello@happyhourcompass.com
+                  </a>
+                  .
+                </p>
+                <a
+                  href="/business"
+                  className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                >
+                  Learn about listing your business →
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -54,7 +128,9 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             Happy Hour Compass
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Operator Admin Portal</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Business Login — for restaurant, bar &amp; venue operators.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -129,6 +205,13 @@ export default function LoginPage() {
             add your business
           </a>
           .
+        </p>
+        <p className="mt-2 text-xs text-gray-400 text-center leading-relaxed">
+          Looking for your personal account?{" "}
+          <a href="/sign-in" className="underline hover:text-gray-600 transition-colors">
+            Consumer Sign In
+          </a>{" "}
+          →
         </p>
         </div>{/* end card */}
       </div>{/* end max-w-md wrapper */}

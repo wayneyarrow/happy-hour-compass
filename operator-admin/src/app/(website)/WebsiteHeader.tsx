@@ -208,7 +208,7 @@ export default function WebsiteHeader({
                 href="/sign-in"
                 className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
-                Sign In
+                Consumer Sign In
               </Link>
             )}
           </nav>
@@ -409,7 +409,7 @@ export default function WebsiteHeader({
                     href="/sign-in"
                     className="block w-full text-center py-3 px-6 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-full transition-colors"
                   >
-                    Sign In
+                    Consumer Sign In
                   </Link>
                 </div>
               )}

@@ -46,7 +46,7 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Reset your password</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Reset your Business password</h1>
         <p className="text-sm text-gray-500 mt-1">
           Enter the email address on your operator account and we&rsquo;ll send you a reset link.
         </p>
@@ -103,13 +103,23 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
         </button>
       </form>
 
-      <div className="mt-6 text-center">
-        <a
-          href="/login"
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Back to sign in
-        </a>
+      <div className="mt-6 text-center space-y-1">
+        <p>
+          <a
+            href="/login"
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Back to Business Login
+          </a>
+        </p>
+        <p>
+          <a
+            href="/account/forgot-password"
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Resetting a Consumer account instead? →
+          </a>
+        </p>
       </div>
     </>
   );

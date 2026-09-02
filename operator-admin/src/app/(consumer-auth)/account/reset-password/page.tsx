@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
 import PasswordInput from "@/components/PasswordInput";
+import { resolveCurrentUserAccess } from "@/lib/postAuthAccess";
+import { resolveConsumerRecoveryOutcome } from "@/lib/accessOutcome";
 
 const INPUT_CLASS =
   "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
@@ -17,7 +19,14 @@ const INPUT_CLASS =
 // "form": a session is established (via verifyOtp() or the legacy
 //   hash-fragment path) — show the new-password form.
 // "unavailable": no usable session — link expired, already used, or invalid.
-type Phase = "checking" | "confirm" | "verifying" | "form" | "unavailable";
+// "business-continuation": the password update succeeded, but this identity
+//   has no consumer_profiles row and DOES have Business/Operator access —
+//   i.e. an Operator-only identity that reached Consumer recovery by
+//   mistake (the Casa de Frida scenario). The shared Auth password is
+//   already updated at this point; this phase never manufactures a Consumer
+//   account, it just offers a direct route into the Business/Operator
+//   experience instead of the normal /account redirect below.
+type Phase = "checking" | "confirm" | "verifying" | "form" | "unavailable" | "business-continuation";
 
 export default function ConsumerResetPasswordPage() {
   const router = useRouter();
@@ -131,10 +140,28 @@ export default function ConsumerResetPasswordPage() {
     setLoading(true);
     const supabase = createClient();
     const { error: updateError } = await supabase.auth.updateUser({ password });
-    setLoading(false);
 
     if (updateError) {
+      setLoading(false);
       setError(updateError.message);
+      return;
+    }
+
+    // The shared Auth password is updated at this point regardless of what
+    // happens next. Where the person lands depends on which role(s) this
+    // identity actually has — NOT on which recovery form they happened to
+    // use (see src/lib/accessOutcome.ts's header comment). A dual-role or
+    // Consumer-only identity stays in the Consumer context (unchanged
+    // behavior below); an Operator-only identity that reached Consumer
+    // recovery by mistake must not be pushed to /account — that page has no
+    // consumer_profiles row to show and would just bounce them back to
+    // /sign-in. Offer a direct continuation into Business/Operator instead.
+    const access = await resolveCurrentUserAccess();
+    const outcome = resolveConsumerRecoveryOutcome(access);
+    setLoading(false);
+
+    if (outcome === "business-continuation") {
+      setPhase("business-continuation");
       return;
     }
 
@@ -185,6 +212,29 @@ export default function ConsumerResetPasswordPage() {
         >
           Request a new link →
         </Link>
+      </div>
+    );
+  }
+
+  if (phase === "business-continuation") {
+    return (
+      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-8 text-center">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Password updated</h1>
+        <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+          Your password has been changed. This email is associated with a
+          Business account, not a Consumer account — continue to Business
+          Admin to manage your venue.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            router.push("/admin/home");
+            router.refresh();
+          }}
+          className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors"
+        >
+          Continue to Business Admin →
+        </button>
       </div>
     );
   }

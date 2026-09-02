@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureOperatorForSession } from "@/lib/ensureOperator";
+import { hasOperatorAccess } from "@/lib/operatorAccess";
 import { redirect } from "next/navigation";
 import type { VenueFormValues, VenueFormState } from "../../_shared/types";
 
@@ -53,6 +54,18 @@ export async function updateVenueAction(
   if (!user) {
     return {
       errors: { form: "Your session has expired. Please sign in again." },
+      values,
+    };
+  }
+
+  // Same Business-access gate as /dashboard/venues/[id]/layout.tsx — this
+  // action is reachable independently of that layout's page-render check
+  // (a mutating server action must not rely solely on the page around it),
+  // and must never reach ensureOperatorForSession for a non-Operator
+  // identity. See admin/layout.tsx's header comment for the full rationale.
+  if (!user.email || !(await hasOperatorAccess(user.email))) {
+    return {
+      errors: { form: "This account doesn't have Business/Operator access." },
       values,
     };
   }

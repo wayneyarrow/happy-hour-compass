@@ -1,51 +1,92 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import PasswordInput from "@/components/PasswordInput";
 import { completeAccountSetupAction } from "./actions";
 
+// "checking":  initial load, determining which recovery path (if any) applies.
+// "confirm":   a token_hash link was opened — waiting on the user's explicit
+//   action before calling verifyOtp() (see handleContinue below for why).
+// "verifying": the user has clicked Continue; the one-time verifyOtp() call
+//   is in flight.
+// "form":      a session is established (via verifyOtp() or the legacy
+//   hash-fragment path) — show the password form.
+// "unavailable": no usable session — link expired, already used, or invalid.
+type Phase = "checking" | "confirm" | "verifying" | "form" | "unavailable";
+
 /**
  * /operator/create-password
  *
- * Password setup page for newly onboarded operators arriving via the
- * Supabase recovery link sent at claim approval time.
+ * Password setup/reset page for operators, reached from two different
+ * emails that both redirect here:
+ *   1. Claim-approval onboarding ("Set up my password") — provisionOperatorForVenue
+ *      (src/lib/operatorActivation.ts), still sends Supabase's raw action_link.
+ *   2. Operator forgot-password ("Reset your password") — forgotPasswordAction
+ *      (src/app/forgot-password/actions.ts), sends a token_hash link.
  *
- * Session flow (hash-fragment / implicit):
- *   1. Claimant clicks "Set up my password →" in approval email.
- *   2. Supabase's /auth/v1/verify verifies the recovery token.
- *   3. Supabase redirects here with tokens in the URL hash:
- *        /operator/create-password#access_token=...&refresh_token=...&type=recovery
- *   4. On mount the page explicitly parses the hash and calls setSession() so
- *      the session is established immediately, regardless of whether
- *      createBrowserClient auto-detects hash tokens in this context.
- *   5. Once a session is confirmed, the password form is shown.
- *   6. On submit: supabase.auth.updateUser({ password }).
- *   7. Redirect to /admin/home — operator account is ready.
+ * Session flow — two supported shapes, mirroring the Consumer recovery page
+ * ((consumer-auth)/account/reset-password/page.tsx):
  *
- * Fallback: if no hash tokens are found (e.g. page refresh after exchange),
- * getSession() is used — handles a pre-existing cookie session.
+ *   Path A — token_hash query param (current forgot-password emails):
+ *     /operator/create-password?token_hash=...&type=recovery
+ *     Loading this page must NOT call verifyOtp() automatically — Supabase
+ *     documents email-security scanners prefetching links as a common cause
+ *     of single-use recovery tokens being silently consumed before the user
+ *     ever opens the message (confirmed directly in the Casa de Frida
+ *     operator-login investigation). Capture the token and wait for an
+ *     explicit "Continue" click (handleContinue) instead.
+ *
+ *   Path B — hash-fragment tokens (legacy — still what the claim-approval
+ *     onboarding email produces, since that flow is unchanged by this task):
+ *     /operator/create-password#access_token=...&refresh_token=...&type=recovery
+ *     Supabase's own /auth/v1/verify already consumed the token server-side
+ *     to produce this redirect, so there's nothing left to defer — call
+ *     setSession() on mount as before.
+ *
+ *   Path C — pre-existing cookie session (e.g. page refresh after either
+ *     exchange above already completed).
+ *
+ * On submit: supabase.auth.updateUser({ password }), then redirect into the
+ * Business/Operator experience (/admin/home) — this is the "Business
+ * recovery → Business context" half of the Consumer/Business recovery
+ * model; see (consumer-auth)/account/reset-password/page.tsx for the
+ * Consumer half.
  */
 export default function CreatePasswordPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [sessionChecked, setSessionChecked] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
+  const [phase, setPhase] = useState<Phase>("checking");
+  const [pendingTokenHash, setPendingTokenHash] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
+  // In-memory guard against a double click/Enter firing verifyOtp() twice —
+  // recovery tokens are single-use, so a second call would always fail.
+  // Checked synchronously, so it closes the gap before the disabled-button
+  // re-render takes effect. Mirrors the Consumer recovery page's same guard.
+  const verifyingRef = useRef(false);
+
   useEffect(() => {
     async function init() {
-      // --- Path A: explicit hash-fragment recovery token handling ---
-      // Supabase recovery links redirect with tokens in the URL hash.
-      // Parse and call setSession() explicitly — do not rely on the browser
-      // client auto-detecting hash tokens, which is unreliable in this context.
+      // --- Path A: token_hash query param ---
+      const searchParams = new URLSearchParams(window.location.search);
+      const tokenHash = searchParams.get("token_hash");
+      const otpType = searchParams.get("type");
+
+      if (tokenHash && otpType === "recovery") {
+        setPendingTokenHash(tokenHash);
+        setPhase("confirm");
+        return;
+      }
+
+      // --- Path B: legacy hash-fragment recovery token ---
       const hash = window.location.hash.slice(1); // strip leading "#"
       if (hash) {
         const params = new URLSearchParams(hash);
@@ -63,22 +104,37 @@ export default function CreatePasswordPage() {
           // on refresh and are not visible in browser history.
           window.history.replaceState(null, "", window.location.pathname);
 
-          setHasSession(!sessionError);
-          setSessionChecked(true);
+          setPhase(sessionError ? "unavailable" : "form");
           return;
         }
       }
 
-      // --- Path B: fallback for pre-existing cookie session ---
-      // Handles the "page refreshed after tokens were already exchanged" case.
+      // --- Path C: pre-existing cookie session ---
       const { data: { session } } = await supabase.auth.getSession();
-      setHasSession(!!session);
-      setSessionChecked(true);
+      setPhase(session ? "form" : "unavailable");
     }
 
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleContinue(e: { preventDefault(): void }) {
+    e.preventDefault();
+
+    if (verifyingRef.current || !pendingTokenHash) return;
+    verifyingRef.current = true;
+    setPhase("verifying");
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: pendingTokenHash,
+      type: "recovery",
+    });
+
+    // Remove the token from the address bar now that it's been used.
+    window.history.replaceState(null, "", window.location.pathname);
+
+    setPhase(verifyError ? "unavailable" : "form");
+  }
 
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
@@ -114,10 +170,10 @@ export default function CreatePasswordPage() {
     // in-memory session and passed to the server action, which asks Supabase
     // Auth to verify it — rather than having the server action derive
     // identity from the cookie-based session on its own. The cookie write
-    // from the setSession()/updateUser() calls above is not guaranteed to
-    // have propagated by the time this request is dispatched; relying on it
-    // was causing the server action to silently see no user and skip the
-    // activation notification entirely.
+    // from the setSession()/verifyOtp()/updateUser() calls above is not
+    // guaranteed to have propagated by the time this request is dispatched;
+    // relying on it was causing the server action to silently see no user
+    // and skip the activation notification entirely.
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -127,12 +183,13 @@ export default function CreatePasswordPage() {
       // Non-blocking — notification failure must not block account setup.
     }
 
+    // Business recovery always returns to the Business/Operator context.
     router.push("/admin/home");
     router.refresh();
   }
 
-  // Loading — exchanging hash tokens / checking session
-  if (!sessionChecked) {
+  // Loading — checking for a recovery token / existing session
+  if (phase === "checking") {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50">
         <p className="text-sm text-gray-400">Loading…</p>
@@ -140,8 +197,46 @@ export default function CreatePasswordPage() {
     );
   }
 
+  // token_hash present — wait for an explicit click before verifying, so an
+  // email scanner prefetching the link can't consume it first.
+  if (phase === "confirm" || phase === "verifying") {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/logo.png"
+              alt="Happy Hour Compass"
+              width={80}
+              height={80}
+              className="rounded-xl"
+            />
+          </div>
+          <div className="bg-white p-8 rounded-xl shadow-md text-center">
+            <h1 className="text-xl font-bold text-gray-900 mb-2">
+              Reset your password
+            </h1>
+            <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+              Continue to securely reset the password for your Happy Hour
+              Compass Business account.
+            </p>
+            <form onSubmit={handleContinue}>
+              <button
+                type="submit"
+                disabled={phase === "verifying"}
+                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {phase === "verifying" ? "Continuing…" : "Continue to reset password"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   // No active session — link expired or already used
-  if (!hasSession) {
+  if (phase === "unavailable") {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md">
@@ -196,7 +291,7 @@ export default function CreatePasswordPage() {
               Set your password
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Choose a password to complete your operator account setup.
+              Choose a password for your Happy Hour Compass Business account.
             </p>
           </div>
 
@@ -247,7 +342,7 @@ export default function CreatePasswordPage() {
 
             {done && (
               <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                Password set — redirecting to your dashboard…
+                Password set — redirecting to your Business dashboard…
               </div>
             )}
 

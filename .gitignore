@@ -3,6 +3,7 @@ env.js
 original-app/env.js
 operator-admin/venue-tagging-matrix.xlsx
 # Supabase CLI local metadata
+supabase/.temp/
 operator-admin/supabase/.temp/
 # Claude Code local overrides (per-user secrets, e.g. MCP env vars — never commit)
 .claude/settings.local.json

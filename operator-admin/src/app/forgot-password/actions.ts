@@ -7,6 +7,7 @@ import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
 import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
+import { buildTokenHashRecoveryLink } from "@/lib/supabase/recoveryLink";
 import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
@@ -115,7 +116,7 @@ export async function forgotPasswordAction(
     options: { redirectTo },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     console.error("[forgotPasswordAction] generateLink failed:", linkError?.message);
     await sendSlackAlert({
       channel:  "ops-alerts",
@@ -134,10 +135,22 @@ export async function forgotPasswordAction(
   }
 
   // ── Send branded reset email via Resend ────────────────────────────────────
+  // IMPORTANT — not linkData.properties.action_link (the raw .../auth/v1/verify
+  // URL). That shape verifies and consumes the one-time token the instant it's
+  // *loaded* — including by an email security scanner prefetching the link
+  // before the operator ever opens the message — which was the confirmed
+  // mechanism behind the Casa de Frida operator-login investigation. Rebuilt
+  // as a token_hash link instead (buildTokenHashRecoveryLink), matching the
+  // pattern already proven safe by the Consumer recovery flow
+  // (requestConsumerPasswordReset): /operator/create-password defers
+  // auth.verifyOtp() to an explicit "Continue" click rather than verifying on
+  // page load. See that page's header comment for the full flow.
+  const resetLink = buildTokenHashRecoveryLink(redirectTo, linkData.properties.hashed_token);
+
   await sendPasswordResetEmail({
     to:        email,
     firstName,
-    resetLink: linkData.properties.action_link,
+    resetLink,
   });
 
   // Slack escalation on failure is handled by sendTransactionalEmail

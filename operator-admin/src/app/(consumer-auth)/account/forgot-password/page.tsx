@@ -74,7 +74,7 @@ export default function ConsumerForgotPasswordPage() {
   return (
     <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Reset your password</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Reset your Consumer password</h1>
         <p className="text-sm text-gray-500 mt-1">
           Enter your email and we&rsquo;ll send you a reset link.
         </p>
@@ -125,13 +125,23 @@ export default function ConsumerForgotPasswordPage() {
         </button>
       </form>
 
-      <div className="mt-6 text-center">
-        <Link
-          href="/sign-in"
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Back to sign in
-        </Link>
+      <div className="mt-6 text-center space-y-1">
+        <p>
+          <Link
+            href="/sign-in"
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Back to sign in
+          </Link>
+        </p>
+        <p>
+          <Link
+            href="/forgot-password"
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Resetting a Business account instead? →
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
+import { buildTokenHashRecoveryLink } from "@/lib/supabase/recoveryLink";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
 import {
@@ -39,13 +40,16 @@ export type RequestConsumerPasswordResetResult =
  * already uses without triggering a Gmail warning).
  *
  * IMPORTANT — the link sent is NOT linkData.properties.action_link (the raw
- * .../auth/v1/verify?... URL). It's rebuilt as
+ * .../auth/v1/verify?... URL). It's rebuilt via buildTokenHashRecoveryLink()
+ * (src/lib/supabase/recoveryLink.ts) as
  * `${redirectTo}?token_hash=${hashed_token}&type=recovery`, matching exactly
  * the shape the Reset Password *email template* was previously changed to
  * produce (see CLAUDE.md's Authentication & Email section and commit
  * 1e7067a, "Prevent password reset links from being consumed on page load").
  * hashed_token is the same value Supabase's own {{ .TokenHash }} template
- * variable would resolve to for this exact operation. This preserves
+ * variable would resolve to for this exact operation. forgotPasswordAction
+ * (the operator flow, src/app/forgot-password/actions.ts) now builds its
+ * link through the same helper — see that file's header comment. This preserves
  * /account/reset-password's existing token_hash + explicit-Continue-click
  * flow untouched: that page defers auth.verifyOtp() to a manual button click
  * specifically so an email security scanner prefetching the link cannot
@@ -120,7 +124,7 @@ export async function requestConsumerPasswordReset({
     return { ok: true };
   }
 
-  const resetLink = `${redirectTo}?token_hash=${linkData.properties.hashed_token}&type=recovery`;
+  const resetLink = buildTokenHashRecoveryLink(redirectTo, linkData.properties.hashed_token);
 
   // Slack escalation on delivery failure is handled by sendTransactionalEmail
   // (password_reset → critical → #ops-critical), same as the operator flow.
