@@ -100,7 +100,7 @@ export default function SignInPage() {
   return (
     <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.08)] p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Sign in to your Happy Hour Compass account</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Sign in to your Happy Hour Compass consumer account</h1>
         <p className="text-sm text-gray-500 mt-1">
           For discovering and saving happy hours &amp; events — not for
           managing a venue.{" "}
