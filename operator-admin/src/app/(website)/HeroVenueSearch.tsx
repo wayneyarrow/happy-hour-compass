@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Market } from "@/lib/markets";
 import type { VenueSuggestion } from "@/lib/data/venueSuggestions";
 import { suggestHomepageVenuesAction } from "./suggestActions";
+import { fireWebsiteSearch } from "./searchTracking";
 
 type Props = {
   market: Market;
@@ -43,6 +44,12 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
+  // Phase 4B search tracking: the last trimmed query we've already fired a
+  // website_search_events row for. Prevents firing a duplicate event for the
+  // exact same settled query across rerenders (e.g. the click-outside effect
+  // or an unrelated parent rerender) — reset to "" whenever the query is
+  // cleared, so retyping the same term later still counts as a fresh search.
+  const lastTrackedQueryRef = useRef("");
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<VenueSuggestion[]>([]);
@@ -60,6 +67,7 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
       setIsLoading(false);
       setHasSearched(false);
       setActiveIndex(-1);
+      lastTrackedQueryRef.current = "";
       return;
     }
 
@@ -72,6 +80,21 @@ export function HeroVenueSearch({ market, placeholder, ariaLabel, discoveryHref 
         setIsLoading(false);
         setHasSearched(true);
         setActiveIndex(-1);
+
+        // Phase 4B: one website_search_events row per settled, meaningful
+        // query — resultCount is exactly the suggestion set the visitor sees
+        // (searchVenueSuggestions() is already capped to a useful top-N, so
+        // this is "the useful search result set available", not a separate
+        // full-count query).
+        if (trimmed !== lastTrackedQueryRef.current) {
+          lastTrackedQueryRef.current = trimmed;
+          fireWebsiteSearch({
+            searchTerm: trimmed,
+            surface: "homepage_hero",
+            resultCount: suggestions.length,
+            marketId: market.id,
+          });
+        }
       });
     }, DEBOUNCE_MS);
 
