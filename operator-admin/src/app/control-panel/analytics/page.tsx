@@ -57,11 +57,16 @@ function KpiCard({
   value,
   subtext,
   trend,
+  secondary,
 }: {
   label: string;
   value: number | string;
   subtext?: string;
   trend?: number;
+  // Optional secondary figure shown within the same card (e.g. an all-time
+  // total alongside the primary 30-day number) — keeps a card compact
+  // instead of adding a whole second card for one extra number.
+  secondary?: { label: string; value: number };
 }) {
   const display = typeof value === "number" ? value.toLocaleString() : value;
   return (
@@ -71,6 +76,11 @@ function KpiCard({
       </p>
       <p className="text-3xl font-bold text-gray-900 leading-none">{display}</p>
       {subtext && <p className="mt-1.5 text-xs text-gray-400">{subtext}</p>}
+      {secondary && (
+        <p className="mt-1.5 text-xs text-gray-500">
+          {secondary.label}: <span className="font-semibold text-gray-700">{secondary.value.toLocaleString()}</span>
+        </p>
+      )}
       {typeof trend === "number" && trend > 0 && (
         <span className="mt-2 inline-block text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
           +{trend.toLocaleString()} last 30d
@@ -452,14 +462,14 @@ export default async function PlatformAnalyticsPage() {
 
         <div className="grid grid-cols-2 gap-3 mb-6">
           <KpiCard
-            label="Venue Views"
+            label="Venue Views — Last 30 Days"
             value={cd.venueViewsLast30d}
-            subtext="Last 30 days"
+            secondary={{ label: "All Time", value: cd.venueViewsAllTime }}
           />
           <KpiCard
-            label="Event Views"
+            label="Event Views — Last 30 Days"
             value={cd.eventViewsLast30d}
-            subtext="Last 30 days"
+            secondary={{ label: "All Time", value: cd.eventViewsAllTime }}
           />
         </div>
 

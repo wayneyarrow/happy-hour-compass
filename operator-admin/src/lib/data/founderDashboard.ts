@@ -94,7 +94,9 @@ export type FounderDashboardData = {
   // "Are consumers engaging?"
   consumerDemand: {
     venueViewsLast30d: number;
+    venueViewsAllTime: number;
     eventViewsLast30d: number;
+    eventViewsAllTime: number;
     topVenues:         TopItem[];
     topEvents:         TopItem[];
   };
@@ -167,6 +169,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     r_cancelledVenues,
     venueViewCounts,
     eventViewCounts,
+    venueViewCountsAllTime,
+    eventViewCountsAllTime,
   ] = await Promise.all([
     // venue_suggestions / operator_submissions — Acquisition
     supabase.from("venue_suggestions").select("*", { count: "exact", head: true }),
@@ -224,6 +228,11 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     // once platform-wide 30-day view volume grew past it.
     getVenueViewCounts(t30),
     getEventViewCounts(t30),
+    // All-time — same RPC, no lower bound. Additional context alongside the
+    // 30-day figures on the Consumer Demand cards; never used for the
+    // leaderboards or High Demand signals below, which stay 30-day-only.
+    getVenueViewCounts(null),
+    getEventViewCounts(null),
   ]);
 
   // ── Active venues ──────────────────────────────────────────────────────────
@@ -444,7 +453,9 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
 
     consumerDemand: {
       venueViewsLast30d: sumViews(venueViewCounts),
+      venueViewsAllTime: sumViews(venueViewCountsAllTime),
       eventViewsLast30d: sumViews(eventViewCounts),
+      eventViewsAllTime: sumViews(eventViewCountsAllTime),
       topVenues,
       topEvents,
     },
