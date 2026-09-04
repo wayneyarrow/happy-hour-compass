@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { PlatformAdmin } from "@/lib/platformAdmins";
 import { formatDateISO } from "@/lib/controlPanelDateTime";
+import { CopyButton } from "@/components/TableControls";
 import {
   invitePlatformAdminAction,
   revokePlatformAdminAction,
@@ -157,7 +158,10 @@ function AdminTable({
             return (
               <tr key={admin.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-900">
-                  {admin.email}
+                  <span className="inline-flex items-center gap-1.5">
+                    {admin.email}
+                    <CopyButton value={admin.email} />
+                  </span>
                   {isSelf && (
                     <span className="ml-2 text-xs text-gray-400">(you)</span>
                   )}

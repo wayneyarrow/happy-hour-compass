@@ -13,7 +13,7 @@ export default async function ControlPanelVenuesPage() {
   const { data: venuesData, error: venuesError } = await supabase
     .from("venues")
     .select(
-      "id, slug, name, city, is_published, claimed_at, updated_at, created_by_operator_id"
+      "id, slug, name, city, is_published, is_verified, claimed_at, updated_at, created_by_operator_id"
     )
     .order("updated_at", { ascending: false });
 
@@ -36,6 +36,7 @@ export default async function ControlPanelVenuesPage() {
       name:          v.name as string,
       city:          (v.city as string | null) ?? null,
       is_published:  v.is_published as boolean,
+      is_verified:   v.is_verified as boolean,
       claimed_at:    (v.claimed_at as string | null) ?? null,
       updated_at:    v.updated_at as string,
       operatorEmail: v.created_by_operator_id
@@ -51,7 +52,7 @@ export default async function ControlPanelVenuesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Venues</h1>
           <p className="mt-1 text-sm text-gray-500">
-            All venues on the platform — published status, claim state, and linked operator.
+            All venues on the platform — published status, claim state, verification status, and linked operator.
           </p>
         </div>
         {venues.length > 0 && (

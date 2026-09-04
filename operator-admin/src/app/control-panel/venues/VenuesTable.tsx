@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import StatusBadge from "@/components/StatusBadge";
 import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
@@ -15,14 +15,16 @@ export type VenueRow = {
   name: string;
   city: string | null;
   is_published: boolean;
+  is_verified: boolean;
   claimed_at: string | null;
   updated_at: string;      // ISO string
   operatorEmail: string | null;
 };
 
-type SortCol     = "name" | "city" | "is_published" | "claimed_at" | "updated_at";
+type SortCol     = "name" | "city" | "is_published" | "is_verified" | "claimed_at" | "updated_at";
 type PubFilter   = "all" | "published" | "draft";
 type ClaimFilter = "all" | "claimed" | "unclaimed";
+type VerifiedFilter = "all" | "verified" | "unverified";
 
 const PAGE_SIZE   = 25;
 const DEFAULT_SORT: SortCol = "updated_at";
@@ -33,11 +35,12 @@ function readUrlParam(key: string, fallback: string): string {
   return p.get(key) ?? fallback;
 }
 
-function syncUrl(q: string, pub: string, claimed: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, pub: string, claimed: string, verified: string, sort: string, dir: string, page: number) {
   const p = new URLSearchParams();
   if (q)              p.set("q",       q);
   if (pub !== "all")  p.set("pub",     pub);
   if (claimed !== "all") p.set("claimed", claimed);
+  if (verified !== "all") p.set("verified", verified);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir !== "desc") p.set("dir",     dir);
   if (page > 1)       p.set("page",    String(page));
@@ -50,24 +53,27 @@ function syncUrl(q: string, pub: string, claimed: string, sort: string, dir: str
 export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
   const router = useRouter();
 
-  const [q,       setQ]       = useState("");
-  const [pub,     setPub]     = useState<PubFilter>("all");
-  const [claimed, setClaimed] = useState<ClaimFilter>("all");
-  const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [page,    setPage]    = useState(1);
+  const [q,        setQ]        = useState("");
+  const [pub,      setPub]      = useState<PubFilter>("all");
+  const [claimed,  setClaimed]  = useState<ClaimFilter>("all");
+  const [verified, setVerified] = useState<VerifiedFilter>("all");
+  const [sortCol,  setSortCol]  = useState<SortCol>(DEFAULT_SORT);
+  const [sortDir,  setSortDir]  = useState<"asc" | "desc">("desc");
+  const [page,     setPage]     = useState(1);
 
   // Hydrate state from URL once on mount
   useEffect(() => {
-    const q0       = readUrlParam("q",       "");
-    const pub0     = readUrlParam("pub",     "all") as PubFilter;
-    const claimed0 = readUrlParam("claimed", "all") as ClaimFilter;
-    const sort0    = readUrlParam("sort",    DEFAULT_SORT) as SortCol;
-    const dir0     = readUrlParam("dir",     "desc") as "asc" | "desc";
-    const page0    = Math.max(1, parseInt(readUrlParam("page", "1"), 10));
+    const q0        = readUrlParam("q",        "");
+    const pub0      = readUrlParam("pub",      "all") as PubFilter;
+    const claimed0  = readUrlParam("claimed",  "all") as ClaimFilter;
+    const verified0 = readUrlParam("verified", "all") as VerifiedFilter;
+    const sort0     = readUrlParam("sort",     DEFAULT_SORT) as SortCol;
+    const dir0      = readUrlParam("dir",      "desc") as "asc" | "desc";
+    const page0     = Math.max(1, parseInt(readUrlParam("page", "1"), 10));
     setQ(q0);
     setPub(pub0);
     setClaimed(claimed0);
+    setVerified(verified0);
     setSortCol(sort0);
     setSortDir(dir0);
     setPage(page0);
@@ -84,9 +90,11 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
       if (pub === "draft"      &&  v.is_published) return false;
       if (claimed === "claimed"   && !v.claimed_at) return false;
       if (claimed === "unclaimed" &&  v.claimed_at) return false;
+      if (verified === "verified"   && !v.is_verified) return false;
+      if (verified === "unverified" &&  v.is_verified) return false;
       return true;
     });
-  }, [rows, q, pub, claimed]);
+  }, [rows, q, pub, claimed, verified]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -103,6 +111,9 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
           break;
         case "is_published":
           cmp = a.is_published === b.is_published ? 0 : a.is_published ? -1 : 1;
+          break;
+        case "is_verified":
+          cmp = a.is_verified === b.is_verified ? 0 : a.is_verified ? -1 : 1;
           break;
         case "claimed_at":
           if (!a.claimed_at && !b.claimed_at) cmp = 0;
@@ -130,38 +141,45 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
     setSortCol(newCol);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, pub, claimed, newCol, newDir, 1);
+    syncUrl(q, pub, claimed, verified, newCol, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, pub, claimed, sortCol, sortDir, 1);
+    syncUrl(val, pub, claimed, verified, sortCol, sortDir, 1);
   };
 
   const applyPub = (val: PubFilter) => {
     setPub(val);
     setPage(1);
-    syncUrl(q, val, claimed, sortCol, sortDir, 1);
+    syncUrl(q, val, claimed, verified, sortCol, sortDir, 1);
   };
 
   const applyClaimed = (val: ClaimFilter) => {
     setClaimed(val);
     setPage(1);
-    syncUrl(q, pub, val, sortCol, sortDir, 1);
+    syncUrl(q, pub, val, verified, sortCol, sortDir, 1);
+  };
+
+  const applyVerified = (val: VerifiedFilter) => {
+    setVerified(val);
+    setPage(1);
+    syncUrl(q, pub, claimed, val, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, pub, claimed, sortCol, sortDir, p);
+    syncUrl(q, pub, claimed, verified, sortCol, sortDir, p);
   };
 
   const handleExport = () => {
-    const headers = ["Venue", "City", "Published", "Claimed", "Operator", "Updated"];
+    const headers = ["Venue", "City", "Published", "Verified", "Claimed", "Operator", "Updated"];
     const csvRows = sorted.map((v) => [
       v.name,
       v.city,
       v.is_published ? "Yes" : "No",
+      v.is_verified ? "Yes" : "No",
       v.claimed_at  ? "Yes" : "No",
       v.operatorEmail,
       fmtDate(v.updated_at),
@@ -216,6 +234,15 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
           <option value="claimed">Claimed</option>
           <option value="unclaimed">Unclaimed</option>
         </select>
+        <select
+          value={verified}
+          onChange={(e) => applyVerified(e.target.value as VerifiedFilter)}
+          className={selectCls}
+        >
+          <option value="all">All verification states</option>
+          <option value="verified">Verified</option>
+          <option value="unverified">Unverified</option>
+        </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
         </span>
@@ -256,6 +283,11 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
+                    <button onClick={() => applySort("is_verified")} className={thBtnCls}>
+                      Verified <SortIcon active={sortCol === "is_verified"} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("claimed_at")} className={thBtnCls}>
                       Claimed <SortIcon active={sortCol === "claimed_at"} dir={sortDir} />
                     </button>
@@ -292,12 +324,25 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge
+                        variant={v.is_verified ? "success" : "neutral"}
+                        label={v.is_verified ? "Verified" : "Unverified"}
+                      />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusBadge
                         variant={v.claimed_at ? "success" : "warning"}
                         label={v.claimed_at ? "Claimed" : "Unclaimed"}
                       />
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {v.operatorEmail ?? <span className="text-gray-300">—</span>}
+                      {v.operatorEmail ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {v.operatorEmail}
+                          <CopyButton value={v.operatorEmail} />
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                       {fmtDate(v.updated_at)}

@@ -221,6 +221,9 @@ export type SeededNeedingClaimsRow = {
   slug: string;
   name: string;
   city: string | null;
+  // Street address — for in-person outreach (finding the venue in the
+  // field). Null when the venue's address hasn't been recorded.
+  addressLine1: string | null;
   createdAt: string;
   daysSinceSeeded: number;
   venueViews30d: number;
@@ -490,6 +493,12 @@ type SeededVenueWithGeo = VenueWithSetup & {
   market_id: string | null;
   city_id: string | null;
   market_geo: { slug: string } | null;
+  // Street address — fetched only for this report (not added to
+  // VENUE_SELECT/VenueWithSetup, same reasoning as market_id/city_id
+  // above). Used for in-person outreach: this report's whole purpose is
+  // finding an unclaimed venue in the field, so its street address is the
+  // single most useful extra column it can carry.
+  address_line1: string | null;
 };
 
 /**
@@ -518,7 +527,7 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
 
   const { data: venuesData } = await supabase
     .from("venues")
-    .select(VENUE_SELECT + ", market_id, city_id, market_geo:markets!market_id(slug)")
+    .select(VENUE_SELECT + ", market_id, city_id, market_geo:markets!market_id(slug), address_line1")
     .eq("source", "seed")
     .is("created_by_operator_id", null);
 
@@ -565,6 +574,7 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
       slug: v.slug,
       name: v.name,
       city: v.city,
+      addressLine1: v.address_line1,
       createdAt: v.created_at,
       daysSinceSeeded: Math.floor((now - new Date(v.created_at).getTime()) / (1000 * 60 * 60 * 24)),
       venueViews30d: venueViewMap.get(v.id) ?? 0,

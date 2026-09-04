@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { OperatorSubmissionRow } from "@/lib/data/operatorSubmissions";
 
@@ -303,7 +303,10 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
                       <p className="text-gray-800 whitespace-nowrap">
                         {[row.first_name, row.last_name].filter(Boolean).join(" ") || "—"}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{row.email}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 inline-flex items-center gap-1">
+                        {row.email}
+                        <CopyButton value={row.email} />
+                      </p>
                     </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {row.position || "—"}

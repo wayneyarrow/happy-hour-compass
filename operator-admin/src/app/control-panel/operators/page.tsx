@@ -34,7 +34,7 @@ export default async function ControlPanelOperatorsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (venuesData ?? []).map((v: Record<string, any>) => [
       v.created_by_operator_id as string,
-      { name: v.name as string, slug: v.slug as string },
+      { id: v.id as string, name: v.name as string, slug: v.slug as string },
     ])
   );
 
@@ -78,6 +78,7 @@ export default async function ControlPanelOperatorsPage() {
         email:             op.email as string,
         is_approved:       op.is_approved as boolean,
         highestVenuePlan:  highestVenuePlanForOperator(op.id as string),
+        venueId:           venue?.id ?? null,
         venueName:         venue?.name ?? null,
         venueSlug:         venue?.slug ?? null,
         created_at:        op.created_at as string,

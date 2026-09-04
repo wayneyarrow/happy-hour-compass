@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { ClaimWithVenue } from "@/lib/data/claims";
 
@@ -271,7 +271,12 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
                       {row.first_name} {row.last_name}
                     </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.position}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.email}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.email}
+                        <CopyButton value={row.email} />
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.phone}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={row.status} />

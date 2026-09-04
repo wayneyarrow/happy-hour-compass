@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { SeededNeedingClaimsRow } from "@/lib/data/actionCenter";
 
@@ -117,12 +117,12 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
     // same as the table above. CRM contact fields are appended for outreach
     // use; they're display-only and never affect which venues appear here.
     const headers = [
-      "Venue", "City", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)",
+      "Venue", "City", "Address", "Days Since Seeded", "Venue Views (30d)", "Event Views (30d)",
       "Health Score %", "Missing Setup Items", "Published", "Live on Site", "Source",
       "Contact Name", "Contact Role", "Contact Email", "Contact Phone", "Outreach Status",
     ];
     const csvRows = sorted.map((r) => [
-      r.name, r.city, String(r.daysSinceSeeded),
+      r.name, r.city, r.addressLine1, String(r.daysSinceSeeded),
       String(r.venueViews30d), String(r.eventViews30d),
       String(r.setupHealthScorePct), r.missingItems.join("; "),
       r.isPublished ? "Yes" : "No", r.isLiveOnSite ? "Yes" : "No", r.source,
@@ -192,6 +192,7 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
                   <tr className="border-b border-gray-100 bg-slate-50">
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("name")} className={TH}>Venue <SortIcon active={sortCol === "name"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("city")} className={TH}>City <SortIcon active={sortCol === "city"} dir={sortDir} /></button></th>
+                    <th className="text-left px-4 py-3"><span className={THS}>Address</span></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("daysSinceSeeded")} className={TH}>Days Seeded <SortIcon active={sortCol === "daysSinceSeeded"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("venueViews30d")} className={TH}>Venue Views (30d) <SortIcon active={sortCol === "venueViews30d"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("eventViews30d")} className={TH}>Event Views (30d) <SortIcon active={sortCol === "eventViews30d"} dir={sortDir} /></button></th>
@@ -209,6 +210,7 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
                       className="hover:bg-amber-50 transition-colors cursor-pointer">
                       <td className="px-4 py-3 font-medium text-slate-900">{r.name}</td>
                       <td className="px-4 py-3 text-gray-600">{r.city ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{r.addressLine1 ?? <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-gray-600 tabular-nums">{r.daysSinceSeeded}d</td>
                       <td className="px-4 py-3 text-gray-600 tabular-nums">{fmtNum(r.venueViews30d)}</td>
                       <td className="px-4 py-3 text-gray-600 tabular-nums">{fmtNum(r.eventViews30d)}</td>
@@ -226,7 +228,10 @@ export default function SeededNeedingClaimsTable({ rows }: { rows: SeededNeeding
                             {r.primaryContactName && (
                               <div className="text-gray-700 font-medium truncate">{r.primaryContactName}</div>
                             )}
-                            <div className="text-gray-500 truncate">{r.primaryContactEmail}</div>
+                            <div className="text-gray-500 inline-flex items-center gap-1 max-w-full">
+                              <span className="truncate">{r.primaryContactEmail}</span>
+                              <CopyButton value={r.primaryContactEmail} />
+                            </div>
                           </div>
                         ) : (
                           <span className="text-gray-300">—</span>

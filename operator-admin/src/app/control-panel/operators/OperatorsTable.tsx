@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import Link from "next/link";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
@@ -24,6 +25,7 @@ export type OperatorRow = {
    * billing subscription — there is no such thing any more.
    */
   highestVenuePlan: string;
+  venueId: string | null;
   venueName: string | null;
   venueSlug: string | null;
   created_at: string;   // ISO string
@@ -258,22 +260,25 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                       <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                         {op.name ?? <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{op.email}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        <span className="inline-flex items-center gap-1.5">
+                          {op.email}
+                          <CopyButton value={op.email} />
+                        </span>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <StatusBadge variant={planVariant} label={planLabel} />
                       </td>
                       <td className="px-4 py-3">
                         {op.venueName ? (
                           <>
-                            {op.venueSlug ? (
-                              <a
-                                href={`/venue/${op.venueSlug}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            {op.venueId ? (
+                              <Link
+                                href={`/control-panel/venues/${op.venueId}`}
                                 className="font-medium text-slate-900 hover:text-amber-600 transition-colors"
                               >
                                 {op.venueName}
-                              </a>
+                              </Link>
                             ) : (
                               <span className="font-medium text-slate-900">{op.venueName}</span>
                             )}

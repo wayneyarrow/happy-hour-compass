@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { SortIcon, Pagination } from "@/components/TableControls";
+import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { PLAN_LABELS } from "@/lib/plans";
 import type { UnusedSearchTagsRow } from "@/lib/data/actionCenter";
@@ -165,7 +165,12 @@ export default function UnusedSearchTagsTable({ rows }: { rows: UnusedSearchTags
                       <td className="px-4 py-3 font-medium text-slate-900">{r.name}</td>
                       <td className="px-4 py-3 text-gray-600">{r.city ?? <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-gray-700">{r.operatorName}</td>
-                      <td className="px-4 py-3 text-gray-500">{r.operatorEmail}</td>
+                      <td className="px-4 py-3 text-gray-500">
+                        <span className="inline-flex items-center gap-1.5">
+                          {r.operatorEmail}
+                          <CopyButton value={r.operatorEmail} />
+                        </span>
+                      </td>
                       <td className="px-4 py-3"><PlanBadge plan={r.plan} /></td>
                       <td className="px-4 py-3 text-gray-600 tabular-nums whitespace-nowrap">
                         {r.searchTagsUsed} / {r.searchTagLimit} used
