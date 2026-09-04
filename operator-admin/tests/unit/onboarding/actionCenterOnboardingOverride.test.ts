@@ -44,9 +44,16 @@ test("computeSetupHealth() passes manualOverrideActive through to computeVenueSe
 test("getActionCenterSummary() derives stillOnboarding from computeSetupHealth's own onboardingComplete, not missingItems.length", () => {
   const fn = SOURCE.split("export async function getActionCenterSummary")[1]
     .split("export async function getSeededNeedingClaims")[0];
+  // Phase 3: setupHealthScorePct is no longer destructured here — it was
+  // only used by getActionCenterSummary's own upgradeOpportunities
+  // computation, which Phase 3 replaced with a direct reuse of
+  // getUpgradeOpportunities() (see actionCenterVenuePlanQueries.test.ts,
+  // same file, for why removing that duplicate computation is itself a
+  // regression fix). onboardingComplete is still consumed exactly as
+  // before — the invariant this test guards is unaffected.
   assert.match(
     fn,
-    /const \{ setupHealthScorePct, onboardingComplete \} = computeSetupHealth\(venue, mediaByVenue\);/
+    /const \{ onboardingComplete \} = computeSetupHealth\(venue, mediaByVenue\);/
   );
   assert.doesNotMatch(fn, /missingItems\.length === 0/);
 });

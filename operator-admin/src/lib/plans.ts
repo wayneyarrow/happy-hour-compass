@@ -258,3 +258,27 @@ export function maxSearchTags(plan: OperatorPlan): number {
     case "enterprise": return Infinity;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upgrade opportunity types (Action Center reporting)
+//
+// The named factors src/lib/data/actionCenter.ts's getUpgradeOpportunities()
+// can flag a venue for — four are counts checked against the max*() limit
+// helpers above; "Events" is checked against canUseAdvancedEvents() instead,
+// since it's a binary feature gate with no numeric limit. Defined here
+// (rather than in actionCenter.ts, a server-only module that imports
+// createAdminClient()/next-headers) so the Upgrade Opportunities
+// ReportTable — a Client Component — can import the list directly for its
+// opportunity-type filter without pulling server-only code into the client
+// bundle. plans.ts has no imports of its own, so it's always safe to import
+// from a Client Component (already done elsewhere for PLAN_LABELS).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UPGRADE_OPPORTUNITY_TYPES = [
+  "Images",
+  "Food specials",
+  "Drink specials",
+  "Team members",
+  "Events",
+] as const;
+export type UpgradeOpportunityType = (typeof UPGRADE_OPPORTUNITY_TYPES)[number];

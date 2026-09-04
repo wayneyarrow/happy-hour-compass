@@ -61,8 +61,18 @@ function reportBody(name: string, nextName: string): string {
 // by operator_id) and resolves plan via planMap.get(v.id)-shaped lookups
 // (never planMap.get(opId)).
 
+// getActionCenterSummary is intentionally NOT in this list as of Phase 3:
+// it no longer resolves venue plan (or computes upgradeOpportunities) at
+// all — it reuses getUpgradeOpportunities()'s own row count instead of
+// duplicating that computation inline (the duplicate had already silently
+// diverged from the real report once Phase 3 added an Events opportunity
+// type the inline copy didn't know about — same class of bug the
+// unusedSearchTagRows reuse a few lines above it in actionCenter.ts exists
+// to avoid). getUpgradeOpportunities' own venue_subscriptions/
+// buildVenuePlanMap usage is still fully covered below, so removing
+// getActionCenterSummary here does not reduce coverage of the invariant
+// this file guards.
 const REPORTS: [string, string][] = [
-  ["getActionCenterSummary",         "getSeededNeedingClaims"],
   ["getActiveStillOnboarding",       "getInactiveOperators"],
   ["getInactiveOperators",           "getUnpublishedVenues"],
   ["getUnpublishedVenues",           "getUpgradeOpportunities"],

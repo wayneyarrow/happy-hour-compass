@@ -13,6 +13,8 @@ import {
   maxDrinkSpecials,
   maxUsers,
   maxSearchTags,
+  canUseAdvancedEvents,
+  type UpgradeOpportunityType,
 } from "@/lib/plans";
 import { getMarketById } from "@/lib/markets";
 import { getVenueViewCounts, getEventViewCounts } from "@/lib/data/viewCounts";
@@ -292,6 +294,13 @@ export type UnpublishedVenueRow = {
   eventViews30d: number;
 };
 
+// UPGRADE_OPPORTUNITY_TYPES / UpgradeOpportunityType are defined in
+// src/lib/plans.ts (imported above), not here — this module imports
+// createAdminClient()/next-headers and the Upgrade Opportunities
+// ReportTable (a Client Component) needs the type list without pulling
+// that server-only chain into the client bundle. See plans.ts's own
+// comment on UPGRADE_OPPORTUNITY_TYPES for the full reasoning.
+
 export type UpgradeOpportunityRow = {
   id: string;
   slug: string;
@@ -300,9 +309,21 @@ export type UpgradeOpportunityRow = {
   plan: OperatorPlan;
   setupHealthScorePct: number;
   isPublished: boolean;
+  isVerified: boolean;
+  // Structured form of limitingFactor — lets the report filter by
+  // individual opportunity type. A venue with multiple opportunities
+  // appears once per matching filter (see limitingFactor below for the
+  // display string built from this same array).
+  opportunities: UpgradeOpportunityType[];
+  // Human-readable comma-joined form of `opportunities`, kept for existing
+  // table/CSV display — unchanged in shape, always derived from
+  // `opportunities` rather than computed separately.
   limitingFactor: string;
   venueViews30d: number;
   operatorLastSeenAt: string | null;
+  // Already fetched (OPERATOR_SELECT includes email) but not previously
+  // exposed on this row — added for outreach (Copy Email in the table/CSV).
+  operatorEmail: string | null;
 };
 
 export type HighDemandVenueRow = {
@@ -394,57 +415,24 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     supabase.from("venues").select(VENUE_SELECT).not("created_by_operator_id", "is", null),
   ]);
 
-  // ── Active venues: compute onboarding + upgrade counts ───────────────────────
+  // ── Active venues: compute onboarding count ───────────────────────────────
+  // (upgradeOpportunities is no longer computed here — see the
+  // getUpgradeOpportunities() reuse below, same pattern as
+  // unusedSearchTagRows.)
   const activeVenues = (r_activeVenues.data ?? []) as VenueWithSetup[];
-  const activeOpIds = [...new Set(
-    activeVenues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
-  )];
 
-  const [r_media, r_subs, r_memberships] = await Promise.all([
-    activeVenues.length > 0
-      ? supabase.from("media").select("venue_id, url")
-          .in("venue_id", activeVenues.map((v) => v.id)).eq("type", "venue_image")
-      : Promise.resolve({ data: [] as MediaRow[] }),
-    activeVenues.length > 0
-      ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status")
-          .in("venue_id", activeVenues.map((v) => v.id))
-      : Promise.resolve({ data: [] as VenueSubRow[] }),
-    activeOpIds.length > 0
-      ? supabase.from("operator_memberships").select("operator_id").in("operator_id", activeOpIds).eq("status", "active")
-      : Promise.resolve({ data: [] as { operator_id: string }[] }),
-  ]);
+  const { data: activeVenueMedia } = activeVenues.length > 0
+    ? await supabase.from("media").select("venue_id, url")
+        .in("venue_id", activeVenues.map((v) => v.id)).eq("type", "venue_image")
+    : { data: [] as MediaRow[] };
 
-  const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const planMap = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
-
-  const memberCountByOp = new Map<string, number>();
-  for (const { operator_id } of (r_memberships.data ?? []) as { operator_id: string }[]) {
-    memberCountByOp.set(operator_id, (memberCountByOp.get(operator_id) ?? 0) + 1);
-  }
+  const mediaByVenue = buildMediaMap((activeVenueMedia ?? []) as MediaRow[]);
 
   let stillOnboarding = 0;
-  let upgradeOpportunities = 0;
 
   for (const venue of activeVenues) {
-    const { setupHealthScorePct, onboardingComplete } = computeSetupHealth(venue, mediaByVenue);
+    const { onboardingComplete } = computeSetupHealth(venue, mediaByVenue);
     if (!onboardingComplete) stillOnboarding++;
-
-    const opId = venue.created_by_operator_id;
-    if (opId && venue.is_published) {
-      const plan = planMap.get(venue.id) ?? "free";
-      if ((plan === "free" || plan === "pro") && setupHealthScorePct >= 90) {
-        const imageCount = (mediaByVenue.get(venue.id) ?? []).length;
-        const foodCount  = parseSpecialItemCount(venue.hh_food_details);
-        const drinkCount = parseSpecialItemCount(venue.hh_drink_details);
-        const teamCount  = memberCountByOp.get(opId) ?? 1;
-        const atLimit =
-          imageCount >= maxImages(plan) ||
-          foodCount  >= maxFoodSpecials(plan) ||
-          drinkCount >= maxDrinkSpecials(plan) ||
-          teamCount  >= maxUsers(plan);
-        if (atLimit) upgradeOpportunities++;
-      }
-    }
   }
 
   // ── View event aggregation (venueViewMap/eventViewMap fetched above) ──────────
@@ -466,15 +454,22 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
   }
 
   // Reuses the full report query (rather than a parallel count computation)
-  // so the summary count is guaranteed to match the report's own contents.
-  const unusedSearchTagRows = await getUnusedSearchTagsOpportunities();
+  // so the summary count is guaranteed to match the report's own contents —
+  // same pattern for both; upgradeOpportunities used to recompute its own
+  // (Events-unaware) copy of this logic inline, which would have silently
+  // drifted from the report the moment Events was added as an opportunity
+  // type, exactly the class of bug this pattern exists to avoid.
+  const [unusedSearchTagRows, upgradeOpportunityRows] = await Promise.all([
+    getUnusedSearchTagsOpportunities(),
+    getUpgradeOpportunities(),
+  ]);
 
   return {
     seededNeedingClaims:      r_seededNoClaim.count ?? 0,
     activeStillOnboarding:    stillOnboarding,
     inactiveOperators:        r_inactiveOps.count ?? 0,
     unpublishedVenues:        r_unpublished.count ?? 0,
-    upgradeOpportunities,
+    upgradeOpportunities:     upgradeOpportunityRows.length,
     highDemandVenues,
     upcomingHighDemandEvents,
     verifiedWithoutOperators: r_verifiedNoOp.count ?? 0,
@@ -807,7 +802,7 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     allVenues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
   )];
 
-  const [r_media, r_subs, r_ops, venueViewMap, r_memberships] = await Promise.all([
+  const [r_media, r_subs, r_ops, venueViewMap, r_memberships, r_events] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", allVenueIds).eq("type", "venue_image"),
     supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", allVenueIds),
     allOpIds.length > 0
@@ -817,6 +812,11 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     allOpIds.length > 0
       ? supabase.from("operator_memberships").select("operator_id").in("operator_id", allOpIds).eq("status", "active")
       : Promise.resolve({ data: [] as { operator_id: string }[] }),
+    // Events — used only to gate the "Events" opportunity below (a venue
+    // must actually be using the Events feature before lacking advanced
+    // event capabilities is a meaningful upgrade signal, same spirit as
+    // the count-based factors already being "in active use").
+    supabase.from("events").select("id, venue_id").in("venue_id", allVenueIds),
   ]);
 
   const mediaByVenue  = buildMediaMap((r_media.data ?? []) as MediaRow[]);
@@ -835,6 +835,12 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     memberCountByOp.set(operator_id, (memberCountByOp.get(operator_id) ?? 0) + 1);
   }
 
+  // Event count per venue — see r_events comment above.
+  const eventCountByVenue = new Map<string, number>();
+  for (const { venue_id } of (r_events.data ?? []) as { venue_id: string }[]) {
+    eventCountByVenue.set(venue_id, (eventCountByVenue.get(venue_id) ?? 0) + 1);
+  }
+
   const rows: UpgradeOpportunityRow[] = [];
 
   for (const v of allVenues) {
@@ -850,14 +856,25 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     const foodCount  = parseSpecialItemCount(v.hh_food_details);
     const drinkCount = parseSpecialItemCount(v.hh_drink_details);
     const teamCount  = memberCountByOp.get(opId) ?? 1;
+    const eventCount = eventCountByVenue.get(v.id) ?? 0;
 
-    const factors: string[] = [];
-    if (imageCount >= maxImages(plan))        factors.push("Images");
-    if (foodCount  >= maxFoodSpecials(plan))  factors.push("Food specials");
-    if (drinkCount >= maxDrinkSpecials(plan)) factors.push("Drink specials");
-    if (teamCount  >= maxUsers(plan))         factors.push("Team members");
+    const opportunities: UpgradeOpportunityType[] = [];
+    if (imageCount >= maxImages(plan))        opportunities.push("Images");
+    if (foodCount  >= maxFoodSpecials(plan))  opportunities.push("Food specials");
+    if (drinkCount >= maxDrinkSpecials(plan)) opportunities.push("Drink specials");
+    if (teamCount  >= maxUsers(plan))         opportunities.push("Team members");
+    // Events is a binary feature gate (canUseAdvancedEvents() in
+    // src/lib/plans.ts — the single authoritative entitlement source for
+    // recurring schedules, multi-date ranges, and rich descriptions),
+    // not a numeric limit like the four factors above, so there is no
+    // maxEvents(plan) to compare against. "At the limit" is expressed as
+    // "already using the Events feature (>=1 event) while not entitled to
+    // its advanced form" — this only ever fires for the free plan, since
+    // canUseAdvancedEvents() is already true for pro (and this report only
+    // considers free/pro venues to begin with).
+    if (eventCount > 0 && !canUseAdvancedEvents(plan)) opportunities.push("Events");
 
-    if (factors.length === 0) continue;
+    if (opportunities.length === 0) continue;
 
     const op = opById.get(opId);
     rows.push({
@@ -868,9 +885,12 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
       plan,
       setupHealthScorePct,
       isPublished: v.is_published,
-      limitingFactor: factors.join(", "),
+      isVerified: v.is_verified,
+      opportunities,
+      limitingFactor: opportunities.join(", "),
       venueViews30d: venueViewMap.get(v.id) ?? 0,
       operatorLastSeenAt: op?.last_seen_at ?? null,
+      operatorEmail: op?.email ?? null,
     });
   }
 
