@@ -181,7 +181,12 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         teaser: venue.teaser,
         ctaLabel: "View Venue",
         ctaHref,
-        venueId: venue.id,
+        // venue.id here is the SLUG (ConsumerVenue's convention — see
+        // src/lib/data/venues.ts's doc comment on that field); venueUuid is
+        // the real UUID venue_discover_events.venue_id needs. Caught live
+        // during Phase 4A staging validation: a real browser click had sent
+        // the slug as venueId, which fails the table's UUID FK constraint.
+        venueId: venue.venueUuid,
       },
     };
   }
