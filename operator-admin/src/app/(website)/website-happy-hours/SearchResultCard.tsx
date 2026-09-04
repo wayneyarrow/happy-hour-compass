@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
 import { computeHhStatusForDay, getCurrentDayName, type HhStatus } from "@/lib/happyHourStatus";
+import { fireDiscoveryClick, type DiscoveryContext } from "@/app/(website)/discoveryTracking";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,9 +180,19 @@ type Props = {
    * callers with no Day filter concept.
    */
   effectiveDayName?: string | null;
+  /**
+   * Phase 4A — present ONLY when this card is rendered inside a curated
+   * placement (a homepage rail/feature, or a guide) that has opted into
+   * discovery tracking; see discoveryTracking.tsx. Ordinary search/listing
+   * usage of this component (HappyHoursSearchClient and any other plain
+   * results grid) never passes this, so it never fires a
+   * venue_discover_events row — regular browse/search traffic must never
+   * be misattributed as curated-placement traffic.
+   */
+  discovery?: DiscoveryContext;
 };
 
-export function SearchResultCard({ data, effectiveDayName }: Props) {
+export function SearchResultCard({ data, effectiveDayName, discovery }: Props) {
   return (
     // `<article>` (not the Link) is the outer element so the Save button
     // below can be an interactive sibling of the Link rather than nested
@@ -211,6 +222,12 @@ export function SearchResultCard({ data, effectiveDayName }: Props) {
         // Scroll restoration is handled natively by the browser when using
         // Next.js Link + browser back. Enhanced session-storage restoration
         // can be added in a future pass once the Venue Detail page exists.
+        //
+        // Phase 4A: fire-and-forget click tracking, only when a curated
+        // placement opted in via `discovery` — never blocks/delays
+        // navigation (no preventDefault, no await), matching
+        // (consumer)/home/VenueRailCard.tsx's existing click handler.
+        onClick={discovery ? () => fireDiscoveryClick(data.venueUuid, discovery) : undefined}
       >
         {/* ── Hero Image ───────────────────────────────────────────────── */}
         <div className="relative h-[200px] overflow-hidden bg-gray-100">

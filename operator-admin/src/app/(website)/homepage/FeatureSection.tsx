@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
+import { DiscoveryImpressionTracker, fireDiscoveryClick } from "@/app/(website)/discoveryTracking";
 
 /**
  * Renders a Venue/Event/Guide Feature Section as a full-width editorial
@@ -23,18 +26,45 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
  * The content column's horizontal padding is mirrored alongside the order
  * flip (`lg:pl-12` instead of `lg:pr-12`) so the outer breathing room stays
  * on the card's true outer edge rather than ending up against the grid gap.
+ *
+ * Phase 4A: "use client" added (previously a Server Component) so the CTA
+ * Link can carry a discovery-tracking onClick for Venue Features — see
+ * discoveryTracking.tsx. Purely presentational otherwise; no server-only
+ * work was ever done in this component, so this has no other effect.
  */
 
 type Props = {
   section: Extract<HomepagePreviewSection, { kind: "venue_feature" | "event_feature" | "guide_feature" }>;
+  /**
+   * Opt-in only — omitted by the Control Panel's homepage preview route
+   * (control-panel/homepages/[id]/preview) so a founder/admin previewing a
+   * draft Homepage never generates real discovery-attribution rows; set by
+   * the live public homepage ((website)/page.tsx) only.
+   */
+  enableDiscoveryTracking?: boolean;
 };
 
-export function FeatureSection({ section }: Props) {
+export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
   const { feature } = section;
   const isVenueFeature = section.kind === "venue_feature";
 
+  // Discovery attribution only applies to Featured Venue cards (this
+  // phase's scope is venue discovery attribution) and only when the
+  // resolved feature actually carries a venueId (see homepagesRendering.ts
+  // — always true for venue_feature, never set for event/guide features).
+  const discoveryContext =
+    enableDiscoveryTracking && isVenueFeature && feature.venueId
+      ? { context: `homepage_feature:${section.id}`, position: 0 }
+      : null;
+
   return (
     <section className="py-10 md:py-12 border-t border-gray-100">
+      {discoveryContext && feature.venueId && (
+        <DiscoveryImpressionTracker
+          context={discoveryContext.context}
+          items={[{ venueId: feature.venueId, position: 0 }]}
+        />
+      )}
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center rounded-3xl overflow-hidden border border-gray-100 bg-gray-50">
           <div
@@ -69,6 +99,11 @@ export function FeatureSection({ section }: Props) {
               <Link
                 href={feature.ctaHref}
                 className="inline-flex items-center px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-sm transition-colors"
+                onClick={
+                  discoveryContext && feature.venueId
+                    ? () => fireDiscoveryClick(feature.venueId as string, discoveryContext)
+                    : undefined
+                }
               >
                 {feature.ctaLabel}
                 <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

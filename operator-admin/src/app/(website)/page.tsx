@@ -104,7 +104,9 @@ export default async function WebsiteHomePage() {
   return (
     <>
       <HeroSection market={market} cityName={cityName} isPersisted={isPersisted} />
-      {homepage && <HomepageSectionsRenderer sections={homepage.sections} />}
+      {homepage && (
+        <HomepageSectionsRenderer sections={homepage.sections} enableDiscoveryTracking />
+      )}
     </>
   );
 }

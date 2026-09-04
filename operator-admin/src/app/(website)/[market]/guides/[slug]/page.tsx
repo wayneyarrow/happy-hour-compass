@@ -253,6 +253,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
         relatedGuides={relatedGuides}
         faqs={faqs}
         canonicalUrl={absoluteUrl(canonicalPath)}
+        enableDiscoveryTracking
       />
     </>
   );

@@ -10,6 +10,7 @@ import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
 import { ShareButton } from "@/app/(website)/ShareButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
+import { DiscoveryImpressionTracker } from "@/app/(website)/discoveryTracking";
 
 /**
  * Guide Experience V2 — the guide-detail presentation, extracted (Card 2A)
@@ -90,6 +91,14 @@ type Props = {
    * rather than sharing a non-existent or draft URL.
    */
   canonicalUrl?: string;
+  /**
+   * Phase 4A — opt-in venue discovery attribution (see discoveryTracking.tsx),
+   * same pattern as canonicalUrl above: omitted by the Control Panel's admin
+   * preview route so a founder/admin previewing a draft guide never
+   * generates real venue_discover_events rows; set to true only by the live
+   * public guide route ((website)/[market]/guides/[slug]/page.tsx).
+   */
+  enableDiscoveryTracking?: boolean;
 };
 
 export function GuideDetailView({
@@ -100,6 +109,7 @@ export function GuideDetailView({
   relatedGuides,
   faqs,
   canonicalUrl,
+  enableDiscoveryTracking,
 }: Props) {
   const cityOrMarket = guide.cityName || guide.marketName;
   const province = MARKET_PROVINCE[guide.marketName];
@@ -107,6 +117,10 @@ export function GuideDetailView({
 
   const editorialSections = getEditorialSections(guide);
   const hasEditorialContent = editorialSections.length > 0;
+
+  // Phase 4A: guide.slug, not guide.id — see discoveryTracking.tsx's naming
+  // convention doc comment for why guides use their slug specifically.
+  const discoveryContextName = enableDiscoveryTracking ? `guide:${guide.slug}` : null;
 
   return (
     <div className="bg-white pb-16">
@@ -212,8 +226,18 @@ export function GuideDetailView({
             {isVenueGuide ? (
               venueCards.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {venueCards.map((v) => (
-                    <SearchResultCard key={v.venueUuid} data={v} />
+                  {discoveryContextName && (
+                    <DiscoveryImpressionTracker
+                      context={discoveryContextName}
+                      items={venueCards.map((v, i) => ({ venueId: v.venueUuid, position: i }))}
+                    />
+                  )}
+                  {venueCards.map((v, i) => (
+                    <SearchResultCard
+                      key={v.venueUuid}
+                      data={v}
+                      discovery={discoveryContextName ? { context: discoveryContextName, position: i } : undefined}
+                    />
                   ))}
                 </div>
               ) : (

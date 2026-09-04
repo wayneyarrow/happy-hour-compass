@@ -84,6 +84,15 @@ export type HomepagePreviewFeatureCard = {
   teaser: string | null;
   ctaLabel: "View Venue" | "View Event" | "Read Guide";
   ctaHref: string;
+  /**
+   * Phase 4A — the venue's UUID, set only for a "Featured Venue" card
+   * (eyebrow === "Featured Venue"). ctaHref uses the venue's slug, not its
+   * id, so this is the only way FeatureSection.tsx can attribute a click
+   * to venue_discover_events without an extra lookup. Left undefined for
+   * event/guide features — those aren't in scope for venue discovery
+   * attribution.
+   */
+  venueId?: string;
 };
 
 export type HomepagePreviewSection =
@@ -172,6 +181,7 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         teaser: venue.teaser,
         ctaLabel: "View Venue",
         ctaHref,
+        venueId: venue.id,
       },
     };
   }

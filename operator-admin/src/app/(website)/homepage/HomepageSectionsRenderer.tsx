@@ -17,16 +17,24 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 
 type Props = {
   sections: HomepagePreviewSection[];
+  /**
+   * Phase 4A — opt-in venue discovery attribution (see discoveryTracking.tsx).
+   * Omitted (undefined) by the Control Panel's homepage preview route
+   * (control-panel/homepages/[id]/preview) so a founder/admin previewing a
+   * draft Homepage never generates real venue_discover_events rows; set to
+   * true only by the live public homepage ((website)/page.tsx).
+   */
+  enableDiscoveryTracking?: boolean;
 };
 
-export function HomepageSectionsRenderer({ sections }: Props) {
+export function HomepageSectionsRenderer({ sections, enableDiscoveryTracking }: Props) {
   return (
     <>
       {sections.map((section) => {
         if (section.kind === "venue_collection" || section.kind === "event_collection" || section.kind === "guide_collection") {
-          return <CollectionRail key={section.id} section={section} />;
+          return <CollectionRail key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
         }
-        return <FeatureSection key={section.id} section={section} />;
+        return <FeatureSection key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
       })}
     </>
   );
