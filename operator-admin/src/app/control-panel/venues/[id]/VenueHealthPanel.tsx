@@ -218,7 +218,9 @@ export default function VenueHealthPanel({ data }: { data: VenueHealthData }) {
         <div className="divide-y divide-gray-100">
           <Row label="Venue views (30d)">{data.venueViews30d.toLocaleString()}</Row>
           <Row label="Venue views (7d)">{data.venueViews7d.toLocaleString()}</Row>
+          <Row label="Venue views (all time)">{data.venueViewsAllTime.toLocaleString()}</Row>
           <Row label="Event views (30d)">{data.eventViews30d.toLocaleString()}</Row>
+          <Row label="Event views (all time)">{data.eventViewsAllTime.toLocaleString()}</Row>
           <Row label="Top event">
             {data.topEventLabel ? (
               <span className="block truncate max-w-[180px]" title={data.topEventLabel}>

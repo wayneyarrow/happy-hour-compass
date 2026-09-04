@@ -15,6 +15,7 @@ import {
   maxSearchTags,
 } from "@/lib/plans";
 import { getMarketById } from "@/lib/markets";
+import { getVenueViewCounts, getEventViewCounts } from "@/lib/data/viewCounts";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
 
@@ -157,21 +158,11 @@ export function buildVenuePlanMap(rows: VenueSubRow[]): Map<string, OperatorPlan
   return m;
 }
 
-function buildVenueViewMap(rows: { venue_id: string }[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const { venue_id } of rows) {
-    m.set(venue_id, (m.get(venue_id) ?? 0) + 1);
-  }
-  return m;
-}
-
-function buildEventViewMap(rows: { event_id: string }[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const { event_id } of rows) {
-    m.set(event_id, (m.get(event_id) ?? 0) + 1);
-  }
-  return m;
-}
+// Per-venue/per-event view counts are now fetched directly as Maps via
+// getVenueViewCounts()/getEventViewCounts() (src/lib/data/viewCounts.ts —
+// GROUP BY RPC, migration 088) — the raw-row-fetch + JS-aggregation helpers
+// that used to live here (buildVenueViewMap/buildEventViewMap) are gone;
+// see that migration's header for why they were replaced.
 
 function buildMediaMap(rows: MediaRow[]): Map<string, string[]> {
   const m = new Map<string, string[]>();
@@ -319,7 +310,12 @@ export type HighDemandVenueRow = {
   plan: OperatorPlan | null;
   setupHealthScorePct: number;
   venueViews30d: number;
+  // All-time totals — additional context only. Never used to determine
+  // report membership; the 30-day HIGH_DEMAND_VENUE/HIGH_DEMAND_EVENT
+  // qualification logic is unchanged.
+  venueViewsAllTime: number;
   eventViews30d: number;
+  eventViewsAllTime: number;
   isPublished: boolean;
   operatorLastSeenAt: string | null;
 };
@@ -334,6 +330,8 @@ export type HighDemandEventRow = {
   plan: OperatorPlan | null;
   venueSetupHealthScorePct: number;
   eventViews30d: number;
+  // All-time total — additional context only, does not affect qualification.
+  eventViewsAllTime: number;
   eventDate: string | null;
   isPublished: boolean;
 };
@@ -374,8 +372,8 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     r_inactiveOps,
     r_unpublished,
     r_verifiedNoOp,
-    r_venueViews,
-    r_eventViews,
+    venueViewMap,
+    eventViewMap,
     r_activeVenues,
   ] = await Promise.all([
     supabase.from("venues").select("*", { count: "exact", head: true })
@@ -386,8 +384,10 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
       .eq("is_published", false),
     supabase.from("venues").select("*", { count: "exact", head: true })
       .eq("is_verified", true).is("created_by_operator_id", null),
-    supabase.from("venue_view_events").select("venue_id").gte("viewed_at", t30),
-    supabase.from("event_view_events").select("event_id").gte("viewed_at", t30),
+    // Per-venue/per-event view counts via GROUP BY RPC (migration 088) —
+    // see src/lib/data/viewCounts.ts.
+    getVenueViewCounts(t30),
+    getEventViewCounts(t30),
     supabase.from("venues").select(VENUE_SELECT).not("created_by_operator_id", "is", null),
   ]);
 
@@ -444,10 +444,7 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     }
   }
 
-  // ── View event aggregation ────────────────────────────────────────────────────
-  const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
-  const eventViewMap = buildEventViewMap((r_eventViews.data ?? []) as { event_id: string }[]);
-
+  // ── View event aggregation (venueViewMap/eventViewMap fetched above) ──────────
   const highDemandVenues = [...venueViewMap.values()].filter((v) => v >= HIGH_DEMAND_VENUE).length;
 
   // Upcoming high demand events: event ids with >= threshold views, then filter by first_date >= today
@@ -530,9 +527,9 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
 
   const venueIds = venues.map((v) => v.id);
 
-  const [r_media, r_venueViews, r_events, r_crmContacts] = await Promise.all([
+  const [r_media, venueViewMap, r_events, r_crmContacts] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
+    getVenueViewCounts(t30, venueIds),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
     // Internal CRM contacts (crm_venue_contacts) — only the primary contact
     // per venue is needed for this report. Table is service-role-only
@@ -545,18 +542,11 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
   ]);
 
   const mediaByVenue   = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const venueViewMap   = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const eventRows      = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds       = eventRows.map((e) => e.id);
   const primaryContactByVenue = buildPrimaryContactMap((r_crmContacts.data ?? []) as CrmContactRow[]);
 
-  let eventViewMap = new Map<string, number>();
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase
-      .from("event_view_events").select("event_id").in("event_id", eventIds).gte("viewed_at", t30);
-    const rawEventViews = (evData ?? []) as { event_id: string }[];
-    eventViewMap = buildEventViewMap(rawEventViews);
-  }
+  const eventViewMap = await getEventViewCounts(t30, eventIds);
 
   // event views per venue
   const eventViewsByVenue = new Map<string, number>();
@@ -681,9 +671,9 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
   // it can only be fetched once venueIds is known — moved into this second
   // batch alongside the other venue-keyed queries rather than the opIds-keyed
   // batch above.
-  const [r_media, r_venueViews, r_events, r_subs] = await Promise.all([
+  const [r_media, venueViewMap, r_events, r_subs] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
+    getVenueViewCounts(t30, venueIds),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
     supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
   ]);
@@ -691,12 +681,7 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
   const eventRows  = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds   = eventRows.map((e) => e.id);
 
-  let eventViewMap = new Map<string, number>();
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase
-      .from("event_view_events").select("event_id").in("event_id", eventIds).gte("viewed_at", t30);
-    eventViewMap = buildEventViewMap((evData ?? []) as { event_id: string }[]);
-  }
+  const eventViewMap = await getEventViewCounts(t30, eventIds);
 
   const eventViewsByVenue = new Map<string, number>();
   for (const { id, venue_id } of eventRows) {
@@ -704,7 +689,6 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
   }
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById       = new Map(operators.map((o) => [o.id, o]));
 
@@ -747,9 +731,9 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
     venues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
   )];
 
-  const [r_media, r_venueViews, r_events, r_ops, r_subs] = await Promise.all([
+  const [r_media, venueViewMap, r_events, r_ops, r_subs] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
+    getVenueViewCounts(t30, venueIds),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
     opIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
@@ -760,12 +744,7 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds  = eventRows.map((e) => e.id);
 
-  let eventViewMap = new Map<string, number>();
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase
-      .from("event_view_events").select("event_id").in("event_id", eventIds).gte("viewed_at", t30);
-    eventViewMap = buildEventViewMap((evData ?? []) as { event_id: string }[]);
-  }
+  const eventViewMap = await getEventViewCounts(t30, eventIds);
 
   const eventViewsByVenue = new Map<string, number>();
   for (const { id, venue_id } of eventRows) {
@@ -773,7 +752,6 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
   }
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
-  const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const operators    = (r_ops.data ?? []) as OperatorRow[];
   const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById       = new Map(operators.map((o) => [o.id, o]));
@@ -819,13 +797,13 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     allVenues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
   )];
 
-  const [r_media, r_subs, r_ops, r_venueViews, r_memberships] = await Promise.all([
+  const [r_media, r_subs, r_ops, venueViewMap, r_memberships] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", allVenueIds).eq("type", "venue_image"),
     supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", allVenueIds),
     allOpIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", allOpIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
-    supabase.from("venue_view_events").select("venue_id").in("venue_id", allVenueIds).gte("viewed_at", t30),
+    getVenueViewCounts(t30, allVenueIds),
     allOpIds.length > 0
       ? supabase.from("operator_memberships").select("operator_id").in("operator_id", allOpIds).eq("status", "active")
       : Promise.resolve({ data: [] as { operator_id: string }[] }),
@@ -839,7 +817,6 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
   // evaluated against ITS OWN plan's entitlement limits, not a single
   // operator-wide plan.
   const planMap       = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
-  const venueViewMap  = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
   const opById        = new Map(operators.map((o) => [o.id, o]));
 
   // Team member count per operator
@@ -896,10 +873,10 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
-  const { data: allVenueViews } = await supabase
-    .from("venue_view_events").select("venue_id").gte("viewed_at", t30);
-
-  const venueViewMap = buildVenueViewMap((allVenueViews ?? []) as { venue_id: string }[]);
+  // Qualification is 30-day-only, via the GROUP BY RPC (migration 088) —
+  // unchanged qualification logic, just no longer a raw-row fetch subject
+  // to PostgREST's default row-return cap.
+  const venueViewMap = await getVenueViewCounts(t30);
   const topVenueIds = [...venueViewMap.entries()]
     .filter(([, count]) => count >= HIGH_DEMAND_VENUE)
     .map(([id]) => id);
@@ -917,28 +894,31 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
     venues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id)
   )];
 
-  const [r_media, r_subs, r_ops, r_events] = await Promise.all([
+  const [r_media, r_subs, r_ops, r_events, venueViewsAllTimeMap] = await Promise.all([
     supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
     supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
     opIds.length > 0
       ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    // All-time total — additional context only, scoped to the venues that
+    // already qualified above; never used for qualification itself.
+    getVenueViewCounts(null, venueIds),
   ]);
 
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds  = eventRows.map((e) => e.id);
 
-  let eventViewMap = new Map<string, number>();
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase
-      .from("event_view_events").select("event_id").in("event_id", eventIds).gte("viewed_at", t30);
-    eventViewMap = buildEventViewMap((evData ?? []) as { event_id: string }[]);
-  }
+  const [eventViewMap, eventViewAllTimeMap] = await Promise.all([
+    getEventViewCounts(t30, eventIds),
+    getEventViewCounts(null, eventIds),
+  ]);
 
   const eventViewsByVenue = new Map<string, number>();
+  const eventViewsAllTimeByVenue = new Map<string, number>();
   for (const { id, venue_id } of eventRows) {
     eventViewsByVenue.set(venue_id, (eventViewsByVenue.get(venue_id) ?? 0) + (eventViewMap.get(id) ?? 0));
+    eventViewsAllTimeByVenue.set(venue_id, (eventViewsAllTimeByVenue.get(venue_id) ?? 0) + (eventViewAllTimeMap.get(id) ?? 0));
   }
 
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
@@ -957,7 +937,9 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
       plan: opId ? (planMap.get(v.id) ?? "free") : null,
       setupHealthScorePct,
       venueViews30d: venueViewMap.get(v.id) ?? 0,
+      venueViewsAllTime: venueViewsAllTimeMap.get(v.id) ?? 0,
       eventViews30d: eventViewsByVenue.get(v.id) ?? 0,
+      eventViewsAllTime: eventViewsAllTimeByVenue.get(v.id) ?? 0,
       isPublished: v.is_published,
       operatorLastSeenAt: opId ? (opById.get(opId)?.last_seen_at ?? null) : null,
     };
@@ -971,10 +953,10 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   const t30  = t30ago();
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: allEventViews } = await supabase
-    .from("event_view_events").select("event_id").gte("viewed_at", t30);
-
-  const eventViewMap = buildEventViewMap((allEventViews ?? []) as { event_id: string }[]);
+  // Qualification is 30-day-only, via the GROUP BY RPC (migration 088) —
+  // unchanged qualification logic, just no longer a raw-row fetch subject
+  // to PostgREST's default row-return cap.
+  const eventViewMap = await getEventViewCounts(t30);
   const topEventIds = [...eventViewMap.entries()]
     .filter(([, count]) => count >= HIGH_DEMAND_EVENT)
     .map(([id]) => id);
@@ -991,20 +973,23 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   const events = (eventsData ?? []) as EventRow[];
   if (events.length === 0) return [];
 
+  const eventIds = events.map((e) => e.id);
   const venueIds = [...new Set(events.map((e) => e.venue_id))];
 
-  const { data: venuesData } = await supabase.from("venues").select(VENUE_SELECT).in("id", venueIds);
-  const venues = (venuesData ?? []) as VenueWithSetup[];
-
-  const [r_media, r_subs] = await Promise.all([
+  const [r_venues, r_media, r_subs, eventViewAllTimeMap] = await Promise.all([
+    supabase.from("venues").select(VENUE_SELECT).in("id", venueIds),
     venueIds.length > 0
       ? supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image")
       : Promise.resolve({ data: [] as MediaRow[] }),
     venueIds.length > 0
       ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds)
       : Promise.resolve({ data: [] as VenueSubRow[] }),
+    // All-time total — additional context only, scoped to the events that
+    // already qualified above; never used for qualification itself.
+    getEventViewCounts(null, eventIds),
   ]);
 
+  const venues       = (r_venues.data ?? []) as VenueWithSetup[];
   const mediaByVenue = buildMediaMap((r_media.data ?? []) as MediaRow[]);
   const planMap      = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const venueById    = new Map(venues.map((v) => [v.id, v]));
@@ -1024,6 +1009,7 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
       plan: opId ? (planMap.get(venue.id) ?? "free") : null,
       venueSetupHealthScorePct: setupHealthScorePct,
       eventViews30d: eventViewMap.get(e.id) ?? 0,
+      eventViewsAllTime: eventViewAllTimeMap.get(e.id) ?? 0,
       eventDate: e.first_date,
       isPublished: e.is_published,
     };
@@ -1048,27 +1034,20 @@ export async function getVerifiedWithoutOperators(): Promise<VerifiedWithoutOper
 
   const venueIds = venues.map((v) => v.id);
 
-  const [r_venueViews, r_events] = await Promise.all([
-    supabase.from("venue_view_events").select("venue_id").in("venue_id", venueIds).gte("viewed_at", t30),
+  const [venueViewMap, r_events] = await Promise.all([
+    getVenueViewCounts(t30, venueIds),
     supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
   ]);
 
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
   const eventIds  = eventRows.map((e) => e.id);
 
-  let eventViewMap = new Map<string, number>();
-  if (eventIds.length > 0) {
-    const { data: evData } = await supabase
-      .from("event_view_events").select("event_id").in("event_id", eventIds).gte("viewed_at", t30);
-    eventViewMap = buildEventViewMap((evData ?? []) as { event_id: string }[]);
-  }
+  const eventViewMap = await getEventViewCounts(t30, eventIds);
 
   const eventViewsByVenue = new Map<string, number>();
   for (const { id, venue_id } of eventRows) {
     eventViewsByVenue.set(venue_id, (eventViewsByVenue.get(venue_id) ?? 0) + (eventViewMap.get(id) ?? 0));
   }
-
-  const venueViewMap = buildVenueViewMap((r_venueViews.data ?? []) as { venue_id: string }[]);
 
   return venues.map((v) => ({
     id: v.id,

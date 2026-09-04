@@ -4,6 +4,7 @@ import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
 import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import type { OperatorPlan } from "@/lib/plans";
+import { getEventViewCounts, sumViews } from "@/lib/data/viewCounts";
 
 /**
  * Data helper for the Control Panel Venue Detail "Health Panel" (right column
@@ -88,7 +89,9 @@ export type VenueHealthData = {
   // 5. Consumer demand
   venueViews30d: number;
   venueViews7d: number;
+  venueViewsAllTime: number;
   eventViews30d: number;
+  eventViewsAllTime: number;
   topEventLabel: string | null;
   topEventViews: number | null;
 
@@ -134,12 +137,18 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
 
   const isActive = input.operatorId != null;
 
-  const [r_media, r_venueViews30d, r_venueViews7d, r_events, r_membershipCount, plan] = await Promise.all([
+  const [r_media, r_venueViews30d, r_venueViews7d, r_venueViewsAllTime, r_events, r_membershipCount, plan] = await Promise.all([
     supabase.from("media").select("url").eq("venue_id", input.venueId).eq("type", "venue_image"),
     supabase.from("venue_view_events").select("*", { count: "exact", head: true })
       .eq("venue_id", input.venueId).gte("viewed_at", t30),
     supabase.from("venue_view_events").select("*", { count: "exact", head: true })
       .eq("venue_id", input.venueId).gte("viewed_at", t7),
+    // All-time — a genuine COUNT(*) with no date lower bound. Like the 30d/7d
+    // counts above, count:"exact"+head:true is a real SQL COUNT(*), never
+    // subject to PostgREST's default row-return cap (see migration 088's
+    // header) — this was already safe, all-time just wasn't computed before.
+    supabase.from("venue_view_events").select("*", { count: "exact", head: true })
+      .eq("venue_id", input.venueId),
     supabase.from("events").select("id, title").eq("venue_id", input.venueId),
     isActive
       ? supabase.from("operator_memberships").select("*", { count: "exact", head: true })
@@ -152,28 +161,29 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
   ]);
 
   // ── Consumer demand: event views require a second query keyed off this
-  //    venue's event ids (event_view_events has no venue_id column). ───────
+  //    venue's event ids (event_view_events has no venue_id column). Uses
+  //    the event_view_counts() GROUP BY RPC (migration 088 — see
+  //    src/lib/data/viewCounts.ts) rather than a raw-row fetch, which was
+  //    the last remaining unbounded row fetch on this page (see that
+  //    migration's header). ─────────────────────────────────────────────
   const eventRows = (r_events.data ?? []) as { id: string; title: string | null }[];
   const eventIds = eventRows.map((e) => e.id);
 
   let eventViews30d = 0;
+  let eventViewsAllTime = 0;
   let topEventLabel: string | null = null;
   let topEventViews: number | null = null;
 
   if (eventIds.length > 0) {
-    const { data: viewRows } = await supabase
-      .from("event_view_events")
-      .select("event_id")
-      .in("event_id", eventIds)
-      .gte("viewed_at", t30);
+    const [counts30d, countsAllTime] = await Promise.all([
+      getEventViewCounts(t30, eventIds),
+      getEventViewCounts(null, eventIds),
+    ]);
 
-    const counts = new Map<string, number>();
-    for (const { event_id } of (viewRows ?? []) as { event_id: string }[]) {
-      counts.set(event_id, (counts.get(event_id) ?? 0) + 1);
-    }
-    eventViews30d = [...counts.values()].reduce((a, b) => a + b, 0);
+    eventViews30d = sumViews(counts30d);
+    eventViewsAllTime = sumViews(countsAllTime);
 
-    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    const top = [...counts30d.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top) {
       const [topId, views] = top;
       topEventLabel = eventRows.find((e) => e.id === topId)?.title ?? "Unknown";
@@ -278,7 +288,9 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
 
     venueViews30d: r_venueViews30d.count ?? 0,
     venueViews7d: r_venueViews7d.count ?? 0,
+    venueViewsAllTime: r_venueViewsAllTime.count ?? 0,
     eventViews30d,
+    eventViewsAllTime,
     topEventLabel,
     topEventViews,
 

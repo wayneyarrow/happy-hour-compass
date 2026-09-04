@@ -8,7 +8,7 @@ import type { HighDemandEventRow } from "@/lib/data/actionCenter";
 
 type SortCol =
   | "eventTitle" | "venueName" | "city" | "plan"
-  | "venueSetupHealthScorePct" | "eventViews30d" | "eventDate" | "isPublished";
+  | "venueSetupHealthScorePct" | "eventViews30d" | "eventViewsAllTime" | "eventDate" | "isPublished";
 
 const PAGE_SIZE    = 25;
 const DEFAULT_SORT: SortCol = "eventViews30d";
@@ -87,6 +87,7 @@ export default function HighDemandEventsTable({ rows }: { rows: HighDemandEventR
         case "plan":                  cmp = (a.plan ?? "").localeCompare(b.plan ?? ""); break;
         case "venueSetupHealthScorePct": cmp = a.venueSetupHealthScorePct - b.venueSetupHealthScorePct; break;
         case "eventViews30d":         cmp = a.eventViews30d - b.eventViews30d; break;
+        case "eventViewsAllTime":     cmp = a.eventViewsAllTime - b.eventViewsAllTime; break;
         case "eventDate":             cmp = (a.eventDate ?? "").localeCompare(b.eventDate ?? ""); break;
         case "isPublished":           cmp = Number(a.isPublished) - Number(b.isPublished); break;
       }
@@ -106,10 +107,13 @@ export default function HighDemandEventsTable({ rows }: { rows: HighDemandEventR
   const applyPage   = (p: number)   => { setPage(p); syncUrl(q, sortCol, sortDir, p); };
 
   const handleExport = () => {
-    const headers = ["Event", "Venue", "City", "Plan", "Venue Health Score %", "Event Views (30d)", "Event Date", "Published"];
+    const headers = [
+      "Event", "Venue", "City", "Plan", "Venue Health Score %",
+      "Event Views (30d)", "Event Views (All Time)", "Event Date", "Published",
+    ];
     const csvRows = sorted.map((r) => [
       r.eventTitle, r.venueName, r.city, r.plan ?? "",
-      String(r.venueSetupHealthScorePct), String(r.eventViews30d),
+      String(r.venueSetupHealthScorePct), String(r.eventViews30d), String(r.eventViewsAllTime),
       fmtDate(r.eventDate), r.isPublished ? "Yes" : "No",
     ]);
     downloadCsv(`high-demand-events-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv(headers, csvRows));
@@ -148,6 +152,7 @@ export default function HighDemandEventsTable({ rows }: { rows: HighDemandEventR
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("plan")} className={TH}>Plan <SortIcon active={sortCol === "plan"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("venueSetupHealthScorePct")} className={TH}>Venue Health <SortIcon active={sortCol === "venueSetupHealthScorePct"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("eventViews30d")} className={TH}>Event Views (30d) <SortIcon active={sortCol === "eventViews30d"} dir={sortDir} /></button></th>
+                    <th className="text-left px-4 py-3"><button onClick={() => applySort("eventViewsAllTime")} className={TH}>Event Views (All Time) <SortIcon active={sortCol === "eventViewsAllTime"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("eventDate")} className={TH}>Event Date <SortIcon active={sortCol === "eventDate"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><button onClick={() => applySort("isPublished")} className={TH}>Published <SortIcon active={sortCol === "isPublished"} dir={sortDir} /></button></th>
                     <th className="text-left px-4 py-3"><span className={THS}>View Venue</span></th>
@@ -165,6 +170,7 @@ export default function HighDemandEventsTable({ rows }: { rows: HighDemandEventR
                       <td className="px-4 py-3"><PlanBadge plan={r.plan} /></td>
                       <td className="px-4 py-3"><HealthBadge pct={r.venueSetupHealthScorePct} /></td>
                       <td className="px-4 py-3 text-gray-600 tabular-nums font-medium">{r.eventViews30d.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-500 tabular-nums">{r.eventViewsAllTime.toLocaleString()}</td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{fmtDate(r.eventDate)}</td>
                       <td className="px-4 py-3">
                         {r.isPublished

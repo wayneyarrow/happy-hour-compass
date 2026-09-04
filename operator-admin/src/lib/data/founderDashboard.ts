@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { computeOperatorImageCount } from "@/lib/venueReadiness";
 import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
+import { getVenueViewCounts, getEventViewCounts, sumViews } from "@/lib/data/viewCounts";
 
 // ── Plan rank for upgrade/downgrade classification ─────────────────────────────
 
@@ -164,8 +165,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     r_neverLoggedInOperators,
     r_planChanges30d,
     r_cancelledVenues,
-    r_venueViews,
-    r_eventViews,
+    venueViewCounts,
+    eventViewCounts,
   ] = await Promise.all([
     // venue_suggestions / operator_submissions — Acquisition
     supabase.from("venue_suggestions").select("*", { count: "exact", head: true }),
@@ -217,10 +218,12 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
       .select("cancelled_at")
       .not("cancelled_at", "is", null),
 
-    // view events — fetch IDs only for JS aggregation
-    // TODO: replace with a Postgres RPC (GROUP BY) once view volume justifies it
-    supabase.from("venue_view_events").select("venue_id").gte("viewed_at", t30),
-    supabase.from("event_view_events").select("event_id").gte("viewed_at", t30),
+    // Per-venue / per-event view counts via GROUP BY RPC (migration 088 —
+    // see src/lib/data/viewCounts.ts). Replaces a raw-row fetch + JS
+    // aggregation that was subject to PostgREST's default row-return cap
+    // once platform-wide 30-day view volume grew past it.
+    getVenueViewCounts(t30),
+    getEventViewCounts(t30),
   ]);
 
   // ── Active venues ──────────────────────────────────────────────────────────
@@ -235,19 +238,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
   const churnedVenuesAllTime = cancelledVenueRows.length;
   const churnLast30d         = cancelledVenueRows.filter(v => v.cancelled_at >= t30).length;
 
-  // ── Aggregate view events for leaderboards ────────────────────────────────
-  const venueViews = (r_venueViews.data ?? []) as { venue_id: string }[];
-  const venueViewCounts = new Map<string, number>();
-  for (const { venue_id } of venueViews) {
-    venueViewCounts.set(venue_id, (venueViewCounts.get(venue_id) ?? 0) + 1);
-  }
-
-  const eventViews = (r_eventViews.data ?? []) as unknown as { event_id: string }[];
-  const eventViewCounts = new Map<string, number>();
-  for (const { event_id } of eventViews) {
-    eventViewCounts.set(event_id, (eventViewCounts.get(event_id) ?? 0) + 1);
-  }
-
+  // ── Leaderboards (venueViewCounts/eventViewCounts are already per-id
+  //    Maps — see the RPC-backed fetch above) ────────────────────────────────
   const topVenueEntries = [...venueViewCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
@@ -305,8 +297,12 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     views,
   }));
 
-  const highDemandVenues = [...venueViewCounts.values()].filter(v => v > HIGH_DEMAND_VENUE).length;
-  const highDemandEvents = [...eventViewCounts.values()].filter(v => v > HIGH_DEMAND_EVENT).length;
+  // >= matches Action Center's threshold semantics and the "10+"/"5+" UI
+  // copy on both surfaces — previously ">" here (11+/6+) undercounted
+  // relative to Action Center's High Demand reports for venues/events
+  // sitting at exactly the threshold.
+  const highDemandVenues = [...venueViewCounts.values()].filter(v => v >= HIGH_DEMAND_VENUE).length;
+  const highDemandEvents = [...eventViewCounts.values()].filter(v => v >= HIGH_DEMAND_EVENT).length;
 
   // ── Resolve each venue's own plan (venue_subscriptions; no row → 'free') ──
   // Phase 2B: never falls back to operators.plan — see
@@ -447,8 +443,8 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     },
 
     consumerDemand: {
-      venueViewsLast30d: venueViews.length,
-      eventViewsLast30d: eventViews.length,
+      venueViewsLast30d: sumViews(venueViewCounts),
+      eventViewsLast30d: sumViews(eventViewCounts),
       topVenues,
       topEvents,
     },
