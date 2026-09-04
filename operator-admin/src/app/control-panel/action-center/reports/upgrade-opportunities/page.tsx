@@ -18,8 +18,9 @@ export default async function UpgradeOpportunitiesPage() {
         <h1 className="text-2xl font-bold text-slate-900">Upgrade Opportunities</h1>
         <p className="mt-1 text-sm text-gray-500">
           Published Free or Pro venues with a health score ≥ 90% that have hit at least one
-          plan limit — or are using Events without the advanced event features their plan lacks.
-          These operators are ready to upgrade — they&apos;ve outgrown their current plan. Filter by
+          plan limit — or aren&apos;t using Events yet and are on a plan that only offers one-time
+          (no recurring/advanced) events. These operators are ready to upgrade — they&apos;ve either
+          outgrown their current plan, or could unlock a feature they haven&apos;t tried. Filter by
           opportunity type or venue verification status to target outreach.
         </p>
       </div>
@@ -29,8 +30,8 @@ export default async function UpgradeOpportunitiesPage() {
           <p className="text-sm font-medium text-slate-700 mb-1">No upgrade opportunities found</p>
           <p className="text-xs text-gray-400">
             Venues appear here when they are published, have a health score ≥ 90%, are on Free or Pro,
-            and have reached at least one plan limit (images, food specials, drink specials, team members,
-            or using events without the advanced event features their plan lacks).
+            and have reached at least one plan limit (images, food specials, drink specials, team members),
+            or have no events yet and are on a plan limited to one-time-only events.
           </p>
         </div>
       ) : (

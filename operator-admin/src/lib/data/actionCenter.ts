@@ -812,10 +812,9 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     allOpIds.length > 0
       ? supabase.from("operator_memberships").select("operator_id").in("operator_id", allOpIds).eq("status", "active")
       : Promise.resolve({ data: [] as { operator_id: string }[] }),
-    // Events — used only to gate the "Events" opportunity below (a venue
-    // must actually be using the Events feature before lacking advanced
-    // event capabilities is a meaningful upgrade signal, same spirit as
-    // the count-based factors already being "in active use").
+    // Events — used only to gate the "Events" opportunity below: the
+    // signal is a venue NOT yet using Events at all (see that check for
+    // why zero, not one-or-more, is the qualifying count).
     supabase.from("events").select("id, venue_id").in("venue_id", allVenueIds),
   ]);
 
@@ -863,16 +862,29 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     if (foodCount  >= maxFoodSpecials(plan))  opportunities.push("Food specials");
     if (drinkCount >= maxDrinkSpecials(plan)) opportunities.push("Drink specials");
     if (teamCount  >= maxUsers(plan))         opportunities.push("Team members");
-    // Events is a binary feature gate (canUseAdvancedEvents() in
-    // src/lib/plans.ts — the single authoritative entitlement source for
-    // recurring schedules, multi-date ranges, and rich descriptions),
-    // not a numeric limit like the four factors above, so there is no
-    // maxEvents(plan) to compare against. "At the limit" is expressed as
-    // "already using the Events feature (>=1 event) while not entitled to
-    // its advanced form" — this only ever fires for the free plan, since
-    // canUseAdvancedEvents() is already true for pro (and this report only
-    // considers free/pro venues to begin with).
-    if (eventCount > 0 && !canUseAdvancedEvents(plan)) opportunities.push("Events");
+    // Events is a sales/outreach signal, not a usage-limit signal like the
+    // four factors above — it deliberately does NOT require the venue to
+    // already have events (Phase 3 correction: the original "eventCount >
+    // 0" version required existing usage, which is backwards for this
+    // report's purpose — it excluded exactly the venues most worth
+    // pitching, e.g. a verified venue that has never run an event at all).
+    //
+    // canUseAdvancedEvents() (src/lib/plans.ts) is the authoritative
+    // entitlement here, same as before — but note what it actually gates:
+    // one-time (no-repeat) events are available on EVERY plan, including
+    // Free (see that function's neighbor canUseRecurringEvents()'s doc
+    // comment). Free-plan venues are never locked out of Events itself;
+    // canUseAdvancedEvents() gates only the upgrade-worthy layer —
+    // recurring schedules, multi-date ranges, rich descriptions, and
+    // future event-specific promotions. So a Free-plan venue with zero
+    // events is not "unable to use Events" — it's a venue that hasn't
+    // started, for whom upgrading would unlock the fuller feature set the
+    // moment they do. That is the intended "you could add/promote Events
+    // by upgrading" pitch, and — as with the other four factors — this
+    // only ever fires for the free plan, since canUseAdvancedEvents() is
+    // already true for pro (and this report only considers free/pro
+    // venues to begin with).
+    if (eventCount === 0 && !canUseAdvancedEvents(plan)) opportunities.push("Events");
 
     if (opportunities.length === 0) continue;
 
