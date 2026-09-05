@@ -97,7 +97,25 @@ export async function middleware(request: NextRequest) {
   // (src/app/admin/layout.tsx's shouldBlockAdminAccess() check). A
   // member-only operator who submits the form, or navigates straight to
   // /admin/*, is correctly recognized either way.
-  if (user && pathname === "/login" && user.email) {
+  //
+  // Excludes Next.js Server Action requests (identified by the `next-action`
+  // request header — Next's own ACTION_HEADER constant, see
+  // next/dist/client/components/app-router-headers.js) — never a genuine
+  // "visit /login" navigation. The login page (src/app/login/page.tsx)
+  // calls resolveCurrentUserAccess() as its own follow-up Server Action
+  // immediately after signInWithPassword() succeeds, which POSTs back to
+  // the current page's URL (i.e. this same "/login" pathname). Without this
+  // exclusion, middleware redirected that action call itself to
+  // /admin/venue — a raw HTTP 307 with none of the Next.js action-response
+  // envelope the client's fetch runtime expects — surfacing as "An
+  // unexpected response was received from the server." and leaving the
+  // login form stuck on "Please wait…" even though authentication had
+  // already succeeded (confirmed via direct request tracing: the
+  // intercepted POST carries `next-action` + RSC-flight headers
+  // `accept: text/x-component` / `next-router-state-tree`). A normal
+  // browser navigation (GET, or a link/redirect to /login) never carries
+  // this header, so the convenience redirect is otherwise unaffected.
+  if (user && pathname === "/login" && user.email && !request.headers.get("next-action")) {
     const { data: operatorRow } = await supabase
       .from("operators")
       .select("id")
