@@ -11,6 +11,7 @@ import HelpSteps from "../components/HelpSteps";
 import HelpSection from "../components/HelpSection";
 import HelpInfoSection from "../components/HelpInfoSection";
 import HelpNeedSupport from "../components/HelpNeedSupport";
+import HelpViewTracker from "../HelpViewTracker";
 
 /**
  * Getting Started guide.
@@ -39,6 +40,7 @@ export default async function GettingStartedPage() {
 
   return (
     <div>
+      <HelpViewTracker articleSlug="getting-started" />
       <HelpBreadcrumbs current={title} />
 
       <div className="max-w-2xl">

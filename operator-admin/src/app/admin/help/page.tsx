@@ -3,7 +3,9 @@ export const metadata = { title: "Help" };
 import Link from "next/link";
 import { getArticleBySlug, articleUrl } from "@/lib/helpCenter/articles";
 import type { HowToArticle } from "@/lib/helpCenter/types";
+import { HELP_CENTER_INDEX_SLUG } from "@/lib/helpCenter/constants";
 import HelpNeedSupport from "./components/HelpNeedSupport";
+import HelpViewTracker from "./HelpViewTracker";
 
 /**
  * Landing-page-only presentation grouping for the approved V1 How-To
@@ -57,6 +59,7 @@ export default function AdminHelpPage() {
 
   return (
     <div className="max-w-4xl">
+      <HelpViewTracker articleSlug={HELP_CENTER_INDEX_SLUG} />
 
       {/* ── Page heading ──────────────────────────────────────────────────── */}
       <div className="mb-6">

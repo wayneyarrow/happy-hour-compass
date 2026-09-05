@@ -12,6 +12,7 @@ import HelpSteps from "../components/HelpSteps";
 import HelpSection from "../components/HelpSection";
 import HelpRelatedArticles from "../components/HelpRelatedArticles";
 import HelpNeedSupport from "../components/HelpNeedSupport";
+import HelpViewTracker from "../HelpViewTracker";
 
 // Content is static, code-defined data (see src/lib/helpCenter/articles.ts) —
 // every known slug can be prerendered at build time. Adding a new article to
@@ -44,6 +45,7 @@ export default async function HelpArticlePage({
 
   return (
     <div>
+      <HelpViewTracker articleSlug={article.slug} />
       <HelpBreadcrumbs current={article.title} />
 
       <HelpArticleLayout
