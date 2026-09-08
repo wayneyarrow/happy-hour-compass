@@ -22,6 +22,24 @@
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Content length limits
+//
+// Application-layer only — no database CHECK constraint backs these
+// (Phase 2 correction task explicitly deferred any schema change; a hard
+// DB-level limit can be added later if it ever proves necessary). Shared
+// here so the Operator Admin form (client-side maxLength + live counter)
+// and saveDailySpecialAction (authoritative server validation via
+// validateDailySpecialContent() in dailySpecialSchedule.ts) can never
+// drift out of sync with two independently-maintained numbers.
+//
+// Conditions / additional details has no limit — not requested, existing
+// behavior preserved.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SHORT_SUMMARY_MAX_LENGTH = 120;
+export const DESCRIPTION_MAX_LENGTH = 1000;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Offer type
 // ─────────────────────────────────────────────────────────────────────────────
 

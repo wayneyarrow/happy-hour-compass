@@ -7,10 +7,12 @@ import {
   isRecurringSpecialCurrentlyActive,
   isWithinRecurrenceValidity,
   occursOnDate,
+  validateDailySpecialContent,
   validateDailySpecialSchedule,
   validateDailySpecialTime,
   weeklyIncludesWeekday,
 } from "../../../src/lib/dailySpecialSchedule";
+import { DESCRIPTION_MAX_LENGTH, SHORT_SUMMARY_MAX_LENGTH } from "../../../src/lib/dailySpecialTypes";
 import type {
   DailySpecialOneTimeSchedule,
   DailySpecialWeeklySchedule,
@@ -420,4 +422,72 @@ test("formatDaysOfWeek: consecutive run collapses to a range", () => {
 
 test("formatDaysOfWeek: non-consecutive days join without a range dash", () => {
   assert.equal(formatDaysOfWeek([0, 6]), "Sun & Sat");
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// validateDailySpecialContent — Phase 2 correction: Short Summary (120)
+// and Description (1000) character limits. This is the SAME function
+// saveDailySpecialAction calls — testing it directly here is a genuine
+// test of the authoritative server-side enforcement, not a reimplementation.
+// ─────────────────────────────────────────────────────────────────────────
+
+test("content: null/empty short summary and description are always valid (both optional)", () => {
+  const result = validateDailySpecialContent({ shortSummary: null, description: null });
+  assert.equal(result.valid, true);
+});
+
+test("content: short summary at exactly 120 characters is accepted", () => {
+  const result = validateDailySpecialContent({
+    shortSummary: "a".repeat(SHORT_SUMMARY_MAX_LENGTH),
+    description: null,
+  });
+  assert.equal(result.valid, true);
+});
+
+test("content: short summary at 121 characters is rejected with the exact expected message", () => {
+  const result = validateDailySpecialContent({
+    shortSummary: "a".repeat(SHORT_SUMMARY_MAX_LENGTH + 1),
+    description: null,
+  });
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.equal(result.errors[0], "Short summary must be 120 characters or fewer.");
+  }
+});
+
+test("content: description at exactly 1000 characters is accepted", () => {
+  const result = validateDailySpecialContent({
+    shortSummary: null,
+    description: "a".repeat(DESCRIPTION_MAX_LENGTH),
+  });
+  assert.equal(result.valid, true);
+});
+
+test("content: description at 1001 characters is rejected with the exact expected message", () => {
+  const result = validateDailySpecialContent({
+    shortSummary: null,
+    description: "a".repeat(DESCRIPTION_MAX_LENGTH + 1),
+  });
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.equal(result.errors[0], "Description must be 1,000 characters or fewer.");
+  }
+});
+
+test("content: both fields can be rejected simultaneously, reporting both errors", () => {
+  const result = validateDailySpecialContent({
+    shortSummary: "a".repeat(SHORT_SUMMARY_MAX_LENGTH + 1),
+    description: "a".repeat(DESCRIPTION_MAX_LENGTH + 1),
+  });
+  assert.equal(result.valid, false);
+  if (!result.valid) {
+    assert.equal(result.errors.length, 2);
+  }
+});
+
+test("content: Conditions has no limit enforced by this function — not requested in this correction", () => {
+  // validateDailySpecialContent() takes only shortSummary/description —
+  // there is no conditions parameter at all, so a conditions field of any
+  // length can never be rejected by this function.
+  assert.equal(validateDailySpecialContent.length, 1);
 });

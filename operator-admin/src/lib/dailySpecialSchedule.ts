@@ -18,6 +18,8 @@
  */
 
 import {
+  DESCRIPTION_MAX_LENGTH,
+  SHORT_SUMMARY_MAX_LENGTH,
   isEndMode,
   isScheduleType,
   isTimeMode,
@@ -274,6 +276,41 @@ export function validateDailySpecialTime(
     if (!input.startTime && input.endMode === "unspecified") {
       errors.push("A timed special needs a start time, an end time, or Close.");
     }
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content length validation (Phase 2 correction)
+//
+// Application-layer only — no DB CHECK constraint backs these limits (no
+// migration was made for this; see SHORT_SUMMARY_MAX_LENGTH/
+// DESCRIPTION_MAX_LENGTH's own comment in dailySpecialTypes.ts). Shared by
+// both the Operator Admin form (client-side pre-check) and
+// saveDailySpecialAction (authoritative). Conditions has no limit here —
+// not requested, existing behavior preserved.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DailySpecialContentInput = {
+  shortSummary: string | null;
+  description: string | null;
+};
+
+export function validateDailySpecialContent(
+  input: DailySpecialContentInput
+): ScheduleValidationResult {
+  const errors: string[] = [];
+
+  if (input.shortSummary && input.shortSummary.length > SHORT_SUMMARY_MAX_LENGTH) {
+    errors.push(`Short summary must be ${SHORT_SUMMARY_MAX_LENGTH} characters or fewer.`);
+  }
+  if (input.description && input.description.length > DESCRIPTION_MAX_LENGTH) {
+    // DESCRIPTION_MAX_LENGTH is fixed at 1000 — the comma is written
+    // literally here rather than derived via locale-dependent formatting
+    // (Intl.NumberFormat/toLocaleString can vary by environment), so this
+    // message is guaranteed to read exactly "1,000 characters or fewer."
+    errors.push("Description must be 1,000 characters or fewer.");
   }
 
   return errors.length > 0 ? { valid: false, errors } : { valid: true };

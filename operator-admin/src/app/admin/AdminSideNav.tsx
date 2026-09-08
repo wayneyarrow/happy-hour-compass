@@ -9,6 +9,7 @@ export const NAV_ITEMS = [
   { label: "Home",         href: "/admin/home" },
   { label: "Venue",        href: "/admin/venue" },
   { label: "Happy Hours",  href: "/admin/happy-hours" },
+  { label: "Daily Specials", href: "/admin/daily-specials" },
   { label: "Events",       href: "/admin/events" },
   { label: "Analytics",    href: "/admin/analytics" },
   { label: "Subscription", href: "/admin/subscription" },
