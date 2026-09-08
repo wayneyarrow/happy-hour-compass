@@ -173,6 +173,75 @@ export function canCreateRecurringEventInSupportMode(
   return isUnclaimedVenueSupportMode;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Specials entitlements
+//
+// Same recurring-content entitlement philosophy as Events (Phase 1 of the
+// Daily Specials architecture — see
+// supabase/migrations/091_daily_specials_foundation.sql): free operators
+// can create one-time Daily Specials only; recurring (weekly) Daily
+// Specials require Pro/Premium/Enterprise, with the identical grandfathered
+// and support-mode exceptions Events already has. These three functions
+// deliberately mirror canUseRecurringEvents() /
+// canManageGrandfatheredRecurringEvent() /
+// canCreateRecurringEventInSupportMode() above — kept as separate, Daily-
+// Specials-named functions (not a shared/generalized helper) per the task
+// brief: Daily Specials and Events remain separate content types even
+// where the entitlement RULE happens to be identical today; a future
+// change to one must not silently change the other.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Recurring (weekly) Daily Specials — the single named entitlement for
+ * recurring Daily Specials. One-time Daily Specials remain available on
+ * all plans.
+ */
+export function canUseRecurringDailySpecials(plan: OperatorPlan): boolean {
+  return plan === "pro" || plan === "premium" || plan === "enterprise";
+}
+
+/**
+ * Grandfathered exception to canUseRecurringDailySpecials(): a
+ * platform-seeded Daily Special that is *currently* a weekly special
+ * (is_seeded_special = true AND schedule_type = "weekly") may still be
+ * fully managed — edited, schedule details changed, published/unpublished,
+ * deleted — by a Free-plan operator.
+ *
+ * Callers must derive `isSeededAndCurrentlyRecurring` from the row's
+ * CURRENT state in the database (never from an in-flight payload), so this
+ * can never be used to create a new recurring Daily Special or convert a
+ * one-time Daily Special — seeded or not — into a recurring one. If the
+ * row is later saved as one-time, or deleted, it no longer qualifies and
+ * the exception does not re-apply to it. Mirrors
+ * canManageGrandfatheredRecurringEvent() exactly.
+ */
+export function canManageGrandfatheredRecurringDailySpecial(
+  plan: OperatorPlan,
+  isSeededAndCurrentlyRecurring: boolean
+): boolean {
+  return canUseRecurringDailySpecials(plan) || isSeededAndCurrentlyRecurring;
+}
+
+/**
+ * Support-mode exception to canUseRecurringDailySpecials(): while founder
+ * impersonation is actively managing an UNCLAIMED venue via the Control
+ * Panel "Open as Operator" flow (Case B — no operator exists, so there is
+ * no real plan to read; it implicitly defaults to "free"), recurring Daily
+ * Specials may still be created and managed, so the founder can seed
+ * weekly specials onto a venue before an operator ever claims it. Mirrors
+ * canCreateRecurringEventInSupportMode() exactly — see that function's own
+ * doc comment for the full Case A/Case B distinction. Every recurring
+ * Daily Special created this way must be stamped is_seeded_special = true
+ * by the caller, so a future claiming operator inherits it as a
+ * grandfathered seeded recurring Daily Special through
+ * canManageGrandfatheredRecurringDailySpecial() above.
+ */
+export function canCreateRecurringDailySpecialInSupportMode(
+  isUnclaimedVenueSupportMode: boolean
+): boolean {
+  return isUnclaimedVenueSupportMode;
+}
+
 /**
  * Custom search tag management beyond the default auto-generated tag set.
  * Allows operators to surface their venue for specific consumer searches.
