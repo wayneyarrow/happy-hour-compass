@@ -6,6 +6,7 @@ import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
 import { getPublicHomepageForLocation } from "@/lib/data/homepagePublic";
 import { buildPageMetadata } from "@/lib/seo/metadata";
+import { DAILY_SPECIALS_NEW_UNTIL, isFeatureNewBadgeVisible } from "@/lib/newBadge";
 
 // Resolves the consumer-facing city name (and slug, for public Homepage
 // geography resolution — Task 8) for the hero's search placeholder. Mirrors
@@ -98,12 +99,16 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function WebsiteHomePage() {
   const { market, isPersisted } = await getActiveMarket();
-  const { cityName, citySlug } = await getHeroCityContext(market);
+  const { citySlug } = await getHeroCityContext(market);
   const homepage = await getPublicHomepageForLocation(market.id, citySlug);
 
   return (
     <>
-      <HeroSection market={market} cityName={cityName} isPersisted={isPersisted} />
+      <HeroSection
+        market={market}
+        isPersisted={isPersisted}
+        dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
+      />
       {homepage && (
         <HomepageSectionsRenderer sections={homepage.sections} enableDiscoveryTracking />
       )}

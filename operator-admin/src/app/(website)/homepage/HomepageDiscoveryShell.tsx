@@ -3,6 +3,7 @@ import WebsiteHeader from "@/app/(website)/WebsiteHeader";
 import HeroSection from "@/app/(website)/HeroSection";
 import type { Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
+import { DAILY_SPECIALS_NEW_UNTIL, isFeatureNewBadgeVisible } from "@/lib/newBadge";
 
 /**
  * The Homepage's static Discovery Shell — public Website header + existing
@@ -56,7 +57,11 @@ export function HomepageDiscoveryShell({ market, cityName, cities, banner, stick
         {banner}
         <WebsiteHeader marketId={market.id} marketName={market.name} currentCityName={cityName} cities={cities} />
       </div>
-      <HeroSection market={market} cityName={cityName} isPersisted />
+      <HeroSection
+        market={market}
+        isPersisted
+        dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
+      />
     </>
   );
 }

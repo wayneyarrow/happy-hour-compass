@@ -6,10 +6,13 @@ import { usePathname } from "next/navigation";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import type { Market } from "@/lib/markets";
-import { EVENT_TYPE_OPTIONS } from "@/lib/eventTypes";
+import { EVENT_TYPE_OPTIONS, getEventTypeLabel } from "@/lib/eventTypes";
+import { eventMatchesSearch } from "@/lib/eventSearch";
 import { EventSearchCard } from "./EventSearchCard";
 import EventSearchContextHeader from "./EventSearchContextHeader";
 import { trackGA4Event } from "@/lib/ga4";
+import { DiscoverySearchInput } from "../DiscoverySearchInput";
+import { buildEventFilterSearchParams, parseEventFilterSearchParams } from "./eventFilterUrl";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
 
@@ -475,7 +478,7 @@ type Props = {
   /** Rendered once, full-width, after the results in both desktop and mobile layouts. */
   footerCta?: ReactNode;
   /**
-   * Enables the ?date=/?from=/?to=/?type= URL sync and mount-time restore.
+   * Enables the ?date=/?from=/?to=/?type=/?q= URL sync and mount-time restore.
    * Off by default so other callers of this component (Saved, Collections)
    * are unaffected — only website-events/page.tsx opts in today.
    */
@@ -579,6 +582,17 @@ export function EventSearchResults({
   const [activeType, setActiveType] = useState<string | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
 
+  // ── Free-text search (`?q=`) ──────────────────────────────────────────────
+  // Rendered as a visible DiscoverySearchInput field below (Events
+  // search-field UX correction) so a `?q=` URL — pasted directly, or
+  // arrived at via the homepage Hero's "See all Events matching …" action
+  // — is never a silent/invisible filter: the active query is always shown,
+  // editable, and clearable. Coexists with the Date/Type chips via the same
+  // URL-sync/restore pattern those already use. Independent from Event
+  // Type — see eventMatchesSearch()'s header comment; this never sets
+  // `activeType`.
+  const [query, setQuery] = useState("");
+
   // GA4 discovery_filtered — latches false after the debounced URL-sync
   // effect's first ever firing for this mounted instance (the initial
   // page-load sync, not a genuine filter change) so only real subsequent
@@ -604,19 +618,21 @@ export function EventSearchResults({
   useEffect(() => {
     if (!enableFilterSync) return;
     const timer = setTimeout(() => {
-      const parts: string[] = [];
-      if (dateFilter) {
-        parts.push(`date=${dateFilter}`);
-      } else if (hasAppliedRange && calAppliedStart && calAppliedEnd) {
-        parts.push(`from=${toIso(calAppliedStart)}`);
-        parts.push(`to=${toIso(calAppliedEnd)}`);
-      }
-      if (activeType) parts.push(`type=${encodeURIComponent(activeType)}`);
-      const url = parts.length > 0 ? `${pathname}?${parts.join("&")}` : pathname;
+      const searchParams = buildEventFilterSearchParams({
+        dateFilter,
+        rangeStart: hasAppliedRange && calAppliedStart ? toIso(calAppliedStart) : null,
+        rangeEnd: hasAppliedRange && calAppliedEnd ? toIso(calAppliedEnd) : null,
+        activeType,
+        query,
+      });
+      const url = searchParams ? `${pathname}?${searchParams}` : pathname;
       window.history.replaceState(null, "", url);
 
       // GA4 discovery_filtered — fires once per settled (debounced) filter
-      // change, never on the initial mount sync.
+      // change, never on the initial mount sync. Deliberately unchanged by
+      // the mode-aware search correction: filter_count still counts only
+      // Date/Range/Type, not `q` — expanding this metric's definition is a
+      // separate measurement-plan decision, out of scope here.
       if (isFirstFilterSyncRef.current) {
         isFirstFilterSyncRef.current = false;
       } else {
@@ -625,7 +641,7 @@ export function EventSearchResults({
       }
     }, FILTER_URL_SYNC_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enableFilterSync, dateFilter, hasAppliedRange, calAppliedStart, calAppliedEnd, activeType, pathname]);
+  }, [enableFilterSync, dateFilter, hasAppliedRange, calAppliedStart, calAppliedEnd, activeType, query, pathname]);
 
   // Restores filter state from the live address bar once, on mount — see the
   // matching effect and comment in HappyHoursSearchClient.tsx for why this is
@@ -636,13 +652,11 @@ export function EventSearchResults({
   // reconciles state with what the address bar actually shows.
   useEffect(() => {
     if (!enableFilterSync) return;
-    const params = new URLSearchParams(window.location.search);
-    const dateParam = params.get("date");
-    const fromParam = params.get("from");
-    const toParam = params.get("to");
-    const typeParam = params.get("type");
+    const { dateParam, fromParam, toParam, typeParam, qParam } = parseEventFilterSearchParams(
+      window.location.search
+    );
 
-    if (dateParam === "today" || dateParam === "tomorrow" || dateParam === "weekend") {
+    if (dateParam) {
       setDateFilter(dateParam);
     } else if (fromParam && toParam) {
       const start = parseIsoLocal(fromParam);
@@ -659,6 +673,8 @@ export function EventSearchResults({
     if (typeParam && EVENT_TYPE_OPTIONS.some((o) => o.value === typeParam)) {
       setActiveType(typeParam);
     }
+
+    if (qParam) setQuery(qParam);
   }, [enableFilterSync]);
 
   // ── Filter pipeline ───────────────────────────────────────────────────────
@@ -682,7 +698,13 @@ export function EventSearchResults({
       }
       return true;
     })
-    .filter((e) => (activeType ? e.eventType === activeType : true));
+    .filter((e) => (activeType ? e.eventType === activeType : true))
+    .filter((e) =>
+      eventMatchesSearch(
+        { title: e.title, description: e.description, eventTypeLabel: getEventTypeLabel(e.eventType) },
+        query
+      )
+    );
 
   // ── Derived labels for context header ─────────────────────────────────────
   const activeDateLabel: string | null = (() => {
@@ -698,7 +720,7 @@ export function EventSearchResults({
     ? (EVENT_TYPE_OPTIONS.find((o) => o.value === activeType)?.label ?? null)
     : null;
 
-  const hasFilters = !!(dateFilter || hasAppliedRange || activeType);
+  const hasFilters = !!(dateFilter || hasAppliedRange || activeType || query.trim());
 
   // ── Card hover → marker highlight ─────────────────────────────────────────
   // Hover ID for events is the venue's lat,lng key (same as marker ID).
@@ -756,6 +778,27 @@ export function EventSearchResults({
     <>
       {/* ── Sticky filter chip bar ──────────────────────────────────────── */}
       <div className={`sticky ${STICKY_TOP} z-30 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]`}>
+        {/* Visible text search — mirrors HappyHoursSearchClient.tsx's own
+            placement/gating exactly (only rendered when enableFilterSync is
+            on, i.e. only the real /website-events discovery page — not the
+            Saved/Collections embeds of this same component, which don't
+            opt into the `q`/URL-sync behavior this field drives). Desktop
+            width matches the left results column (w-1/2 below) so the
+            field reads as belonging to the Event list it filters, not the
+            map column beside it. `q` itself is a separate, independent
+            filter from Event Type — this field intentionally never touches
+            `activeType` (see eventMatchesSearch()'s header comment). */}
+        {enableFilterSync && (
+          <div className="px-4 pt-3 md:w-1/2 md:px-5">
+            <DiscoverySearchInput
+              value={query}
+              onChange={setQuery}
+              onClear={() => setQuery("")}
+              placeholder="Search trivia, live music, events..."
+              ariaLabel="Search events"
+            />
+          </div>
+        )}
         {/* Chip row — overflow-visible on desktop so the calendar popover escapes */}
         <div className="flex items-center gap-2 px-4 md:px-6 py-3 overflow-x-auto md:overflow-visible [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
 

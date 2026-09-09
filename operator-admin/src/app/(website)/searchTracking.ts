@@ -17,7 +17,7 @@ export type WebsiteSearchSurface = "homepage_hero" | "listing_page";
 
 /**
  * Fire-and-forget "meaningful search" event. Callers are responsible for
- * their own debounce + dedupe (see HeroVenueSearch.tsx and
+ * their own debounce + dedupe (see HeroDiscoverySearch.tsx and
  * HappyHoursSearchClient.tsx) — this function itself fires unconditionally
  * whenever called, exactly once per call.
  */

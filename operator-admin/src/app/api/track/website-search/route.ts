@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/server";
  *
  * Two known surfaces today — new ones must be added here deliberately, not
  * inferred from client input:
- *   homepage_hero — HeroVenueSearch.tsx
+ *   homepage_hero — HeroDiscoverySearch.tsx
  *   listing_page  — website-happy-hours/HappyHoursSearchClient.tsx
  *
  * Not Turnstile-gated: matches every other /api/track/* endpoint in this

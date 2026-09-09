@@ -19,6 +19,16 @@
  * measurement plan). Widening this union is a deliberate measurement-plan
  * decision, not a casual addition.
  *
+ * Homepage Hero discovery mode (Happy Hours / Daily Specials / Events
+ * selector — HeroSection.tsx) — trigger points:
+ *   - homepage_discovery_mode_selected: fired only when the visitor
+ *     actively changes the selector away from its current mode — never on
+ *     initial page load (Happy Hours default) and never for a click on the
+ *     already-active mode. Params: surface, mode, previous_mode, market.
+ *   - homepage_discovery_browse_clicked: fired on click of the Hero's
+ *     orange Browse CTA, before/with the Link's own navigation. Params:
+ *     surface, mode, market.
+ *
  * Consumer Signup funnel (consumer_signup_started / consumer_signup_completed
  * / consumer_email_confirmed) — trigger points:
  *   - consumer_signup_started:   (consumer-auth)/sign-up/page.tsx, once client
@@ -43,7 +53,9 @@ type GA4EventName =
   | "discovery_filtered"
   | "consumer_signup_started"
   | "consumer_signup_completed"
-  | "consumer_email_confirmed";
+  | "consumer_email_confirmed"
+  | "homepage_discovery_mode_selected"
+  | "homepage_discovery_browse_clicked";
 
 type GA4EventParams = Record<string, string | number | boolean | null | undefined>;
 

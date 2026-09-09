@@ -6,25 +6,34 @@ import Link from "next/link";
 import type { Market } from "@/lib/markets";
 import { findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
-import { HeroVenueSearch } from "./HeroVenueSearch";
-
-type ContentType = "happy-hours" | "events";
+import { HeroDiscoverySearch } from "./HeroDiscoverySearch";
+import { trackGA4Event } from "@/lib/ga4";
+import {
+  DISCOVERY_MODE_ORDER,
+  DISCOVERY_MODES,
+  DEFAULT_DISCOVERY_MODE,
+  type DiscoveryMode,
+} from "@/lib/homepageDiscoveryModes";
 
 type Props = {
   market: Market;
-  cityName: string;
   isPersisted: boolean;
+  /**
+   * Whether the Daily Specials selector option should show its "NEW"
+   * badge — computed server-side via isFeatureNewBadgeVisible() and passed
+   * down as a plain boolean so this Client Component never calls
+   * `new Date()` itself during render (see newBadge.ts's header comment on
+   * why that avoids a hydration mismatch right at the expiry boundary).
+   */
+  dailySpecialsNewBadgeVisible: boolean;
 };
 
-export default function HeroSection({ market, cityName, isPersisted }: Props) {
+export default function HeroSection({ market, isPersisted, dailySpecialsNewBadgeVisible }: Props) {
   const router = useRouter();
-  const [contentType, setContentType] = useState<ContentType>("happy-hours");
+  const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>(DEFAULT_DISCOVERY_MODE);
   const [, startTransition] = useTransition();
 
-  const subheadline =
-    contentType === "happy-hours"
-      ? "Discover the best happy hours near you."
-      : "Discover what's happening near you.";
+  const activeConfig = DISCOVERY_MODES[discoveryMode];
 
   // Auto-detect market on first visit when no cookie is set.
   // Reuses the same findNearestActiveMarket + setMarketAction as MarketChip.
@@ -47,11 +56,29 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
     );
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const showMeHref = contentType === "happy-hours" ? "/website-happy-hours" : "/website-events";
-  const searchPlaceholder =
-    contentType === "happy-hours"
-      ? "Search venues, food and drink specials..."
-      : `Search ${cityName} events or venues...`;
+  // GA4 homepage_discovery_mode_selected — fires only for a genuine change
+  // away from the current mode: never for the Happy Hours default on page
+  // load (there's no call at mount) and never for re-clicking the
+  // already-active mode (the `mode !== discoveryMode` guard below).
+  function selectDiscoveryMode(mode: DiscoveryMode) {
+    if (mode !== discoveryMode) {
+      trackGA4Event("homepage_discovery_mode_selected", {
+        surface: "homepage_hero",
+        mode,
+        previous_mode: discoveryMode,
+        market: market.id,
+      });
+    }
+    setDiscoveryMode(mode);
+  }
+
+  function trackBrowseClick() {
+    trackGA4Event("homepage_discovery_browse_clicked", {
+      surface: "homepage_hero",
+      mode: discoveryMode,
+      market: market.id,
+    });
+  }
 
   return (
     <section
@@ -73,51 +100,55 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
         </span>
       </h1>
 
-      {/* Subheadline — tied to the Happy Hours / Events toggle */}
+      {/* Subheadline */}
       <p className="mt-5 text-lg md:text-xl text-gray-400">
-        {subheadline}
+        Discover happy hours, daily specials and events near you.
       </p>
 
-      {/* Happy Hours / Events segmented control */}
-      <div className="mt-5 w-full max-w-[280px]">
-        <div className="bg-gray-100 rounded-full p-1 flex" role="group" aria-label="Content type">
-          <button
-            type="button"
-            onClick={() => setContentType("happy-hours")}
-            aria-pressed={contentType === "happy-hours"}
-            className={`
-              flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all duration-200
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
-              ${contentType === "happy-hours"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-              }
-            `}
-          >
-            Happy Hours
-          </button>
-          <button
-            type="button"
-            onClick={() => setContentType("events")}
-            aria-pressed={contentType === "events"}
-            className={`
-              flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all duration-200
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
-              ${contentType === "events"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-              }
-            `}
-          >
-            Events
-          </button>
+      {/* Happy Hours / Daily Specials / Events segmented control */}
+      <div className="mt-5 w-full max-w-md">
+        <div className="bg-gray-100 rounded-full p-1 flex" role="group" aria-label="Discovery mode">
+          {DISCOVERY_MODE_ORDER.map((mode) => {
+            const config = DISCOVERY_MODES[mode];
+            const isActive = mode === discoveryMode;
+            const showNewBadge = mode === "daily_specials" && dailySpecialsNewBadgeVisible;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => selectDiscoveryMode(mode)}
+                aria-pressed={isActive}
+                className={`
+                  flex-1 flex items-center justify-center gap-1
+                  py-2 px-2 sm:px-4 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap
+                  transition-all duration-200
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
+                  ${isActive
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                  }
+                `}
+              >
+                <span>{config.label}</span>
+                {showNewBadge && (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold leading-none text-amber-700"
+                  >
+                    NEW
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Primary CTA — Show Me */}
+      {/* Primary CTA — Browse */}
       <div className="mt-6 w-full max-w-xl">
         <Link
-          href={showMeHref}
+          href={activeConfig.destination}
+          onClick={trackBrowseClick}
           className="
             w-full flex items-center justify-center gap-2
             px-6 py-[18px]
@@ -130,7 +161,7 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
             transition-all duration-200
           "
         >
-          {contentType === "happy-hours" ? "Browse Happy Hours" : "Show Me Events"}
+          {activeConfig.ctaLabel}
           <svg
             className="w-4 h-4"
             fill="none"
@@ -143,17 +174,12 @@ export default function HeroSection({ market, cityName, isPersisted }: Props) {
         </Link>
       </div>
 
-      {/* Search pill — secondary action, wired to live venue suggestions.
-          discoveryHref is only set for Happy Hours: /website-events has no
-          ?q=-aware search results page yet, so Events mode stays
-          venue-suggestions-only rather than linking somewhere that can't
-          apply the query. */}
-      <HeroVenueSearch
-        market={market}
-        placeholder={searchPlaceholder}
-        ariaLabel={`Search ${contentType === "happy-hours" ? "happy hours" : "events"}`}
-        discoveryHref={contentType === "happy-hours" ? "/website-happy-hours" : undefined}
-      />
+      {/* Search pill — secondary action. Searches the entity that matches
+          the selected mode (venues / Daily Specials / Events — see
+          HeroDiscoverySearch.tsx) and derives its own placeholder, CTA
+          copy, and "See all" destination from DISCOVERY_MODES for the
+          given mode. */}
+      <HeroDiscoverySearch market={market} mode={discoveryMode} />
 
     </section>
   );

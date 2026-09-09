@@ -14,6 +14,7 @@ import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
 import { trackGA4Event } from "@/lib/ga4";
 import { fireWebsiteSearch } from "../searchTracking";
+import { DiscoverySearchInput } from "../DiscoverySearchInput";
 import {
   saveDesktopMapBounds,
   saveMobileMapBounds,
@@ -93,7 +94,7 @@ function filterCardsWithinBounds<T extends { latitude: number | null; longitude:
 const NEAR_ME_RADIUS_KM = 25;
 const TOP_RATED_MIN = 4.0;
 // Matches the debounce already established for the homepage's autocomplete
-// (HeroVenueSearch.tsx) — used here only to debounce the ?q= URL sync since
+// (HeroDiscoverySearch.tsx) — used here only to debounce the ?q= URL sync since
 // the actual filtering is client-side/instant (no network round trip).
 const SEARCH_URL_SYNC_DEBOUNCE_MS = 200;
 
@@ -478,69 +479,6 @@ function SortOptions({
         A – Z
       </button>
     </>
-  );
-}
-
-// ─── Search input ─────────────────────────────────────────────────────────────
-// Same pill visual language as the homepage's HeroVenueSearch (border,
-// rounded-full, shadow, amber focus ring, search icon) — kept consistent
-// with the existing consumer experience rather than introducing a new style.
-
-function VenueSearchInput({
-  value,
-  onChange,
-  onClear,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onClear: () => void;
-}) {
-  return (
-    <div
-      className="
-        flex items-center gap-2.5 pl-4 pr-3 py-2.5
-        bg-white border border-gray-200 rounded-full
-        shadow-[0_1px_2px_rgba(0,0,0,0.04)]
-        focus-within:ring-2 focus-within:ring-amber-400
-        transition-all
-      "
-    >
-      <svg
-        className="w-4 h-4 text-gray-400 flex-shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Search by name, type, or specials…"
-        aria-label="Search happy hours"
-        autoComplete="off"
-        className="flex-1 min-w-0 text-sm text-gray-900 placeholder:text-gray-400 bg-transparent outline-none"
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="Clear search"
-          className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
-    </div>
   );
 }
 
@@ -1328,10 +1266,12 @@ export function HappyHoursSearchClient({
              venue list it filters instead of stretching across the map
              column too. Mobile is unaffected (single stacked column). */
           <div className="px-4 pt-3 md:w-1/2 md:px-5">
-            <VenueSearchInput
+            <DiscoverySearchInput
               value={searchQuery}
               onChange={setSearchQuery}
               onClear={() => setSearchQuery("")}
+              placeholder="Search by name, type, or specials…"
+              ariaLabel="Search happy hours"
             />
           </div>
         )}
