@@ -88,6 +88,32 @@ function CharCounter({ length, max }: { length: number; max: number }) {
   );
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+//
+// Progressive creation, matching the established Events/Collections pattern
+// (src/app/admin/events/EventForm.tsx): a brand new Daily Special (no id
+// yet) shows only the fields needed to safely create an unpublished draft —
+// Title, Type, and Schedule — behind a "Continue" action. Once the draft
+// exists (currentSpecialId is set, whether from a fresh Continue or because
+// an existing Daily Special was opened for editing), the full editor
+// renders — every other field is either nullable or has a safe server-side
+// default, so nothing else blocks draft creation. Image is therefore never
+// shown in a disabled "come back later" state — it isn't reachable until
+// currentSpecialId already exists, which fixes the specific gap this
+// correction task reported (previously the operator had to save the whole
+// form, close it, reopen it, and only then could an image be attached).
+//
+// Unlike Events, whose Continue branch also calls onSaved() (relying on
+// EventsManager's handleSaved flipping `mode` from "creating" to "editing"
+// as a side effect to stop the SECOND save from re-triggering
+// "just finished creating" behaviour), Daily Specials' Continue branch
+// deliberately does NOT call onSaved — see its own comment in handleSubmit
+// below for why that would be wrong here specifically.
+//
+// Opening an EXISTING Daily Special (initialSpecial provided) always
+// hydrates currentSpecialId immediately (see the effect below), so Edit
+// never reaches the Step 1 branch — it goes straight to the full editor,
+// completely unchanged from before this task.
 export default function DailySpecialForm({
   initialSpecial,
   venueId,
@@ -140,6 +166,92 @@ export default function DailySpecialForm({
     setError(null);
     setTitleError(null);
 
+    // ── Step 1: Continue — create the draft ─────────────────────────────
+    // Only reachable for a brand-new creation (currentSpecialId is null);
+    // opening an existing row always hydrates currentSpecialId immediately
+    // (see the effect above), so an Edit session never reaches this branch.
+    // Validates only Title, Type, and Schedule — the fields Step 1 shows —
+    // and sends safe, valid defaults for everything else. isPublished is
+    // hard-coded false — Continue must never publish.
+    //
+    // Deliberately does NOT call onSaved() here, unlike EventForm's
+    // otherwise-identical Continue branch. Events' onSaved-on-Continue only
+    // works there because EventsManager's handleSaved flips `mode` from
+    // "creating" to "editing" as a side effect of that first call — that's
+    // what stops the SECOND (full-editor) save from also being treated as
+    // "just finished creating." Daily Specials' manager has no such
+    // mode-flip step: resolveAfterSave() maps wasCreating=true straight to
+    // the neutral idle state with a success toast. Calling onSaved here
+    // would fire that neutral-return + toast after Continue — one step too
+    // early, and exactly the silent-looking-done-when-it-isn't behaviour
+    // this task exists to avoid. Keeping `mode` as "creating" throughout
+    // both Step 1 and Step 2 and firing onSaved only from the true final
+    // save (below) is simpler than mirroring Events' side effect.
+    if (!currentSpecialId) {
+      if (!formState.title.trim()) {
+        const msg = "Please enter a title.";
+        setError(msg);
+        setTitleError(msg);
+        return;
+      }
+      if (!formState.offerType) {
+        setError("Please select a type (Food, Drink, or Food & Drink).");
+        return;
+      }
+
+      const scheduleResult = validateDailySpecialSchedule({
+        scheduleType: formState.scheduleType,
+        oneTimeDate: formState.scheduleType === "one_time" ? formState.oneTimeDate || null : null,
+        daysOfWeek: formState.scheduleType === "weekly" ? formState.daysOfWeek : null,
+        recurrenceStartDate: formState.scheduleType === "weekly" ? formState.recurrenceStartDate || null : null,
+        recurrenceEndDate: formState.scheduleType === "weekly" ? formState.recurrenceEndDate || null : null,
+      });
+      if (!scheduleResult.valid) {
+        setError(scheduleResult.errors[0]);
+        return;
+      }
+
+      submittingRef.current = true;
+      setIsSaving(true);
+
+      const result = await saveDailySpecialAction(
+        {
+          venueId,
+          title: formState.title.trim(),
+          offerType: formState.offerType,
+          shortSummary: null,
+          description: null,
+          conditions: null,
+          scheduleType: formState.scheduleType,
+          oneTimeDate: formState.scheduleType === "one_time" ? (formState.oneTimeDate || null) : null,
+          daysOfWeek: formState.scheduleType === "one_time" ? null : formState.daysOfWeek,
+          recurrenceStartDate:
+            formState.scheduleType === "one_time" ? null : (formState.recurrenceStartDate || null),
+          recurrenceEndDate:
+            formState.scheduleType === "one_time" ? null : (formState.recurrenceEndDate || null),
+          timeMode: "unspecified",
+          startTime: null,
+          endMode: "unspecified",
+          endTime: null,
+          isPublished: false,
+        },
+        null
+      );
+
+      submittingRef.current = false;
+
+      if ("error" in result) {
+        setError(result.error);
+        setIsSaving(false);
+        return;
+      }
+
+      setCurrentSpecialId(result.savedId);
+      setIsSaving(false);
+      return;
+    }
+
+    // ── Step 2 (new creation, past Continue) / single-stage Edit: full save ──
     // ── Client-side validation — same Phase 1 pure validators the server
     // uses, so client and server can never disagree. This is convenience
     // only; saveDailySpecialAction re-validates authoritatively.
@@ -211,12 +323,10 @@ export default function DailySpecialForm({
   };
 
   // ── Image upload / remove ─────────────────────────────────────────────────
-  // Both require currentSpecialId — the Image section only renders once a
-  // row exists (mirrors EventForm's "image only reachable once the row
-  // exists" gating, without a separate two-step create flow: unlike
-  // Events, a Daily Special's required fields — title, type, a valid
-  // schedule — are reasonable to fill in one pass, so "Create Daily
-  // Special" already performs a full, valid save the first time).
+  // Both require currentSpecialId, which is always set by the time either
+  // rendering path that shows the Image section can render (Step 2 of a
+  // new creation, past Continue; or the single-stage Edit form) — the
+  // guards here are defensive, not reachable through normal use.
 
   const handleImageUpload = async (file: File) => {
     if (!currentSpecialId) return;
@@ -284,6 +394,259 @@ export default function DailySpecialForm({
     setIsUploadingImage(false);
   };
 
+  // ── Shared field blocks — rendered from both the Step 1 (Continue) return
+  // and the full editor return below, so Title/Type/Schedule are defined
+  // exactly once rather than drifting between two copies.
+
+  const titleAndTypeFields = (
+    <>
+      {/* Title */}
+      <div>
+        <label htmlFor="special-title" className={labelCls}>Title</label>
+        <input
+          id="special-title"
+          type="text"
+          value={formState.title}
+          onChange={(e) => {
+            update("title", e.target.value);
+            if (titleError) setTitleError(null);
+          }}
+          placeholder="e.g. Wing Wednesday"
+          disabled={isSaving}
+          aria-invalid={!!titleError}
+          className={inputCls}
+        />
+        {titleError && <p className="mt-1 text-xs text-red-600">{titleError}</p>}
+      </div>
+
+      {/* Type */}
+      <div>
+        <label className={labelCls}>Type</label>
+        <div className="flex flex-wrap gap-2">
+          {OFFER_TYPES.map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => update("offerType", type)}
+              disabled={isSaving}
+              aria-pressed={formState.offerType === type}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.offerType === type
+                  ? "bg-amber-500 border-amber-500 text-white"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {OFFER_TYPE_LABELS[type]}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+
+  const scheduleSection = (
+    <div className="pt-5 border-t border-gray-100 space-y-4">
+      <h3 className={sectionHeadingCls}>Schedule</h3>
+
+      <div>
+        <label className={labelCls}>How often does this special run?</label>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="radio"
+              name="schedule-type"
+              checked={formState.scheduleType === "one_time"}
+              onChange={() => {
+                setScheduleUpsellVisible(false);
+                update("scheduleType", "one_time");
+              }}
+              disabled={isSaving}
+              className="text-amber-500 focus:ring-amber-400"
+            />
+            One time
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="radio"
+              name="schedule-type"
+              checked={formState.scheduleType === "weekly"}
+              onChange={() => {
+                if (!canRecur) {
+                  setScheduleUpsellVisible(true);
+                  return;
+                }
+                setScheduleUpsellVisible(false);
+                update("scheduleType", "weekly");
+              }}
+              disabled={isSaving}
+              className="text-amber-500 focus:ring-amber-400"
+            />
+            Every week {!canRecur && <span className="text-gray-400">(Pro+)</span>}
+          </label>
+        </div>
+
+        {/* Downgrade notice: existing recurring special on a Free plan */}
+        {!canRecur && initialSpecial && formState.scheduleType === "weekly" && (
+          <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            This Daily Special has a recurring schedule from a previous plan. To edit
+            the schedule, upgrade to Pro or switch to &ldquo;One time&rdquo; to save other changes.{" "}
+            {isOwner ? (
+              <Link href="/admin/subscription" className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors">
+                Change your plan →
+              </Link>
+            ) : (
+              <span className="text-amber-700">Ask the admin to change the plan.</span>
+            )}
+          </div>
+        )}
+
+        {scheduleUpsellVisible && (
+          <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
+            <p className="text-sm font-semibold text-amber-900">Recurring Daily Specials</p>
+            <p className="text-sm text-amber-800 leading-snug">
+              Create a Daily Special once and automatically repeat it every week — no
+              re-entering details each time.
+            </p>
+            <p className="text-xs font-medium text-amber-800 pt-0.5">
+              Available on Pro and Premium plans.{" "}
+              {isOwner ? (
+                <Link href="/admin/subscription" className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors">
+                  Change your plan →
+                </Link>
+              ) : (
+                <span className="text-amber-700">Ask the admin to change the plan.</span>
+              )}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {formState.scheduleType === "one_time" ? (
+        <div>
+          <label htmlFor="special-one-time-date" className={labelCls}>Date</label>
+          <input
+            id="special-one-time-date"
+            type="date"
+            value={formState.oneTimeDate}
+            onChange={(e) => update("oneTimeDate", e.target.value)}
+            disabled={isSaving}
+            className={inputCls}
+          />
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className={labelCls}>Days of the week</label>
+            <div className="flex flex-wrap gap-2">
+              {WEEKDAY_UI_ORDER.map((day) => {
+                const selected = formState.daysOfWeek.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => update("daysOfWeek", toggleWeekday(formState.daysOfWeek, day))}
+                    disabled={isSaving}
+                    aria-pressed={selected}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      selected
+                        ? "bg-amber-500 border-amber-500 text-white"
+                        : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {WEEKDAY_LABELS_LONG[day]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-gray-400">Select one or more days — e.g. Monday-Friday, or Saturday and Sunday.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="special-recurrence-start" className={labelCls}>
+                Starts <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="special-recurrence-start"
+                type="date"
+                value={formState.recurrenceStartDate}
+                onChange={(e) => update("recurrenceStartDate", e.target.value)}
+                disabled={isSaving}
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-gray-400">Leave blank if already active.</p>
+            </div>
+            <div>
+              <label htmlFor="special-recurrence-end" className={labelCls}>
+                Ends <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="special-recurrence-end"
+                type="date"
+                value={formState.recurrenceEndDate}
+                onChange={(e) => update("recurrenceEndDate", e.target.value)}
+                disabled={isSaving}
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Leave blank if it continues until you change or remove it.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // ── Step 1: only Title, Type, Schedule — behind Continue ────────────────
+  // Not reachable for Edit (see the component doc comment above).
+  if (!currentSpecialId) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        <p className="text-sm text-gray-500">
+          Start with the title, type, and schedule. You&rsquo;ll add a summary,
+          description, image, and publishing status next.
+        </p>
+
+        <div className="space-y-4">{titleAndTypeFields}</div>
+
+        {scheduleSection}
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? "Creating…" : "Continue"}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isSaving}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400">
+          This Daily Special is created as a draft — you&rsquo;ll add the rest of the
+          details, an optional image, and choose whether to publish it next.
+        </p>
+      </form>
+    );
+  }
+
+  // ── Step 2 (new creation, past Continue) / single-stage Edit: full editor ──
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
@@ -296,47 +659,7 @@ export default function DailySpecialForm({
       <div className="space-y-4">
         <h3 className={sectionHeadingCls}>Daily Special</h3>
 
-        {/* Title */}
-        <div>
-          <label htmlFor="special-title" className={labelCls}>Title</label>
-          <input
-            id="special-title"
-            type="text"
-            value={formState.title}
-            onChange={(e) => {
-              update("title", e.target.value);
-              if (titleError) setTitleError(null);
-            }}
-            placeholder="e.g. Wing Wednesday"
-            disabled={isSaving}
-            aria-invalid={!!titleError}
-            className={inputCls}
-          />
-          {titleError && <p className="mt-1 text-xs text-red-600">{titleError}</p>}
-        </div>
-
-        {/* Type */}
-        <div>
-          <label className={labelCls}>Type</label>
-          <div className="flex flex-wrap gap-2">
-            {OFFER_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => update("offerType", type)}
-                disabled={isSaving}
-                aria-pressed={formState.offerType === type}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  formState.offerType === type
-                    ? "bg-amber-500 border-amber-500 text-white"
-                    : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {OFFER_TYPE_LABELS[type]}
-              </button>
-            ))}
-          </div>
-        </div>
+        {titleAndTypeFields}
 
         {/* Short summary */}
         <div>
@@ -396,222 +719,73 @@ export default function DailySpecialForm({
           </p>
         </div>
 
-        {/* Image — only reachable once the row exists */}
-        {currentSpecialId && (
-          <div>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              className="sr-only"
+        {/* Image — always available here: this section only ever renders
+            once currentSpecialId exists (see the Step 1 early return
+            above), so there is no disabled/"come back later" state to
+            show — this is exactly the gap this correction task fixes. */}
+        <div>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={isUploadingImage || isSaving}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageUpload(file);
+            }}
+          />
+
+          <p className={labelCls}>
+            Image <span className="text-gray-400 font-normal">(optional)</span>
+          </p>
+
+          {imageError && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+              {imageError}
+            </div>
+          )}
+
+          {imageUrl ? (
+            <div className="flex items-start gap-4">
+              <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imageUrl} alt="Daily Special" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isUploadingImage || isSaving}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUploadingImage ? "Uploading…" : "Replace image"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImageRemove}
+                  disabled={isUploadingImage || isSaving}
+                  className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Remove image
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
               disabled={isUploadingImage || isSaving}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageUpload(file);
-              }}
-            />
-
-            <p className={labelCls}>
-              Image <span className="text-gray-400 font-normal">(optional)</span>
-            </p>
-
-            {imageError && (
-              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-                {imageError}
-              </div>
-            )}
-
-            {imageUrl ? (
-              <div className="flex items-start gap-4">
-                <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrl} alt="Daily Special" className="w-full h-full object-cover" />
-                </div>
-                <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={isUploadingImage || isSaving}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isUploadingImage ? "Uploading…" : "Replace image"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleImageRemove}
-                    disabled={isUploadingImage || isSaving}
-                    className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Remove image
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={isUploadingImage || isSaving}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploadingImage ? "Uploading…" : "Upload image"}
-              </button>
-            )}
-          </div>
-        )}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUploadingImage ? "Uploading…" : "Upload image"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Section 2: Schedule ──────────────────────────────────────────── */}
-      <div className="pt-5 border-t border-gray-100 space-y-4">
-        <h3 className={sectionHeadingCls}>Schedule</h3>
-
-        <div>
-          <label className={labelCls}>How often does this special run?</label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="schedule-type"
-                checked={formState.scheduleType === "one_time"}
-                onChange={() => {
-                  setScheduleUpsellVisible(false);
-                  update("scheduleType", "one_time");
-                }}
-                disabled={isSaving}
-                className="text-amber-500 focus:ring-amber-400"
-              />
-              One time
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="schedule-type"
-                checked={formState.scheduleType === "weekly"}
-                onChange={() => {
-                  if (!canRecur) {
-                    setScheduleUpsellVisible(true);
-                    return;
-                  }
-                  setScheduleUpsellVisible(false);
-                  update("scheduleType", "weekly");
-                }}
-                disabled={isSaving}
-                className="text-amber-500 focus:ring-amber-400"
-              />
-              Every week {!canRecur && <span className="text-gray-400">(Pro+)</span>}
-            </label>
-          </div>
-
-          {/* Downgrade notice: existing recurring special on a Free plan */}
-          {!canRecur && initialSpecial && formState.scheduleType === "weekly" && (
-            <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
-              This Daily Special has a recurring schedule from a previous plan. To edit
-              the schedule, upgrade to Pro or switch to &ldquo;One time&rdquo; to save other changes.{" "}
-              {isOwner ? (
-                <Link href="/admin/subscription" className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors">
-                  Change your plan →
-                </Link>
-              ) : (
-                <span className="text-amber-700">Ask the admin to change the plan.</span>
-              )}
-            </div>
-          )}
-
-          {scheduleUpsellVisible && (
-            <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1.5">
-              <p className="text-sm font-semibold text-amber-900">Recurring Daily Specials</p>
-              <p className="text-sm text-amber-800 leading-snug">
-                Create a Daily Special once and automatically repeat it every week — no
-                re-entering details each time.
-              </p>
-              <p className="text-xs font-medium text-amber-800 pt-0.5">
-                Available on Pro and Premium plans.{" "}
-                {isOwner ? (
-                  <Link href="/admin/subscription" className="font-semibold underline underline-offset-2 hover:text-amber-900 transition-colors">
-                    Change your plan →
-                  </Link>
-                ) : (
-                  <span className="text-amber-700">Ask the admin to change the plan.</span>
-                )}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {formState.scheduleType === "one_time" ? (
-          <div>
-            <label htmlFor="special-one-time-date" className={labelCls}>Date</label>
-            <input
-              id="special-one-time-date"
-              type="date"
-              value={formState.oneTimeDate}
-              onChange={(e) => update("oneTimeDate", e.target.value)}
-              disabled={isSaving}
-              className={inputCls}
-            />
-          </div>
-        ) : (
-          <>
-            <div>
-              <label className={labelCls}>Days of the week</label>
-              <div className="flex flex-wrap gap-2">
-                {WEEKDAY_UI_ORDER.map((day) => {
-                  const selected = formState.daysOfWeek.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => update("daysOfWeek", toggleWeekday(formState.daysOfWeek, day))}
-                      disabled={isSaving}
-                      aria-pressed={selected}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                        selected
-                          ? "bg-amber-500 border-amber-500 text-white"
-                          : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      {WEEKDAY_LABELS_LONG[day]}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1 text-xs text-gray-400">Select one or more days — e.g. Monday-Friday, or Saturday and Sunday.</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="special-recurrence-start" className={labelCls}>
-                  Starts <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  id="special-recurrence-start"
-                  type="date"
-                  value={formState.recurrenceStartDate}
-                  onChange={(e) => update("recurrenceStartDate", e.target.value)}
-                  disabled={isSaving}
-                  className={inputCls}
-                />
-                <p className="mt-1 text-xs text-gray-400">Leave blank if already active.</p>
-              </div>
-              <div>
-                <label htmlFor="special-recurrence-end" className={labelCls}>
-                  Ends <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  id="special-recurrence-end"
-                  type="date"
-                  value={formState.recurrenceEndDate}
-                  onChange={(e) => update("recurrenceEndDate", e.target.value)}
-                  disabled={isSaving}
-                  className={inputCls}
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Leave blank if it continues until you change or remove it.
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      {scheduleSection}
 
       {/* ── Section 3: Time ──────────────────────────────────────────────── */}
       <div className="pt-5 border-t border-gray-100 space-y-4">
@@ -747,18 +921,14 @@ export default function DailySpecialForm({
             disabled={isSaving}
             className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? "Saving…" : currentSpecialId ? "Save changes" : "Create Daily Special"}
+            {/* initialSpecial (not currentSpecialId) decides the label:
+                currentSpecialId is always set on this branch, including for
+                a brand-new creation's Step 2 (set by Continue) — the label
+                must still read "Create Daily Special" there, since this is
+                the action that finishes creating a NEW row, just as an
+                UPDATE to the same draft row rather than a second insert. */}
+            {isSaving ? "Saving…" : initialSpecial ? "Save changes" : "Create Daily Special"}
           </button>
-          {!currentSpecialId && onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isSaving}
-              className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-          )}
           {saved && (
             <span
               className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-700"

@@ -315,3 +315,114 @@ export function validateDailySpecialContent(
 
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Consumer discovery — WHEN filter matching (Phase 3)
+//
+// Shared, framework-agnostic date/day logic used by the website Daily
+// Specials search results page. Presentation (labels/copy) stays in
+// src/app/(website)/dailySpecialConsumerLabels.ts — this is filtering
+// behavior only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type WhenFilter = "today" | Weekday | null;
+
+/**
+ * The ISO "YYYY-MM-DD" date of the next occurrence of `weekday` on or after
+ * `todayIsoDate` — returns `todayIsoDate` itself when today already falls
+ * on that weekday (i.e. "next occurrence, inclusive of today").
+ */
+export function nextDateForWeekday(todayIsoDate: string, weekday: Weekday): string {
+  const todayDow = getWeekdayFromIsoDate(todayIsoDate);
+  if (todayDow === null) return todayIsoDate;
+
+  const diffDays = (weekday - todayDow + 7) % 7;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(todayIsoDate);
+  if (!m) return todayIsoDate;
+
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  date.setUTCDate(date.getUTCDate() + diffDays);
+
+  const y = date.getUTCFullYear();
+  const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${mo}-${d}`;
+}
+
+/**
+ * Does this schedule match the consumer WHEN filter?
+ *
+ * filter = null    -> always true (no day filter applied — "browse all").
+ * filter = "today"  -> delegates entirely to occursOnDate() against
+ *                      todayIsoDate — a one-time Special matches only on
+ *                      its exact date; a weekly Special matches when
+ *                      today's weekday is selected AND today falls inside
+ *                      its recurrence validity window.
+ * filter = a Weekday (browsing e.g. "Wednesday", not necessarily today) ->
+ *   Resolved against the UPCOMING concrete calendar date for that weekday
+ *   (nextDateForWeekday) — this is "the selected consumer context's actual
+ *   date" the product rule requires recurrence validity to be checked
+ *   against, since a bare weekday name alone has no date of its own:
+ *     - Weekly: weekday must be selected AND that upcoming date must fall
+ *       inside the optional recurrence validity window.
+ *     - One-time: matches ONLY if its stored one_time_date is EXACTLY that
+ *       upcoming date — never merely "any one-time Special whose date
+ *       happens to fall on this weekday", which would incorrectly resurrect
+ *       an old or far-future one-time Special every time its weekday comes
+ *       up in browsing (the exact failure mode the product rule warns
+ *       against). This is stricter than Events' eventOccursOnDow(), which
+ *       has no equivalent "arbitrary weekday browse" filter to begin with
+ *       (Events only offers Today/Tomorrow/Weekend chips, not a full
+ *       weekday picker) — there is no existing Events convention to
+ *       directly copy for this case, so this rule was authored fresh
+ *       against the product brief's explicit guidance.
+ */
+export function dailySpecialMatchesWhenFilter(
+  schedule: DailySpecialSchedule,
+  filter: WhenFilter,
+  todayIsoDate: string
+): boolean {
+  if (filter === null) return true;
+  if (filter === "today") return occursOnDate(schedule, todayIsoDate);
+
+  const targetDate = nextDateForWeekday(todayIsoDate, filter);
+
+  if (schedule.scheduleType === "one_time") {
+    return schedule.oneTimeDate === targetDate;
+  }
+
+  if (!weeklyIncludesWeekday(schedule.daysOfWeek, filter)) return false;
+  return isWithinRecurrenceValidity(schedule, targetDate);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Consumer discovery — text search matching (Phase 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DailySpecialSearchableContent = {
+  title: string;
+  shortSummary: string | null;
+  description: string | null;
+};
+
+/**
+ * Case-insensitive substring match across title, short summary, and
+ * description — exactly the three fields the product brief names, nothing
+ * more (no conditions, no structured offer-item data to search since none
+ * exists). An empty/whitespace-only query always matches (no search
+ * applied), matching the Happy Hours/Events search pages' own convention
+ * of treating a blank query as "no filter".
+ */
+export function dailySpecialMatchesSearch(
+  content: DailySpecialSearchableContent,
+  query: string
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  return (
+    content.title.toLowerCase().includes(q) ||
+    (content.shortSummary?.toLowerCase().includes(q) ?? false) ||
+    (content.description?.toLowerCase().includes(q) ?? false)
+  );
+}

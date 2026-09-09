@@ -2,14 +2,12 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
 import DailySpecialForm from "./DailySpecialForm";
 import type { DailySpecialRow } from "./formState";
-import { deleteDailySpecialAction } from "./actions";
+import { deleteDailySpecialAction, getDailySpecialsForActiveVenueAction } from "./actions";
 import type { OperatorPlan } from "@/lib/plans";
 import { OFFER_TYPE_LABELS, coerceDailySpecialRow } from "@/lib/dailySpecialTypes";
 import { scheduleSummary, timeSummary, validitySummary } from "./summaryLabels";
-import { DAILY_SPECIAL_COLUMNS } from "./columns";
 
 // ── Filter & Sort ─────────────────────────────────────────────────────────────
 
@@ -174,14 +172,21 @@ export default function DailySpecialsManager({
     setMode("creating");
   };
 
+  // Routed through a server action (resolveOperatorContext()), not the
+  // browser Supabase client — see getDailySpecialsForActiveVenueAction's
+  // own header comment for the impersonation bug this specifically fixes.
+  // The browser client is always authenticated as whoever is actually
+  // logged into this browser; during founder impersonation that's the
+  // founder's own session, unrelated to the server-side-only
+  // impersonation cookie, and Daily Specials' venue-ownership-scoped
+  // SELECT policy would silently return zero rows for it.
   const refreshList = async () => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("daily_specials")
-      .select(DAILY_SPECIAL_COLUMNS)
-      .eq("venue_id", venueId)
-      .order("updated_at", { ascending: false });
-    setSpecials((data as unknown as DailySpecialRow[]) ?? []);
+    const result = await getDailySpecialsForActiveVenueAction(venueId);
+    if ("error" in result) {
+      console.error("[DailySpecialsManager] refreshList failed:", result.error);
+      return;
+    }
+    setSpecials(result.specials as unknown as DailySpecialRow[]);
   };
 
   // After a successful save, behaviour differs by what was being saved:

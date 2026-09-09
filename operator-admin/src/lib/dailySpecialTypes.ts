@@ -294,7 +294,17 @@ export function coerceDailySpecialRow(row: DailySpecialDbRow): DailySpecial | nu
   };
 }
 
-function coerceDailySpecialSchedule(row: DailySpecialDbRow): DailySpecialSchedule | null {
+/**
+ * Exported (unlike coerceDailySpecialTime below, for the identical reason)
+ * so a caller with only a partial row shape — e.g. a joined website search
+ * query that never selects id/venue_id/timestamps — can still reuse this
+ * exact coercion logic instead of duplicating it or constructing a fake
+ * full DailySpecialDbRow just to call coerceDailySpecialRow(). Takes only
+ * the columns it actually reads.
+ */
+export function coerceDailySpecialSchedule(
+  row: Pick<DailySpecialDbRow, "schedule_type" | "one_time_date" | "days_of_week" | "recurrence_start_date" | "recurrence_end_date">
+): DailySpecialSchedule | null {
   if (row.schedule_type === "one_time") {
     if (!row.one_time_date) return null;
     return { scheduleType: "one_time", oneTimeDate: row.one_time_date };
@@ -312,7 +322,10 @@ function coerceDailySpecialSchedule(row: DailySpecialDbRow): DailySpecialSchedul
   return null;
 }
 
-function coerceDailySpecialTime(row: DailySpecialDbRow): DailySpecialTime | null {
+/** Exported for the same reason as coerceDailySpecialSchedule() above — see its own comment. */
+export function coerceDailySpecialTime(
+  row: Pick<DailySpecialDbRow, "time_mode" | "start_time" | "end_mode" | "end_time">
+): DailySpecialTime | null {
   if (row.time_mode === "unspecified") return { timeMode: "unspecified" };
   if (row.time_mode === "all_day") return { timeMode: "all_day" };
   if (row.time_mode === "timed") {

@@ -29,6 +29,8 @@ import { ClaimVenueCTA } from "./ClaimVenueCTA";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
+import { DailySpecialsSection } from "./DailySpecialsSection";
+import { DailySpecialDeepLinkScroll } from "./DailySpecialDeepLinkScroll";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -323,6 +325,21 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   const hasFood = venue.specialsFood.length > 0;
   const hasDrinks = venue.specialsDrinks.length > 0;
   const hasSpecials = hasFood || hasDrinks;
+  // Venue-detail UX correction: Happy Hour Times and Food/Drink Offers are
+  // now one merged section/nav item (see the "happy-hour" section below),
+  // so its own visibility must fold in both — a venue with offers but an
+  // empty weekly schedule (or vice versa) still has a Happy Hour section
+  // worth showing; only a venue with neither gets no Happy Hour nav item
+  // at all (falling through to e.g. "Daily Specials · Info" alone).
+  // hasAnySlotsInWeekly mirrors HappyHourTimesCard's own identical check
+  // (that component still independently falls back to "Happy hour
+  // information not available" if ever rendered with none — this flag
+  // only decides whether the section is offered at the page level).
+  const hasHappyHourWeekly = Object.values(venue.happyHourWeekly).some(
+    (slots) => Array.isArray(slots) && slots.length > 0
+  );
+  const hasHappyHour = hasHappyHourWeekly || hasSpecials;
+  const hasDailySpecials = venue.dailySpecials.length > 0;
   const hasEvents = venue.events.length > 0;
   const hasAbout = Boolean(venue.aboutYourVenue?.trim());
   const hasBusinessHours = DAY_ORDER.some(
@@ -376,10 +393,18 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
       : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venueLocationQuery)}`
     : null;
 
-  // Nav sections — only sections that will render.
+  // Nav sections — only sections that will render. Conceptual order is
+  // Happy Hour -> Daily Specials -> Events (Phase 3 locked decision).
+  // Venue-detail UX correction: Happy Hour Times and Food/Drink Offers
+  // used to be two separate top-level nav entries ("Happy Hour" and
+  // "Offers"), which read as unrelated even though both describe the same
+  // Happy Hour. There is now a single "Happy Hour" entry (gated on
+  // hasHappyHour, covering either kind of content) with no separate
+  // "Offers" destination — Food Offers/Drink Offers are subsections
+  // inside it, not their own nav items or anchors.
   const sections = [
-    { id: "happy-hour", label: "Happy Hour" },
-    ...(hasSpecials ? [{ id: "specials", label: "Specials" }] : []),
+    ...(hasHappyHour ? [{ id: "happy-hour", label: "Happy Hour" }] : []),
+    ...(hasDailySpecials ? [{ id: "daily-specials", label: "Daily Specials" }] : []),
     ...(hasEvents ? [{ id: "events", label: "Events" }] : []),
     ...(hasAbout ? [{ id: "about", label: "About" }] : []),
     { id: "info", label: "Info" },
@@ -391,6 +416,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
+      {hasDailySpecials && <DailySpecialDeepLinkScroll />}
       <JsonLd nodes={[venueNode, breadcrumbNode]} />
 
       {isPreviewAuthorized && (
@@ -468,7 +494,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
         </div>
 
         {/* Sticky section nav */}
-        <StickyNav sections={sections} />
+        <StickyNav sections={sections} venueName={venue.name} />
 
         {/* ── Content grid ────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-10 xl:gap-16 pt-10">
@@ -476,100 +502,147 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
           {/* ── Left: main content ─────────────────────────────────────────── */}
           <div className="min-w-0 space-y-14">
 
-            {/* ── Happy Hour ─────────────────────────────────────────────────── */}
-            <section id="happy-hour" style={{ scrollMarginTop: SCROLL_MARGIN }}>
-              <SectionHeading>Happy Hour</SectionHeading>
-              {venue.happyHourTagline && (
-                <p className="text-base text-gray-600 mb-5 leading-relaxed -mt-1">
-                  {venue.happyHourTagline}
-                </p>
-              )}
-              {/* Pass empty specials — specials render in their own section below */}
-              <HappyHourTimesCard
-                venueId={venue.id}
-                happyHourWeekly={venue.happyHourWeekly}
-                specialsFood={[]}
-                specialsDrinks={[]}
-                initialExpanded={wantsHappyHourExpanded}
-              />
-            </section>
+            {/* ── Happy Hour (merged: times + food/drink offers) ────────────────
+                Venue-detail UX correction: Happy Hour Times and the
+                associated Food/Drink Offers previously lived in two
+                separate top-level sections/StickyNav items ("Happy Hour"
+                and "Offers"), which manual QA found confusing — both
+                describe the same Happy Hour. Now a single top-level
+                section/nav item ("Happy Hour"), with "Happy Hour Times",
+                "Food Offers", and "Drink Offers" as subheadings inside it.
+                The old id="specials" anchor is retired along with the
+                separate section — there is no longer a distinct
+                destination to link to. venue.specialsFood/specialsDrinks
+                and every underlying data field/helper are unchanged
+                (presentation/structure only — see CLAUDE.md: internal
+                names/fields are not part of this cleanup). */}
+            {hasHappyHour && (
+              <section id="happy-hour" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>Happy Hour</SectionHeading>
+                {venue.happyHourTagline && (
+                  <p className="text-base text-gray-600 mb-5 leading-relaxed -mt-1">
+                    {venue.happyHourTagline}
+                  </p>
+                )}
 
-            {/* ── Specials ───────────────────────────────────────────────────── */}
-            {hasSpecials && (
-              <section id="specials" style={{ scrollMarginTop: SCROLL_MARGIN }}>
-                <SectionHeading>Happy Hour Specials</SectionHeading>
-                <div
-                  className={`grid gap-8 ${
-                    hasFood && hasDrinks ? "sm:grid-cols-2" : ""
-                  }`}
-                >
-                  {hasFood && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-4 h-4 text-amber-500 shrink-0"
-                          aria-hidden="true"
-                        >
-                          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
-                          <path d="M7 2v20" />
-                          <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3v7" />
-                        </svg>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                          Food
-                        </h3>
-                      </div>
-                      <ul className="space-y-3">
-                        {venue.specialsFood.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2.5 text-[15px] text-gray-700 leading-snug">
-                            <span className="text-amber-400 shrink-0 mt-0.5 font-bold" aria-hidden="true">·</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
+                <div className="space-y-8">
+                  {/* Happy Hour Times */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-4 h-4 text-amber-500 shrink-0"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        Happy Hour Times
+                      </h3>
                     </div>
-                  )}
-                  {hasDrinks && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="w-4 h-4 text-amber-500 shrink-0"
-                          aria-hidden="true"
-                        >
-                          <path d="M8 22h8" />
-                          <path d="M7 10h10l-2 9H9Z" />
-                          <path d="m12 10-.5-8" />
-                          <path d="m7 2 1.5 2" />
-                          <path d="m17 2-1.5 2" />
-                          <path d="m9.5 2 1 2" />
-                          <path d="m14.5 2-1 2" />
-                        </svg>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                          Drinks
-                        </h3>
-                      </div>
-                      <ul className="space-y-3">
-                        {venue.specialsDrinks.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2.5 text-[15px] text-gray-700 leading-snug">
-                            <span className="text-amber-400 shrink-0 mt-0.5 font-bold" aria-hidden="true">·</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    {/* Pass empty specials — offers render in their own subsection below */}
+                    <HappyHourTimesCard
+                      venueId={venue.id}
+                      happyHourWeekly={venue.happyHourWeekly}
+                      specialsFood={[]}
+                      specialsDrinks={[]}
+                      initialExpanded={wantsHappyHourExpanded}
+                    />
+                  </div>
+
+                  {/* Food Offers / Drink Offers — subsections, not their own
+                      nav anchors. No heading renders for whichever of the
+                      two is empty (never an empty "Food Offers" heading
+                      with nothing under it). */}
+                  {hasSpecials && (
+                    <div
+                      className={`grid gap-8 ${
+                        hasFood && hasDrinks ? "sm:grid-cols-2" : ""
+                      }`}
+                    >
+                      {hasFood && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-4 h-4 text-amber-500 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+                              <path d="M7 2v20" />
+                              <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3v7" />
+                            </svg>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                              Food Offers
+                            </h3>
+                          </div>
+                          <ul className="space-y-3">
+                            {venue.specialsFood.map((item, i) => (
+                              <li key={i} className="flex items-start gap-2.5 text-[15px] text-gray-700 leading-snug">
+                                <span className="text-amber-400 shrink-0 mt-0.5 font-bold" aria-hidden="true">·</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {hasDrinks && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-4 h-4 text-amber-500 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <path d="M8 22h8" />
+                              <path d="M7 10h10l-2 9H9Z" />
+                              <path d="m12 10-.5-8" />
+                              <path d="m7 2 1.5 2" />
+                              <path d="m17 2-1.5 2" />
+                              <path d="m9.5 2 1 2" />
+                              <path d="m14.5 2-1 2" />
+                            </svg>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                              Drink Offers
+                            </h3>
+                          </div>
+                          <ul className="space-y-3">
+                            {venue.specialsDrinks.map((item, i) => (
+                              <li key={i} className="flex items-start gap-2.5 text-[15px] text-gray-700 leading-snug">
+                                <span className="text-amber-400 shrink-0 mt-0.5 font-bold" aria-hidden="true">·</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+              </section>
+            )}
+
+            {/* ── Daily Specials ─────────────────────────────────────────────── */}
+            {hasDailySpecials && (
+              <section id="daily-specials" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>Daily Specials</SectionHeading>
+                <DailySpecialsSection specials={venue.dailySpecials} scrollMargin={SCROLL_MARGIN} />
               </section>
             )}
 

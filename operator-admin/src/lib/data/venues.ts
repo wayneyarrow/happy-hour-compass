@@ -12,6 +12,8 @@ import {
   getEventsForConsumerVenues,
 } from "@/lib/data/events";
 import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
+import { getPublishedDailySpecialsForVenue } from "@/lib/data/dailySpecials";
+import type { DailySpecial } from "@/lib/dailySpecialTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -70,6 +72,14 @@ export type ConsumerVenue = {
   /** True if any happy hour food or drink item has a numeric price strictly below $10. */
   hasUnderTenItem: boolean;
   events: ConsumerEvent[];
+  /**
+   * Published Daily Specials for this venue (Phase 3 — consumer venue
+   * detail). Populated only by the single-venue fetch
+   * (getVenueWithEventsForConsumerById), same convention as `events` and
+   * `images` — list fetches leave this as [] to avoid an extra query per
+   * row on multi-venue pages (homepage, search results, etc.).
+   */
+  dailySpecials: DailySpecial[];
   /**
    * Ordered venue images from the media table (type = 'venue_image').
    * First element is the hero image. Populated only by single-venue fetches;
@@ -584,6 +594,7 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
       rawSpecialsHaveUnderTen(row.hh_drink_details as string | null),
     events: [],  // populated by callers after event fetch
     images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
+    dailySpecials: [],  // populated by getVenueWithEventsForConsumerById after Daily Specials fetch
     claimedAt: (row.claimed_at as string | null) ?? null,
     googleRating: typeof row.google_rating === "number" ? row.google_rating : null,
     googleReviewCount: typeof row.google_review_count === "number" ? row.google_review_count : null,
@@ -793,7 +804,7 @@ export async function getVenueWithEventsForConsumerById(
     // Fetch events and images using the DB UUID (row.id), not the slug
     const venueUuid = row.id as string;
 
-    const [events, imageData] = await Promise.all([
+    const [events, imageData, dailySpecials] = await Promise.all([
       getEventsForConsumerVenues([venueUuid]),
       supabase
         .from("media")
@@ -801,6 +812,7 @@ export async function getVenueWithEventsForConsumerById(
         .eq("venue_id", venueUuid)
         .eq("type", "venue_image")
         .order("sort_order", { ascending: true }),
+      getPublishedDailySpecialsForVenue(venueUuid),
     ]);
 
     venue.events = events;
@@ -808,6 +820,7 @@ export async function getVenueWithEventsForConsumerById(
     venue.images = (imageData.data ?? []).map((r: Record<string, any>) => ({
       url: r.url as string,
     }));
+    venue.dailySpecials = dailySpecials;
 
     return venue;
   } catch (err) {

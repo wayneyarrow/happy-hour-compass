@@ -94,7 +94,32 @@ test("page.tsx does NOT import DAILY_SPECIAL_COLUMNS from DailySpecialsManager (
   assert.doesNotMatch(PAGE_SOURCE, /import DailySpecialsManager, \{ DAILY_SPECIAL_COLUMNS/);
 });
 
-test("DailySpecialsManager.tsx (\"use client\") also imports DAILY_SPECIAL_COLUMNS from ./columns rather than defining its own copy", () => {
-  assert.match(MANAGER_SOURCE, /import \{ DAILY_SPECIAL_COLUMNS \} from "\.\/columns";/);
+// DailySpecialsManager.tsx no longer imports DAILY_SPECIAL_COLUMNS at all
+// (as of the impersonation-save-fix correction task): its refreshList() no
+// longer queries `daily_specials` directly through the browser Supabase
+// client — that was the source of a SEPARATE bug (the browser client stays
+// authenticated as the founder's own session during impersonation, so it
+// silently got zero rows back from Daily Specials' venue-ownership-scoped
+// RLS policy). It now calls getDailySpecialsForActiveVenueAction()
+// (actions.ts), a server action that resolves the correct identity via
+// resolveOperatorContext() and selects its own DAILY_SPECIAL_LIST_COLUMNS
+// string server-side — so there is no client-boundary "use client" -> server
+// import of DAILY_SPECIAL_COLUMNS through Manager anymore at all. This does
+// not reopen the original .split() crash this file protects against: that
+// bug was specifically about page.tsx (a Server Component) importing the
+// constant FROM a "use client" module — Manager no longer touches
+// DAILY_SPECIAL_COLUMNS in either direction, and page.tsx's own import from
+// the boundary-neutral ./columns module (tested above) is unchanged.
+test("DailySpecialsManager.tsx (\"use client\") no longer imports DAILY_SPECIAL_COLUMNS or defines its own copy — it no longer queries daily_specials directly through the browser client at all", () => {
+  assert.doesNotMatch(MANAGER_SOURCE, /DAILY_SPECIAL_COLUMNS/);
   assert.doesNotMatch(MANAGER_SOURCE, /export const DAILY_SPECIAL_COLUMNS/);
+});
+
+test("DailySpecialsManager.tsx no longer imports the browser Supabase client — every daily_specials read/write goes through a server action", () => {
+  assert.doesNotMatch(MANAGER_SOURCE, /from "@\/lib\/supabase\/browser"/);
+});
+
+test("DailySpecialsManager.tsx's refreshList reads through getDailySpecialsForActiveVenueAction, not a direct .from(\"daily_specials\") browser query", () => {
+  assert.match(MANAGER_SOURCE, /getDailySpecialsForActiveVenueAction/);
+  assert.doesNotMatch(MANAGER_SOURCE, /\.from\("daily_specials"\)/);
 });

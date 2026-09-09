@@ -79,9 +79,16 @@ test("neither limit constant is a locally re-declared magic number — both are 
 });
 
 test("client-side submit validation calls validateDailySpecialContent() before saving — matches server enforcement exactly", () => {
+  // As of the two-step creation flow, handleSubmit contains TWO
+  // saveDailySpecialAction() calls: Step 1's Continue branch (which sends
+  // hard-coded null content and never calls validateDailySpecialContent at
+  // all — see its own test group below) and the Step 2 / single-stage-Edit
+  // branch, which is the one this test is actually about. Scope the search
+  // to the SECOND occurrence — the one that follows validateDailySpecialContent
+  // in source order — rather than the first (Step 1's), which precedes it.
   assert.match(FORM_SOURCE, /validateDailySpecialContent\(\{/);
   const idx = FORM_SOURCE.indexOf("validateDailySpecialContent({");
-  const saveCallIdx = FORM_SOURCE.indexOf("await saveDailySpecialAction(");
+  const saveCallIdx = FORM_SOURCE.indexOf("await saveDailySpecialAction(", idx);
   assert.ok(idx > -1 && saveCallIdx > -1 && idx < saveCallIdx);
 });
 

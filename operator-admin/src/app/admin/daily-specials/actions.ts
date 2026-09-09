@@ -40,7 +40,7 @@ import {
   validateDailySpecialSchedule,
   validateDailySpecialTime,
 } from "@/lib/dailySpecialSchedule";
-import { isOfferType, isScheduleType } from "@/lib/dailySpecialTypes";
+import { isOfferType, isScheduleType, type DailySpecialDbRow } from "@/lib/dailySpecialTypes";
 
 const REVALIDATE_PATH = "/admin/daily-specials";
 
@@ -305,4 +305,77 @@ export async function saveDailySpecialAction(
 
   revalidatePath(REVALIDATE_PATH);
   return { savedId: inserted.id as string };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// List refresh (impersonation fix)
+//
+// BUG THIS EXISTS TO FIX: DailySpecialsManager.tsx's client-side
+// refreshList() previously queried `daily_specials` directly through the
+// BROWSER Supabase client (src/lib/supabase/browser.ts). That client is
+// always authenticated as whoever is actually logged into the browser —
+// during founder impersonation, that is the FOUNDER's own real session,
+// completely independent of the server-side-only imp_session_id httpOnly
+// cookie (browser JS cannot read it). Daily Specials' SELECT RLS policy
+// ("daily_specials: read for own venue", migration 091) is correctly
+// venue-ownership-scoped, so a founder's own browser session — almost
+// never the actual owner of whatever venue they're impersonating — got
+// ZERO rows back from that query, even though the save/delete that
+// triggered the refresh had already succeeded server-side (via
+// resolveOperatorContext()'s admin client, which correctly bypasses RLS
+// during impersonation). The row was really there; the list just silently
+// went empty, which looked exactly like "nothing saved."
+//
+// Events' identical refreshList() pattern (EventsManager.tsx) never
+// surfaced this because events' SELECT policy is permissive
+// (USING (TRUE), unchanged since 001_initial_schema.sql) — ANY
+// authenticated user can read ALL events, so it never mattered who was
+// actually asking. That is Events' policy being looser, not Daily
+// Specials' policy being wrong — RLS is not weakened here to "match"
+// Events; instead, the read is moved to where the correct identity is
+// already resolved.
+//
+// FIX: this server action re-fetches the list through
+// resolveOperatorContext() — the same authorization sequence every other
+// Daily Specials action already uses — so the read always reflects
+// whoever (or whichever impersonated identity) is actually active,
+// exactly like the initial page.tsx server-side fetch already does
+// correctly. No RLS policy changes; the fix is entirely about which
+// client performs the read.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DAILY_SPECIAL_LIST_COLUMNS =
+  "id, venue_id, title, offer_type, short_summary, description, conditions, image_url, " +
+  "schedule_type, one_time_date, days_of_week, recurrence_start_date, recurrence_end_date, " +
+  "time_mode, start_time, end_mode, end_time, " +
+  "is_published, is_seeded_special, source_url, last_verified_at, " +
+  "created_by_operator_id, updated_by_operator_id, created_at, updated_at";
+
+export async function getDailySpecialsForActiveVenueAction(
+  venueId: string
+): Promise<{ specials: DailySpecialDbRow[] } | { error: string }> {
+  const ctx = await resolveOperatorContext();
+
+  if (ctx.operatorError || (!ctx.operator && !ctx.isImpersonating)) {
+    return { error: ctx.operatorError ?? "Could not resolve operator context." };
+  }
+
+  const targetVenueId = ctx.isImpersonating ? (ctx.sessionVenueId ?? venueId) : venueId;
+
+  if (!ctx.isImpersonating && !ctx.venues.some((v) => v.id === targetVenueId)) {
+    return { error: "Venue not found or you don't have permission to manage it." };
+  }
+
+  const { data, error } = await ctx.supabase
+    .from("daily_specials")
+    .select(DAILY_SPECIAL_LIST_COLUMNS)
+    .eq("venue_id", targetVenueId)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("[getDailySpecialsForActiveVenueAction] Query failed:", error);
+    return { error: "Failed to load Daily Specials. Please try again." };
+  }
+
+  return { specials: (data ?? []) as unknown as DailySpecialDbRow[] };
 }
