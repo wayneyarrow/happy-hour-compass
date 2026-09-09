@@ -47,11 +47,12 @@ const SECTION_SOURCE = readFileSync(SECTION_PATH, "utf8");
 const VENUE_PAGE_PATH = join(__dirname, "../../../src/app/(website)/[market]/[city]/[slug]/page.tsx");
 const VENUE_PAGE_SOURCE = readFileSync(VENUE_PAGE_PATH, "utf8");
 
-const DEEP_LINK_SCROLL_PATH = join(
-  __dirname,
-  "../../../src/app/(website)/[market]/[city]/[slug]/DailySpecialDeepLinkScroll.tsx"
-);
-const DEEP_LINK_SCROLL_SOURCE = readFileSync(DEEP_LINK_SCROLL_PATH, "utf8");
+// DailySpecialDeepLinkScroll was retired in the "Text-First Consumer UX +
+// Exact Deep-Link Correction" task — its own mount-only scroll check ran
+// before DailySpecialsSection's today-aware reorder, so it stopped being
+// reliable the moment a real venue had more than one Daily Special. The
+// correction now lives inside DailySpecialsSection itself — see
+// textFirstAndMultiSpecialDeepLink.test.ts for that coverage.
 
 // ─────────────────────────────────────────────────────────────────────────
 // INITIAL DAILY SPECIAL HASH
@@ -179,11 +180,6 @@ test("once released (lock cleared), the observer's normal 'greatest top wins' lo
 // DIRECT LOAD
 // ─────────────────────────────────────────────────────────────────────────
 
-test("DailySpecialDeepLinkScroll (the direct-load / navigation-timing fallback) is unchanged by this correction — it still only nudges scroll position, no active-state logic was duplicated into it", () => {
-  assert.match(DEEP_LINK_SCROLL_SOURCE, /el\.scrollIntoView\(\{ behavior: "auto", block: "start" \}\);/);
-  assert.doesNotMatch(DEEP_LINK_SCROLL_SOURCE, /activeSection|StickyNav/);
-});
-
 test("the individual Special anchor id and its presence in the DOM are unaffected by the new context offset — only the scrollMarginTop value changed", () => {
   assert.match(SECTION_SOURCE, /id=\{`daily-special-\$\{special\.id\}`\}/);
 });
@@ -215,13 +211,9 @@ test("SCROLL_MARGIN (the shared section-level constant) is unchanged — only th
   assert.match(VENUE_PAGE_SOURCE, /const SCROLL_MARGIN = 132;/);
 });
 
-test("the Daily Specials search page / card / filter files were not touched by this correction — only venue-detail files changed", () => {
+test("the Daily Specials search card's deep-link href shape is unaffected by later, unrelated changes to that same file (e.g. image removal) — the load-bearing #daily-special-<id> link target is what this correction protects, not the file's byte content", () => {
   const CARD_PATH = join(__dirname, "../../../src/app/(website)/website-daily-specials/DailySpecialSearchCard.tsx");
   const RESULTS_PATH = join(__dirname, "../../../src/app/(website)/website-daily-specials/DailySpecialSearchResults.tsx");
-  // Sanity: these files still exist and still point at the same deep-link
-  // shape — a full content diff isn't meaningful in a source-text test, but
-  // asserting the link shape is untouched is the load-bearing fact for
-  // this correction specifically (it must not have redirected the link).
   const cardSource = readFileSync(CARD_PATH, "utf8");
   const resultsSource = readFileSync(RESULTS_PATH, "utf8");
   assert.match(cardSource, /#daily-special-\$\{special\.id\}/);

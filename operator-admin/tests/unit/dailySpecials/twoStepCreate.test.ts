@@ -147,7 +147,7 @@ function extractStep2Block(): string {
   const start = FORM_SOURCE.indexOf(
     "// ── Step 2 (new creation, past Continue) / single-stage Edit: full save"
   );
-  const end = FORM_SOURCE.indexOf("// ── Image upload / remove");
+  const end = FORM_SOURCE.indexOf("// ── Shared field blocks");
   return FORM_SOURCE.slice(start, end);
 }
 
@@ -182,31 +182,44 @@ test("Step 2's failure path sets the error state and never calls onSaved — a f
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// IMAGE — only reachable in Step 2, never in Step 1
+// IMAGE MANAGEMENT — removed entirely (Text-First correction task)
+//
+// Daily Specials is a text-first product surface: image upload/replace/
+// remove controls are gone from BOTH the create flow (Step 1 and Step 2)
+// and the single-stage Edit form. image_url itself, imageActions.ts, and
+// the underlying Storage bucket path are all deliberately left in place —
+// this is a UI/presentation-level change, not schema churn — this form
+// simply no longer exposes any control for it.
 // ─────────────────────────────────────────────────────────────────────────
 
-test("the Image section is not present anywhere in the Step 1 (early-return) JSX", () => {
-  const step1ReturnStart = FORM_SOURCE.indexOf("if (!currentSpecialId) {\n    return (");
-  const step1ReturnEnd = FORM_SOURCE.indexOf("// ── Step 2 (new creation, past Continue) / single-stage Edit: full editor");
-  const step1Jsx = FORM_SOURCE.slice(step1ReturnStart, step1ReturnEnd);
-  assert.doesNotMatch(step1Jsx, /Upload image/);
-  assert.doesNotMatch(step1Jsx, /handleImageUpload/);
-  assert.doesNotMatch(step1Jsx, /imageInputRef/);
+test("no image upload/replace/remove control exists anywhere in the form source — Step 1, Step 2, or single-stage Edit", () => {
+  assert.doesNotMatch(FORM_SOURCE, /Upload image/);
+  assert.doesNotMatch(FORM_SOURCE, /Replace image/);
+  assert.doesNotMatch(FORM_SOURCE, /Remove image/);
+  assert.doesNotMatch(FORM_SOURCE, /handleImageUpload/);
+  assert.doesNotMatch(FORM_SOURCE, /handleImageRemove/);
+  assert.doesNotMatch(FORM_SOURCE, /imageInputRef/);
 });
 
-test("the Image section in the full editor is unconditional (no currentSpecialId && guard) — this branch only ever renders once currentSpecialId already exists", () => {
-  const fullEditorIdx = FORM_SOURCE.indexOf(
-    "// ── Step 2 (new creation, past Continue) / single-stage Edit: full editor"
-  );
-  const imageSectionIdx = FORM_SOURCE.indexOf("Upload image", fullEditorIdx);
-  assert.ok(imageSectionIdx > -1);
-  // The old single-stage form gated this with `{currentSpecialId && (`.
-  // Confirm that specific conditional wrapper is gone from the full editor.
-  const nearby = FORM_SOURCE.slice(fullEditorIdx, imageSectionIdx);
-  assert.doesNotMatch(nearby, /\{currentSpecialId && \(/);
+test("the form no longer imports the image upload/remove server actions or image-processing helpers", () => {
+  assert.doesNotMatch(FORM_SOURCE, /from "\.\/imageActions"/);
+  assert.doesNotMatch(FORM_SOURCE, /from "@\/lib\/imageProcessing"/);
+  assert.doesNotMatch(FORM_SOURCE, /uploadDailySpecialImageAction/);
+  assert.doesNotMatch(FORM_SOURCE, /removeDailySpecialImageAction/);
 });
 
-test("this is the exact gap the correction task reports fixed: Image is reachable as soon as Step 1's Continue succeeds, not only after a full save-close-reopen cycle", () => {
+test("the form carries no local imageUrl/isUploadingImage/imageError state — nothing left over from the removed image UI", () => {
+  assert.doesNotMatch(FORM_SOURCE, /\[imageUrl, setImageUrl\]/);
+  assert.doesNotMatch(FORM_SOURCE, /\[isUploadingImage, setIsUploadingImage\]/);
+  assert.doesNotMatch(FORM_SOURCE, /\[imageError, setImageError\]/);
+});
+
+test("Step 1's helper copy no longer promises an image step, and the full editor's Content section ends at Conditions with no trailing Image block", () => {
+  assert.doesNotMatch(FORM_SOURCE, /description, image, and publishing/);
+  assert.doesNotMatch(FORM_SOURCE, /an optional image, and choose/);
+});
+
+test("this is the exact gap the correction task reports fixed: the draft is reachable as soon as Step 1's Continue succeeds, not only after a full save-close-reopen cycle", () => {
   // Step 1 ends by setting currentSpecialId and returning (no further
   // action needed from the operator to reach Step 2 — no page reload, no
   // re-selecting the row from the list).

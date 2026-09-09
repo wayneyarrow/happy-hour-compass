@@ -30,7 +30,6 @@ import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 import { DailySpecialsSection } from "./DailySpecialsSection";
-import { DailySpecialDeepLinkScroll } from "./DailySpecialDeepLinkScroll";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -416,7 +415,6 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   return (
     <div className="bg-white pb-20 lg:pb-0">
       <VenueViewTracker venueId={venue.venueUuid} city={venue.city} />
-      {hasDailySpecials && <DailySpecialDeepLinkScroll />}
       <JsonLd nodes={[venueNode, breadcrumbNode]} />
 
       {isPreviewAuthorized && (

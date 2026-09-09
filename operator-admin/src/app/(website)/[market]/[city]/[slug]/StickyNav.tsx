@@ -76,10 +76,11 @@ export function StickyNav({ sections, venueName }: Props) {
     if (mapped && sectionsRef.current.some((s) => s.id === mapped)) {
       setActiveSection(mapped);
       // Arm the lock — see the observer effect for why this matters. The
-      // browser's own native anchor scroll (and DailySpecialDeepLinkScroll's
-      // defensive fallback) haven't necessarily run yet at this point, so
-      // the lock must already be armed before the IntersectionObserver
-      // below gets its first chance to fire.
+      // browser's own native anchor scroll (and, for Daily Specials,
+      // DailySpecialsSection's own post-sort scroll correction — see that
+      // component) haven't necessarily run yet at this point, so the lock
+      // must already be armed before the IntersectionObserver below gets
+      // its first chance to fire.
       initialHashLockRef.current = mapped;
     }
   }, []);
@@ -87,10 +88,11 @@ export function StickyNav({ sections, venueName }: Props) {
   // Releases the initial-hash lock on the first GENUINE user scroll intent
   // — wheel, touch drag, or a scroll-relevant key — never on a bare
   // "scroll" event, which also fires for the deep-link's own programmatic
-  // positioning (the native anchor jump and DailySpecialDeepLinkScroll's
-  // scrollIntoView fallback) and would release the lock before it ever did
-  // anything. This is a deterministic release tied to real input, not a
-  // timeout guessing when the programmatic scroll has "settled."
+  // positioning (the native anchor jump and, for Daily Specials,
+  // DailySpecialsSection's own scrollIntoView correction) and would
+  // release the lock before it ever did anything. This is a deterministic
+  // release tied to real input, not a timeout guessing when the
+  // programmatic scroll has "settled."
   useEffect(() => {
     function release() {
       initialHashLockRef.current = null;

@@ -3,11 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  processImageFile,
-  ImageTooLargeError,
-  InvalidImageTypeError,
-} from "@/lib/imageProcessing";
-import {
   canCreateRecurringDailySpecialInSupportMode,
   canManageGrandfatheredRecurringDailySpecial,
   type OperatorPlan,
@@ -26,7 +21,6 @@ import {
   validateDailySpecialTime,
 } from "@/lib/dailySpecialSchedule";
 import { saveDailySpecialAction } from "./actions";
-import { uploadDailySpecialImageAction, removeDailySpecialImageAction } from "./imageActions";
 import {
   EMPTY_FORM_STATE,
   hydrateFormState,
@@ -97,11 +91,15 @@ function CharCounter({ length, max }: { length: number; max: number }) {
 // exists (currentSpecialId is set, whether from a fresh Continue or because
 // an existing Daily Special was opened for editing), the full editor
 // renders — every other field is either nullable or has a safe server-side
-// default, so nothing else blocks draft creation. Image is therefore never
-// shown in a disabled "come back later" state — it isn't reachable until
-// currentSpecialId already exists, which fixes the specific gap this
-// correction task reported (previously the operator had to save the whole
-// form, close it, reopen it, and only then could an image be attached).
+// default, so nothing else blocks draft creation.
+//
+// No image management anywhere in this form (create or edit) — Daily
+// Specials is a text-first product surface (correction task). The
+// underlying `image_url` column, imageActions.ts server actions, and the
+// venue-images Storage bucket path are all deliberately left in place
+// (schema/low-level code, no product benefit to removing them, and no
+// consumer surface renders image_url anymore) — this form simply never
+// exposes controls for it.
 //
 // Unlike Events, whose Continue branch also calls onSaved() (relying on
 // EventsManager's handleSaved flipping `mode` from "creating" to "editing"
@@ -125,10 +123,6 @@ export default function DailySpecialForm({
 }: Props) {
   const [formState, setFormState] = useState<DailySpecialFormState>(EMPTY_FORM_STATE);
   const [currentSpecialId, setCurrentSpecialId] = useState<string | null>(initialSpecial?.id ?? null);
-  const [imageUrl, setImageUrl] = useState<string | null>(initialSpecial?.image_url ?? null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +147,6 @@ export default function DailySpecialForm({
     if (!initialSpecial) return;
     setFormState(hydrateFormState(initialSpecial));
     setCurrentSpecialId(initialSpecial.id);
-    setImageUrl(initialSpecial.image_url ?? null);
   }, [initialSpecial]);
 
   function update<K extends keyof DailySpecialFormState>(key: K, value: DailySpecialFormState[K]) {
@@ -320,78 +313,6 @@ export default function DailySpecialForm({
     setSaved(true);
     savedTimerRef.current = setTimeout(() => setSaved(false), 4000);
     onSaved?.(result.savedId);
-  };
-
-  // ── Image upload / remove ─────────────────────────────────────────────────
-  // Both require currentSpecialId, which is always set by the time either
-  // rendering path that shows the Image section can render (Step 2 of a
-  // new creation, past Continue; or the single-stage Edit form) — the
-  // guards here are defensive, not reachable through normal use.
-
-  const handleImageUpload = async (file: File) => {
-    if (!currentSpecialId) return;
-    setImageError(null);
-    setIsUploadingImage(true);
-    if (imageInputRef.current) imageInputRef.current.value = "";
-
-    let blob: Blob;
-    try {
-      blob = await processImageFile(file, {
-        maxWidth: 1600,
-        maxSizeBytes: 1.5 * 1024 * 1024,
-      });
-    } catch (err) {
-      if (err instanceof InvalidImageTypeError) {
-        setImageError("Please upload a valid image file.");
-      } else if (err instanceof ImageTooLargeError) {
-        setImageError("This image is too large even after compression. Please choose a smaller image.");
-      } else {
-        setImageError("Failed to process image. Please try again.");
-      }
-      setIsUploadingImage(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", new File([blob], `${crypto.randomUUID()}.jpg`, { type: "image/jpeg" }));
-
-    const { error: actionError, imageUrl: uploadedUrl } = await uploadDailySpecialImageAction(
-      currentSpecialId,
-      venueId,
-      formData
-    );
-
-    if (actionError || !uploadedUrl) {
-      console.error("[DailySpecialForm] Image upload failed:", actionError);
-      setImageError(actionError ?? "Failed to save image. Please try again.");
-      setIsUploadingImage(false);
-      return;
-    }
-
-    setImageUrl(uploadedUrl);
-    setIsUploadingImage(false);
-  };
-
-  const handleImageRemove = async () => {
-    if (!currentSpecialId) return;
-    setImageError(null);
-    setIsUploadingImage(true);
-
-    const { error: actionError } = await removeDailySpecialImageAction(
-      currentSpecialId,
-      venueId,
-      imageUrl ?? ""
-    );
-
-    if (actionError) {
-      console.error("[DailySpecialForm] image_url remove failed:", actionError);
-      setImageError(actionError);
-      setIsUploadingImage(false);
-      return;
-    }
-
-    setImageUrl(null);
-    setIsUploadingImage(false);
   };
 
   // ── Shared field blocks — rendered from both the Step 1 (Continue) return
@@ -611,7 +532,7 @@ export default function DailySpecialForm({
 
         <p className="text-sm text-gray-500">
           Start with the title, type, and schedule. You&rsquo;ll add a summary,
-          description, image, and publishing status next.
+          description, and publishing status next.
         </p>
 
         <div className="space-y-4">{titleAndTypeFields}</div>
@@ -640,7 +561,7 @@ export default function DailySpecialForm({
 
         <p className="text-xs text-gray-400">
           This Daily Special is created as a draft — you&rsquo;ll add the rest of the
-          details, an optional image, and choose whether to publish it next.
+          details and choose whether to publish it next.
         </p>
       </form>
     );
@@ -717,70 +638,6 @@ export default function DailySpecialForm({
           <p className="mt-1 text-xs text-gray-400">
             e.g. Dine-in only · Beverage purchase required · While quantities last · Reservation required
           </p>
-        </div>
-
-        {/* Image — always available here: this section only ever renders
-            once currentSpecialId exists (see the Step 1 early return
-            above), so there is no disabled/"come back later" state to
-            show — this is exactly the gap this correction task fixes. */}
-        <div>
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            disabled={isUploadingImage || isSaving}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleImageUpload(file);
-            }}
-          />
-
-          <p className={labelCls}>
-            Image <span className="text-gray-400 font-normal">(optional)</span>
-          </p>
-
-          {imageError && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-              {imageError}
-            </div>
-          )}
-
-          {imageUrl ? (
-            <div className="flex items-start gap-4">
-              <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt="Daily Special" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex flex-col gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isUploadingImage || isSaving}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploadingImage ? "Uploading…" : "Replace image"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleImageRemove}
-                  disabled={isUploadingImage || isSaving}
-                  className="text-xs text-red-500 hover:text-red-600 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Remove image
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={isUploadingImage || isSaving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isUploadingImage ? "Uploading…" : "Upload image"}
-            </button>
-          )}
         </div>
       </div>
 

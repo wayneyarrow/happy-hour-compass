@@ -4,40 +4,41 @@ import Link from "next/link";
 import type { WebsiteDailySpecialListItem } from "@/lib/data/dailySpecials";
 import { OFFER_TYPE_LABELS, type OfferType } from "@/lib/dailySpecialTypes";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
-import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import {
   formatDailySpecialSchedule,
   formatDailySpecialTime,
 } from "../dailySpecialConsumerLabels";
 
-function DailySpecialImagePlaceholder() {
-  return (
-    <div className="w-full h-full bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-2 opacity-60">
-        <svg
-          className="w-10 h-10 text-amber-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12M15.5 8.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z"
-          />
-        </svg>
-        <span className="text-[11px] font-semibold text-amber-500 tracking-wide">SPECIAL</span>
-      </div>
-    </div>
-  );
-}
-
 type Props = {
   special: WebsiteDailySpecialListItem;
 };
 
+/**
+ * Text-first by product decision (correction task): Daily Specials cards
+ * never render an image, whether the Special's own image field or the
+ * venue's own fallback photo. Real seeded inventory showed the venue
+ * fallback routinely misrepresenting the actual offer (a wine Special
+ * showing a beer-pour photo, a taco Special showing a generic bar
+ * interior) — genuinely misleading, not just a missing-asset placeholder
+ * problem. `image_url` itself is untouched at the data layer (schema,
+ * WebsiteDailySpecialListItem, the server query) — this component simply
+ * never reads it. If Special-specific imagery is reintroduced later, it
+ * should be a deliberate product decision with real, always-accurate
+ * per-Special photography — not a venue-photo stand-in.
+ *
+ * Visual polish pass (this task): the image-free grid read as flat/
+ * directory-like, so a thin HHC-brand (amber-500 — the same accent used
+ * for the active StickyNav underline, primary buttons, and focus rings
+ * throughout the site, not a new color) top accent line, a touch more
+ * resting depth, and a restrained hover lift were added — no product
+ * architecture, data, or information changed. Deliberately does NOT use
+ * a `motion-safe:`/reduced-motion-gated transform: no existing card on
+ * this site (EventSearchCard, website-happy-hours' SearchResultCard, the
+ * pre-polish version of this one) gates its own hover lift that way
+ * either — introducing it here alone would be a new, inconsistent
+ * convention rather than following an existing one, which is what the
+ * task asked for.
+ */
 export function DailySpecialSearchCard({ special }: Props) {
   // Venue detail page + exact anchor — no standalone Daily Special page
   // exists (locked product decision). Falls back to null (no link) only
@@ -53,14 +54,6 @@ export function DailySpecialSearchCard({ special }: Props) {
   });
   const href = venuePath ? `${venuePath}#daily-special-${special.id}` : null;
 
-  const imageSrc =
-    special.imageUrl ??
-    getVenueImageSrc({
-      images: [],
-      placeholderImagePath: special.venuePlaceholderImagePath,
-      establishmentType: special.venueEstablishmentType,
-    });
-
   const scheduleLabel = formatDailySpecialSchedule(special.schedule);
   const timeLabel = formatDailySpecialTime(special.time);
   const scheduleTimeLine = [scheduleLabel, timeLabel].filter(Boolean).join(" · ");
@@ -71,35 +64,32 @@ export function DailySpecialSearchCard({ special }: Props) {
   const cardBody = (
     <article
       className="
-        relative
-        bg-white rounded-2xl overflow-hidden
+        relative overflow-hidden
+        bg-white rounded-2xl
         border border-gray-100/80
-        shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_14px_rgba(0,0,0,0.07)]
-        hover:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.10)]
-        hover:-translate-y-[3px]
+        shadow-[0_1px_4px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.09)]
+        hover:shadow-[0_3px_10px_rgba(0,0,0,0.06),0_16px_32px_rgba(0,0,0,0.11)]
+        hover:-translate-y-[2px]
         transition-all duration-200
       "
     >
-      {/* ── Hero image ───────────────────────────────────────────────────── */}
-      <div className="relative h-[200px] overflow-hidden bg-gray-100">
-        {imageSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageSrc} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <DailySpecialImagePlaceholder />
-        )}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "linear-gradient(to bottom, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0) 48%)",
-          }}
-          aria-hidden="true"
-        />
-      </div>
+      {/* Top accent line — thin, brand-consistent (amber-500, same token
+          used for the active StickyNav underline and primary buttons
+          elsewhere on the site), the one restrained cue that replaces the
+          removed hero image and keeps the grid from reading as a flat
+          directory list. */}
+      <div className="h-1 bg-amber-500" aria-hidden="true" />
 
-      {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 space-y-1.5">
-        <h3 className="text-[17px] font-bold text-gray-900 leading-tight tracking-tight line-clamp-2">
+      <div className="px-5 py-5 space-y-2">
+        {/* Type badge first — small, secondary, sets context before the title
+            the way a card image's implicit category cue used to. */}
+        {offerLabel && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-100 text-[11px] font-semibold text-amber-700 tracking-wide uppercase">
+            {offerLabel}
+          </span>
+        )}
+
+        <h3 className="text-[19px] font-bold text-gray-900 leading-tight tracking-tight">
           {special.title}
         </h3>
 
@@ -108,22 +98,24 @@ export function DailySpecialSearchCard({ special }: Props) {
         )}
 
         {special.shortSummary && (
-          <p className="text-sm text-gray-600 leading-relaxed line-clamp-2">
+          <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
             {special.shortSummary}
           </p>
         )}
 
         {scheduleTimeLine && (
-          <p className="text-sm text-amber-700 font-medium">{scheduleTimeLine}</p>
+          <p className="text-sm text-amber-700 font-medium pt-1 border-t border-gray-100 mt-1">
+            {scheduleTimeLine}
+          </p>
         )}
 
-        {offerLabel && (
-          <div className="pt-1.5 border-t border-gray-100">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-medium text-gray-600">
-              {offerLabel}
-            </span>
-          </div>
-        )}
+        {/* Destination cue — purely decorative text, not a second
+            interactive element; the whole card is already the one Link.
+            Secondary by design (smaller, muted, right-aligned) so it never
+            competes with the schedule/time line above it. */}
+        <p className="text-xs font-medium text-gray-400 text-right pt-0.5">
+          View venue →
+        </p>
       </div>
     </article>
   );

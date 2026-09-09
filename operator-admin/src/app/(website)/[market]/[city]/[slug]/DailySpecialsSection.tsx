@@ -70,6 +70,51 @@ export function DailySpecialsSection({ specials, scrollMargin }: Props) {
 
   const ordered = todayIsoDate ? sortDailySpecialsForVenueDetail(specials, todayIsoDate) : specials;
 
+  // ── Deep-link scroll correction ──────────────────────────────────────────
+  // Deliberately keyed on `todayIsoDate`, not `[]` (mount-once) — this is
+  // the ONLY point in the component's lifecycle where React GUARANTEES the
+  // DOM already reflects the FINAL, today-aware sort order (`ordered`
+  // above is derived from `todayIsoDate`, so an effect that depends on it
+  // fires strictly after the commit that applied that reorder).
+  //
+  // Root cause this fixes: before this correction, a separate top-level
+  // component (formerly DailySpecialDeepLinkScroll) did its own one-time
+  // "scroll the target into view if not already visible" check on ITS OWN
+  // mount — which, for a venue with more than one Daily Special, ran
+  // BEFORE this section's own today-aware re-sort had happened (this
+  // section renders in the server's `created_at` insertion order until
+  // mount, then re-sorts). Any correct scroll position computed against
+  // the PRE-sort layout was invalidated the instant the re-sort reflowed
+  // the surrounding cards a moment later — the viewport ended up aligned
+  // with whichever Special happened to land at that Y position after
+  // reordering, not the one actually clicked. This was invisible during
+  // Phase 3 QA (a single synthetic Special can't reorder relative to
+  // itself) and only surfaced once real venues had multiple Specials.
+  //
+  // Fix: do the scroll correction here instead, once, after this
+  // component's own reorder has already committed — deterministic (real
+  // effect-dependency ordering, not a guessed timeout), and correct
+  // regardless of list length (a 1-item list reorders to itself, so this
+  // is a safe no-op there too).
+  useEffect(() => {
+    if (!todayIsoDate) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith("#daily-special-")) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    el.scrollIntoView({ behavior: "auto", block: "start" });
+  }, [todayIsoDate]);
+
+  // Exact-target visual highlight (visual polish pass): uses Tailwind's
+  // `target:` variant — plain CSS `:target`, matched against THIS element's
+  // own `id` and the current URL hash — deliberately not new React state.
+  // `:target` is inherently exclusive (a URL fragment can only ever match
+  // one element's id), so at most one card is ever highlighted, and it
+  // works identically for a click from search, a pasted URL, and a
+  // hash-intact refresh, with zero additional JS: no listener, no timer,
+  // no re-render. It coexists with, and is fully independent of, the
+  // scroll-correction effect above and StickyNav's separate active-section
+  // logic — none of that JS-driven behavior changes.
   return (
     <div className="space-y-4">
       {ordered.map((special) => {
@@ -86,15 +131,15 @@ export function DailySpecialsSection({ specials, scrollMargin }: Props) {
             key={special.id}
             id={`daily-special-${special.id}`}
             style={{ scrollMarginTop: scrollMargin + DAILY_SPECIAL_ITEM_CONTEXT_OFFSET }}
-            className="flex items-start gap-4 p-5 rounded-xl border border-gray-100 bg-gray-50/60"
+            className="
+              p-5 rounded-xl border border-gray-100 bg-gray-50/60
+              transition-colors duration-300
+              target:border-amber-300 target:bg-amber-50/70
+              target:ring-2 target:ring-amber-300/70
+              target:shadow-[0_4px_16px_rgba(217,119,6,0.15)]
+            "
           >
-            {special.imageUrl && (
-              <div className="hidden sm:block shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-gray-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={special.imageUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="font-semibold text-gray-900 leading-snug text-[15px]">
                   {special.title}

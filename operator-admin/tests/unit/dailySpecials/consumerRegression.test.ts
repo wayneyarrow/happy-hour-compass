@@ -77,8 +77,17 @@ test("each Daily Special anchor also carries scrollMarginTop, so a direct hash l
   assert.match(nearby, /scrollMarginTop: scrollMargin/);
 });
 
-test("deep-link scroll component is mounted only when the venue has Daily Specials", () => {
-  assert.match(VENUE_PAGE_SOURCE, /\{hasDailySpecials && <DailySpecialDeepLinkScroll \/>\}/);
+// DailySpecialDeepLinkScroll was retired (Text-First + Deep-Link correction
+// task): its one-time, mount-only scroll check ran BEFORE
+// DailySpecialsSection's own today-aware re-sort for a multi-Special venue,
+// so a correct-at-the-time scroll position was invalidated the instant the
+// re-sort reflowed the surrounding cards — invisible with a single
+// synthetic Special, but wrong for any real multi-Special venue. The
+// correction now lives inside DailySpecialsSection itself, in an effect
+// keyed on `todayIsoDate` so it only runs after that reorder has already
+// committed — see deepLinkArrival.test.ts for the direct coverage.
+test("the standalone DailySpecialDeepLinkScroll component no longer exists or is rendered — deep-link scroll correction now lives inside DailySpecialsSection, after its own reorder settles", () => {
+  assert.doesNotMatch(VENUE_PAGE_SOURCE, /DailySpecialDeepLinkScroll/);
 });
 
 test("Daily Specials section presentation is a flat list, not per-weekday duplicated sections — no per-day grouping headers", () => {
