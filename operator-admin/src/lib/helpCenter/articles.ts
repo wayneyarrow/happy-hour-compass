@@ -10,25 +10,24 @@ import type { HowToArticle } from "./types";
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
  * unpublish your venue", "Manage your Happy Hours", "Create a Daily
- * Special", "Create an event", "Manage your events", "Understand
- * subscriptions and limits", "Manage users", "Understand analytics", and
- * "Manage your Search Tags" (below) are the real, approved How-To articles,
- * following the design/content standard established by the Getting Started
- * guides. They're listed first, under the "Managing Your Venue" category,
- * so they display above the Internal Preview category on the landing page —
- * each reuses this same category rather than a new one, since it's still an
- * operator managing a feature area of their venue via the same Operator
- * Admin main menu. "Create a Daily Special" was added after the original V1
- * set (which ended at "Manage your Search Tags") shipped — a "Manage your
- * Daily Specials" companion article is expected as a later addition, mirroring
- * Events' Create/Manage pair, but is deliberately out of scope until that
- * article exists. The two Internal Preview entries after them are
- * placeholders that exist only to prove the renderer, optional-section
- * behavior, screenshot presentation, and related-article linking work
- * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
- * "Internal preview" badge) and must not be treated as approved Help Center
- * content — kept for now per the task brief, to be removed once enough real
- * articles exist.
+ * Special", "Manage your Daily Specials", "Create an event", "Manage your
+ * events", "Understand subscriptions and limits", "Manage users",
+ * "Understand analytics", and "Manage your Search Tags" (below) are the
+ * real, approved How-To articles, following the design/content standard
+ * established by the Getting Started guides. They're listed first, under
+ * the "Managing Your Venue" category, so they display above the Internal
+ * Preview category on the landing page — each reuses this same category
+ * rather than a new one, since it's still an operator managing a feature
+ * area of their venue via the same Operator Admin main menu. "Create a
+ * Daily Special" and "Manage your Daily Specials" were added after the
+ * original V1 set (which ended at "Manage your Search Tags") shipped —
+ * together they mirror Events' Create/Manage pair. The two Internal Preview
+ * entries after them are placeholders that exist only to prove the
+ * renderer, optional-section behavior, screenshot presentation, and
+ * related-article linking work end-to-end. They are marked
+ * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
+ * and must not be treated as approved Help Center content — kept for now
+ * per the task brief, to be removed once enough real articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -398,6 +397,78 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
         "Clear, accurate Specials make it easier for guests to discover your venue and know what they can expect when they arrive.",
       ],
     },
+  },
+  {
+    type: "how-to",
+    slug: "manage-daily-specials",
+    title: "Manage your Daily Specials",
+    summary:
+      "Daily Specials lets you find offers you've already created, update their details and schedule, change whether they're published, and remove Specials you no longer need.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Find a Daily Special",
+        body: [
+          "From Operator Admin, select Daily Specials from the main menu.",
+          "Your Specials are listed on the left. Use the filters for All, Published, Draft, One-time, and Weekly to quickly find the one you're looking for. You can also use the sort menu to change how the list is ordered.",
+          "Select a Daily Special from the list to open it in the editor on the right.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-daily-specials-01-find.png",
+          alt: "Daily Specials list with a Draft special selected, showing the filter tabs (All, Published, Draft, One-time, Weekly), the sort menu, and the selected Daily Special open in the editor panel.",
+          width: 1872,
+          height: 873,
+        },
+      },
+      {
+        title: "Edit a Daily Special",
+        body: [
+          "Update any of the Special's information — including its Title, Type, Short summary, Description, Conditions, Schedule, or Time — the same way you entered it when you created the Special.",
+          "See Create a Daily Special for guidance on any of these fields.",
+          "Select Save changes when you're done. You can return to the Special from your Daily Specials list anytime to make further updates.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-daily-specials-02-edit.png",
+          alt: "Top of the Daily Special editor showing the Delete Daily Special action above the Title, Type, Short summary, Description, and Conditions / additional details fields.",
+          width: 964,
+          height: 648,
+        },
+      },
+      {
+        title: "Publish or unpublish a Daily Special",
+        body: [
+          "Under Publishing, switch the setting to Published when you're ready for guests to see the Special on Happy Hour Compass, or switch it back to Draft to take it down without deleting it.",
+          "Select Save changes to apply the change.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-daily-specials-03-publishing.png",
+          alt: "Schedule, Time, and Publishing sections of the Daily Special editor, showing the Draft toggle and Save changes button.",
+          width: 964,
+          height: 532,
+        },
+      },
+      {
+        title: "Delete a Daily Special",
+        body: [
+          "Select Delete Daily Special, near the top of the editor, to permanently remove a Special. You'll be asked to confirm — this action cannot be undone.",
+          "Once deleted, the Daily Special is removed from your list and can no longer be shown to guests.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/manage-daily-specials-04-delete.png",
+          alt: "Browser confirmation dialog reading \"Delete this Daily Special? This action cannot be undone.\"",
+          width: 530,
+          height: 144,
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your Daily Specials up to date",
+      body: [
+        "Revisit your Daily Specials whenever an offer, price, schedule, time, or condition changes so guests always see accurate information.",
+        "An outdated Special is easy to update — just select it from your list, make your changes, and save.",
+      ],
+    },
+    relatedSlugs: ["create-a-daily-special"],
   },
   {
     type: "how-to",

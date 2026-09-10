@@ -218,10 +218,16 @@ test("the new article has no Related Help links — mirrors Create an event, whi
   assert.deepEqual(getRelatedArticles(createEventArticle), []);
 });
 
-test("no fabricated 'Manage your Daily Specials' article was created or linked", () => {
-  assert.equal(getArticleBySlug("manage-daily-specials"), undefined);
+// "Manage your Daily Specials" was added as a later, separate task (see
+// manageDailySpecialsArticle.test.ts) — it is now a real, deliberately
+// registered article, not a fabrication. What stays true and worth pinning
+// here is the one-directional Related Help relationship established when it
+// was added: it mirrors Events (Manage your events -> Create an event), so
+// "Create a Daily Special" itself still carries no relatedSlugs pointing
+// back at its Manage companion.
+test("'Create a Daily Special' itself has no Related Help links, even after its Manage companion was added", () => {
   const dailySpecialArticle = getArticleBySlug(ARTICLE_SLUG)!;
-  assert.ok(!(dailySpecialArticle.relatedSlugs ?? []).includes("manage-daily-specials"));
+  assert.deepEqual(dailySpecialArticle.relatedSlugs ?? [], []);
 });
 
 // ── Breadcrumb / structure sanity ────────────────────────────────────────────

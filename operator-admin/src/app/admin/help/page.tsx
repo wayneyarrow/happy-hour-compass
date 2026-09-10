@@ -32,7 +32,13 @@ const ARTICLE_GROUPS: { heading: string; slugs: string[] }[] = [
   },
   {
     heading: "Happy Hours, Specials & Events",
-    slugs: ["manage-happy-hours", "create-a-daily-special", "create-event", "manage-events"],
+    slugs: [
+      "manage-happy-hours",
+      "create-a-daily-special",
+      "manage-daily-specials",
+      "create-event",
+      "manage-events",
+    ],
   },
   {
     heading: "Account & Growth",
