@@ -45,6 +45,7 @@ import {
   type CollectionVenueOverride,
   type CollectionEventOverride,
   type CollectionGuideItem,
+  type CollectionDailySpecialOverride,
   type CollectionUsageSummary,
   type CollectionUsageEntry,
   type CollectionWriteResult,
@@ -69,6 +70,7 @@ export {
   type CollectionVenueOverride,
   type CollectionEventOverride,
   type CollectionGuideItem,
+  type CollectionDailySpecialOverride,
   type CollectionUsageSummary,
   type CollectionUsageEntry,
   type CollectionListFilters,
@@ -137,6 +139,29 @@ function mapEventOverrideRow(row: Row): CollectionEventOverride {
     createdBy:    (row.created_by as string | null) ?? null,
     updatedAt:    row.updated_at as string,
     updatedBy:    (row.updated_by as string | null) ?? null,
+  };
+}
+
+/** dailySpecialLabel composes title + venue since daily_specials has no single "name" column — see CollectionDailySpecialOverride's doc comment. */
+function mapDailySpecialOverrideRow(row: Row): CollectionDailySpecialOverride {
+  const special = (row.daily_special as Row | null) ?? null;
+  const venue = (special?.venue as Row | null) ?? null;
+  const title = special?.title as string | undefined;
+  const venueName = venue?.name as string | undefined;
+  return {
+    id:                row.id as string,
+    collectionId:      row.collection_id as string,
+    dailySpecialId:    row.daily_special_id as string,
+    dailySpecialLabel: title ? (venueName ? `${title} — ${venueName}` : title) : null,
+    action:            row.action as "include" | "exclude",
+    boost:             row.boost as number,
+    sortOrder:         row.sort_order as number,
+    reasonType:        (row.reason_type as string | null) ?? null,
+    note:              (row.note as string | null) ?? null,
+    createdAt:         row.created_at as string,
+    createdBy:         (row.created_by as string | null) ?? null,
+    updatedAt:         row.updated_at as string,
+    updatedBy:         (row.updated_by as string | null) ?? null,
   };
 }
 
@@ -229,10 +254,11 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
   const row = data as Row;
   const collectionType = row.collection_type as CollectionType;
 
-  const [venueOverrides, eventOverrides, guideItems, usage] = await Promise.all([
+  const [venueOverrides, eventOverrides, guideItems, dailySpecialOverrides, usage] = await Promise.all([
     collectionType === "venue" ? getCollectionVenueOverrides(id) : Promise.resolve([]),
     collectionType === "event" ? getCollectionEventOverrides(id) : Promise.resolve([]),
     collectionType === "guide" ? getCollectionGuideItems(id) : Promise.resolve([]),
+    collectionType === "daily_special" ? getCollectionDailySpecialOverrides(id) : Promise.resolve([]),
     getCollectionUsage(id),
   ]);
 
@@ -259,6 +285,7 @@ export async function getCollectionById(id: string): Promise<CollectionDetail | 
     venueOverrides,
     eventOverrides,
     guideItems,
+    dailySpecialOverrides,
     usage,
   };
 }
@@ -309,10 +336,11 @@ export async function getPublishedCollectionBySlug(
   const collectionType = row.collection_type as CollectionType;
   const id = row.id as string;
 
-  const [venueOverrides, eventOverrides, guideItems] = await Promise.all([
+  const [venueOverrides, eventOverrides, guideItems, dailySpecialOverrides] = await Promise.all([
     collectionType === "venue" ? getCollectionVenueOverrides(id) : Promise.resolve([]),
     collectionType === "event" ? getCollectionEventOverrides(id) : Promise.resolve([]),
     collectionType === "guide" ? getCollectionGuideItems(id) : Promise.resolve([]),
+    collectionType === "daily_special" ? getCollectionDailySpecialOverrides(id) : Promise.resolve([]),
   ]);
 
   const market = (row.market as Row | null) ?? {};
@@ -336,6 +364,7 @@ export async function getPublishedCollectionBySlug(
     venueOverrides,
     eventOverrides,
     guideItems,
+    dailySpecialOverrides,
   };
 }
 
@@ -570,7 +599,7 @@ export async function updateCollection(
 function validateContentGeography(
   content: { marketId: string | null; cityId: string | null } | null,
   collection: { marketId: string; cityId: string | null },
-  kind: "Venue" | "Event" | "Guide"
+  kind: "Venue" | "Event" | "Guide" | "Daily Special"
 ): string | null {
   if (!content) return `${kind} not found.`;
   if (content.marketId === null) {
@@ -629,6 +658,33 @@ async function fetchEventGeographyById(
     .in("id", eventIds);
   if (error) {
     console.error("[fetchEventGeographyById]", error.message);
+    return map;
+  }
+  for (const row of (data ?? []) as Row[]) {
+    const venue = (row.venue as Row | null) ?? null;
+    map.set(row.id as string, {
+      marketId: (venue?.market_id as string | null | undefined) ?? null,
+      cityId: (venue?.city_id as string | null | undefined) ?? null,
+    });
+  }
+  return map;
+}
+
+async function fetchDailySpecialGeographyById(
+  dailySpecialIds: string[]
+): Promise<Map<string, { marketId: string | null; cityId: string | null }>> {
+  const supabase = createAdminClient();
+  const map = new Map<string, { marketId: string | null; cityId: string | null }>();
+  if (dailySpecialIds.length === 0) return map;
+
+  // Daily Specials have no market_id/city_id of their own — geography is
+  // resolved via the parent venue, same as fetchEventGeographyById above.
+  const { data, error } = await supabase
+    .from("daily_specials")
+    .select("id, venue:venues(market_id, city_id)")
+    .in("id", dailySpecialIds);
+  if (error) {
+    console.error("[fetchDailySpecialGeographyById]", error.message);
     return map;
   }
   for (const row of (data ?? []) as Row[]) {
@@ -800,6 +856,151 @@ export async function replaceVenueOverrides(
   if (insertError) {
     console.error("[replaceVenueOverrides] insert failed:", insertError.message);
     return { success: false, error: "Failed to replace venue membership." };
+  }
+  return { success: true };
+}
+
+// ── Daily Special Collection membership ──────────────────────────────────────
+//
+// Mirrors Venue Collection membership above field-for-field (migration
+// 092_daily_special_collections.sql). Geography validation reuses a venue
+// join (fetchDailySpecialGeographyById) the same way Event membership does
+// via fetchEventGeographyById — a Daily Special has no market_id/city_id of
+// its own. "Today" eligibility is NEVER checked here — this table only
+// stores override intent; selectTodaysSpecials() (todaysSpecialsRanking.ts)
+// is the sole place that decides whether a Special is eligible today, and
+// it always applies that check BEFORE consulting these override rows (see
+// resolveAlgorithmicDailySpecials in collectionsPreview.ts).
+
+export type DailySpecialOverrideInput = {
+  dailySpecialId: string;
+  action: "include" | "exclude";
+  boost?: number;
+  sortOrder?: number;
+  reasonType?: string | null;
+  note?: string | null;
+};
+
+async function getCollectionDailySpecialOverrides(collectionId: string): Promise<CollectionDailySpecialOverride[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("collection_daily_special_overrides")
+    .select(
+      "id, collection_id, daily_special_id, action, boost, sort_order, reason_type, note, " +
+        "created_at, created_by, updated_at, updated_by, daily_special:daily_specials(title, venue:venues(name))"
+    )
+    .eq("collection_id", collectionId)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("[getCollectionDailySpecialOverrides]", error.message);
+    return [];
+  }
+  return (data ?? []).map(mapDailySpecialOverrideRow);
+}
+
+/** Adds or updates one Daily Special's membership in a Daily Special Collection. Validates type + geography before writing. */
+export async function upsertDailySpecialOverride(
+  collectionId: string,
+  input: DailySpecialOverrideInput,
+  actorEmail: string | null = null
+): Promise<CollectionMutationResult> {
+  const collection = await getCollectionForValidation(collectionId);
+  if (!collection) return { success: false, error: "Collection not found." };
+  if (collection.collectionType !== "daily_special") {
+    return { success: false, error: "This Collection is not a Daily Special Collection." };
+  }
+
+  const geography = await fetchDailySpecialGeographyById([input.dailySpecialId]);
+  const geoError = validateContentGeography(geography.get(input.dailySpecialId) ?? null, collection, "Daily Special");
+  if (geoError) return { success: false, error: geoError };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("collection_daily_special_overrides").upsert(
+    {
+      collection_id: collectionId,
+      daily_special_id: input.dailySpecialId,
+      action: input.action,
+      boost: input.boost ?? 0,
+      sort_order: input.sortOrder ?? 0,
+      reason_type: input.reasonType ?? null,
+      note: input.note ?? null,
+      updated_by: actorEmail,
+      created_by: actorEmail,
+    },
+    { onConflict: "collection_id,daily_special_id" }
+  );
+
+  if (error) {
+    console.error("[upsertDailySpecialOverride]", error.message);
+    return { success: false, error: "Failed to save Daily Special membership." };
+  }
+  return { success: true };
+}
+
+export async function removeDailySpecialOverride(
+  collectionId: string,
+  dailySpecialId: string
+): Promise<CollectionMutationResult> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("collection_daily_special_overrides")
+    .delete()
+    .eq("collection_id", collectionId)
+    .eq("daily_special_id", dailySpecialId);
+
+  if (error) {
+    console.error("[removeDailySpecialOverride]", error.message);
+    return { success: false, error: "Failed to remove Daily Special membership." };
+  }
+  return { success: true };
+}
+
+/** Replaces a Daily Special Collection's entire manual membership set — same delete-then-insert pattern as replaceVenueOverrides. */
+export async function replaceDailySpecialOverrides(
+  collectionId: string,
+  rows: DailySpecialOverrideInput[],
+  actorEmail: string | null = null
+): Promise<CollectionMutationResult> {
+  const collection = await getCollectionForValidation(collectionId);
+  if (!collection) return { success: false, error: "Collection not found." };
+  if (collection.collectionType !== "daily_special") {
+    return { success: false, error: "This Collection is not a Daily Special Collection." };
+  }
+
+  const geography = await fetchDailySpecialGeographyById(rows.map((r) => r.dailySpecialId));
+  for (const row of rows) {
+    const geoError = validateContentGeography(geography.get(row.dailySpecialId) ?? null, collection, "Daily Special");
+    if (geoError) return { success: false, error: `${geoError} (daily_special_id: ${row.dailySpecialId})` };
+  }
+
+  const supabase = createAdminClient();
+  const { error: deleteError } = await supabase
+    .from("collection_daily_special_overrides")
+    .delete()
+    .eq("collection_id", collectionId);
+  if (deleteError) {
+    console.error("[replaceDailySpecialOverrides] delete failed:", deleteError.message);
+    return { success: false, error: "Failed to replace Daily Special membership." };
+  }
+  if (rows.length === 0) return { success: true };
+
+  const { error: insertError } = await supabase.from("collection_daily_special_overrides").insert(
+    rows.map((row, index) => ({
+      collection_id: collectionId,
+      daily_special_id: row.dailySpecialId,
+      action: row.action,
+      boost: row.boost ?? 0,
+      sort_order: row.sortOrder ?? index,
+      reason_type: row.reasonType ?? null,
+      note: row.note ?? null,
+      created_by: actorEmail,
+      updated_by: actorEmail,
+    }))
+  );
+  if (insertError) {
+    console.error("[replaceDailySpecialOverrides] insert failed:", insertError.message);
+    return { success: false, error: "Failed to replace Daily Special membership." };
   }
   return { success: true };
 }

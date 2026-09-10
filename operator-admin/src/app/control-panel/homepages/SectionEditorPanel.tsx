@@ -59,7 +59,12 @@ type Props = {
   homepageGeography: HomepageGeography;
   existingSection: HomepageSection | null;
   usedIds: UsedIds;
-  assignableCollections: { venue: CollectionSummary[]; event: CollectionSummary[]; guide: CollectionSummary[] };
+  assignableCollections: {
+    venue: CollectionSummary[];
+    event: CollectionSummary[];
+    guide: CollectionSummary[];
+    daily_special: CollectionSummary[];
+  };
   assignableGuideFeatures: HomepageGuideFeatureCandidate[];
   onClose: () => void;
   onSaved: (sections: HomepageSection[]) => void;

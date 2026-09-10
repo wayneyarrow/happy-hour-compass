@@ -180,6 +180,15 @@ export type WebsiteDailySpecialListItem = {
   marketSlug: string | null;
   /** Canonical city slug for this venue's public URL. Null if unresolved — see buildVenuePublicPath. */
   citySlug: string | null;
+  /**
+   * venues.is_verified — the platform's single dedicated "Verified Venue ✓"
+   * signal (migration 028_venues_is_verified.sql), already used site-wide
+   * for the consumer trust badge (ConsumerVenue.isVerified in venues.ts).
+   * Added for Today's Specials homepage ranking (an actively-managed-venue
+   * boost) — existing callers of this function ignore the field, so this is
+   * purely additive.
+   */
+  venueIsVerified: boolean;
 };
 
 /**
@@ -217,7 +226,7 @@ export async function getPublishedDailySpecialsForWebsite(
           "schedule_type, one_time_date, days_of_week, recurrence_start_date, recurrence_end_date, " +
           "time_mode, start_time, end_mode, end_time, " +
           "venue_id, " +
-          "venues!inner(name, slug, lat, lng, establishment_type, placeholder_image_path, is_published, " +
+          "venues!inner(name, slug, lat, lng, establishment_type, placeholder_image_path, is_published, is_verified, " +
           "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
       )
       .eq("is_published", true)
@@ -282,6 +291,7 @@ export async function getPublishedDailySpecialsForWebsite(
         venuePlaceholderImagePath: (venue.placeholder_image_path as string | null) ?? null,
         venueLat: vLat,
         venueLng: vLng,
+        venueIsVerified: venue.is_verified === true,
         marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
         citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
       }];

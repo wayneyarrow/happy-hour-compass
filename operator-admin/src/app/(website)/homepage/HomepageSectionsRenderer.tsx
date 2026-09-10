@@ -1,5 +1,6 @@
 import { CollectionRail } from "./CollectionRail";
 import { FeatureSection } from "./FeatureSection";
+import { TodaysSpecialsSection } from "./TodaysSpecialsSection";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 
 /**
@@ -33,6 +34,9 @@ export function HomepageSectionsRenderer({ sections, enableDiscoveryTracking }: 
       {sections.map((section) => {
         if (section.kind === "venue_collection" || section.kind === "event_collection" || section.kind === "guide_collection") {
           return <CollectionRail key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
+        }
+        if (section.kind === "daily_special_collection") {
+          return <TodaysSpecialsSection key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
         }
         return <FeatureSection key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
       })}

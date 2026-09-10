@@ -7,6 +7,7 @@ import { MANUAL_ADD_REASON, type AlgorithmKey } from "@/lib/data/collectionsShar
 import {
   searchCollectionVenueCandidatesAction,
   searchCollectionEventCandidatesAction,
+  searchCollectionDailySpecialCandidatesAction,
   generateCollectionResultAction,
   type CollectionCandidateSearchInput,
 } from "./actions";
@@ -76,7 +77,7 @@ export type MembershipRow = {
   reasonType: string | null;
 };
 
-type Kind = "venue" | "event";
+type Kind = "venue" | "event" | "daily_special";
 
 type Props = {
   kind: Kind;
@@ -98,6 +99,7 @@ type Props = {
 const SEARCH_ACTION: Record<Kind, (input: CollectionCandidateSearchInput) => Promise<AttachmentCandidate[]>> = {
   venue: searchCollectionVenueCandidatesAction,
   event: searchCollectionEventCandidatesAction,
+  daily_special: searchCollectionDailySpecialCandidatesAction,
 };
 
 const SOURCE_LABEL: Record<CollectionPreviewItem["origin"], string> = {
@@ -144,8 +146,12 @@ export default function ResolvedCollectionTable({
   resolvedError = null,
   onResolvedCountChange,
 }: Props) {
-  const label = kind === "venue" ? "venue" : "event";
-  const labelCap = kind === "venue" ? "Venue" : "Event";
+  const label = kind === "venue" ? "venue" : kind === "event" ? "event" : "daily special";
+  const labelCap = kind === "venue" ? "Venue" : kind === "event" ? "Event" : "Daily Special";
+  // Events and Daily Specials both show a separate "Venue" context column
+  // (see the table header/row rendering below) — a Special's venue is just
+  // as important context as an Event's.
+  const showVenueColumn = kind === "event" || kind === "daily_special";
 
   const [overrideRows, setOverrideRows] = useState<MembershipRow[]>(initialOverrideRows);
   const [generated, setGenerated] = useState<CollectionPreviewResult | null>(resolvedResult);
@@ -468,7 +474,7 @@ export default function ResolvedCollectionTable({
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{labelCap}</th>
-                    {kind === "event" && (
+                    {showVenueColumn && (
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Venue</th>
                     )}
                     <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</th>
@@ -485,7 +491,7 @@ export default function ResolvedCollectionTable({
                           <span className="text-xs text-gray-400 block truncate font-normal">{item.secondaryLabel}</span>
                         )}
                       </td>
-                      {kind === "event" && (
+                      {showVenueColumn && (
                         <td className="px-3 py-2 text-gray-600 max-w-xs">
                           <span className="block truncate">{item.secondaryLabel}</span>
                         </td>

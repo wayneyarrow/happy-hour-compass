@@ -27,6 +27,7 @@ export default async function EditHomepagePage({
     venueCollections,
     eventCollections,
     guideCollections,
+    dailySpecialCollections,
     guideFeatures,
     { success },
   ] = await Promise.all([
@@ -42,6 +43,7 @@ export default async function EditHomepagePage({
     getAssignableCollectionsForSection(id, "venue"),
     getAssignableCollectionsForSection(id, "event"),
     getAssignableCollectionsForSection(id, "guide"),
+    getAssignableCollectionsForSection(id, "daily_special"),
     getAssignableGuidesForFeatureSection(id),
     searchParams,
   ]);
@@ -100,7 +102,12 @@ export default async function EditHomepagePage({
         // Only right after a fresh create-and-redirect — see HomepageForm's
         // module docstring for the smooth-scroll behavior this triggers.
         scrollToSectionsOnMount={success === "created"}
-        assignableCollections={{ venue: venueCollections, event: eventCollections, guide: guideCollections }}
+        assignableCollections={{
+          venue: venueCollections,
+          event: eventCollections,
+          guide: guideCollections,
+          daily_special: dailySpecialCollections,
+        }}
         assignableGuideFeatures={guideFeatures}
       />
     </div>

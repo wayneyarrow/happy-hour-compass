@@ -30,7 +30,10 @@ export function normalizeHomepageStatus(status: string): HomepageStatus {
 // drift independently.
 
 export type HomepageSectionType = CollectionType;
-export const HOMEPAGE_SECTION_TYPES = ["venue", "event", "guide"] as const;
+// daily_special added by migration 092_daily_special_collections.sql
+// (Today's Specials) — always content_mode='collection', never 'feature'
+// (see HOMEPAGE_SECTION_KINDS below).
+export const HOMEPAGE_SECTION_TYPES = ["venue", "event", "guide", "daily_special"] as const;
 
 export function isHomepageSectionType(value: string): value is HomepageSectionType {
   return (HOMEPAGE_SECTION_TYPES as readonly string[]).includes(value);
@@ -61,6 +64,7 @@ export type HomepageSectionKind =
   | "venue_collection"
   | "event_collection"
   | "guide_collection"
+  | "daily_special_collection"
   | "venue_feature"
   | "event_feature"
   | "guide_feature";
@@ -69,6 +73,7 @@ export const HOMEPAGE_SECTION_KINDS: HomepageSectionKind[] = [
   "venue_collection",
   "event_collection",
   "guide_collection",
+  "daily_special_collection",
   "venue_feature",
   "event_feature",
   "guide_feature",
@@ -78,6 +83,7 @@ export const SECTION_KIND_LABELS: Record<HomepageSectionKind, string> = {
   venue_collection: "Venue Collection",
   event_collection: "Event Collection",
   guide_collection: "Guide Collection",
+  daily_special_collection: "Daily Special Collection",
   venue_feature: "Venue Feature",
   event_feature: "Event Feature",
   guide_feature: "Guide Feature",
@@ -94,10 +100,20 @@ export function toSectionKind(
   return `${sectionType}_${contentMode}` as HomepageSectionKind;
 }
 
+/**
+ * Splits on the LAST underscore, not the first — `sectionType` itself can
+ * contain an underscore ("daily_special"), so a naive `kind.split("_")`
+ * would wrongly break "daily_special_collection" into three parts instead
+ * of "daily_special" + "collection". `contentMode` is always a single,
+ * underscore-free word ("collection" | "feature"), so splitting from the
+ * end is unambiguous for every current and future sectionType value.
+ */
 export function fromSectionKind(
   kind: HomepageSectionKind
 ): { sectionType: HomepageSectionType; contentMode: HomepageSectionContentMode } {
-  const [sectionType, contentMode] = kind.split("_") as [HomepageSectionType, HomepageSectionContentMode];
+  const lastUnderscore = kind.lastIndexOf("_");
+  const sectionType = kind.slice(0, lastUnderscore) as HomepageSectionType;
+  const contentMode = kind.slice(lastUnderscore + 1) as HomepageSectionContentMode;
   return { sectionType, contentMode };
 }
 

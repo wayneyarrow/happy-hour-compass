@@ -31,6 +31,8 @@ import { resolveCollectionPreview } from "@/lib/data/collectionsPreview";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
+import { getPublishedDailySpecialsForWebsite, type WebsiteDailySpecialListItem } from "@/lib/data/dailySpecials";
+import { getMarketLocalWeekdayLabel } from "@/lib/marketLocalDate";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
@@ -99,6 +101,15 @@ export type HomepagePreviewSection =
   | { id: string; kind: "venue_collection"; title: string; viewAllHref: string; items: SearchResultCardData[] }
   | { id: string; kind: "event_collection"; title: string; viewAllHref: string; items: WebsiteEventListItem[] }
   | { id: string; kind: "guide_collection"; title: string; viewAllHref: string; items: HomepagePreviewGuideCard[] }
+  | {
+      id: string;
+      kind: "daily_special_collection";
+      title: string;
+      viewAllHref: string;
+      items: WebsiteDailySpecialListItem[];
+      /** e.g. "Wednesday's food & drink specials around Kelowna" — computed once at resolution time (market-local weekday + the Collection's own city/market display name), never stored. */
+      subtitle: string;
+    }
   | { id: string; kind: "venue_feature" | "event_feature" | "guide_feature"; title: string; feature: HomepagePreviewFeatureCard };
 
 // ── Section resolution ───────────────────────────────────────────────────────
@@ -117,6 +128,10 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
   // "View All" always opens this Collection's own public Landing Page — the
   // Collection's persisted slug is the single source of truth for this
   // route, never inferred from section.title or the Collection's name/type.
+  // Daily Special Collections are the one exception: Today's Specials has
+  // its own existing, dedicated discovery page/query contract
+  // (/website-daily-specials?when=today) rather than a generic Collection
+  // Landing Page — see the daily_special branch below, which overrides this.
   const viewAllHref = buildCollectionLandingHref(marketSlug, collection.slug);
 
   const preview = await resolveCollectionPreview({
@@ -128,9 +143,48 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
     venueOverrides: collection.venueOverrides,
     eventOverrides: collection.eventOverrides,
     guideItems: collection.guideItems,
+    dailySpecialOverrides: collection.dailySpecialOverrides,
   });
   const orderedIds = preview.items.map((i) => i.id);
   if (orderedIds.length === 0) return null;
+
+  if (section.sectionType === "daily_special") {
+    // Bridges collection.marketId (DB markets.id) to the static, slug-keyed
+    // Market getPublishedDailySpecialsForWebsite() expects — same pattern
+    // resolveDiscoveryShellGeography() below already uses. Re-fetches the
+    // full candidate set (already computed once inside resolveCollectionPreview
+    // -> resolveAlgorithmicDailySpecials for ranking) rather than adding a
+    // second "get Daily Specials by id" data-layer function purely to avoid
+    // one extra, cheap query against a small table.
+    const dbMarkets = await getAllMarkets();
+    const dbMarket = dbMarkets.find((m) => m.id === collection.marketId);
+    const staticMarket = dbMarket ? getStaticMarketBySlug(dbMarket.slug) : undefined;
+    if (!staticMarket) return null;
+
+    const specials = await getPublishedDailySpecialsForWebsite(staticMarket);
+    const byId = new Map(specials.map((s) => [s.id, s]));
+    const items = orderedIds
+      .map((id) => byId.get(id))
+      .filter((s): s is WebsiteDailySpecialListItem => Boolean(s));
+    if (items.length === 0) return null;
+
+    // Location label follows this Collection's OWN configured geography
+    // (City Collection's city, else the Market Collection's market) — never
+    // hardcoded — exactly like every other geography-aware label already
+    // derived from collection.cityName/marketName elsewhere in this file.
+    const locationLabel = collection.cityName ?? collection.marketName;
+    const weekdayLabel = getMarketLocalWeekdayLabel(staticMarket.id, new Date());
+    const subtitle = `${weekdayLabel}'s food & drink specials around ${locationLabel}`;
+
+    return {
+      id: section.id,
+      kind: "daily_special_collection",
+      title: section.title,
+      viewAllHref: "/website-daily-specials?when=today",
+      items,
+      subtitle,
+    };
+  }
 
   if (section.sectionType === "venue") {
     const venues = await getPublishedVenuesByUuids(orderedIds);

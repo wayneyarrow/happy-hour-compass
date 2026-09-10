@@ -37,7 +37,12 @@ type Props = {
   homepageId: string;
   homepageGeography: HomepageGeography;
   initialSections: HomepageSection[];
-  assignableCollections: { venue: CollectionSummary[]; event: CollectionSummary[]; guide: CollectionSummary[] };
+  assignableCollections: {
+    venue: CollectionSummary[];
+    event: CollectionSummary[];
+    guide: CollectionSummary[];
+    daily_special: CollectionSummary[];
+  };
   assignableGuideFeatures: HomepageGuideFeatureCandidate[];
 };
 

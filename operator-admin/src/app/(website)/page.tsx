@@ -92,10 +92,13 @@ export async function generateMetadata(): Promise<Metadata> {
 // ─── Page ────────────────────────────────────────────────────────────────────
 // The Discovery Shell (header + Hero) is the only product-owned content
 // below this point that is not driven by the Homepage CMS. Everything else
-// on the public homepage is owned by the published Homepage's editorial
-// Sections — there is no legacy static fallback content. When no Homepage
-// is published for this geography (neither City nor Market), the page
-// simply ends after the Hero; see docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
+// on the public homepage — including Today's Specials as of migration
+// 092_daily_special_collections.sql — is owned by the published Homepage's
+// editorial Sections, in their own saved displayOrder; there is no legacy
+// static fallback content and no hardcoded section insertion. When no
+// Homepage is published for this geography (neither City nor Market), the
+// page simply ends after the Hero; see
+// docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
 
 export default async function WebsiteHomePage() {
   const { market, isPersisted } = await getActiveMarket();

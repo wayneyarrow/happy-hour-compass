@@ -16,6 +16,19 @@ import { ALGORITHM_KEYS, ALGORITHM_COLLECTION_TYPE } from "@/lib/data/collection
 import type { GuideCandidate } from "@/lib/data/collections";
 import type { CollectionPreviewResult } from "@/lib/data/collectionsPreview";
 import { RAIL_LABELS, type RailKey } from "@/lib/data/discoverOverridesShared";
+
+// RAIL_LABELS only covers the six legacy Discover Management rail keys
+// (spotlight, patio-picks, ...) — collections.ts's ALGORITHM_KEYS is a
+// superset (migration 092 added "todays-specials" for Daily Special
+// Collections), so a bare RAIL_LABELS lookup would render `undefined` for
+// any key outside that original six. This wraps it with the small set of
+// newer keys that have no legacy rail equivalent.
+const ALGORITHM_LABEL_OVERRIDES: Partial<Record<AlgorithmKey, string>> = {
+  "todays-specials": "Today's Specials",
+};
+function algorithmLabel(key: AlgorithmKey): string {
+  return ALGORITHM_LABEL_OVERRIDES[key] ?? RAIL_LABELS[key as RailKey] ?? key;
+}
 import {
   createCollectionAction,
   updateCollectionAction,
@@ -126,6 +139,7 @@ const TYPE_OPTIONS: { value: CollectionType; label: string }[] = [
   { value: "venue", label: "Venue Collection" },
   { value: "event", label: "Event Collection" },
   { value: "guide", label: "Guide Collection" },
+  { value: "daily_special", label: "Daily Special Collection" },
 ];
 
 const STATUS_OPTIONS: { value: CollectionStatus; label: string }[] = [
@@ -218,7 +232,8 @@ export default function CollectionForm({
   const filteredCities = useMemo(() => cities.filter((c) => c.marketId === marketId), [cities, marketId]);
   const selectedMarket = markets.find((m) => m.id === marketId) ?? null;
   const isGuideType = collectionType === "guide";
-  const algorithmic = !isGuideType && curationMode === "algorithmic";
+  const isDailySpecialType = collectionType === "daily_special";
+  const algorithmic = isDailySpecialType || (!isGuideType && curationMode === "algorithmic");
   const itemLimitNumber = itemLimit.trim() && Number.isFinite(Number(itemLimit)) ? Number(itemLimit) : null;
   const algorithmKeyValue: AlgorithmKey | null = algorithmic && algorithmKey ? algorithmKey : null;
 
@@ -286,10 +301,20 @@ export default function CollectionForm({
       // so this is an implied default, not a deliberate pick.
       setCurationMode("manual");
       setAlgorithmKey("");
+    } else if (nextType === "daily_special") {
+      // Today's Specials is always algorithmic — there's exactly one valid
+      // algorithm ("todays-specials"), so this is an implied default too,
+      // the mirror image of Guide's implied "manual" above. Item Limit
+      // defaults to the approved consumer display count (6) — still an
+      // editable, deliberate value, not hidden from the founder.
+      setCurationMode("algorithmic");
+      setAlgorithmKey("todays-specials");
+      if (itemLimit.trim() === "") setItemLimit("6");
     } else {
-      // Coming back from Guide, "manual" was only ever implied — require a
-      // fresh, deliberate choice now that Algorithmic is available again.
-      if (previousType === "guide") setCurationMode(null);
+      // Coming back from Guide or Daily Special, the mode was only ever
+      // implied — require a fresh, deliberate choice now that both Manual
+      // and Algorithmic are meaningfully available again.
+      if (previousType === "guide" || previousType === "daily_special") setCurationMode(null);
       // Algorithm options are type-specific — clear a now-incompatible selection.
       if (algorithmKey && ALGORITHM_COLLECTION_TYPE[algorithmKey] !== nextType) {
         setAlgorithmKey("");
@@ -312,6 +337,9 @@ export default function CollectionForm({
   const initialEventRows: MembershipRow[] = (initialCollection?.eventOverrides ?? []).map((o) => ({
     id: o.eventId, primaryLabel: o.eventTitle ?? "(unknown event)", secondaryLabel: null, action: o.action, boost: o.boost, reasonType: o.reasonType,
   }));
+  const initialDailySpecialRows: MembershipRow[] = (initialCollection?.dailySpecialOverrides ?? []).map((o) => ({
+    id: o.dailySpecialId, primaryLabel: o.dailySpecialLabel ?? "(unknown Daily Special)", secondaryLabel: null, action: o.action, boost: o.boost, reasonType: o.reasonType,
+  }));
   const initialGuideRows: GuideMembershipRow[] = (initialCollection?.guideItems ?? []).map((g) => {
     const candidate = guideCandidates.find((c) => c.id === g.guideId);
     return { id: g.guideId, title: g.guideTitle ?? "(unknown guide)", status: candidate?.status ?? "published" };
@@ -323,6 +351,11 @@ export default function CollectionForm({
   // `useState(initialAttachments.length)` convention), then kept live via
   // onResolvedCountChange/onRowsChange as the editor adds/excludes/removes
   // content (see ResolvedCollectionTable.tsx and CollectionGuidePicker.tsx).
+  // Note: `algorithmic` is unconditionally true whenever collectionType is
+  // "daily_special" (see its derivation above), so that type can never
+  // reach the manual-mode fallback branch below — Daily Special always
+  // takes the `algorithmic` branch just above it, same as Event/Venue do
+  // whenever curationMode is Algorithmic.
   const initialResolvedCount = isGuideType
     ? initialGuideRows.length
     : algorithmic
@@ -561,6 +594,34 @@ export default function CollectionForm({
               ? "Add and order guides directly in Resolved Collection below."
               : "You'll add and order guides on the next screen."}
           </p>
+        ) : isDailySpecialType ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Daily Special Collections are always Algorithmic — ranked automatically each day (eligible today,
+              verified-venue boost, recent demand, soft type variety). Include/Exclude/Boost on the next screen
+              refine that ranking; they never bypass today&apos;s eligibility.
+            </p>
+            <div>
+              <label className={labelCls} htmlFor="item_limit">Item Limit</label>
+              <input
+                id="item_limit"
+                name="item_limit"
+                type="number"
+                min={1}
+                value={itemLimit}
+                onChange={(e) => setItemLimit(e.target.value)}
+                disabled={mode === "edit"}
+                placeholder="6"
+                className={inputCls}
+              />
+              {err.item_limit && <p className={errorCls}>{err.item_limit}</p>}
+              {!err.item_limit && itemLimit.trim() !== "" && !itemLimitFormatValid && (
+                <p className={errorCls}>Item limit must be a positive whole number.</p>
+              )}
+              <p className={hintCls}>The approved homepage design shows 6 — change only for a deliberate experiment.</p>
+            </div>
+            <input type="hidden" name="algorithm_key" value="todays-specials" />
+          </div>
         ) : mode === "edit" ? (
           <div className="space-y-3">
             <div>
@@ -574,7 +635,7 @@ export default function CollectionForm({
                 <div>
                   <span className={labelCls}>Algorithm</span>
                   <p className="text-sm text-slate-700 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                    {algorithmKey ? RAIL_LABELS[algorithmKey as RailKey] : "—"}
+                    {algorithmKey ? algorithmLabel(algorithmKey as AlgorithmKey) : "—"}
                   </p>
                 </div>
                 <div>
@@ -634,7 +695,7 @@ export default function CollectionForm({
                   >
                     <option value="">Select an algorithm…</option>
                     {algorithmOptions.map((key) => (
-                      <option key={key} value={key}>{RAIL_LABELS[key as RailKey]}</option>
+                      <option key={key} value={key}>{algorithmLabel(key)}</option>
                     ))}
                   </select>
                   {err.algorithm_key && <p className={errorCls}>{err.algorithm_key}</p>}
@@ -726,6 +787,21 @@ export default function CollectionForm({
               candidates={guideCandidates}
               initialRows={initialGuideRows}
               onRowsChange={setResolvedItemCount}
+            />
+          )}
+          {collectionType === "daily_special" && (
+            <ResolvedCollectionTable
+              kind="daily_special"
+              fieldName="daily_special_overrides"
+              marketId={marketId}
+              cityId={cityId || null}
+              algorithmic={algorithmic}
+              algorithmKey={algorithmKeyValue}
+              itemLimit={itemLimitNumber}
+              initialOverrideRows={initialDailySpecialRows}
+              resolvedResult={resolvedResult}
+              resolvedError={resolvedError}
+              onResolvedCountChange={setResolvedItemCount}
             />
           )}
         </section>

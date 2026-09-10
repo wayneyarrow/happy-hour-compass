@@ -83,7 +83,12 @@ type Props = {
   /** True only right after a fresh create-and-redirect (`success=created`) — triggers the one-time smooth-scroll to Homepage Sections. See module docstring. */
   scrollToSectionsOnMount?: boolean;
   /** Published Collections eligible for this Homepage's geography, by Section content-kind — edit mode only. See HomepageSectionsEditor.tsx. */
-  assignableCollections?: { venue: CollectionSummary[]; event: CollectionSummary[]; guide: CollectionSummary[] };
+  assignableCollections?: {
+    venue: CollectionSummary[];
+    event: CollectionSummary[];
+    guide: CollectionSummary[];
+    daily_special: CollectionSummary[];
+  };
   /** Published Guides eligible to feature on this Homepage's geography — edit mode only. */
   assignableGuideFeatures?: HomepageGuideFeatureCandidate[];
 };
@@ -112,7 +117,7 @@ export default function HomepageForm({
   cities,
   existingHomepages = [],
   scrollToSectionsOnMount = false,
-  assignableCollections = { venue: [], event: [], guide: [] },
+  assignableCollections = { venue: [], event: [], guide: [], daily_special: [] },
   assignableGuideFeatures = [],
 }: Props) {
   const boundAction =

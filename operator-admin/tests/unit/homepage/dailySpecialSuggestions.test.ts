@@ -36,6 +36,7 @@ function baseSpecial(overrides: Partial<WebsiteDailySpecialListItem> = {}): Webs
     venuePlaceholderImagePath: null,
     venueLat: 49.888,
     venueLng: -119.496,
+    venueIsVerified: false,
     marketSlug: "central-okanagan",
     citySlug: "kelowna",
     ...overrides,

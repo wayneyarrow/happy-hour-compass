@@ -12,6 +12,7 @@ import {
   replaceVenueOverrides,
   replaceEventOverrides,
   replaceGuideItems,
+  replaceDailySpecialOverrides,
   archiveCollection,
   restoreCollection,
   isCollectionType,
@@ -21,10 +22,18 @@ import {
   type VenueOverrideInput,
   type EventOverrideInput,
   type GuideItemInput,
+  type DailySpecialOverrideInput,
 } from "@/lib/data/collections";
 import { resolveCollectionPreview, type CollectionPreviewResult } from "@/lib/data/collectionsPreview";
-import type { CollectionVenueOverride, CollectionEventOverride, CollectionGuideItem, AlgorithmKey } from "@/lib/data/collectionsShared";
+import type {
+  CollectionVenueOverride,
+  CollectionEventOverride,
+  CollectionGuideItem,
+  CollectionDailySpecialOverride,
+  AlgorithmKey,
+} from "@/lib/data/collectionsShared";
 import { searchVenueCandidates, searchEventCandidates, type AttachmentCandidate } from "@/lib/data/contentGuideAttachments";
+import { searchDailySpecialCandidates } from "@/lib/data/dailySpecialCandidates";
 
 /**
  * Server actions for Collections Management V1
@@ -257,6 +266,13 @@ function toEventOverridesForPreview(rows: OverrideRowInput[]): CollectionEventOv
   }));
 }
 
+function toDailySpecialOverridesForPreview(rows: OverrideRowInput[]): CollectionDailySpecialOverride[] {
+  return rows.map((r, i) => ({
+    id: "", collectionId: "", dailySpecialId: r.id, dailySpecialLabel: null, action: r.action, boost: r.boost,
+    sortOrder: i, reasonType: r.reasonType, note: null, createdAt: "", createdBy: null, updatedAt: "", updatedBy: null,
+  }));
+}
+
 function toGuideItemsForPreview(guideIds: string[]): CollectionGuideItem[] {
   return guideIds.map((id, i) => ({
     id: "", collectionId: "", guideId: id, guideTitle: null, sortOrder: i,
@@ -398,7 +414,10 @@ export async function updateCollectionAction(
   // change geography, then re-add geography-valid content.
   const geographyChanged = marketId !== existing.marketId || cityId !== existing.cityId;
   const hasMembership =
-    existing.venueOverrides.length > 0 || existing.eventOverrides.length > 0 || existing.guideItems.length > 0;
+    existing.venueOverrides.length > 0 ||
+    existing.eventOverrides.length > 0 ||
+    existing.guideItems.length > 0 ||
+    existing.dailySpecialOverrides.length > 0;
   if (geographyChanged && hasMembership) {
     return {
       error:
@@ -421,6 +440,8 @@ export async function updateCollectionAction(
     const venueRows = existing.collectionType === "venue" ? parseOverrideRows(formData, "venue_overrides") : [];
     const eventRows = existing.collectionType === "event" ? parseOverrideRows(formData, "event_overrides") : [];
     const guideIds = existing.collectionType === "guide" ? parseGuideRows(formData) : [];
+    const dailySpecialRows =
+      existing.collectionType === "daily_special" ? parseOverrideRows(formData, "daily_special_overrides") : [];
 
     // algorithmKey/itemLimit are already the Collection's own stored, valid
     // values (see above) — no re-validation needed here, unlike before this
@@ -434,6 +455,7 @@ export async function updateCollectionAction(
       venueOverrides: toVenueOverridesForPreview(venueRows),
       eventOverrides: toEventOverridesForPreview(eventRows),
       guideItems: toGuideItemsForPreview(guideIds),
+      dailySpecialOverrides: toDailySpecialOverridesForPreview(dailySpecialRows),
     });
 
     if (preview.items.length === 0) {
@@ -479,6 +501,13 @@ export async function updateCollectionAction(
       eventId: r.id, action: r.action, boost: r.boost, sortOrder: i, reasonType: r.reasonType,
     }));
     const result = await replaceEventOverrides(collectionId, input, callerEmail);
+    if (!result.success) membershipError = result.error;
+  } else if (existing.collectionType === "daily_special") {
+    const rows = parseOverrideRows(formData, "daily_special_overrides");
+    const input: DailySpecialOverrideInput[] = rows.map((r, i) => ({
+      dailySpecialId: r.id, action: r.action, boost: r.boost, sortOrder: i, reasonType: r.reasonType,
+    }));
+    const result = await replaceDailySpecialOverrides(collectionId, input, callerEmail);
     if (!result.success) membershipError = result.error;
   } else {
     const guideIds = parseGuideRows(formData);
@@ -577,6 +606,23 @@ export async function searchCollectionEventCandidatesAction(
   return filterToCollectionGeography(results, input.cityId);
 }
 
+export async function searchCollectionDailySpecialCandidatesAction(
+  input: CollectionCandidateSearchInput
+): Promise<AttachmentCandidate[]> {
+  const callerEmail = await getCallerEmail();
+  if (!callerEmail) return [];
+  if (!input.marketId) return [];
+  // searchDailySpecialCandidates already scopes exactly to marketId/cityId
+  // (no cross-geography cascade to filter down, unlike the tiered venue/
+  // event search) — every result is already tagged with the correct tier.
+  return searchDailySpecialCandidates({
+    marketId: input.marketId,
+    cityId: input.cityId,
+    query: input.query,
+    excludeIds: input.excludeIds,
+  });
+}
+
 // ── Resolve for live editorial refinement ───────────────────────────────────
 //
 // Powers ResolvedCollectionTable.tsx's automatic re-resolution after an
@@ -592,7 +638,7 @@ export async function searchCollectionEventCandidatesAction(
 // calling it freely.
 
 export type GenerateCollectionInput = {
-  collectionType: "venue" | "event";
+  collectionType: "venue" | "event" | "daily_special";
   marketId: string;
   cityId: string | null;
   algorithmKey: string | null;
@@ -635,6 +681,8 @@ export async function generateCollectionResultAction(
     venueOverrides: input.collectionType === "venue" ? toVenueOverridesForPreview(sanitizedRows) : [],
     eventOverrides: input.collectionType === "event" ? toEventOverridesForPreview(sanitizedRows) : [],
     guideItems: [],
+    dailySpecialOverrides:
+      input.collectionType === "daily_special" ? toDailySpecialOverridesForPreview(sanitizedRows) : [],
   });
 
   return { success: true, preview };

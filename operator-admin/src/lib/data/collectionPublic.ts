@@ -85,6 +85,13 @@ export async function getPublicCollectionModel(
   const collection = await getPublishedCollectionBySlug(market.id, collectionSlug);
   if (!collection) return null;
 
+  // No public Collection Landing Page for Daily Special collections yet —
+  // out of scope for the Today's Specials CPanel-integration task (only
+  // Homepage Section rendering, via homepagesRendering.ts, was required).
+  // Explicit early return so this never falls through into the "guide"
+  // branch's fallthrough logic below with the wrong id set.
+  if (collection.collectionType === "daily_special") return null;
+
   const preview = await resolveCollectionPreview({
     collectionType: collection.collectionType,
     marketId: collection.marketId,
@@ -94,6 +101,7 @@ export async function getPublicCollectionModel(
     venueOverrides: collection.venueOverrides,
     eventOverrides: collection.eventOverrides,
     guideItems: collection.guideItems,
+    dailySpecialOverrides: collection.dailySpecialOverrides,
   });
   const orderedIds = preview.items.map((i) => i.id);
   if (orderedIds.length === 0) return null;

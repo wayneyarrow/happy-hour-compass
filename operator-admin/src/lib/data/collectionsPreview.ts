@@ -68,7 +68,14 @@ import {
   type CollectionVenueOverride,
   type CollectionEventOverride,
   type CollectionGuideItem,
+  type CollectionDailySpecialOverride,
 } from "@/lib/data/collectionsShared";
+import { getAllMarkets } from "@/lib/geo/geography";
+import { getMarketById as getStaticMarketBySlug } from "@/lib/markets";
+import { getTodaysSpecialsForHomepage } from "@/lib/data/todaysSpecialsHomepage";
+import type { WebsiteDailySpecialListItem } from "@/lib/data/dailySpecials";
+import { TODAYS_SPECIALS_DEFAULT_LIMIT, type TodaysSpecialOverride } from "@/lib/todaysSpecialsRanking";
+import { OFFER_TYPE_LABELS, type OfferType } from "@/lib/dailySpecialTypes";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -373,6 +380,93 @@ async function resolveAlgorithmicEvents(
   };
 }
 
+// ── Algorithmic resolution — Daily Specials ("Today's Specials") ────────────
+//
+// Unlike venue/event algorithms above (discoverEngine.ts /
+// featuredEventsEngine.ts, re-implemented/adapted here), this delegates
+// entirely to the SAME pure ranking engine the homepage Today's Specials
+// section itself uses — selectTodaysSpecials() (todaysSpecialsRanking.ts) —
+// rather than a second, parallel implementation. That function already
+// implements the exact required pipeline (eligible-today -> exclude ->
+// include/boost -> one-per-venue -> diversify -> cap) and, critically,
+// already guarantees a manual override can never resurrect a Special that
+// isn't eligible today: it filters to occursOnDate() BEFORE ever consulting
+// overrides. Reusing it here (rather than re-deriving that safety property
+// a second time) is what makes that guarantee automatically hold for the
+// CPanel Collection editor too.
+//
+// Market bridging: collections.market_id is the DB `markets` table UUID;
+// selectTodaysSpecials' whole pipeline (getPublishedDailySpecialsForWebsite,
+// getMarketLocalIsoDate) is keyed off the static MARKETS[] config (slug-
+// based `Market`) — two coexisting market representations, a known
+// transitional duality (see markets.ts's own header comment). This bridges
+// the two: look up the DB market row for its slug, then resolve the static
+// Market by that same slug. Returns an empty, "no eligible content" result
+// rather than throwing if the bridge can't resolve (e.g. a market not yet
+// present in the static MARKETS[] config).
+async function resolveAlgorithmicDailySpecials(
+  marketId: string,
+  itemLimit: number | null,
+  overrides: CollectionDailySpecialOverride[]
+): Promise<CollectionPreviewResult> {
+  const dbMarkets = await getAllMarkets();
+  const dbMarket = dbMarkets.find((m) => m.id === marketId);
+  const staticMarket = dbMarket ? getStaticMarketBySlug(dbMarket.slug) : undefined;
+  if (!staticMarket) {
+    return {
+      items: [],
+      excludedCount: 0,
+      emptyReason: "This market is not yet configured for Today's Specials.",
+    };
+  }
+
+  const rankingOverrides: TodaysSpecialOverride[] = overrides.map((o) => ({
+    dailySpecialId: o.dailySpecialId,
+    action: o.action,
+    boost: o.boost,
+  }));
+
+  const specials = await getTodaysSpecialsForHomepage(staticMarket, {
+    limit: itemLimit ?? TODAYS_SPECIALS_DEFAULT_LIMIT,
+    overrides: rankingOverrides,
+  });
+
+  return {
+    items: toDailySpecialPreviewItems(specials, overrides),
+    excludedCount: overrides.filter((o) => o.action === "exclude").length,
+    emptyReason:
+      specials.length === 0 ? "No Daily Specials are eligible today within the selected market." : null,
+  };
+}
+
+/**
+ * Pure — maps already-ranked/selected Specials (selectTodaysSpecials'
+ * output) to the generic CollectionPreviewItem shape ResolvedCollectionTable.tsx
+ * renders, using the same "manual-include" vs "algorithm" origin
+ * distinction resolveAlgorithmicVenues/resolveAlgorithmicEvents use above
+ * (a genuine manual add carries MANUAL_ADD_REASON; a promoted/boosted-only
+ * row does not). Exported for direct unit testing without a database.
+ */
+export function toDailySpecialPreviewItems(
+  specials: WebsiteDailySpecialListItem[],
+  overrides: CollectionDailySpecialOverride[]
+): CollectionPreviewItem[] {
+  const manualAddIds = new Set(
+    overrides.filter((o) => o.action === "include" && o.reasonType === MANUAL_ADD_REASON).map((o) => o.dailySpecialId)
+  );
+  const boostedIds = new Set(overrides.filter((o) => o.boost > 0).map((o) => o.dailySpecialId));
+
+  return specials.map((special) => ({
+    id: special.id,
+    primaryLabel: special.title,
+    secondaryLabel: [special.venueName, OFFER_TYPE_LABELS[special.offerType as OfferType] ?? special.offerType]
+      .filter(Boolean)
+      .join(" · "),
+    origin: (manualAddIds.has(special.id) ? "manual-include" : "algorithm") as PreviewOrigin,
+    boosted: boostedIds.has(special.id),
+  }));
+}
+
 // ── Public entry point ───────────────────────────────────────────────────────
 
 export type CollectionPreviewInput = {
@@ -384,6 +478,7 @@ export type CollectionPreviewInput = {
   venueOverrides: CollectionVenueOverride[];
   eventOverrides: CollectionEventOverride[];
   guideItems: CollectionGuideItem[];
+  dailySpecialOverrides: CollectionDailySpecialOverride[];
 };
 
 export async function resolveCollectionPreview(input: CollectionPreviewInput): Promise<CollectionPreviewResult> {
@@ -395,6 +490,13 @@ export async function resolveCollectionPreview(input: CollectionPreviewInput): P
       return resolveManualVenueOrEvent(input.venueOverrides, "venueId", "venueName");
     }
     return resolveAlgorithmicVenues(input.marketId, input.cityId, input.algorithmKey, input.itemLimit, input.venueOverrides);
+  }
+  if (input.collectionType === "daily_special") {
+    // Today's Specials is always algorithmic — there is no manual-only mode
+    // (see the Today's Specials CPanel-integration task: "retain its
+    // automatic 'today' ranking algorithm... manual overrides layer on top
+    // of that engine").
+    return resolveAlgorithmicDailySpecials(input.marketId, input.itemLimit, input.dailySpecialOverrides);
   }
   // event
   if (input.algorithmKey === null) {
@@ -454,6 +556,7 @@ export async function resolveCollectionPreviewById(collectionId: string): Promis
       venueOverrides: collection.venueOverrides,
       eventOverrides: collection.eventOverrides,
       guideItems: [],
+      dailySpecialOverrides: collection.dailySpecialOverrides,
     });
     return { success: true, preview };
   } catch (err) {

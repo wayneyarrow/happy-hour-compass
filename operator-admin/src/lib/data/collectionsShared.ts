@@ -12,7 +12,11 @@
 
 // ── Collection type / status ─────────────────────────────────────────────────
 
-export const COLLECTION_TYPES = ["venue", "event", "guide"] as const;
+// daily_special added by migration 092_daily_special_collections.sql — the
+// Today's Specials CMS/CPanel integration. Same code space as
+// homepage_sections.section_type (see that migration's header) and
+// homepagesShared.ts's HomepageSectionType alias.
+export const COLLECTION_TYPES = ["venue", "event", "guide", "daily_special"] as const;
 export type CollectionType = (typeof COLLECTION_TYPES)[number];
 
 export function isCollectionType(value: string): value is CollectionType {
@@ -65,6 +69,7 @@ export const ALGORITHM_KEYS = [
   "featured-nearby",
   "new-this-week",
   "featured-events",
+  "todays-specials",
 ] as const;
 
 export type AlgorithmKey = (typeof ALGORITHM_KEYS)[number];
@@ -77,6 +82,7 @@ export const ALGORITHM_COLLECTION_TYPE: Record<AlgorithmKey, CollectionType> = {
   "featured-nearby": "venue",
   "new-this-week":   "venue",
   "featured-events": "event",
+  "todays-specials": "daily_special",
 };
 
 export function isAlgorithmKey(value: string): value is AlgorithmKey {
@@ -197,6 +203,28 @@ export type CollectionEventOverride = {
   updatedBy: string | null;
 };
 
+/**
+ * Mirrors CollectionVenueOverride/CollectionEventOverride exactly (migration
+ * 092_daily_special_collections.sql). `dailySpecialLabel` composes title +
+ * venue (there's no single "name" column on daily_specials the way venues/
+ * events have) — see collections.ts's mapDailySpecialOverrideRow.
+ */
+export type CollectionDailySpecialOverride = {
+  id: string;
+  collectionId: string;
+  dailySpecialId: string;
+  dailySpecialLabel: string | null;
+  action: "include" | "exclude";
+  boost: number;
+  sortOrder: number;
+  reasonType: string | null;
+  note: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
 export type CollectionGuideItem = {
   id: string;
   collectionId: string;
@@ -263,6 +291,8 @@ export type CollectionDetail = {
   eventOverrides: CollectionEventOverride[];
   /** Populated when collectionType === "guide", otherwise []. */
   guideItems: CollectionGuideItem[];
+  /** Populated when collectionType === "daily_special", otherwise []. */
+  dailySpecialOverrides: CollectionDailySpecialOverride[];
   usage: CollectionUsageSummary;
 };
 

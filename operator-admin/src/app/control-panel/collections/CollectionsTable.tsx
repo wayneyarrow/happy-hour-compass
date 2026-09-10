@@ -31,6 +31,7 @@ const TYPE_LABELS: Record<CollectionType, string> = {
   venue: "Venue",
   event: "Event",
   guide: "Guide",
+  daily_special: "Daily Special",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -269,6 +270,7 @@ export default function CollectionsTable({
           <option value="venue">Venue</option>
           <option value="event">Event</option>
           <option value="guide">Guide</option>
+          <option value="daily_special">Daily Special</option>
         </select>
         <select value={marketId} onChange={(e) => applyMarket(e.target.value)} className={selectCls}>
           <option value="">All markets</option>
