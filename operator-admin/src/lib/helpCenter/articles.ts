@@ -9,22 +9,26 @@ import type { HowToArticle } from "./types";
  * appending an object here — no new page, no new routing logic.
  *
  * "Manage your venue information", "Manage your venue images", "Publish or
- * unpublish your venue", "Manage your Happy Hours", "Create an event",
- * "Manage your events", "Understand subscriptions and limits", "Manage
- * users", "Understand analytics", and "Manage your Search Tags" (below) are
- * the real, approved How-To articles, following the design/content standard
- * established by the Getting Started guides. They're listed first, under
- * the "Managing Your Venue" category, so they display above the Internal
- * Preview category on the landing page — each reuses this same category
- * rather than a new one, since it's still an operator managing a feature
- * area of their venue via the same Operator Admin main menu. This is the
- * final planned real V1 How-To article. The two Internal Preview entries
- * after them are placeholders that exist only to prove the renderer,
- * optional-section behavior, screenshot presentation, and related-article
- * linking work end-to-end. They are marked
- * `isPlaceholder: true` (rendered with a visible "Internal preview" badge)
- * and must not be treated as approved Help Center content — kept for now per
- * the task brief, to be removed once enough real articles exist.
+ * unpublish your venue", "Manage your Happy Hours", "Create a Daily
+ * Special", "Create an event", "Manage your events", "Understand
+ * subscriptions and limits", "Manage users", "Understand analytics", and
+ * "Manage your Search Tags" (below) are the real, approved How-To articles,
+ * following the design/content standard established by the Getting Started
+ * guides. They're listed first, under the "Managing Your Venue" category,
+ * so they display above the Internal Preview category on the landing page —
+ * each reuses this same category rather than a new one, since it's still an
+ * operator managing a feature area of their venue via the same Operator
+ * Admin main menu. "Create a Daily Special" was added after the original V1
+ * set (which ended at "Manage your Search Tags") shipped — a "Manage your
+ * Daily Specials" companion article is expected as a later addition, mirroring
+ * Events' Create/Manage pair, but is deliberately out of scope until that
+ * article exists. The two Internal Preview entries after them are
+ * placeholders that exist only to prove the renderer, optional-section
+ * behavior, screenshot presentation, and related-article linking work
+ * end-to-end. They are marked `isPlaceholder: true` (rendered with a visible
+ * "Internal preview" badge) and must not be treated as approved Help Center
+ * content — kept for now per the task brief, to be removed once enough real
+ * articles exist.
  */
 export const HOW_TO_ARTICLES: HowToArticle[] = [
   {
@@ -306,6 +310,94 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
       ],
     },
     relatedSlugs: ["publish-unpublish-venue"],
+  },
+  {
+    type: "how-to",
+    slug: "create-a-daily-special",
+    title: "Create a Daily Special",
+    summary:
+      "Create a Daily Special to promote a food or drink offer available on a particular day or schedule at your venue. The details you enter are what guests see on Happy Hour Compass, so keep the offer clear, accurate and easy to understand.",
+    category: "Managing Your Venue",
+    steps: [
+      {
+        title: "Start a new Daily Special",
+        body: [
+          "From Operator Admin, select Daily Specials from the main menu, then select + New Daily Special.",
+          "Enter a Title for the offer and choose whether it is Food, Drink, or Food & Drink.",
+          "Next, choose how often the Special runs. For a one-time offer, select One time and choose the date. If your plan includes recurring Daily Specials, you can select Every week instead.",
+          "Select Continue. This creates the Daily Special as a draft — you'll add the rest of the details and choose whether to publish it next.",
+        ],
+        note: {
+          heading: "Tip: Make a Daily Special recurring",
+          text: "If the same offer runs every week — like Wing Wednesday or Taco Tuesday — choose Every week instead of creating it again each time. Weekly Daily Specials are available on plans that include recurring Specials. If your current plan doesn't include them, Operator Admin will show you an option to upgrade.",
+        },
+        screenshot: {
+          src: "/help/screenshots/create-daily-special-01-start.png",
+          alt: "New Daily Special start form showing Title, Type, how often the special runs (One time selected, Every week marked Pro+), a Date field, and the Continue button, with the draft explanation below.",
+          width: 966,
+          height: 573,
+        },
+      },
+      {
+        title: "Add the offer details",
+        body: [
+          "Use Short summary to give guests a quick description of the offer. This is the short version shown on Daily Specials cards, so keep it simple and specific — for example, \"$12 wings.\"",
+          "Use Description for any additional information you want guests to know about the offer.",
+          "If there are restrictions or requirements, add them under Conditions / additional details. This is a good place for information such as Dine-in only, Beverage purchase required, While quantities last, or Reservation required.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-daily-special-02-details.png",
+          alt: "Daily Special form showing Title, Type, Short summary, Description, and Conditions / additional details fields with their character counts and example placeholder text.",
+          width: 966,
+          height: 624,
+        },
+      },
+      {
+        title: "Confirm the schedule",
+        body: [
+          "Under Schedule, confirm when the Daily Special is available.",
+          "For a one-time Special, choose the date it will be offered.",
+          "For an Every week Special, choose the day or days of the week the offer runs. If the promotion only runs for a limited period, use the available start or end dates to keep the schedule accurate.",
+        ],
+      },
+      {
+        title: "Set the time",
+        body: [
+          "Under Time, choose when the Special is available:",
+          "No specific time — use this if the offer isn't tied to particular hours.",
+          "All day — use this if the offer is available throughout the day.",
+          "Specific hours — use this when timing matters.",
+          "If you choose Specific hours, you can add a start time and choose how the Special ends: No end time, Specific time, or Close. For example, a Special could run from 2 PM until close.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-daily-special-03-schedule-time.png",
+          alt: "Schedule and Time sections of the Daily Special form, showing the recurrence options with the selected date, and the time options including Specific hours with a start time and an end set to Close.",
+          width: 947,
+          height: 548,
+        },
+      },
+      {
+        title: "Publish the Daily Special",
+        body: [
+          "Under Publishing, switch the setting to Published when you're ready for guests to see the Special on Happy Hour Compass.",
+          "Leave it as Draft if you want to keep working on it privately.",
+          "Select Create Daily Special to save it. Once created, it will appear in your Daily Specials list, where you can return to it anytime to make changes.",
+        ],
+        screenshot: {
+          src: "/help/screenshots/create-daily-special-04-publish.png",
+          alt: "Publishing section of the Daily Special form, showing the Draft toggle and the Create Daily Special button.",
+          width: 947,
+          height: 154,
+        },
+      },
+    ],
+    closingSection: {
+      heading: "Keep your Daily Specials accurate",
+      body: [
+        "Update a Daily Special whenever its price, offer, schedule, time, or conditions change so guests always see current information.",
+        "Clear, accurate Specials make it easier for guests to discover your venue and know what they can expect when they arrive.",
+      ],
+    },
   },
   {
     type: "how-to",

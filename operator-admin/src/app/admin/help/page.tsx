@@ -31,8 +31,8 @@ const ARTICLE_GROUPS: { heading: string; slugs: string[] }[] = [
     slugs: ["manage-venue-information", "manage-venue-images", "publish-unpublish-venue"],
   },
   {
-    heading: "Happy Hours & Events",
-    slugs: ["manage-happy-hours", "create-event", "manage-events"],
+    heading: "Happy Hours, Specials & Events",
+    slugs: ["manage-happy-hours", "create-a-daily-special", "create-event", "manage-events"],
   },
   {
     heading: "Account & Growth",
