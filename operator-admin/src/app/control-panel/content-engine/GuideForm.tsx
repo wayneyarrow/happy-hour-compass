@@ -14,6 +14,7 @@ import {
   getMetaDescriptionWarning,
   getMetaTitleWarning,
   getPrimaryKeywordWarning,
+  type GeneratedGuideSeo,
   type SeoFieldKey,
 } from "@/lib/seo/contentGuideSeo";
 import {
@@ -281,6 +282,52 @@ export default function GuideForm({
   const metaDescriptionWarning = getMetaDescriptionWarning(metaDescription);
   const canonicalUrlWarning = getCanonicalUrlWarning(canonicalUrl);
   const primaryKeywordWarning = getPrimaryKeywordWarning(primaryKeyword);
+
+  // ── Stale-SEO warning (Guide SEO audit follow-up) ────────────────────────
+  // A manually-edited SEO field (seoTouched) stops auto-updating from
+  // generatedSeo by design — that's what lets a hand-written value survive
+  // future edits to title/keywords/location. But that also means it can
+  // silently stop matching those inputs if they change *after* the field
+  // was touched (see docs/website/GUIDE_SEO_STANDARD.md — this is exactly
+  // what happened to the North End guide during the Guide SEO audit).
+  //
+  // baselineSeo snapshots generatedSeo once, right after this render of the
+  // form first mounts — i.e. what the generator produces for the guide's
+  // *original* inputs (title/slug/keywords/location/content as loaded).
+  // Comparing the live generatedSeo against that snapshot, for any field
+  // that's touched, detects "an upstream input changed since this field's
+  // value was set" without ever touching the field's own saved value —
+  // manual edits are never read, compared destructively, or overwritten.
+  //
+  // Scope/limitation: this only catches drift that happens *within the
+  // current edit session* (baseline is captured on mount, not persisted).
+  // It cannot detect a guide that already drifted from its inputs before
+  // this session was opened — reliably tracking that across sessions would
+  // need to persist a signature of "the inputs a saved SEO value was last
+  // generated from," which is a small schema/migration change, not a UI
+  // one. Out of scope here — see docs/website/GUIDE_SEO_STANDARD.md.
+  const [baselineSeo, setBaselineSeo] = useState<GeneratedGuideSeo | null>(null);
+  useEffect(() => {
+    setBaselineSeo(generatedSeo);
+    // Intentionally empty deps — this must capture generatedSeo exactly
+    // once, as computed from the form's initial load, not on every change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const SEO_FIELD_LABELS: Record<SeoFieldKey, string> = {
+    page_title: "Page Title",
+    meta_title: "Meta Title",
+    meta_description: "Meta Description",
+    og_title: "OG Title",
+    og_description: "OG Description",
+    canonical_url: "Canonical URL",
+  };
+
+  const staleSeoFields = baselineSeo
+    ? (Object.keys(SEO_FIELD_LABELS) as SeoFieldKey[]).filter(
+        (key) => seoTouched[key] && generatedSeo[key].value !== baselineSeo[key].value
+      )
+    : [];
 
   // ── Related Content count (Card 7A) ──────────────────────────────────────
   // AttachmentsSelector owns its own selection state internally; this is
@@ -822,6 +869,17 @@ export default function GuideForm({
               Editing a field takes manual control of it — it stops updating until you regenerate.
             </p>
 
+            {staleSeoFields.length > 0 && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
+                Guide inputs have changed since{" "}
+                {staleSeoFields.length === 1 ? "this field was set" : "these fields were set"}:{" "}
+                {staleSeoFields.map((key) => SEO_FIELD_LABELS[key]).join(", ")}. These values were
+                entered manually and are preserved as-is — review them below, or use
+                &quot;Regenerate from guide inputs&quot; above to refresh them from the current
+                title, keywords, and location.
+              </p>
+            )}
+
             <div>
               <label className={labelCls} htmlFor="page_title">Page Title</label>
               <input
@@ -832,6 +890,10 @@ export default function GuideForm({
                 onChange={(e) => handleSeoFieldChange("page_title", e.target.value)}
                 className={inputCls}
               />
+              <p className={hintCls}>
+                Controls the actual browser-tab / search-result title (the page&apos;s real
+                HTML title).
+              </p>
               <p className={hintCls}>Generated from: {generatedSeo.page_title.generatedFrom.join(", ")}</p>
             </div>
 
@@ -845,6 +907,10 @@ export default function GuideForm({
                 onChange={(e) => handleSeoFieldChange("meta_title", e.target.value)}
                 className={inputCls}
               />
+              <p className={hintCls}>
+                Does not set the page/search title — Page Title (above) does that. This is only
+                used as a fallback for OG Title when OG Title is left blank.
+              </p>
               <p className={hintCls}>Generated from: {generatedSeo.meta_title.generatedFrom.join(", ")}</p>
               {metaTitleWarning && <p className="mt-1 text-xs text-amber-600">{metaTitleWarning}</p>}
             </div>

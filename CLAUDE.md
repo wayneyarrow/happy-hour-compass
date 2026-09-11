@@ -126,6 +126,7 @@ Key principles from these documents to carry into every website task:
 - Preserve separation between Public Website, Consumer App, Operator Admin, and Founder Control Panel.
 - The Content Engine is the long-term publishing engine for the public website — not a traditional CMS or blogging platform. Follow `docs/website/CONTENT_ENGINE_PRODUCT_SPEC.md` before introducing new Content Engine functionality or architecture; surface conflicts before writing code.
 - Homepages assemble Collections; Collections own editorial curation; content never knows where it's displayed. Follow `docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md` before introducing new Homepage, Collection, or editorial merchandising functionality or architecture; surface conflicts before writing code.
+- All new or edited Happy Hour Compass consumer guides (Content Engine venue/event guides) must follow `docs/website/GUIDE_SEO_STANDARD.md`. Consult it whenever creating, editing, reviewing, or auditing a guide — SEO is part of guide creation from the start, not a later add-on. Guide-specific SEO/content values belong in the Content Engine guide record and must stay visible/editable in the Founder Control Panel — never hard-code guide metadata in application code. Guide work follows the same workflow as everything else: discuss → task → implementation → report → review/QA → explicit commit only.
 
 ---
 
