@@ -59,16 +59,66 @@ test("html carries the closing line and text version mirrors the same content", 
   assert.ok(rendered.html.includes(MILESTONE_EMAIL_CLOSING));
   assert.ok(rendered.text.includes(MILESTONE_EMAIL_CLOSING));
   assert.match(rendered.text, /^Hi Kelly,/);
-  assert.match(rendered.text, /Wayne\nHappy Hour Compass$/);
+  assert.match(rendered.text, /Wayne \| Founder\nHappy Hour Compass$/);
 });
 
-test("sign-off name defaults to Wayne, but is overridable", () => {
+// ── Draft Two: signature treatment ("Wayne | Founder" + logo) ──────────────
+
+test("signature reads 'Wayne | Founder' with a plain vertical pipe, Happy Hour Compass directly beneath", () => {
+  const rendered = renderVenueViewMilestoneEmail({ milestone: 50, ...SAMPLE });
+
+  // HTML: name and title are separate spans on one line, joined by a plain "|".
+  assert.match(rendered.html, /<span[^>]*>Wayne<\/span>\s*<span[^>]*> \| Founder<\/span>/);
+  // Exactly a plain pipe — not a bullet, slash, dash, or other decorative separator.
+  assert.doesNotMatch(rendered.html, /Wayne\s*[•/\-–—]\s*Founder/);
+
+  // "Happy Hour Compass" is the very next paragraph after the Wayne | Founder line.
+  const signatureNameIdx = rendered.html.indexOf("Wayne</span>");
+  const companyIdx = rendered.html.indexOf(">Happy Hour Compass<");
+  assert.ok(signatureNameIdx !== -1 && companyIdx !== -1);
+  assert.ok(companyIdx > signatureNameIdx, "Happy Hour Compass must come after the Wayne | Founder line");
+
+  // Plain text mirrors the same two lines, adjacent.
+  assert.match(rendered.text, /Wayne \| Founder\nHappy Hour Compass/);
+});
+
+test("sign-off name and title default to Wayne / Founder, but are both overridable", () => {
   const defaultSender = renderVenueViewMilestoneEmail({ milestone: 50, ...SAMPLE });
   assert.match(defaultSender.html, />Wayne</);
+  assert.match(defaultSender.html, /Founder/);
 
-  const overridden = renderVenueViewMilestoneEmail({ milestone: 50, ...SAMPLE, senderFirstName: "Dana" });
+  const overridden = renderVenueViewMilestoneEmail({
+    milestone: 50,
+    ...SAMPLE,
+    senderFirstName: "Dana",
+    senderTitle: "Head of Customer Success",
+  });
   assert.match(overridden.html, />Dana</);
+  assert.match(overridden.html, /Head of Customer Success/);
   assert.doesNotMatch(overridden.html, />Wayne</);
+  assert.doesNotMatch(overridden.html, /\bFounder\b/);
+  assert.match(overridden.text, /Dana \| Head of Customer Success/);
+});
+
+// ── Draft Two: top logo removed entirely ────────────────────────────────────
+
+test("the email no longer opens with a logo — it opens directly with the greeting", () => {
+  for (const milestone of VENUE_VIEW_MILESTONES) {
+    const rendered = renderVenueViewMilestoneEmail({ milestone, ...SAMPLE });
+    // The old stacked square logo asset must not appear anywhere at all.
+    assert.doesNotMatch(rendered.html, /\/logo\.png/, `milestone ${milestone}: the top logo.png must be fully removed`);
+
+    // The greeting is the first piece of visible body content — no <img> tag
+    // appears before "Hi Kelly," in the markup.
+    const bodyStart = rendered.html.indexOf("<body");
+    const greetingIdx = rendered.html.indexOf("Hi Kelly,");
+    const firstImgIdx = rendered.html.indexOf("<img");
+    assert.ok(greetingIdx > bodyStart, `milestone ${milestone}: greeting must be present in the body`);
+    assert.ok(
+      firstImgIdx === -1 || firstImgIdx > greetingIdx,
+      `milestone ${milestone}: no image (logo) may appear before the greeting`
+    );
+  }
 });
 
 test("preheader hidden div carries the preview text", () => {
@@ -113,21 +163,51 @@ test("the rendered email contains no plan/upgrade/pricing language", () => {
   }
 });
 
-// ── Logo URL must be absolute, email-safe — never a bare relative path ─────
+// ── Signature logo: renders, correct asset, absolute email-safe URL ────────
 
-test("the logo <img src> is an absolute URL, not a relative one, in every rendered variant", () => {
-  const expectedLogoUrl = `${getSiteUrl()}/logo.png`;
+test("the signature horizontal logo renders, using the tightly-cropped production asset, sized exactly 110px", () => {
+  const expectedLogoUrl = `${getSiteUrl()}/hhc-logo-horizontal-header.png`;
   assert.match(expectedLogoUrl, /^https?:\/\//, "sanity check: getSiteUrl() itself must resolve to an absolute origin");
 
   for (const milestone of VENUE_VIEW_MILESTONES) {
     const rendered = renderVenueViewMilestoneEmail({ milestone, ...SAMPLE });
-    // Same construction as emailLayout()'s logo in src/lib/email.ts — reused,
-    // not reinvented. Must never regress to a bare `src="/logo.png"`, which
-    // an external email client cannot resolve (no page origin to resolve
-    // a relative path against).
-    assert.match(rendered.html, /<img src="https?:\/\/[^"]+\/logo\.png"/, `milestone ${milestone}: logo src must be absolute`);
-    assert.doesNotMatch(rendered.html, /src="\/logo\.png"/, `milestone ${milestone}: logo src must not be a bare relative path`);
-    assert.ok(rendered.html.includes(`src="${expectedLogoUrl}"`), `milestone ${milestone}: logo src must equal getSiteUrl() + "/logo.png"`);
+
+    // Exactly one <img> in the whole email — the signature logo.
+    const imgTags = rendered.html.match(/<img\s[^>]*>/g) ?? [];
+    assert.equal(imgTags.length, 1, `milestone ${milestone}: exactly one <img> (the signature logo) should be present`);
+
+    // Correct asset — the tightly-cropped horizontal lockup already used by
+    // WebsiteHeader.tsx — never the square-canvas hhc-logo-horizontal.png
+    // (excessive white padding) and never the old stacked /logo.png.
+    assert.match(
+      rendered.html,
+      /<img src="https?:\/\/[^"]+\/hhc-logo-horizontal-header\.png"/,
+      `milestone ${milestone}: signature logo src must be absolute and use hhc-logo-horizontal-header.png`
+    );
+    assert.doesNotMatch(
+      rendered.html,
+      /src="\/hhc-logo-horizontal-header\.png"/,
+      `milestone ${milestone}: signature logo src must not be a bare relative path`
+    );
+    assert.ok(
+      rendered.html.includes(`src="${expectedLogoUrl}"`),
+      `milestone ${milestone}: signature logo src must equal getSiteUrl() + "/hhc-logo-horizontal-header.png"`
+    );
+    assert.doesNotMatch(
+      rendered.html,
+      /hhc-logo-horizontal\.png/,
+      `milestone ${milestone}: must not use the square-canvas hhc-logo-horizontal.png`
+    );
+
+    // Width is exactly 110px (sized down from an initial 140px so it reads
+    // as roughly the same visual width as "Happy Hour Compass" above it),
+    // height left auto to preserve the asset's native aspect ratio.
+    const widthMatch = rendered.html.match(/hhc-logo-horizontal-header\.png"[^>]*width="(\d+)"/);
+    assert.ok(widthMatch, `milestone ${milestone}: signature logo must declare an explicit width`);
+    const width = Number(widthMatch![1]);
+    assert.equal(width, 110, `milestone ${milestone}: signature logo width must be exactly 110px`);
+    assert.match(rendered.html, /hhc-logo-horizontal-header\.png"[^>]*width:110px/);
+    assert.match(rendered.html, /hhc-logo-horizontal-header\.png"[^>]*height:auto/);
   }
 });
 

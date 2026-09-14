@@ -13,10 +13,24 @@
  * no secondary content blocks. See milestoneEmailCopy.ts for the approved
  * wording this renders unmodified (only the {venue} token is substituted).
  *
+ * Draft Two revision: the email no longer opens with a logo — it opens
+ * directly with "Hi [First Name],", like a real personal email. HHC
+ * branding moved to the sign-off instead: "Wayne | Founder" / "Happy Hour
+ * Compass" / a small horizontal logo directly beneath. Branding now reads
+ * as part of who the note is from, not as a campaign header.
+ *
  * BRAND REUSE (not a separate "email brand"):
- *   - Logo: /logo.png — the exact asset every other HHC transactional email
- *     already uses (see emailLayout() in email.ts, and every operator-facing
- *     auth page: login, create-password, activate-account).
+ *   - Signature logo: /hhc-logo-horizontal-header.png — the existing,
+ *     tightly-cropped horizontal HHC lockup already used in production by
+ *     WebsiteHeader.tsx (the public website header). Chosen over
+ *     /hhc-logo-horizontal.png, which is a square canvas with excessive
+ *     white padding around the same artwork, and over the stacked square
+ *     /logo.png every other HHC email uses — a horizontal mark reads more
+ *     like a signature lockup than a masthead. Rendered at 110px wide
+ *     (sized down from an initial 140px so it reads as roughly the same
+ *     visual width as the "Happy Hour Compass" text line above it, rather
+ *     than standing out as its own element), height auto to preserve its
+ *     native 747:247 aspect ratio.
  *   - Colors: the same tokens already established for HHC emails —
  *     heading/body text #0f172a / #475569 / #64748b / #94a3b8, borders
  *     #e2e8f0, background #f8fafc, and the amber accent #d97706 already
@@ -51,6 +65,8 @@ export type VenueViewMilestoneEmailInput = {
   venueName: string;
   /** Defaults to "Wayne" — the sign-off name. */
   senderFirstName?: string;
+  /** Defaults to "Founder" — rendered as "{senderFirstName} | {senderTitle}". */
+  senderTitle?: string;
 };
 
 export type RenderedVenueViewMilestoneEmail = {
@@ -88,13 +104,14 @@ export function renderVenueViewMilestoneEmail(
   }
 
   const senderFirstName = input.senderFirstName ?? "Wayne";
+  const senderTitle = input.senderTitle ?? "Founder";
   const subject = fillVenue(copy.subject, input.venueName);
 
   return {
     subject,
     previewText: copy.previewText,
-    html: buildHtml({ copy, input, senderFirstName }),
-    text: buildText({ copy, input, senderFirstName }),
+    html: buildHtml({ copy, input, senderFirstName, senderTitle }),
+    text: buildText({ copy, input, senderFirstName, senderTitle }),
   };
 }
 
@@ -104,12 +121,14 @@ function buildHtml({
   copy,
   input,
   senderFirstName,
+  senderTitle,
 }: {
   copy: MilestoneCopy;
   input: VenueViewMilestoneEmailInput;
   senderFirstName: string;
+  senderTitle: string;
 }): string {
-  const logoUrl = `${getSiteUrl()}/logo.png`;
+  const signatureLogoUrl = `${getSiteUrl()}/hhc-logo-horizontal-header.png`;
   const firstName = escapeHtml(input.firstName);
   const venueName = escapeHtml(input.venueName);
   const headline = escapeHtml(copy.headline);
@@ -134,17 +153,10 @@ function buildHtml({
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
     <tr>
-      <td align="center" style="padding:40px 20px;">
+      <td align="center" style="padding:32px 20px 40px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
 
-          <!-- Logo: small, left-aligned — present but not the focus -->
-          <tr>
-            <td style="padding:0 0 28px;text-align:left;">
-              <img src="${logoUrl}" alt="Happy Hour Compass" width="72" style="display:block;width:72px;height:auto;border:0;">
-            </td>
-          </tr>
-
-          <!-- Personal greeting -->
+          <!-- Personal greeting — the email opens here, no logo/header above it -->
           <tr>
             <td style="padding:0 0 4px;">
               <p style="margin:0;font-size:16px;color:#0f172a;line-height:1.6;">Hi ${firstName},</p>
@@ -181,12 +193,16 @@ function buildHtml({
             </td>
           </tr>
 
-          <!-- Sign-off -->
+          <!-- Sign-off — HHC branding lives here now, not at the top -->
           <tr>
             <td style="padding:28px 0 0;">
               <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.65;">${closing}</p>
-              <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(senderFirstName)}</p>
-              <p style="margin:0;font-size:13px;color:#94a3b8;">Happy Hour Compass</p>
+              <p style="margin:0 0 2px;font-size:15px;color:#0f172a;">
+                <span style="font-weight:700;">${escapeHtml(senderFirstName)}</span>
+                <span style="font-weight:400;color:#64748b;"> | ${escapeHtml(senderTitle)}</span>
+              </p>
+              <p style="margin:0 0 14px;font-size:13px;color:#94a3b8;">Happy Hour Compass</p>
+              <img src="${signatureLogoUrl}" alt="Happy Hour Compass" width="110" style="display:block;width:110px;height:auto;border:0;">
             </td>
           </tr>
 
@@ -204,10 +220,12 @@ function buildText({
   copy,
   input,
   senderFirstName,
+  senderTitle,
 }: {
   copy: MilestoneCopy;
   input: VenueViewMilestoneEmailInput;
   senderFirstName: string;
+  senderTitle: string;
 }): string {
   const bodyParagraph1 = fillVenue(copy.body[0], input.venueName);
   const bodyParagraph2 = copy.body[1];
@@ -224,6 +242,6 @@ ${bodyParagraph2}
 
 ${MILESTONE_EMAIL_CLOSING}
 
-${senderFirstName}
+${senderFirstName} | ${senderTitle}
 Happy Hour Compass`;
 }
