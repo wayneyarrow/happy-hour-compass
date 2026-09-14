@@ -89,6 +89,8 @@ export async function sendTransactionalEmail({
   text,
   criticality,
   replyTo,
+  from,
+  idempotencyKey,
 }: {
   type: string;
   to: string;
@@ -98,10 +100,23 @@ export async function sendTransactionalEmail({
   criticality: EmailCriticality;
   /** Optional Reply-To override. Defaults to Resend's normal behavior (replies go to DEFAULT_FROM). */
   replyTo?: string;
+  /** Optional From override. Defaults to DEFAULT_FROM ("Happy Hour Compass <hello@happyhourcompass.com>"). */
+  from?: string;
+  /**
+   * Optional Resend idempotency key (sent as the `Idempotency-Key` header
+   * — supported natively by the installed resend SDK, ^6.12.4). Pass the
+   * SAME key across every retry of the same logical send so a
+   * provider-accepted-but-unrecorded attempt is never duplicated. Omit for
+   * flows that don't need this (every existing call site is unaffected).
+   */
+  idempotencyKey?: string;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const resend = getResend();
-    const { data, error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, html, text, replyTo });
+    const { data, error } = await resend.emails.send(
+      { from: from ?? DEFAULT_FROM, to, subject, html, text, replyTo },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
 
     if (error) {
       console.error(`[EMAIL] FAILED type=${type} to=${to} error=${error.message}`);

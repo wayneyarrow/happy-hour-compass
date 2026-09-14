@@ -14,10 +14,16 @@
  *   SLACK_VENUE_CHURN_WEBHOOK_URL         Webhook URL for #venue-churn
  *   SLACK_CONSUMER_SIGNUP_WEBHOOK_URL     Webhook URL for #consumer-signup
  *   SLACK_VENUE_PLAN_CHANGES_WEBHOOK_URL  Webhook URL for #venue-plan-changes
+ *   SLACK_CUSTOMER_SUCCESS_WEBHOOK_URL    Webhook URL for #customer-success
  */
 
 export type SlackChannel = "ops-critical" | "ops-alerts";
-export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact" | "venue-churn" | "consumer-signup" | "venue-plan-changes";
+// Despite the type name (its original scope), this list is really "channel-
+// specific proactive notification targets" — customer-success (Phase 1B
+// milestone email delivery) is not an acquisition event, but reuses the
+// exact same mechanism (one webhook env var per channel, plain mrkdwn text)
+// rather than introducing a second one.
+export type AcquisitionChannel = "venue-suggestions" | "venue-submissions" | "venue-claims" | "website-contact" | "venue-churn" | "consumer-signup" | "venue-plan-changes" | "customer-success";
 export type SlackSeverity = "critical" | "warning" | "info" | "success";
 
 type SlackAlertParams = {
@@ -48,6 +54,7 @@ const ACQUISITION_WEBHOOK_ENV: Record<AcquisitionChannel, string> = {
   "venue-churn":       "SLACK_VENUE_CHURN_WEBHOOK_URL",
   "consumer-signup":   "SLACK_CONSUMER_SIGNUP_WEBHOOK_URL",
   "venue-plan-changes": "SLACK_VENUE_PLAN_CHANGES_WEBHOOK_URL",
+  "customer-success":   "SLACK_CUSTOMER_SUCCESS_WEBHOOK_URL",
 };
 
 function getWebhookUrl(channel: SlackChannel): string | null {
