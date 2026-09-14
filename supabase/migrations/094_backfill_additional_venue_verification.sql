@@ -1,0 +1,86 @@
+-- =============================================================================
+-- Happy Hour Compass — Backfill Additional-Venue Verification Gap
+-- Migration: 094_backfill_additional_venue_verification.sql
+--
+-- CONTEXT:
+--   Fixes existing rows affected by a gap discovered during Customer
+--   Success Phase 1A and corrected at the source in this same change set:
+--   createVenueAdminAction() (operator-admin/src/app/admin/venue/actions.ts)
+--   — the action an already-activated operator uses to create a SECOND (or
+--   further) venue directly from Operator Admin — inserted the new venue
+--   without ever setting is_verified, unlike provisionOperatorForVenue()
+--   (src/lib/operatorActivation.ts), which sets is_verified = true in the
+--   same atomic UPDATE that sets created_by_operator_id for a venue's FIRST
+--   operator (claim approval / operator-submission approval). That gap is
+--   now fixed going forward (createVenueAdminAction sets is_verified: true
+--   at creation, mirroring provisionOperatorForVenue's timing). This
+--   migration backfills rows created before that fix.
+--
+-- WHY THIS PREDICATE IS SAFE — investigated, not assumed:
+--   `created_by_operator_id IS NOT NULL AND is_verified = false` was
+--   checked against every code path (application code AND every script
+--   under operator-admin/scripts/) that writes venues.created_by_operator_id
+--   or venues.is_verified, to confirm no OTHER legitimate state produces
+--   this combination:
+--
+--     - venues.is_verified is written from exactly ONE place in the entire
+--       application: provisionOperatorForVenue()'s atomic UPDATE, always
+--       `true`, always in the same statement that sets
+--       created_by_operator_id. A venue provisioned through claim approval
+--       or operator-submission approval can therefore never be
+--       is_verified = false while created_by_operator_id is set.
+--
+--     - venues.created_by_operator_id is written from exactly TWO places:
+--         (1) provisionOperatorForVenue() — always pairs with
+--             is_verified = true, per above.
+--         (2) createVenueAdminAction() — the gap this migration backfills.
+--       No script (scripts/importVenuesFromCsv.ts, refreshSeededVenues.ts,
+--       bcHygienePass.ts, etc.) ever writes a non-null
+--       created_by_operator_id — importVenuesFromCsv.ts's own comment
+--       states created_by_operator_id is explicitly NULL for CSV imports,
+--       and refreshSeededVenues.ts / bcHygienePass.ts only ever READ it (as
+--       an eligibility guard — see their own headers: refreshSeededVenues
+--       only writes rows where created_by_operator_id IS NULL).
+--
+--     - venues.is_verified = true also occurs on some SEEDED venues with
+--       created_by_operator_id still NULL (manually set outside application
+--       code as part of the offline Happy Hour certification pass — see
+--       CLAUDE.md's "Seeded Market Launch Prep"). That combination
+--       (is_verified = true, created_by_operator_id NULL) is the OPPOSITE
+--       of this migration's predicate and is untouched by it.
+--
+--   So, as far as application code and the repo's scripts can establish,
+--   every row matching this predicate was created via the
+--   createVenueAdminAction gap. The one thing code inspection alone cannot
+--   rule out is a manual/direct SQL edit made outside the application
+--   (e.g. via the Supabase SQL editor) that set created_by_operator_id
+--   without is_verified for some other reason — no evidence of this was
+--   found, and it would be inconsistent with every documented manual-review
+--   process in CLAUDE.md, but it cannot be verified from code alone. Review
+--   the affected row count/list (query below) before applying if that
+--   possibility is a concern.
+--
+-- SAFE TO REVIEW BEFORE APPLYING:
+--   SELECT id, name, slug, created_by_operator_id, is_published, is_verified,
+--          created_at, updated_at
+--   FROM   public.venues
+--   WHERE  created_by_operator_id IS NOT NULL
+--   AND    is_verified = false
+--   ORDER BY created_at;
+--
+-- SCOPE / SAFETY:
+--   - Touches ONLY venues.is_verified, and only where
+--     created_by_operator_id IS NOT NULL AND is_verified = false.
+--   - Does not touch is_published, claimed_at, claimed_by, source, or any
+--     other column.
+--   - Idempotent: the WHERE clause means re-running this migration after
+--     it has already applied matches zero rows and is a no-op.
+--   - NOT applied to Supabase by this task — file only, per explicit
+--     instruction. Apply only after reviewing the query above against the
+--     live database.
+-- =============================================================================
+
+UPDATE public.venues
+SET    is_verified = true
+WHERE  created_by_operator_id IS NOT NULL
+AND    is_verified = false;

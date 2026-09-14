@@ -1,7 +1,7 @@
 "use server";
 
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { buildVenueUpdate } from "@/lib/venueActions";
+import { buildVenueUpdate, buildAdditionalVenueInsertPayload } from "@/lib/venueActions";
 import { redirect } from "next/navigation";
 import { isReservedVenueSlug } from "@/lib/slugify";
 import {
@@ -67,12 +67,25 @@ export async function createVenueAdminAction(
     };
   }
 
-  const { error: insertError } = await ctx.supabase.from("venues").insert({
-    name,
-    slug: generateSlug(name),
-    created_by_operator_id: ctx.operator.id,
-    updated_by_operator_id: ctx.operator.id,
-  });
+  // buildAdditionalVenueInsertPayload() (src/lib/venueActions.ts) sets
+  // is_verified: true — mirrors provisionOperatorForVenue()'s atomic
+  // claimed_by/claimed_at/created_by_operator_id/is_verified UPDATE
+  // (src/lib/operatorActivation.ts) for an operator's FIRST venue. This
+  // additional-venue path has no separate founder review step because
+  // ctx.operator here is already a resolved, already-activated operator
+  // (server-validated by resolveOperatorContext() — never client input,
+  // and Case B/orphan impersonation is rejected above), so the same trust
+  // that made the first venue verified applies to every venue they create
+  // afterward. Fixes a gap where an operator's second-or-later venue could
+  // publish while permanently is_verified = false, even though it's
+  // exactly as legitimate as their first venue.
+  const { error: insertError } = await ctx.supabase.from("venues").insert(
+    buildAdditionalVenueInsertPayload({
+      operatorId: ctx.operator.id,
+      name,
+      slug: generateSlug(name),
+    })
+  );
 
   if (insertError) {
     console.error("[createVenueAdminAction] Insert failed:", insertError);

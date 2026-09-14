@@ -60,28 +60,17 @@
  *       created_by_operator_id check (verified, but not yet a real
  *       operator relationship).
  *
- * KNOWN GAP — multi-venue operators' additional venues:
+ * RESOLVED GAP — multi-venue operators' additional venues:
  *   createVenueAdminAction() (app/admin/venue/actions.ts) lets an already-
  *   activated operator create a SECOND (or further) venue directly from
- *   Operator Admin, and updatePublishStatusAction()
- *   (app/admin/venue/publishActions.ts) is what actually publishes it.
- *   Neither writes is_verified — it is grep-confirmed as write-only from
- *   provisionOperatorForVenue() anywhere in application code. So a
- *   legitimately published, operator-owned SECOND venue for an already-
- *   verified operator can have is_verified = false forever under the
- *   current product, with no in-app way for a founder to flip it (the
- *   Control Panel venue table/detail page only displays is_verified — no
- *   action writes it). This eligibility rule, as specified, would exclude
- *   such a venue from Customer Success even though it is fully legitimate.
- *   This is a pre-existing HHC data-model gap, not something introduced
- *   here — flagged rather than silently special-cased, since every
- *   concrete test case this task specifies is satisfied by is_verified
- *   being a hard requirement, and bypassing it for "any venue whose
- *   operator already has another verified venue" would be inventing new
- *   eligibility logic beyond what was asked. Worth Wayne's judgment before
- *   Phase 1B: either fix the underlying gap (have publishing a venue for an
- *   operator who already has a verified venue also set is_verified), or
- *   decide Customer Success should special-case it.
+ *   Operator Admin. This used to insert the new venue without is_verified,
+ *   so a legitimately published, operator-owned second venue could have
+ *   is_verified = false forever with no in-app way for a founder to fix it.
+ *   Fixed directly at the source (createVenueAdminAction now sets
+ *   is_verified: true at creation, mirroring provisionOperatorForVenue()'s
+ *   timing for a first venue — see that action's own comment for the full
+ *   reasoning) rather than special-cased here — this eligibility rule still
+ *   requires the real is_verified column, unchanged.
  *
  * KNOWN GAP — "test venue":
  *   HHC has no canonical field marking a venue as a QA/test venue today (no
