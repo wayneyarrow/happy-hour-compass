@@ -23,7 +23,8 @@
     "seed:geography": "tsx scripts/seedGeography.ts",
     "backfill:venue-geography": "tsx scripts/backfillVenueGeography.ts",
     "refresh:seeded-venues": "tsx scripts/refreshSeededVenues.ts",
-    "backfill:consumer-brevo-welcome-cohort": "tsx scripts/backfillConsumerBrevoWelcomeCohort.ts"
+    "backfill:consumer-brevo-welcome-cohort": "tsx scripts/backfillConsumerBrevoWelcomeCohort.ts",
+    "customer-success:detect-venue-view-milestones": "tsx scripts/detectCustomerSuccessMilestones.ts"
   },
   "dependencies": {
     "@next/third-parties": "15.5.19",

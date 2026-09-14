@@ -23,6 +23,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 type RpcCountRow<IdKey extends string> = { [K in IdKey]: string } & { views: number | string };
 
+type AdminClient = ReturnType<typeof createAdminClient>;
+
 /**
  * Per-venue view counts.
  *
@@ -31,14 +33,21 @@ type RpcCountRow<IdKey extends string> = { [K in IdKey]: string } & { views: num
  *                  explicit empty array short-circuits to an empty map
  *                  without a network call, matching every pre-existing
  *                  call site's `ids.length > 0 ? fetch(...) : []` guard.
+ * @param admin     Injectable Supabase admin client — defaults to
+ *                  createAdminClient(). Lets callers (e.g. the Customer
+ *                  Success detector's tests) substitute a fake client
+ *                  without a real database; every existing call site is
+ *                  unaffected since this is additive and defaults the same
+ *                  way createAdminClient() always resolved before.
  */
 export async function getVenueViewCounts(
   since: string | null,
-  venueIds?: string[]
+  venueIds?: string[],
+  admin: AdminClient = createAdminClient()
 ): Promise<Map<string, number>> {
   if (venueIds && venueIds.length === 0) return new Map();
 
-  const supabase = createAdminClient();
+  const supabase = admin;
   const { data, error } = await supabase.rpc("venue_view_counts", {
     p_since: since,
     p_venue_ids: venueIds && venueIds.length > 0 ? venueIds : null,
