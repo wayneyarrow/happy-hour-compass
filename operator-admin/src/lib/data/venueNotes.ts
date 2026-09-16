@@ -4,6 +4,17 @@ import {
   CUSTOMER_SUCCESS_ACTIVITY_AUTHOR_LABEL,
   type CustomerSuccessMilestoneEventRow,
 } from "@/lib/customerSuccess/customerSuccessMilestoneNotes";
+import type { VenueNote } from "@/lib/data/venueNoteDisplay";
+
+// VenueNote's canonical definition (and resolveNoteAuthor(), the pure
+// author-resolution helper) now live in ./venueNoteDisplay — a module with
+// no server-only imports, safe for a "use client" component
+// (VenueNotesSection.tsx) to import directly. Re-exported here as a
+// type-only export so this server module's existing consumers
+// (page.tsx, actions.ts) that import VenueNote from "@/lib/data/venueNotes"
+// keep working unchanged. See venueNoteDisplay.ts's header for the build
+// failure this split fixes.
+export type { VenueNote };
 
 // ── System note helper ─────────────────────────────────────────────────────────
 
@@ -66,46 +77,6 @@ export async function addSystemVenueNote(
   } catch (err) {
     console.error("[addSystemVenueNote] Unexpected error:", err);
   }
-}
-
-export type VenueNote = {
-  id: string;
-  venue_id: string;
-  note: string;
-  created_by: string | null;
-  created_by_email: string | null;
-  created_at: string;
-  /**
-   * Optional presentational override for the author line (see NoteEntry in
-   * VenueNotesSection.tsx). Left unset for every real venue_notes /
-   * operator_submission_notes / venue_claim_notes row — those keep their
-   * existing "email, then uid:########, then Unknown" behavior unchanged.
-   * Set only for computed system activity (currently: Customer Success
-   * milestone entries — see getCustomerSuccessNotesForVenue below) that has
-   * no real author to attribute and shouldn't render as "Unknown".
-   */
-  author_label?: string | null;
-};
-
-/**
- * Resolves the author line shown under a note (see NoteEntry in
- * VenueNotesSection.tsx). Extracted as a pure, exported function so this
- * exact behavior — including "must not change for existing notes" — is
- * unit-testable without rendering React.
- *
- * Precedence: an explicit author_label (system activity with no real
- * author — e.g. Customer Success) wins first; otherwise falls back to the
- * original behavior, unchanged: created_by_email, then a truncated
- * created_by uid, then "Unknown" for a genuinely authorless real note.
- */
-export function resolveNoteAuthor(
-  note: Pick<VenueNote, "author_label" | "created_by_email" | "created_by">
-): string {
-  return (
-    note.author_label ??
-    note.created_by_email ??
-    (note.created_by ? `uid:${note.created_by.slice(0, 8)}` : "Unknown")
-  );
 }
 
 /**
@@ -274,7 +245,7 @@ export async function getRelatedClaimNotesForVenue(
  * server-side, reached exclusively from the founder-gated Control Panel
  * venue detail page.
  *
- * Each returned note sets author_label (see VenueNote above) instead of
+ * Each returned note sets author_label (see VenueNote in ./venueNoteDisplay) instead of
  * created_by_email, so it renders with an intentional system label rather
  * than "Unknown" — it never fabricates a human admin identity.
  *

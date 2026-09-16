@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addVenueNoteAction, type VenueNoteState } from "./actions";
-import { resolveNoteAuthor, type VenueNote } from "@/lib/data/venueNotes";
+import { resolveNoteAuthor, type VenueNote } from "@/lib/data/venueNoteDisplay";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
 
 const INITIAL_STATE: VenueNoteState = {};

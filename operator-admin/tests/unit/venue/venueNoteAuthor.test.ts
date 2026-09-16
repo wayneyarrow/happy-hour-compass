@@ -6,10 +6,17 @@
  * lives, so it's tested directly here rather than via React rendering (this
  * repo has no React/jsdom test infra, and adding one for a one-line
  * precedence rule would be disproportionate).
+ *
+ * Imports from ./venueNoteDisplay, not ./venueNotes — resolveNoteAuthor()
+ * was moved to that pure, client-safe module as part of the Phase 1C build
+ * fix (a "use client" component importing it as a runtime value from the
+ * server-only venueNotes.ts broke `next build`). This test both exercises
+ * the real import path VenueNotesSection.tsx now uses and guards against a
+ * regression back to the server module.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveNoteAuthor } from "../../../src/lib/data/venueNotes";
+import { resolveNoteAuthor } from "../../../src/lib/data/venueNoteDisplay";
 import { CUSTOMER_SUCCESS_ACTIVITY_AUTHOR_LABEL } from "../../../src/lib/customerSuccess/customerSuccessMilestoneNotes";
 
 test("Customer Success activity (author_label set) renders the system label, not 'Unknown'", () => {
