@@ -28,6 +28,10 @@ function makeSelectBuilder<T extends Row>(rows: T[]) {
       filters.push((r) => getField(r, col) === val);
       return builder;
     },
+    neq(col: string, val: unknown) {
+      filters.push((r) => getField(r, col) !== val);
+      return builder;
+    },
     not(col: string, op: string, val: unknown) {
       if (op !== "is" || val !== null) throw new Error(`fake: unsupported not(${col}, ${op}, ${val})`);
       filters.push((r) => getField(r, col) !== null && getField(r, col) !== undefined);

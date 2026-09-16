@@ -5,6 +5,7 @@ import {
   getVenueNotes,
   getRelatedSubmissionNotesForVenue,
   getRelatedClaimNotesForVenue,
+  getCustomerSuccessNotesForVenue,
 } from "@/lib/data/venueNotes";
 import { getVenueHealthData } from "@/lib/data/venueHealth";
 import { getVenueFeaturedContent } from "@/lib/data/contentGuideAttachments";
@@ -127,6 +128,7 @@ export default async function ControlPanelVenueDetailPage({
     featuredContent,
     { notes: submissionNotes },
     { notes: claimNotes },
+    { notes: customerSuccessNotes },
   ] = await Promise.all([
     supabase
       .from("venues")
@@ -149,13 +151,16 @@ export default async function ControlPanelVenueDetailPage({
     getVenueFeaturedContent(id),
     getRelatedSubmissionNotesForVenue(id),
     getRelatedClaimNotesForVenue(id),
+    getCustomerSuccessNotesForVenue(id),
   ]);
 
   // Merge the venue's own notes with lifecycle notes from any linked Add Your
-  // Venue submission or venue claim, newest first — one merged,
-  // chronologically ordered feed through the existing VenueNotesSection UI,
-  // with no duplicate storage.
-  const mergedNotes = [...notes, ...submissionNotes, ...claimNotes].sort((a, b) =>
+  // Venue submission or venue claim, plus read-only Customer Success
+  // milestone-email activity (Phase 1C — sourced fresh from
+  // customer_success_events on every load, never copied into venue_notes),
+  // newest first — one merged, chronologically ordered feed through the
+  // existing VenueNotesSection UI, with no duplicate storage.
+  const mergedNotes = [...notes, ...submissionNotes, ...claimNotes, ...customerSuccessNotes].sort((a, b) =>
     a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0
   );
 

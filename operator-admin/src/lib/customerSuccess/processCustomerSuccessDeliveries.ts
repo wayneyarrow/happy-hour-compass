@@ -48,6 +48,7 @@ import { isCustomerSuccessEmailDeliveryEnabled } from "./customerSuccessConfig";
 import { resolveVenueTimeZone, computeInitialSendTime } from "./deliveryScheduling";
 import { resolveRecipientForOperator, type DeliveryBlockedReason } from "./recipientResolution";
 import { decideAfterFailedAttempt, isProcessingStale, customerSuccessIdempotencyKey } from "./deliveryRetryPolicy";
+import { parseDeliverySnapshot, type DeliverySnapshot } from "./deliverySnapshot";
 import { renderVenueViewMilestoneEmail } from "./milestoneEmailTemplate";
 import { getMilestoneEmailCopy } from "./milestoneEmailCopy";
 import {
@@ -372,17 +373,9 @@ async function fetchVenueNames(venueIds: string[], admin: AdminClient): Promise<
 }
 
 // ── Delivery snapshot (Correction Pass Section 2) ───────────────────────────
-
-type DeliverySnapshot = { recipientFirstName: string; venueName: string };
-
-function parseDeliverySnapshot(metadataJson: unknown): DeliverySnapshot | null {
-  if (!metadataJson || typeof metadataJson !== "object") return null;
-  const snap = (metadataJson as Record<string, unknown>).deliverySnapshot;
-  if (!snap || typeof snap !== "object") return null;
-  const s = snap as Record<string, unknown>;
-  if (typeof s.recipientFirstName !== "string" || typeof s.venueName !== "string") return null;
-  return { recipientFirstName: s.recipientFirstName, venueName: s.venueName };
-}
+// parseDeliverySnapshot/DeliverySnapshot now live in ./deliverySnapshot.ts —
+// imported above — so a read-only caller (e.g. Founder Control Panel note
+// formatting) can reuse the same parsing without importing this module.
 
 /**
  * Merges the delivery snapshot into metadata_json WITHOUT discarding any

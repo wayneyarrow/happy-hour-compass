@@ -1,4 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import {
+  formatCustomerSuccessMilestoneNote,
+  CUSTOMER_SUCCESS_ACTIVITY_AUTHOR_LABEL,
+  type CustomerSuccessMilestoneEventRow,
+} from "@/lib/customerSuccess/customerSuccessMilestoneNotes";
 
 // ── System note helper ─────────────────────────────────────────────────────────
 
@@ -70,7 +75,38 @@ export type VenueNote = {
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
+  /**
+   * Optional presentational override for the author line (see NoteEntry in
+   * VenueNotesSection.tsx). Left unset for every real venue_notes /
+   * operator_submission_notes / venue_claim_notes row — those keep their
+   * existing "email, then uid:########, then Unknown" behavior unchanged.
+   * Set only for computed system activity (currently: Customer Success
+   * milestone entries — see getCustomerSuccessNotesForVenue below) that has
+   * no real author to attribute and shouldn't render as "Unknown".
+   */
+  author_label?: string | null;
 };
+
+/**
+ * Resolves the author line shown under a note (see NoteEntry in
+ * VenueNotesSection.tsx). Extracted as a pure, exported function so this
+ * exact behavior — including "must not change for existing notes" — is
+ * unit-testable without rendering React.
+ *
+ * Precedence: an explicit author_label (system activity with no real
+ * author — e.g. Customer Success) wins first; otherwise falls back to the
+ * original behavior, unchanged: created_by_email, then a truncated
+ * created_by uid, then "Unknown" for a genuinely authorless real note.
+ */
+export function resolveNoteAuthor(
+  note: Pick<VenueNote, "author_label" | "created_by_email" | "created_by">
+): string {
+  return (
+    note.author_label ??
+    note.created_by_email ??
+    (note.created_by ? `uid:${note.created_by.slice(0, 8)}` : "Unknown")
+  );
+}
 
 /**
  * Fetches internal notes for a single venue, newest first.
@@ -209,6 +245,76 @@ export async function getRelatedClaimNotesForVenue(
     created_by_email: row.created_by_email as string | null,
     created_at:       row.created_at as string,
   }));
+
+  return { notes };
+}
+
+/**
+ * Fetches venue-view-milestone Customer Success activity for this venue and
+ * formats each event into the same VenueNote shape as the manual/system
+ * notes above, for read-only display alongside them on the venue detail
+ * page (Phase 1C).
+ *
+ * customer_success_events remains the sole source of truth — this is a
+ * display-only projection computed fresh on every page load, never copied
+ * into venue_notes or any other table, and never written to from here.
+ * 'superseded' and 'skipped' rows are excluded — 'superseded' (baseline
+ * supersession, or a milestone overtaken by a higher one before it could
+ * send) is never meaningful to a Founder; 'skipped' is excluded for now
+ * because no current code path produces it and its future semantics are
+ * undefined (Phase 1C correction — see customerSuccessMilestoneNotes.ts).
+ * Both exclusions are also enforced defensively inside
+ * formatCustomerSuccessMilestoneNote() itself, along with any other
+ * unrecognized status.
+ *
+ * Uses the admin client, matching every other read on this table. RLS is
+ * enabled on customer_success_events with zero permissive policies (see
+ * migration 093), so anon/authenticated access is blocked at the API layer
+ * regardless of the underlying table GRANTs; this function only ever runs
+ * server-side, reached exclusively from the founder-gated Control Panel
+ * venue detail page.
+ *
+ * Each returned note sets author_label (see VenueNote above) instead of
+ * created_by_email, so it renders with an intentional system label rather
+ * than "Unknown" — it never fabricates a human admin identity.
+ *
+ * Accepts an injectable admin client (defaulting to createAdminClient(),
+ * matching the DI convention already used throughout src/lib/customerSuccess/)
+ * so this can be exercised in tests against an in-memory fake rather than a
+ * real Supabase connection.
+ */
+export async function getCustomerSuccessNotesForVenue(
+  venueId: string,
+  admin: ReturnType<typeof createAdminClient> = createAdminClient()
+): Promise<{ notes: VenueNote[] }> {
+  const { data, error } = await admin
+    .from("customer_success_events")
+    .select(
+      "id, milestone_value, communication_status, achieved_at, next_attempt_at, sent_at, last_attempted_at, attempt_count, recipient_email, recipient_blocked_reason, processing_started_at, metadata_json"
+    )
+    .eq("venue_id", venueId)
+    .eq("event_type", "venue_view_milestone")
+    .neq("communication_status", "superseded")
+    .neq("communication_status", "skipped")
+    .order("achieved_at", { ascending: false });
+
+  if (error) {
+    console.error("[getCustomerSuccessNotesForVenue]", error.message);
+    return { notes: [] };
+  }
+
+  const notes: VenueNote[] = (data ?? [])
+    .map((row) => formatCustomerSuccessMilestoneNote(row as CustomerSuccessMilestoneEventRow))
+    .filter((n): n is NonNullable<typeof n> => n !== null)
+    .map((n) => ({
+      id:               n.id,
+      venue_id:         venueId,
+      note:             n.note,
+      created_by:       null,
+      created_by_email: null,
+      author_label:     CUSTOMER_SUCCESS_ACTIVITY_AUTHOR_LABEL,
+      created_at:       n.created_at,
+    }));
 
   return { notes };
 }

@@ -3,15 +3,13 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addVenueNoteAction, type VenueNoteState } from "./actions";
-import type { VenueNote } from "@/lib/data/venueNotes";
+import { resolveNoteAuthor, type VenueNote } from "@/lib/data/venueNotes";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
 
 const INITIAL_STATE: VenueNoteState = {};
 
 function NoteEntry({ note }: { note: VenueNote }) {
-  const author =
-    note.created_by_email ??
-    (note.created_by ? `uid:${note.created_by.slice(0, 8)}` : "Unknown");
+  const author = resolveNoteAuthor(note);
   return (
     <div className="py-3 border-b border-gray-100 last:border-0">
       <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed mb-1.5">
