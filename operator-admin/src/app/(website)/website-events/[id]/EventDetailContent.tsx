@@ -46,11 +46,15 @@ export function EventDetailContent({
   isPreviewAuthorized: boolean;
 }) {
   // Home → Event Title only — deliberately not Home → Events → Title.
-  // /website-events is explicitly robots: { index: false } (see
-  // (website)/website-events/page.tsx) and excluded from the sitemap — it
-  // fails "appropriate for indexing" / "stable, crawlable, canonical
-  // public page," so it isn't a valid intermediate breadcrumb level even
-  // though it's a real, working route. The visible page breadcrumb (below)
+  // /website-events is still excluded from the sitemap here (see
+  // (website)/sitemap.ts) — this route is a UUID compatibility/fallback
+  // page, not the canonical location for this event, so it isn't a valid
+  // intermediate breadcrumb level even though it's a real, working route.
+  // (As of the HHC SEO Indexing Audit, /website-events itself is indexable
+  // in production via buildPageMetadata()/shouldNoIndex() — the noindex
+  // rationale this comment previously cited no longer applies, but the
+  // sitemap-exclusion/non-canonical rationale for skipping it as a
+  // breadcrumb level still holds.) The visible page breadcrumb (below)
   // matches this for the same reason. Same canonical path the caller
   // already resolved for buildEventMetadata()'s <link rel="canonical">
   // tag. Event structured data itself remains deferred and is not

@@ -39,10 +39,21 @@ export const dynamic = "force-dynamic";
  * the static pages or the other, healthy sources — see settled() below.
  *
  * Deliberately excluded: admin/operator/control-panel routes, auth/account/
- * saved pages, the /website-events and /website-happy-hours search-results
- * pages (both already noindex'd at the page level via their own metadata),
- * preview/draft content, unpublished content, and the legacy
+ * saved pages, preview/draft content, unpublished content, the
+ * /website-events/{uuid} compatibility route (a redirect, or — for the one
+ * graceful-fallback case where an event's venue has no resolvable
+ * market/city — a non-canonical render; never a second indexable copy of a
+ * page that already has a canonical slug URL), and the legacy
  * /{market}/venue/{slug} redirect route.
+ *
+ * /website-events, /website-happy-hours, and /website-daily-specials (the
+ * market-agnostic search/listing pages, as opposed to the UUID compat route
+ * above) ARE included below, as of the HHC SEO Indexing Audit — they were
+ * previously excluded here to match their own now-corrected unconditional
+ * robots: { index: false } metadata (see each route's page.tsx); now that
+ * they use the same environment-aware buildPageMetadata()/shouldNoIndex()
+ * as every other public page, there is no reason to keep them out of the
+ * sitemap.
  *
  * To add a new public content type: fetch it alongside the others below,
  * map each row to { url, lastModified? }, and flatten it into the returned
@@ -92,6 +103,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl("/careers") },
     { url: absoluteUrl("/privacy") },
     { url: absoluteUrl("/terms") },
+    // Market-agnostic primary discovery/search pages — see the module
+    // comment above for why these are included (unlike the
+    // /website-events/{uuid} compat route, which is not).
+    { url: absoluteUrl("/website-happy-hours") },
+    { url: absoluteUrl("/website-daily-specials") },
+    { url: absoluteUrl("/website-events") },
   ];
 
   // ── Per-market guide library index pages ────────────────────────────────

@@ -5,16 +5,27 @@ import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { toMarketConfig } from "@/lib/markets";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 import {
   HappyHoursSearchClient,
   type WebsiteVenueCard,
 } from "./HappyHoursSearchClient";
 import { resolveInitialDayFilter, resolveInitialTimeRange } from "./searchFilters";
 
-export const metadata: Metadata = {
+// A primary consumer discovery/search page (linked from the homepage,
+// collections, and 404/coming-soon fallbacks — see homepageDiscoveryModes.ts
+// and CollectionTypeContent.tsx) — indexable in production like any other
+// public page, via the same environment-aware buildPageMetadata()/
+// shouldNoIndex() every other public route uses. Previously hardcoded
+// robots: { index: false } unconditionally (in every environment, including
+// production), which is what Google Search Console flagged as the cause of
+// this route being unindexable in production.
+export const metadata: Metadata = buildPageMetadata({
   title: "Happy Hours",
-  robots: { index: false },
-};
+  description:
+    "Find happy hour deals near you — real-time drink and food specials at local bars and restaurants, filterable by day and time.",
+  path: "/website-happy-hours",
+});
 
 // force-dynamic ensures the market cookie and venue data are always fresh.
 export const dynamic = "force-dynamic";
