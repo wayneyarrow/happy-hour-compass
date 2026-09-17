@@ -7,6 +7,7 @@ import type {
   OperatorActivityStatus,
   PaidStatus,
 } from "@/lib/data/venueHealth";
+import type { VenueFeatureAdoptionResult } from "@/lib/customerSuccess/featureAdoption";
 
 /**
  * Right-column Health Panel for the Control Panel venue detail page
@@ -129,7 +130,13 @@ function fmtRelative(iso: string | null): string {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-export default function VenueHealthPanel({ data }: { data: VenueHealthData }) {
+export default function VenueHealthPanel({
+  data,
+  featureAdoption,
+}: {
+  data: VenueHealthData;
+  featureAdoption: VenueFeatureAdoptionResult;
+}) {
   const health = HEALTH_BADGE[data.setupStatus];
   const activity = ACTIVITY_BADGE[data.operatorActivityStatus];
   const planBadgeClasses = data.plan ? (PLAN_BADGE[data.plan] ?? PLAN_BADGE.free) : null;
@@ -191,6 +198,39 @@ export default function VenueHealthPanel({ data }: { data: VenueHealthData }) {
             </li>
           ))}
         </ul>
+      </Card>
+
+      {/* 3.5 Feature Adoption — durable operator engagement signal for
+          Specials (Daily Specials) and Events. Temporarily housed here in
+          the Venue Health right column; may later move into a permanent
+          Customer Success section (see src/lib/customerSuccess/featureAdoption.ts).
+          A query failure renders a neutral message rather than a false
+          Red X — see that module's VenueFeatureAdoptionResult comment. */}
+      <Card title="Feature Adoption" subtitle="Specials & Events">
+        {featureAdoption.ok ? (
+          <ul className="space-y-1.5">
+            {(
+              [
+                { key: "specials", label: "Specials", status: featureAdoption.data.specials },
+                { key: "events", label: "Events", status: featureAdoption.data.events },
+              ] as const
+            ).map(({ key, label, status }) => (
+              <li key={key} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  {status.adopted ? (
+                    <span className="text-green-600">✓</span>
+                  ) : (
+                    <span className="text-red-600">✕</span>
+                  )}
+                  <span className="text-gray-700">{label}</span>
+                </span>
+                <span className="text-gray-500 tabular-nums">{status.activeCount}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Feature Adoption unavailable</p>
+        )}
       </Card>
 
       {/* 4. Operator Activity — kept separate from the Health Score above */}

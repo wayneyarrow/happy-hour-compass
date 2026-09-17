@@ -8,6 +8,7 @@ import {
   getCustomerSuccessNotesForVenue,
 } from "@/lib/data/venueNotes";
 import { getVenueHealthData } from "@/lib/data/venueHealth";
+import { getVenueFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 import { getVenueFeaturedContent } from "@/lib/data/contentGuideAttachments";
 import ImpersonateButton from "./ImpersonateButton";
 import { ExcludeDiscoverControl } from "./ExcludeDiscoverControl";
@@ -240,24 +241,31 @@ export default async function ControlPanelVenueDetailPage({
     onboarding_completed_override_reason:   v.onboarding_completed_override_reason as string | null,
   };
 
-  const health = await getVenueHealthData({
-    venueId: venue.id,
-    operatorId: venue.created_by_operator_id,
-    isPublished: venue.is_published,
-    isVerified: venue.is_verified,
-    source: venue.source,
-    hhTimes: venue.hh_times,
-    businessHours: venue.business_hours,
-    hhFoodDetails: venue.hh_food_details,
-    hhDrinkDetails: venue.hh_drink_details,
-    operatorName: venue.operator_name,
-    operatorEmail: venue.operator_email,
-    operatorLastSeenAt: venue.operator_last_seen_at,
-    venueUpdatedAt: venue.updated_at,
-    onboardingOverrideAt: venue.onboarding_completed_override_at,
-    onboardingOverrideByEmail: venue.onboarding_completed_override_by_email,
-    onboardingOverrideReason: venue.onboarding_completed_override_reason,
-  });
+  // Feature Adoption is fetched independently of Health Panel's own data
+  // (getVenueFeatureAdoption only needs venue.id) so a failure there can
+  // never affect Health Panel's existing cards — see the result's `ok` flag
+  // handling below.
+  const [health, featureAdoption] = await Promise.all([
+    getVenueHealthData({
+      venueId: venue.id,
+      operatorId: venue.created_by_operator_id,
+      isPublished: venue.is_published,
+      isVerified: venue.is_verified,
+      source: venue.source,
+      hhTimes: venue.hh_times,
+      businessHours: venue.business_hours,
+      hhFoodDetails: venue.hh_food_details,
+      hhDrinkDetails: venue.hh_drink_details,
+      operatorName: venue.operator_name,
+      operatorEmail: venue.operator_email,
+      operatorLastSeenAt: venue.operator_last_seen_at,
+      venueUpdatedAt: venue.updated_at,
+      onboardingOverrideAt: venue.onboarding_completed_override_at,
+      onboardingOverrideByEmail: venue.onboarding_completed_override_by_email,
+      onboardingOverrideReason: venue.onboarding_completed_override_reason,
+    }),
+    getVenueFeatureAdoption(venue.id),
+  ]);
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
   const discoverStatus = venue.exclude_from_discover ? "Excluded" : "Active";
@@ -536,7 +544,7 @@ export default async function ControlPanelVenueDetailPage({
       </div>
 
         {/* Right column: Health Panel */}
-        <VenueHealthPanel data={health} />
+        <VenueHealthPanel data={health} featureAdoption={featureAdoption} />
 
       </div>
     </div>

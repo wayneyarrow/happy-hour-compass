@@ -41,6 +41,7 @@ import {
   validateDailySpecialTime,
 } from "@/lib/dailySpecialSchedule";
 import { isOfferType, isScheduleType, type DailySpecialDbRow } from "@/lib/dailySpecialTypes";
+import { genuineOperatorFieldPatch, recordFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 
 const REVALIDATE_PATH = "/admin/daily-specials";
 
@@ -261,6 +262,10 @@ export async function saveDailySpecialAction(
     end_time: isTimed && payload.endMode === "time" ? payload.endTime : null,
     is_published: payload.isPublished,
     ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+    // Feature Adoption content-level provenance — see the identical comment
+    // in src/app/admin/events/actions.ts's saveEventAction(), and
+    // genuineOperatorFieldPatch()'s own comment / migration 096.
+    ...genuineOperatorFieldPatch(ctx),
   };
 
   // ── 9. Save ───────────────────────────────────────────────────────────────
@@ -282,6 +287,7 @@ export async function saveDailySpecialAction(
     }
 
     revalidatePath(REVALIDATE_PATH);
+    await recordFeatureAdoption(ctx, targetVenueId, "daily_specials");
     return { savedId: currentSpecialId };
   }
 
@@ -304,6 +310,7 @@ export async function saveDailySpecialAction(
   }
 
   revalidatePath(REVALIDATE_PATH);
+  await recordFeatureAdoption(ctx, targetVenueId, "daily_specials");
   return { savedId: inserted.id as string };
 }
 

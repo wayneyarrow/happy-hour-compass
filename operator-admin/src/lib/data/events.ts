@@ -570,8 +570,11 @@ export type ConsumerEventListItem = {
  * Recurring events are always treated as upcoming because they continue to
  * fire regardless of when first_date falls. One-off events (recurrence "none"
  * or absent) are past when first_date < today.
+ *
+ * Exported so other modules (e.g. src/lib/customerSuccess/featureAdoption.ts)
+ * can reuse this exact canonical rule instead of reimplementing it.
  */
-function upcomingBucket(
+export function upcomingBucket(
   firstDate: string | null,
   recurrence: string | null,
   today: string

@@ -10,6 +10,7 @@ import {
 } from "@/lib/plans";
 import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import { isRecurring } from "./recurrenceUtils";
+import { genuineOperatorFieldPatch, recordFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 import {
   MAX_SLUG_GENERATION_ATTEMPTS,
   MissingVenueSlugError,
@@ -271,6 +272,13 @@ export async function saveEventAction(
     accessibility_notes:         payload.accessibilityNotes || null,
     teaser:                      payload.teaser || null,
     ...(ctx.operator ? { updated_by_operator_id: ctx.operator.id } : {}),
+    // Feature Adoption content-level provenance (Customer Success Project 2)
+    // — explicitly FALSE (field omitted) for Case A impersonation
+    // (founder/support using "Open as Operator" on a claimed venue), even
+    // though that case also resolves a real ctx.operator. Monotonic
+    // set-only-to-TRUE — see genuineOperatorFieldPatch()'s own comment and
+    // migration 096.
+    ...genuineOperatorFieldPatch(ctx),
   };
 
   if (currentEventId) {
@@ -293,6 +301,7 @@ export async function saveEventAction(
     }
 
     revalidatePath("/admin/events");
+    await recordFeatureAdoption(ctx, targetVenueId, "events");
     return { savedId: currentEventId };
   }
 
@@ -371,5 +380,6 @@ export async function saveEventAction(
   }
 
   revalidatePath("/admin/events");
+  await recordFeatureAdoption(ctx, targetVenueId, "events");
   return { savedId: inserted.id };
 }
