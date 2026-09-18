@@ -17,6 +17,8 @@ import {
   sendOperatorSubmissionConfirmationEmail,
 } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
+import { writeActivationNote } from "@/lib/activation/activationNotes";
+import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 import { slugify } from "@/lib/slugify";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import {
@@ -482,6 +484,13 @@ export async function saveOperatorSubmissionAction(
   // Provision the operator account and link the venue BEFORE inserting the
   // submission row. A failure here returns an error to the submitter so they
   // can retry — no orphan submission row is created.
+  //
+  // Activation-lifecycle claiming happens LATER, after the submission row
+  // below actually exists — see the atomic-claim call further down for why
+  // (claimOrReuseActivationLifecycle()'s origin_submission_id is a real
+  // foreign key, which pendingSubmissionId cannot satisfy until that INSERT
+  // succeeds). provisionOperatorForVenue() itself no longer computes or
+  // returns any activation state at all — see its own header comment.
   let operatorId: string | null = null;
 
   if (routedStatus === "confirmed_auto" && venueId) {
@@ -668,6 +677,34 @@ export async function saveOperatorSubmissionAction(
     });
     if (noteError) {
       console.error("[saveOperatorSubmissionAction] Note insert failed:", noteError.message);
+    }
+
+    // Activation lifecycle — only relevant for confirmed_auto (operatorId is
+    // only ever set on that branch). The submission row now definitely
+    // exists (this INSERT just succeeded), so origin_submission_id is a
+    // satisfiable foreign key — this atomic claim could NOT have safely run
+    // any earlier (see the "Operator provisioning" comment above for why it
+    // could not live inside provisionOperatorForVenue() itself).
+    if (operatorId) {
+      const lifecycleResult = await claimOrReuseActivationLifecycle({
+        operatorId,
+        origin: { type: "submission", submissionId: insertedSubmission.id },
+        logTag: "[saveOperatorSubmissionAction]",
+      });
+      if (lifecycleResult.decision === "started") {
+        const activationResult = await writeActivationNote({
+          origin: { type: "submission", submissionId: insertedSubmission.id },
+          eventType: "activation_started",
+          note: `Activation window started — set up by ${lifecycleResult.lifecycle.deadlineAt}.`,
+          metadata: { activationDeadline: lifecycleResult.lifecycle.deadlineAt, flow: "submission" },
+        });
+        if (!activationResult.ok) {
+          console.error(
+            "[saveOperatorSubmissionAction] Structured activation_started note failed.",
+            { submissionId: insertedSubmission.id, error: activationResult.error }
+          );
+        }
+      }
     }
   }
 

@@ -8,6 +8,8 @@ import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
 import { logAuditEvent } from "@/lib/auditLog";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { writeActivationNote } from "@/lib/activation/activationNotes";
+import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -333,6 +335,31 @@ export async function reviewClaimAction(
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });
+
+  // Activation lifecycle — the claim row now definitely exists (the UPDATE
+  // above just succeeded), so it's safe to attempt the atomic claim: this is
+  // a single INSERT guarded by a database-level partial unique index (see
+  // claimOrReuseActivationLifecycle()'s header for the full atomicity
+  // design and why this replaced an earlier check-then-write race).
+  const lifecycleResult = await claimOrReuseActivationLifecycle({
+    operatorId: provisionResult.authUserId,
+    origin: { type: "claim", claimId },
+    logTag: "[reviewClaimAction]",
+  });
+  if (lifecycleResult.decision === "started") {
+    const activationResult = await writeActivationNote({
+      origin: { type: "claim", claimId },
+      eventType: "activation_started",
+      note: `Activation window started — set up by ${lifecycleResult.lifecycle.deadlineAt}.`,
+      metadata: { activationDeadline: lifecycleResult.lifecycle.deadlineAt, flow: "claim" },
+    });
+    if (!activationResult.ok) {
+      console.error(
+        "[reviewClaimAction] Structured activation_started note failed.",
+        { claimId, error: activationResult.error }
+      );
+    }
+  }
 
   // Fetch venue name for audit log (best-effort — all critical work is done)
   const { data: venueNameRow } = await supabase

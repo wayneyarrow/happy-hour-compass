@@ -3,6 +3,7 @@ import { sendSlackAlert } from "@/lib/slack";
 import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { reportOperationalError } from "@/lib/observability/reportOperationalError";
+import { writeActivationNote, SYSTEM_AUTHOR_EMAIL } from "@/lib/activation/activationNotes";
 
 // ── Observability ────────────────────────────────────────────────────────────
 //
@@ -73,6 +74,30 @@ function isKnownSupabaseJwtKidError(message: string | null | undefined): boolean
  * rollback — `error` is already the standard support-reference customer
  * message (buildInternalErrorMessage() output) with `hhcErrorId` embedded;
  * callers should return it as-is rather than re-wrapping it.
+ *
+ * ACTIVATION LIFECYCLE IS DELIBERATELY NOT THIS FUNCTION'S CONCERN
+ * (corrected 2026-09, final pass): two earlier versions of this function
+ * computed an activation window here and returned it to the caller to
+ * persist separately. That shape had an unavoidable time-of-check-to-time-
+ * of-use race — see src/lib/activation/activationLifecycle.ts's header
+ * comment for the exact sequence — because "read whether a lifecycle already
+ * exists" and "write a new one" were two separate database round trips with
+ * nothing serializing them across concurrent requests. The fix requires the
+ * check-and-write to be a single atomic INSERT guarded by a database
+ * constraint, which in turn requires the origin row (venue_claims /
+ * operator_submissions) to already exist as a real foreign key target —
+ * true for claim/submission approval, but NOT true here: for a
+ * confirmed_auto submission, this function runs and returns BEFORE the
+ * submission row is ever inserted (see saveOperatorSubmissionAction). So the
+ * atomic claim cannot live inside this function for any call site without
+ * either breaking that ordering or special-casing it — instead, EVERY call
+ * site now calls src/lib/activation/activationLifecycle.ts's
+ * claimOrReuseActivationLifecycle() itself, AFTER its own origin-row
+ * write has succeeded, passing this function's returned `authUserId`. See
+ * that module for the full atomicity design and each call site
+ * (reviewClaimAction, approveAndCreateVenueAction,
+ * resolveExistingVenueMatchAction, saveOperatorSubmissionAction) for exactly
+ * where that call happens relative to the origin-row write.
  *
  * The sendEmail callback decouples email copy from provisioning logic,
  * allowing claim approvals and operator submissions to use different copy
@@ -485,6 +510,7 @@ export async function provisionOperatorForVenue({
     message:  "Operator account created, venue linked, and activation email sent.",
     metadata: { Email: email, "Venue ID": venueId, "Auth User": authUserId, Flow: logTag },
   });
+
   return { ok: true, authUserId };
 }
 
@@ -578,47 +604,111 @@ export async function completeOperatorAccountActivation({
   let venueName: string | null = null;
   let sourceFlow = "Unknown";
   // Which entity's own lifecycle note trail this activation belongs to —
-  // resolved from the same lookups as sourceFlow, reused below to write the
-  // note into the correct table rather than a parallel history mechanism.
+  // resolved below, reused to write the note into the correct table rather
+  // than a parallel history mechanism.
   let claimId: string | null = null;
   let submissionId: string | null = null;
 
   try {
-    const { data: venueRow } = await supabase
-      .from("venues")
-      .select("id, name")
-      .eq("claimed_by", operatorId)
+    // ── Authoritative lookup (canonical lifecycle table) ────────────────────
+    // migration 098's operator_activation_lifecycles is the single source of
+    // truth: its partial unique index (operator_id WHERE expired_at IS NULL
+    // AND released_at IS NULL) guarantees at most one row matches here,
+    // ever — see src/lib/activation/activationLifecycle.ts's header for why
+    // that guarantee is now database-enforced rather than relying on
+    // application logic never racing itself. This single query replaces the
+    // earlier two-table, ambiguity-prone lookup entirely for any operator
+    // whose provisioning happened through claimOrReuseActivationLifecycle().
+    const { data: lifecycle } = await supabase
+      .from("operator_activation_lifecycles")
+      .select("origin_type, origin_claim_id, origin_submission_id")
+      .eq("operator_id", operatorId)
+      .is("expired_at", null)
+      .is("released_at", null)
       .maybeSingle();
 
-    if (venueRow) {
-      venueId = venueRow.id as string;
-      venueName = venueRow.name as string;
-
+    if (lifecycle?.origin_type === "claim" && lifecycle.origin_claim_id) {
+      claimId = lifecycle.origin_claim_id as string;
+      sourceFlow = "Claim Your Venue";
       const { data: claimRow } = await supabase
         .from("venue_claims")
-        .select("id")
-        .eq("venue_id", venueId)
-        .eq("status", "approved")
+        .select("venue_id")
+        .eq("id", claimId)
+        .maybeSingle();
+      venueId = (claimRow?.venue_id as string | null) ?? null;
+    } else if (lifecycle?.origin_type === "submission" && lifecycle.origin_submission_id) {
+      submissionId = lifecycle.origin_submission_id as string;
+      const { data: submissionRow } = await supabase
+        .from("operator_submissions")
+        .select("venue_id, status")
+        .eq("id", submissionId)
+        .maybeSingle();
+      venueId = (submissionRow?.venue_id as string | null) ?? null;
+      sourceFlow =
+        (submissionRow?.status as string | undefined) === "confirmed_auto"
+          ? "Add Your Venue (auto-confirmed)"
+          : "Add Your Venue (manual review)";
+    }
+
+    // ── Legacy fallback (operators provisioned before migration 098) ───────
+    // Reached only when no canonical lifecycle row exists for this operator
+    // — i.e. this operator's provisioning predates the atomic lifecycle
+    // table (never backfilled, by design). Exactly the original heuristic
+    // this codebase used before any activation-lifecycle tracking existed,
+    // unchanged, so behavior for already-in-flight legacy operators does not
+    // regress. Ambiguous for a multi-venue operator (an unfiltered
+    // .maybeSingle() on "a" venue they own) — an accepted, pre-existing
+    // limitation for legacy rows only; every operator provisioned through
+    // claimOrReuseActivationLifecycle() is resolved unambiguously above.
+    if (!claimId && !submissionId) {
+      const { data: venueRow } = await supabase
+        .from("venues")
+        .select("id, name")
+        .eq("claimed_by", operatorId)
         .maybeSingle();
 
-      if (claimRow) {
-        sourceFlow = "Claim Your Venue";
-        claimId = claimRow.id as string;
-      } else {
-        const { data: submissionRow } = await supabase
-          .from("operator_submissions")
-          .select("id, status")
-          .eq("operator_id", operatorId)
+      if (venueRow) {
+        venueId = venueRow.id as string;
+        venueName = venueRow.name as string;
+
+        const { data: claimRow } = await supabase
+          .from("venue_claims")
+          .select("id")
+          .eq("venue_id", venueId)
+          .eq("status", "approved")
           .maybeSingle();
 
-        if (submissionRow) {
-          submissionId = submissionRow.id as string;
-          sourceFlow =
-            (submissionRow.status as string) === "confirmed_auto"
-              ? "Add Your Venue (auto-confirmed)"
-              : "Add Your Venue (manual review)";
+        if (claimRow) {
+          sourceFlow = "Claim Your Venue";
+          claimId = claimRow.id as string;
+        } else {
+          const { data: submissionRow } = await supabase
+            .from("operator_submissions")
+            .select("id, status")
+            .eq("operator_id", operatorId)
+            .maybeSingle();
+
+          if (submissionRow) {
+            submissionId = submissionRow.id as string;
+            sourceFlow =
+              (submissionRow.status as string) === "confirmed_auto"
+                ? "Add Your Venue (auto-confirmed)"
+                : "Add Your Venue (manual review)";
+          }
         }
       }
+    }
+
+    // venueName isn't set by the authoritative path above — fetch it once we
+    // know which venue, for either path. Best-effort: never blocks the
+    // notification below.
+    if (venueId && !venueName) {
+      const { data: venueNameRow } = await supabase
+        .from("venues")
+        .select("name")
+        .eq("id", venueId)
+        .maybeSingle();
+      venueName = (venueNameRow?.name as string | null) ?? null;
     }
   } catch (err) {
     console.error("[completeOperatorAccountActivation] Context lookup failed:", err);
@@ -631,12 +721,13 @@ export async function completeOperatorAccountActivation({
   });
 
   // ── Lifecycle note — reuses the same claim/submission notes tables and
-  // system-note convention (created_by/created_by_email left null) already
-  // used elsewhere, rather than a second activation-history mechanism.
-  // Written regardless of email/Slack outcome below — the event itself
-  // (the operator can now sign in) is true independent of notification
-  // delivery. Skipped when neither a claim nor a submission was found —
-  // nothing to attach it to, and this must not invent a source.
+  // system-note convention (created_by null, created_by_email the shared
+  // system-author string) already used elsewhere, rather than a second
+  // activation-history mechanism. Written regardless of email/Slack outcome
+  // below — the event itself (the operator can now sign in) is true
+  // independent of notification delivery. Skipped when neither a claim nor
+  // a submission was found — nothing to attach it to, and this must not
+  // invent a source.
   const activationNote = `Operator account setup completed — ${operatorName} (${operatorEmail}) can now sign in to Operator Admin.`;
   let noteError: string | null = null;
   try {
@@ -645,7 +736,7 @@ export async function completeOperatorAccountActivation({
         claim_id:         claimId,
         note:             activationNote,
         created_by:       null,
-        created_by_email: null,
+        created_by_email: SYSTEM_AUTHOR_EMAIL,
       });
       if (error) noteError = error.message;
     } else if (submissionId) {
@@ -653,12 +744,35 @@ export async function completeOperatorAccountActivation({
         submission_id:    submissionId,
         note:             activationNote,
         created_by:       null,
-        created_by_email: null,
+        created_by_email: SYSTEM_AUTHOR_EMAIL,
       });
       if (error) noteError = error.message;
     }
   } catch (err) {
     noteError = err instanceof Error ? err.message : String(err);
+  }
+
+  // ── Structured "account_activated" event ────────────────────────────────
+  // Written only when an originating claim/submission was actually found
+  // above (authoritative or legacy fallback) — never invents one. Best-effort
+  // and independent of the free-text note above: a failure here is reported
+  // but must not affect anything already committed (account_activated_at is
+  // already set) or the notification email below.
+  if (claimId || submissionId) {
+    const structuredResult = await writeActivationNote({
+      origin: claimId
+        ? { type: "claim", claimId }
+        : { type: "submission", submissionId: submissionId as string },
+      eventType: "account_activated",
+      note: activationNote,
+      metadata: { operatorId, venueId },
+    });
+    if (!structuredResult.ok) {
+      console.error(
+        "[completeOperatorAccountActivation] Structured account_activated note failed.",
+        { operatorId, claimId, submissionId, error: structuredResult.error }
+      );
+    }
   }
 
   if (noteError) {

@@ -21,6 +21,8 @@ import {
   type VenuesGoogleIdentityClient,
 } from "@/lib/google/reconcileVenueGoogleIdentity";
 import { extractGoogleRatingFields } from "@/lib/google/placesMatch";
+import { writeActivationNote } from "@/lib/activation/activationNotes";
+import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -659,6 +661,28 @@ export async function approveAndCreateVenueAction(
     created_by_email: user.email ?? null,
   });
 
+  // Activation lifecycle — the submission row now definitely exists (the
+  // UPDATE above just succeeded), so it's safe to attempt the atomic claim.
+  const lifecycleResult = await claimOrReuseActivationLifecycle({
+    operatorId: provisionResult.authUserId,
+    origin: { type: "submission", submissionId },
+    logTag: "[approveAndCreateVenueAction]",
+  });
+  if (lifecycleResult.decision === "started") {
+    const activationResult = await writeActivationNote({
+      origin: { type: "submission", submissionId },
+      eventType: "activation_started",
+      note: `Activation window started — set up by ${lifecycleResult.lifecycle.deadlineAt}.`,
+      metadata: { activationDeadline: lifecycleResult.lifecycle.deadlineAt, flow: "submission" },
+    });
+    if (!activationResult.ok) {
+      console.error(
+        "[approveAndCreateVenueAction] Structured activation_started note failed.",
+        { submissionId, error: activationResult.error }
+      );
+    }
+  }
+
   await logAuditEvent({
     actorEmail: user.email ?? "unknown",
     action:     "submission_approved",
@@ -936,6 +960,29 @@ export async function resolveExistingVenueMatchAction(
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });
+
+  // Activation lifecycle — the submission row already exists (it's an
+  // existing-venue match, never newly created here), so it's safe to
+  // attempt the atomic claim immediately.
+  const lifecycleResult = await claimOrReuseActivationLifecycle({
+    operatorId: provisionResult.authUserId,
+    origin: { type: "submission", submissionId },
+    logTag: "[resolveExistingVenueMatchAction]",
+  });
+  if (lifecycleResult.decision === "started") {
+    const activationResult = await writeActivationNote({
+      origin: { type: "submission", submissionId },
+      eventType: "activation_started",
+      note: `Activation window started — set up by ${lifecycleResult.lifecycle.deadlineAt}.`,
+      metadata: { activationDeadline: lifecycleResult.lifecycle.deadlineAt, flow: "submission" },
+    });
+    if (!activationResult.ok) {
+      console.error(
+        "[resolveExistingVenueMatchAction] Structured activation_started note failed.",
+        { submissionId, error: activationResult.error }
+      );
+    }
+  }
 
   await logAuditEvent({
     actorEmail: user.email ?? "unknown",

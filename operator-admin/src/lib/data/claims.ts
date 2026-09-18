@@ -10,6 +10,11 @@ export type ClaimNote = {
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
+  /** Structured event identifier (migration 098) — null for every legacy
+   *  and human-authored note; see src/lib/activation/activationEvents.ts. */
+  event_type: string | null;
+  /** Optional structured context for event_type — never a secret value. */
+  metadata_json: Record<string, unknown> | null;
 };
 
 export type ClaimWithVenue = {
@@ -232,7 +237,7 @@ export async function getClaimNotes(claimId: string): Promise<{ notes: ClaimNote
 
   const { data, error } = await supabase
     .from("venue_claim_notes")
-    .select("id, claim_id, note, created_by, created_by_email, created_at")
+    .select("id, claim_id, note, created_by, created_by_email, created_at, event_type, metadata_json")
     .eq("claim_id", claimId)
     .order("created_at", { ascending: false });
 
@@ -248,6 +253,8 @@ export async function getClaimNotes(claimId: string): Promise<{ notes: ClaimNote
     created_by:       row.created_by as string | null,
     created_by_email: row.created_by_email as string | null,
     created_at:       row.created_at as string,
+    event_type:       (row.event_type as string | null) ?? null,
+    metadata_json:    (row.metadata_json as Record<string, unknown> | null) ?? null,
   }));
 
   return { notes };
