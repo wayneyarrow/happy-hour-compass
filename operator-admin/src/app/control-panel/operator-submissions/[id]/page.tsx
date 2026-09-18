@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { getOperatorSubmissionById, getSubmissionNotes } from "@/lib/data/operatorSubmissions";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
+import {
+  getActivationPresentationForSubmission,
+  shouldShowSubmissionActivationCard,
+  ACTIVATION_RELEVANT_SUBMISSION_STATUSES,
+} from "@/lib/activation/activationPresentation";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
+import ActivationCard from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -189,6 +195,21 @@ export default async function OperatorSubmissionDetailPage({
   const venueClaimed =
     venue && (venue.claimed_by != null || venue.created_by_operator_id != null);
 
+  // ── Activation lifecycle presentation ─────────────────────────────────────
+  // Always fetched (cheap — see activationPresentation.ts), regardless of
+  // status: a real lifecycle always wins over a stale/unexpected status
+  // label. The card itself is only RENDERED when a lifecycle actually exists
+  // OR the status is one where provisioning is expected to have run
+  // (confirmed_auto / approved) — never for a clearly rejected, closed, or
+  // incomplete-intake submission with no lifecycle to explain its presence.
+  const rawActivationPresentation = await getActivationPresentationForSubmission(submission.id);
+  const showActivationCard = shouldShowSubmissionActivationCard(submission.status, !!rawActivationPresentation.lifecycle);
+  const activationPresentation = showActivationCard ? rawActivationPresentation : null;
+  const lastStructuredNote = notes.find((n) => n.event_type);
+  const lastActivationEvent = lastStructuredNote
+    ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
+    : null;
+
   return (
     <div className="max-w-6xl">
       {/* ── Back nav ──────────────────────────────────────────────────────── */}
@@ -357,9 +378,20 @@ export default async function OperatorSubmissionDetailPage({
             />
           )}
 
-          {/* Account recovery — shown when operator was provisioned */}
-          {submission.status === "approved" && (
+          {/* Account recovery — shown for any status where provisioning is
+              expected to have run (confirmed_auto or founder-approved), not
+              only "approved" — confirmed_auto submissions are provisioned
+              immediately at submission time and can be just as resendable.
+              The action itself is the real eligibility gate
+              (evaluateSubmissionResendEligibility) — this only avoids
+              showing a resend button on a rejected/no-match/incomplete
+              submission that could never legitimately need one. */}
+          {ACTIVATION_RELEVANT_SUBMISSION_STATUSES.has(submission.status) && (
             <ResendSetupEmailPanel submissionId={submission.id} />
+          )}
+
+          {activationPresentation && (
+            <ActivationCard presentation={activationPresentation} lastEvent={lastActivationEvent} />
           )}
 
           {/* Linked Venue */}

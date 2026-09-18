@@ -5,15 +5,41 @@ import { useRouter } from "next/navigation";
 import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { OperatorSubmissionRow } from "@/lib/data/operatorSubmissions";
+import type { ActivationLifecycleState } from "@/lib/activation/activationState";
+import { ACTIVATION_STATE_LABELS, formatDeadlineCountdown } from "@/lib/activation/activationState";
+import ActivationBadge from "@/components/ActivationBadge";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Row = OperatorSubmissionRow & { submitted: string; updated: string };
+type Row = OperatorSubmissionRow & {
+  submitted: string;
+  updated: string;
+  activationState: ActivationLifecycleState;
+  activationDeadline: string | null;
+};
 
-type SortCol = "venue_name" | "status" | "submitted_at" | "updated_at";
+type SortCol = "venue_name" | "status" | "submitted_at" | "updated_at" | "attention";
+/** Client-side activation filter — a SEPARATE dimension from the existing
+ *  server-side routing-status tabs (needs_review/confirmed_auto/all) and
+ *  from the stored `status`/`match_status` vocabulary, exactly as with
+ *  Claims' equivalent filter. */
+type ActivationFilter = "all" | "awaiting_setup" | "expiring_soon" | "release_required" | "active";
+
+/** Attention-first priority for the default sort — mirrors ClaimsTable's
+ *  attentionRank() exactly. */
+function attentionRank(state: ActivationLifecycleState): number {
+  switch (state) {
+    case "release_required": return 0;
+    case "setup_delivery_error": return 1;
+    case "expiring_soon": return 2;
+    case "awaiting_setup": return 3;
+    default: return 4;
+  }
+}
 
 const PAGE_SIZE    = 25;
-const DEFAULT_SORT: SortCol = "submitted_at";
+const DEFAULT_SORT: SortCol = "attention";
+const DEFAULT_DIR: "asc" | "desc" = "asc";
 
 // ── Badge configs ─────────────────────────────────────────────────────────────
 
@@ -94,13 +120,14 @@ function readUrlParam(key: string, fallback: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fallback;
 }
 
-function syncUrl(q: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, activation: string, sort: string, dir: string, page: number) {
   const p = new URLSearchParams(window.location.search);
   // Preserve existing params (e.g. tab) but overwrite ours
-  if (q)                    p.set("q",    q);    else p.delete("q");
-  if (sort !== DEFAULT_SORT) p.set("sort", sort); else p.delete("sort");
-  if (dir !== "desc")       p.set("dir",  dir);  else p.delete("dir");
-  if (page > 1)             p.set("page", String(page)); else p.delete("page");
+  if (q)                       p.set("q",          q);          else p.delete("q");
+  if (activation !== "all")    p.set("activation",  activation); else p.delete("activation");
+  if (sort !== DEFAULT_SORT)   p.set("sort", sort); else p.delete("sort");
+  if (dir !== DEFAULT_DIR)     p.set("dir",  dir);  else p.delete("dir");
+  if (page > 1)                p.set("page", String(page)); else p.delete("page");
   const qs = p.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
@@ -110,16 +137,18 @@ function syncUrl(q: string, sort: string, dir: string, page: number) {
 export default function SubmissionsTable({ rows }: { rows: Row[] }) {
   const router = useRouter();
 
-  const [q,       setQ]       = useState("");
-  const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [page,    setPage]    = useState(1);
+  const [q,          setQ]          = useState("");
+  const [activation, setActivation] = useState<ActivationFilter>("all");
+  const [sortCol,    setSortCol]    = useState<SortCol>(DEFAULT_SORT);
+  const [sortDir,    setSortDir]    = useState<"asc" | "desc">(DEFAULT_DIR);
+  const [page,       setPage]       = useState(1);
 
   // Hydrate from URL on mount
   useEffect(() => {
     setQ(readUrlParam("q", ""));
+    setActivation(readUrlParam("activation", "all") as ActivationFilter);
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
-    setSortDir(readUrlParam("dir", "desc") as "asc" | "desc");
+    setSortDir(readUrlParam("dir", DEFAULT_DIR) as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
   }, []);
 
@@ -127,14 +156,17 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
 
   const filtered = useMemo(() => {
     const lq = q.toLowerCase();
-    if (!lq) return rows;
     return rows.filter((r) => {
-      const name = [r.first_name, r.last_name].filter(Boolean).join(" ").toLowerCase();
-      return r.venue_name.toLowerCase().includes(lq) ||
-             name.includes(lq) ||
-             r.email.toLowerCase().includes(lq);
+      if (lq) {
+        const name = [r.first_name, r.last_name].filter(Boolean).join(" ").toLowerCase();
+        if (!r.venue_name.toLowerCase().includes(lq) &&
+            !name.includes(lq) &&
+            !r.email.toLowerCase().includes(lq)) return false;
+      }
+      if (activation !== "all" && r.activationState !== activation) return false;
+      return true;
     });
-  }, [rows, q]);
+  }, [rows, q, activation]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -152,6 +184,20 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
         case "updated_at":
           cmp = a.updated_at.localeCompare(b.updated_at);
           break;
+        case "attention": {
+          const rankA = attentionRank(a.activationState);
+          const rankB = attentionRank(b.activationState);
+          if (rankA !== rankB) {
+            cmp = rankA - rankB;
+          } else if (rankA <= 3) {
+            const da = a.activationDeadline ? new Date(a.activationDeadline).getTime() : Infinity;
+            const db = b.activationDeadline ? new Date(b.activationDeadline).getTime() : Infinity;
+            cmp = da - db;
+          } else {
+            cmp = -a.submitted_at.localeCompare(b.submitted_at);
+          }
+          break;
+        }
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -168,27 +214,34 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
     setSortCol(col);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, col, newDir, 1);
+    syncUrl(q, activation, col, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, sortCol, sortDir, 1);
+    syncUrl(val, activation, sortCol, sortDir, 1);
+  };
+
+  const applyActivation = (val: ActivationFilter) => {
+    setActivation(val);
+    setPage(1);
+    syncUrl(q, val, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, sortCol, sortDir, p);
+    syncUrl(q, activation, sortCol, sortDir, p);
   };
 
   const handleExport = () => {
-    const headers = ["Venue", "Submitter", "Email", "Status", "Submitted", "Updated"];
+    const headers = ["Venue", "Submitter", "Email", "Status", "Activation", "Submitted", "Updated"];
     const csvRows = sorted.map((r) => [
       r.venue_name,
       [r.first_name, r.last_name].filter(Boolean).join(" ") || null,
       r.email,
       STATUS_CONFIG[r.status]?.label ?? r.status,
+      ACTIVATION_STATE_LABELS[r.activationState],
       r.submitted,
       r.updated,
     ]);
@@ -220,6 +273,17 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
           placeholder="Search venue, submitter, or email…"
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
+        <select
+          value={activation}
+          onChange={(e) => applyActivation(e.target.value as ActivationFilter)}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        >
+          <option value="all">All activation states</option>
+          <option value="awaiting_setup">Activation: Awaiting setup</option>
+          <option value="expiring_soon">Activation: Expiring soon</option>
+          <option value="release_required">Activation: Release required</option>
+          <option value="active">Activation: Active</option>
+        </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
         </span>
@@ -264,6 +328,9 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
                     <button onClick={() => applySort("status")} className={thBtnCls}>
                       Status <SortIcon active={sortCol === "status"} dir={sortDir} />
                     </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
+                    <span className={thStaticCls}>Activation</span>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
                     <span className={thStaticCls}>Match</span>
@@ -313,6 +380,14 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={row.status} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <ActivationBadge state={row.activationState} />
+                      {row.activationDeadline && (
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {formatDeadlineCountdown(row.activationDeadline)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <MatchBadge status={row.match_status} />

@@ -1,5 +1,6 @@
 import { getClaimsForReview } from "@/lib/data/claims";
 import { formatDate } from "@/lib/controlPanelDateTime";
+import { getActivationPresentationsForClaims } from "@/lib/activation/activationPresentation";
 import ClaimsTable from "./ClaimsTable";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,17 @@ export const metadata = { title: "Claims" };
 
 export default async function ClaimsPage() {
   const { claims, error } = await getClaimsForReview();
+
+  // Only approved claims can ever have a lifecycle (claimOrReuseActivationLifecycle
+  // is only ever called from the approve path) — narrowing the batch lookup to
+  // those ids keeps this a small, targeted query rather than a full-table scan
+  // for claims that can never have a row.
+  const approvedClaimIds = claims.filter((c) => c.status === "approved").map((c) => c.id);
+  const activationByClaimId = await getActivationPresentationsForClaims(approvedClaimIds);
+
+  const awaitingSetupCount = [...activationByClaimId.values()].filter((p) => p.state === "awaiting_setup").length;
+  const expiringSoonCount = [...activationByClaimId.values()].filter((p) => p.state === "expiring_soon").length;
+  const releaseRequiredCount = [...activationByClaimId.values()].filter((p) => p.state === "release_required").length;
 
   return (
     <div className="max-w-7xl">
@@ -24,6 +36,19 @@ export default async function ClaimsPage() {
           </span>
         )}
       </div>
+
+      {/* Attention-count strip — authoritative activation data only */}
+      {(awaitingSetupCount > 0 || expiringSoonCount > 0 || releaseRequiredCount > 0) && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
+          {releaseRequiredCount > 0 && (
+            <span className="text-red-700 font-medium">{releaseRequiredCount} Release required</span>
+          )}
+          {expiringSoonCount > 0 && (
+            <span className="text-amber-700 font-medium">{expiringSoonCount} Expiring soon</span>
+          )}
+          {awaitingSetupCount > 0 && <span>{awaitingSetupCount} Awaiting setup</span>}
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
@@ -60,11 +85,16 @@ export default async function ClaimsPage() {
       {/* Claims table */}
       {!error && claims.length > 0 && (
         <ClaimsTable
-          rows={claims.map((c) => ({
-            ...c,
-            submitted: formatDate(c.created_at),
-            updated:   formatDate(c.updated_at),
-          }))}
+          rows={claims.map((c) => {
+            const activation = activationByClaimId.get(c.id) ?? null;
+            return {
+              ...c,
+              submitted: formatDate(c.created_at),
+              updated:   formatDate(c.updated_at),
+              activationState: activation?.state ?? "not_tracked",
+              activationDeadline: activation?.lifecycle?.deadlineAt ?? null,
+            };
+          })}
         />
       )}
     </div>

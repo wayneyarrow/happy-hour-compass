@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addSubmissionNoteAction, type AddNoteState } from "./actions";
 import type { SubmissionNote } from "@/lib/data/operatorSubmissions";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
+import ActivationNoteMeta from "@/components/ActivationNoteMeta";
 
 const INITIAL_STATE: AddNoteState = {};
 
@@ -14,6 +15,7 @@ function NoteEntry({ note }: { note: SubmissionNote }) {
   const author = note.created_by_email ?? (note.created_by ? `uid:${note.created_by.slice(0, 8)}` : "Unknown");
   return (
     <div className="py-3 border-b border-gray-100 last:border-0">
+      <ActivationNoteMeta eventType={note.event_type} metadata={note.metadata_json} />
       <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed mb-1.5">
         {note.note}
       </p>

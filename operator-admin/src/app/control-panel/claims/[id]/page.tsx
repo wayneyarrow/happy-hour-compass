@@ -2,9 +2,11 @@ import Link from "next/link";
 import { getClaimById, getClaimNotes } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
+import { getActivationPresentationForClaim } from "@/lib/activation/activationPresentation";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
+import ActivationCard from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
@@ -183,6 +185,12 @@ export default async function ClaimDetailPage({
   }
 
   const signals = await computeTrustSignals(claim);
+  const activationPresentation =
+    claim.status === "approved" ? await getActivationPresentationForClaim(claim.id) : null;
+  const lastStructuredNote = notes.find((n) => n.event_type);
+  const lastActivationEvent = lastStructuredNote
+    ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
+    : null;
 
   return (
     <div className="max-w-6xl">
@@ -365,6 +373,10 @@ export default async function ClaimDetailPage({
 
           {claim.status === "approved" && (
             <ResendSetupEmailPanel claimId={claim.id} />
+          )}
+
+          {activationPresentation && (
+            <ActivationCard presentation={activationPresentation} lastEvent={lastActivationEvent} />
           )}
 
           <Section title="Trust signals">

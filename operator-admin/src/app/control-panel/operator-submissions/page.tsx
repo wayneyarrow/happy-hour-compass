@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getOperatorSubmissions } from "@/lib/data/operatorSubmissions";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
+import { getActivationPresentationsForSubmissions } from "@/lib/activation/activationPresentation";
 import SubmissionsTable from "./SubmissionsTable";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,19 @@ export default async function OperatorSubmissionsPage({
   const activeTab: TabKey = isValidTab(rawTab) ? rawTab : "needs_review";
 
   const { submissions, error } = await getOperatorSubmissions(activeTab);
+
+  // Batch-fetch for EVERY submission on this page, not just status==="approved"
+  // — confirmed_auto submissions are provisioned (and can have a live
+  // lifecycle) immediately at submission time, before any founder review, so
+  // pre-filtering by status alone would silently hide their real activation
+  // state. The batch function is exactly 2 queries regardless of row count
+  // (see activationPresentation.ts), so fetching for the whole page is cheap.
+  const submissionIds = submissions.map((s) => s.id);
+  const activationBySubmissionId = await getActivationPresentationsForSubmissions(submissionIds);
+
+  const awaitingSetupCount = [...activationBySubmissionId.values()].filter((p) => p.state === "awaiting_setup").length;
+  const expiringSoonCount = [...activationBySubmissionId.values()].filter((p) => p.state === "expiring_soon").length;
+  const releaseRequiredCount = [...activationBySubmissionId.values()].filter((p) => p.state === "release_required").length;
 
   return (
     <div className="max-w-7xl">
@@ -72,6 +86,19 @@ export default async function OperatorSubmissionsPage({
         </nav>
       </div>
 
+      {/* Attention-count strip — authoritative activation data only */}
+      {(awaitingSetupCount > 0 || expiringSoonCount > 0 || releaseRequiredCount > 0) && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
+          {releaseRequiredCount > 0 && (
+            <span className="text-red-700 font-medium">{releaseRequiredCount} Release required</span>
+          )}
+          {expiringSoonCount > 0 && (
+            <span className="text-amber-700 font-medium">{expiringSoonCount} Expiring soon</span>
+          )}
+          {awaitingSetupCount > 0 && <span>{awaitingSetupCount} Awaiting setup</span>}
+        </div>
+      )}
+
       {/* ── Error state ────────────────────────────────────────────────────────── */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
@@ -111,11 +138,16 @@ export default async function OperatorSubmissionsPage({
       {/* ── Table ────────────────────────────────────────────────────────────────── */}
       {!error && submissions.length > 0 && (
         <SubmissionsTable
-          rows={submissions.map((s) => ({
-            ...s,
-            submitted: formatDateTime(s.submitted_at),
-            updated:   formatDateTime(s.updated_at),
-          }))}
+          rows={submissions.map((s) => {
+            const activation = activationBySubmissionId.get(s.id) ?? null;
+            return {
+              ...s,
+              submitted: formatDateTime(s.submitted_at),
+              updated:   formatDateTime(s.updated_at),
+              activationState: activation?.state ?? "not_tracked",
+              activationDeadline: activation?.lifecycle?.deadlineAt ?? null,
+            };
+          })}
         />
       )}
 

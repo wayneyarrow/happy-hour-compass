@@ -23,6 +23,10 @@ import {
 import { extractGoogleRatingFields } from "@/lib/google/placesMatch";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
+import {
+  getActivationPresentationForSubmission,
+  evaluateSubmissionResendEligibility,
+} from "@/lib/activation/activationPresentation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1053,11 +1057,6 @@ export async function resendSubmissionSetupEmailAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sub = subRaw as any as Record<string, unknown>;
 
-  // ── Eligibility ───────────────────────────────────────────────────────────
-  if ((sub.status as string) !== "approved") {
-    return { error: "Resend is only available for approved submissions." };
-  }
-
   const email      = sub.email as string;
   const firstName  = ((sub.first_name as string | null) ?? "").trim() || "there";
   const operatorId = sub.operator_id as string | null;
@@ -1069,6 +1068,41 @@ export async function resendSubmissionSetupEmailAction(
         "No operator account is linked to this submission. " +
         "The submission may not have been fully provisioned.",
     };
+  }
+
+  // ── Eligibility — the authoritative activation lifecycle, not the routing
+  // status label ──────────────────────────────────────────────────────────
+  // A confirmed_auto submission is provisioned immediately at submission
+  // time (before any founder review) and can have a real, resendable
+  // lifecycle — restricting resend to status === "approved" alone silently
+  // hid that entire path. evaluateSubmissionResendEligibility() requires an
+  // actual live, unreleased, not-yet-due lifecycle for a
+  // confirmed_auto/approved submission; a stale status that merely looks
+  // eligible is never enough on its own. See activationPresentation.ts for
+  // the full rule.
+  const presentation = await getActivationPresentationForSubmission(submissionId);
+  const eligibility = evaluateSubmissionResendEligibility(sub.status as string, presentation);
+  if (!eligibility.eligible) {
+    return { error: eligibility.reason };
+  }
+
+  // ── Double-submit guard ──────────────────────────────────────────────────
+  // Same idiom as resendClaimSetupEmailAction / reviewSubmissionAction's
+  // needs_more_info RETRY_WINDOW_MS guard — no dedicated "last resend"
+  // column exists, so the structured manual_resend note this action
+  // already writes on success is reused as the signal.
+  const RETRY_WINDOW_MS = 10_000;
+  const { data: recentResendNotes } = await supabase
+    .from("operator_submission_notes")
+    .select("created_at")
+    .eq("submission_id", submissionId)
+    .eq("event_type", "manual_resend")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const lastResendAt = recentResendNotes?.[0]?.created_at as string | undefined;
+  if (lastResendAt && Date.now() - new Date(lastResendAt).getTime() < RETRY_WINDOW_MS) {
+    console.warn("[resendSubmissionSetupEmailAction] Duplicate resend suppressed (retry window).", { submissionId });
+    return { success: true, successAction: `Setup email resent to ${email}` };
   }
 
   // ── Generate fresh recovery link ──────────────────────────────────────────
@@ -1103,10 +1137,20 @@ export async function resendSubmissionSetupEmailAction(
     };
   }
 
-  // ── Append internal note ──────────────────────────────────────────────────
+  // ── Append structured internal note ───────────────────────────────────────
+  // Founder-triggered, so attributed to the real signed-in founder — never
+  // the "Happy Hour Compass" system-author string. Never stores the
+  // generated link/token itself — only operational metadata.
   await supabase.from("operator_submission_notes").insert({
     submission_id:    submissionId,
     note:             `Setup email resent to ${email} by founder.`,
+    event_type:       "manual_resend",
+    metadata_json: {
+      recipient: email,
+      sentAt: new Date().toISOString(),
+      lifecycleId: presentation.lifecycle?.id ?? null,
+      currentDeadline: presentation.lifecycle?.deadlineAt ?? null,
+    },
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });

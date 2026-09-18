@@ -5,16 +5,60 @@ import { useRouter } from "next/navigation";
 import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import type { ClaimWithVenue } from "@/lib/data/claims";
+import type { ActivationLifecycleState } from "@/lib/activation/activationState";
+import { ACTIVATION_STATE_LABELS, formatDeadlineCountdown } from "@/lib/activation/activationState";
+import ActivationBadge from "@/components/ActivationBadge";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Row = ClaimWithVenue & { submitted: string; updated: string };
+type Row = ClaimWithVenue & {
+  submitted: string;
+  updated: string;
+  activationState: ActivationLifecycleState;
+  activationDeadline: string | null;
+};
 
-type SortCol      = "venue_name" | "claimant" | "status" | "created_at" | "updated_at";
-type StatusFilter = "all" | "pending" | "approved" | "needs_more_info" | "info_submitted" | "rejected";
+type SortCol = "venue_name" | "claimant" | "status" | "created_at" | "updated_at" | "attention";
+type StatusFilter =
+  | "all"
+  | "pending"
+  | "approved"
+  | "needs_more_info"
+  | "info_submitted"
+  | "rejected"
+  | "awaiting_setup"
+  | "expiring_soon"
+  | "release_required"
+  | "active";
+
+/** Activation states selectable from the status filter — checked against
+ *  row.activationState instead of row.status. Kept distinct from claim
+ *  approval status so both dimensions stay independently filterable — see
+ *  the module header note on why activation is never allowed to obscure
+ *  approval status. */
+const ACTIVATION_FILTER_VALUES = new Set<StatusFilter>([
+  "awaiting_setup",
+  "expiring_soon",
+  "release_required",
+  "active",
+]);
+
+/** Attention-first priority for the default sort — lower sorts first.
+ *  "setup_delivery_error" is included for forward-compatibility even though
+ *  deriveActivationState() never returns it yet (see activationState.ts). */
+function attentionRank(state: ActivationLifecycleState): number {
+  switch (state) {
+    case "release_required": return 0;
+    case "setup_delivery_error": return 1;
+    case "expiring_soon": return 2;
+    case "awaiting_setup": return 3;
+    default: return 4;
+  }
+}
 
 const PAGE_SIZE    = 25;
-const DEFAULT_SORT: SortCol = "created_at";
+const DEFAULT_SORT: SortCol = "attention";
+const DEFAULT_DIR: "asc" | "desc" = "asc";
 
 // ── Status badge config ─────────────────────────────────────────────────────
 
@@ -46,7 +90,7 @@ function syncUrl(q: string, status: string, sort: string, dir: string, page: num
   if (q)                    p.set("q",      q);
   if (status !== "all")     p.set("status", status);
   if (sort !== DEFAULT_SORT) p.set("sort",  sort);
-  if (dir !== "desc")       p.set("dir",    dir);
+  if (dir !== DEFAULT_DIR)  p.set("dir",    dir);
   if (page > 1)             p.set("page",   String(page));
   const qs = p.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
@@ -60,7 +104,7 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
   const [q,       setQ]       = useState("");
   const [status,  setStatus]  = useState<StatusFilter>("all");
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(DEFAULT_DIR);
   const [page,    setPage]    = useState(1);
 
   // Hydrate from URL on mount
@@ -68,7 +112,7 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
     setQ(readUrlParam("q", ""));
     setStatus(readUrlParam("status", "all") as StatusFilter);
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
-    setSortDir(readUrlParam("dir", "desc") as "asc" | "desc");
+    setSortDir(readUrlParam("dir", DEFAULT_DIR) as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
   }, []);
 
@@ -83,7 +127,13 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
             !claimant.includes(lq) &&
             !r.email.toLowerCase().includes(lq)) return false;
       }
-      if (status !== "all" && r.status !== status) return false;
+      if (status !== "all") {
+        if (ACTIVATION_FILTER_VALUES.has(status)) {
+          if (r.activationState !== status) return false;
+        } else if (r.status !== status) {
+          return false;
+        }
+      }
       return true;
     });
   }, [rows, q, status]);
@@ -107,6 +157,22 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
         case "updated_at":
           cmp = a.updated_at.localeCompare(b.updated_at);
           break;
+        case "attention": {
+          const rankA = attentionRank(a.activationState);
+          const rankB = attentionRank(b.activationState);
+          if (rankA !== rankB) {
+            cmp = rankA - rankB;
+          } else if (rankA <= 3) {
+            const da = a.activationDeadline ? new Date(a.activationDeadline).getTime() : Infinity;
+            const db = b.activationDeadline ? new Date(b.activationDeadline).getTime() : Infinity;
+            cmp = da - db;
+          } else {
+            // Everything with no attention-worthy activation state falls
+            // back to the prior default ordering (newest first).
+            cmp = -a.created_at.localeCompare(b.created_at);
+          }
+          break;
+        }
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -144,12 +210,13 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
   };
 
   const handleExport = () => {
-    const headers = ["Venue", "Claimant", "Email", "Status", "Submitted", "Updated"];
+    const headers = ["Venue", "Claimant", "Email", "Status", "Activation", "Submitted", "Updated"];
     const csvRows = sorted.map((r) => [
       r.venue_name,
       `${r.first_name} ${r.last_name}`.trim(),
       r.email,
       STATUS[r.status]?.label ?? r.status,
+      ACTIVATION_STATE_LABELS[r.activationState],
       r.submitted,
       r.updated,
     ]);
@@ -191,11 +258,15 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
           className={selectCls}
         >
           <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
+          <option value="pending">Pending review</option>
           <option value="needs_more_info">Needs more info</option>
           <option value="info_submitted">Info submitted</option>
           <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
+          <option value="rejected">Rejected / closed</option>
+          <option value="awaiting_setup">Activation: Awaiting setup</option>
+          <option value="expiring_soon">Activation: Expiring soon</option>
+          <option value="release_required">Activation: Release required</option>
+          <option value="active">Activation: Active</option>
         </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}
@@ -246,6 +317,9 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
+                    <span className={thStaticCls}>Activation</span>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("created_at")} className={thBtnCls}>
                       Submitted <SortIcon active={sortCol === "created_at"} dir={sortDir} />
                     </button>
@@ -280,6 +354,14 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.phone}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={row.status} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <ActivationBadge state={row.activationState} />
+                      {row.activationDeadline && (
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {formatDeadlineCountdown(row.activationDeadline)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{row.submitted}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{row.updated}</td>

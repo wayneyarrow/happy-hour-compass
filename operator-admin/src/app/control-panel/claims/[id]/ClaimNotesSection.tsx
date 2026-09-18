@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addClaimNoteAction, type AddClaimNoteState } from "./actions";
 import type { ClaimNote } from "@/lib/data/claims";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
+import ActivationNoteMeta from "@/components/ActivationNoteMeta";
 
 const INITIAL_STATE: AddClaimNoteState = {};
 
@@ -14,6 +15,7 @@ function NoteEntry({ note }: { note: ClaimNote }) {
     (note.created_by ? `uid:${note.created_by.slice(0, 8)}` : "Unknown");
   return (
     <div className="py-3 border-b border-gray-100 last:border-0">
+      <ActivationNoteMeta eventType={note.event_type} metadata={note.metadata_json} />
       <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed mb-1.5">
         {note.note}
       </p>
