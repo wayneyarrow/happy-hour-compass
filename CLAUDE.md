@@ -295,6 +295,49 @@ This codebase has no CSP anywhere (`next.config.ts` has no `headers()` block; `m
 
 ---
 
+## Supabase Access (MCP & CLI)
+
+### Preferred method: Supabase MCP server
+
+- Configured in `.mcp.json` (repo root, committed): `@supabase/mcp-server-supabase`, pinned to `--project-ref=juphyhxdmcvseeufbiay`, launched with `--read-only`.
+- Authenticates via `SUPABASE_ACCESS_TOKEN`, supplied through `.claude/settings.local.json` (gitignored — see `docs/developer/SETUP.md`). This is a Management API personal access token, not a database password or service-role key.
+- **This server is read-only by explicit configuration**, independent of the token's own scope. Use it for schema inspection (`list_tables`, `list_migrations`, `list_extensions`), security/performance review (`get_advisors`), read-only SQL (`execute_sql` — `SELECT`/`information_schema` queries only), and project metadata (`get_project_url`, `get_publishable_keys`).
+- **Confirm you're targeting the correct project** by calling `get_project_url` (needs no token) and checking the returned host is `juphyhxdmcvseeufbiay.supabase.co` — the one project behind local dev, staging, and production (see the Repository layout note above).
+
+### Fallback: Supabase CLI
+
+- The `supabase` CLI holds its own separately authenticated session (not the MCP token) and is already linked to this project. `supabase projects list` confirms this — it should show `juphyhxdmcvseeufbiay` / `happy-hour-compass` with `"linked": true`.
+- Useful as a fallback for project/schema metadata when the MCP server is unreachable.
+- `supabase status` targets the **local** Docker-based dev stack, not the remote project, and fails with a Docker-daemon error whenever Docker isn't running locally. That failure says nothing about remote Supabase access — don't read it as the CLI's authenticated session being broken.
+- A CLI write/migration path against the remote project has not been established as authorized in any Claude session to date — don't assume `supabase db push` or similar is available here without confirming with Wayne first.
+
+### Writes, migrations, and configuration changes
+
+- Migration files live in `supabase/migrations/` (see **Supabase migrations** below for authoring rules). How they get applied to the live project is separate from how Claude *reads* it, and has not been verified in any Claude session — confirm the authorized apply path with Wayne before assuming one.
+- The MCP server's `--read-only` flag means it cannot perform writes or run migrations regardless of the token's own permissions — treat this as a deliberate safety boundary, not something to route around.
+- Any database write, migration, Auth configuration change, or other Supabase project-configuration change requires explicit authorization from the current task. A working read-only connection is never itself authorization to write.
+
+### If Supabase MCP returns `Unauthorized`
+
+Do not treat the first `Unauthorized` response as proof Claude lacks Supabase access. Work through this sequence in order before concluding otherwise:
+
+1. Confirm the intended MCP configuration is actually loaded — check `.mcp.json` and that `.claude/settings.local.json` has `SUPABASE_ACCESS_TOKEN` set (presence only; never print, compare, or log its value).
+2. Check whether the *running* MCP server process is holding a stale token or configuration from before a credential was last updated. **A token file can hold the current credential while an already-running MCP process still holds an older one from when it launched** — this is a confirmed failure mode in this project, not a hypothetical.
+3. Reconnect or restart the Supabase MCP server so it reloads current configuration. If that isn't possible from within the session, tell Wayne the Claude session needs to be restarted.
+4. Retry the same read-only MCP calls.
+5. If still failing, check the Supabase CLI fallback (`supabase projects list`) as an independently authenticated path — this distinguishes a stale-MCP-process problem from an actual credential or project problem.
+6. Only report Supabase as unavailable after steps 1–5 have all been checked and have failed. `Unauthorized` on a first call is never sufficient grounds on its own to report unavailability.
+
+### Security & authorization boundaries
+
+- Never print, expose, copy, commit, or document access tokens, passwords, service-role keys, database passwords, or other secret values — including in this file. Diagnose token problems by checking *presence*, and at most length, never by displaying or comparing values.
+- Never invent credential workarounds. Never regenerate, replace, revoke, or rotate any credential without Wayne's explicit approval. Never transfer a credential into another tool, file, or location without explicit approval.
+- Read-only access does not authorize writes. Database writes, migrations, Auth/config changes, and other production configuration changes must be explicitly authorized by the current task, not inferred from having a working connection.
+- Use the least-privileged established method that can complete the authorized work — prefer MCP read-only tools over the CLI, and never reach for a write-capable path just because a read-only one is inconvenient.
+- An access failure that survives the full troubleshooting sequence above is a stop-and-report condition — report it to Wayne rather than working around it.
+
+---
+
 ## Supabase migrations
 
 ### Every new public-schema table must have explicit GRANTs
