@@ -7,6 +7,8 @@ import {
   getActivationPresentationForSubmission,
   shouldShowSubmissionActivationCard,
   evaluateSubmissionResendEligibility,
+  evaluateClaimResendEligibility,
+  shouldShowStandaloneResendPanel,
   evaluateLegacyClaimActivationEligibility,
   evaluateLegacySubmissionActivationEligibility,
   resolveLegacyClaimActivationOrigin,
@@ -444,6 +446,114 @@ test("evaluateSubmissionResendEligibility: an already-activated operator (state=
   const result = evaluateSubmissionResendEligibility("approved", makePresentation({ state: "active" }));
   assert.equal(result.eligible, false);
   if (!result.eligible) assert.match(result.reason, /already activated/);
+});
+
+// ── evaluateClaimResendEligibility() — Phase 1C QA correction ───────────────
+//
+// Staging QA found the actual bug this predicate fixes: an approved claim
+// with NO lifecycle row at all (Marnie/Chilango, Dan/Table 19, Kelly/Buffalo
+// Rouge) could still have its setup email resent via the standalone
+// "Resend setup email" panel, sending an email without ever starting
+// activation tracking — bypassing the controlled legacy-resume flow
+// entirely. This predicate shares its lifecycle-state gate with
+// evaluateSubmissionResendEligibility() (evaluateResendLifecycleGate) — see
+// activationLifecycleActionsWiring.test.ts for the test confirming that
+// sharing, so these two sets of tests never need to drift.
+
+test("evaluateClaimResendEligibility: an approved claim WITH a live lifecycle is eligible", () => {
+  const result = evaluateClaimResendEligibility("approved", makePresentation({ state: "awaiting_setup" }));
+  assert.equal(result.eligible, true);
+});
+
+test("evaluateClaimResendEligibility: an approved claim with NO lifecycle is NOT eligible — the actual staging QA bug", () => {
+  const result = evaluateClaimResendEligibility(
+    "approved",
+    makePresentation({ state: "not_tracked", lifecycle: null, operator: null })
+  );
+  assert.equal(result.eligible, false);
+  if (!result.eligible) {
+    assert.match(result.reason, /No activation lifecycle is tracked/);
+    assert.match(result.reason, /Start activation tracking/);
+  }
+});
+
+test("evaluateClaimResendEligibility: a non-approved claim status is never eligible, with or without a lifecycle", () => {
+  for (const status of ["pending", "needs_more_info", "rejected"]) {
+    const withLifecycle = evaluateClaimResendEligibility(status, makePresentation());
+    assert.equal(withLifecycle.eligible, false, `status "${status}" must never be eligible even with a lifecycle present`);
+
+    const withoutLifecycle = evaluateClaimResendEligibility(
+      status,
+      makePresentation({ state: "not_tracked", lifecycle: null, operator: null })
+    );
+    assert.equal(withoutLifecycle.eligible, false, `status "${status}" must never be eligible without a lifecycle either`);
+  }
+});
+
+test("evaluateClaimResendEligibility: a released lifecycle is never eligible", () => {
+  const result = evaluateClaimResendEligibility(
+    "approved",
+    makePresentation({
+      state: "released",
+      lifecycle: {
+        id: "lc-1", operatorId: "op-1", originType: "claim",
+        startedAt: "2026-06-01T00:00:00.000Z", deadlineAt: "2026-06-20T00:00:00.000Z",
+        reminderStage: 0, expiredAt: "2026-06-21T00:00:00.000Z", releasedAt: "2026-06-22T00:00:00.000Z",
+      },
+    })
+  );
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /already been released/);
+});
+
+test("evaluateClaimResendEligibility: a passed deadline (release_required/expired) is never eligible — resend must not auto-extend", () => {
+  for (const state of ["release_required", "expired"] as const) {
+    const result = evaluateClaimResendEligibility("approved", makePresentation({ state }));
+    assert.equal(result.eligible, false, `state "${state}" must not be eligible for resend`);
+    if (!result.eligible) assert.match(result.reason, /deadline has already passed/);
+  }
+});
+
+test("evaluateClaimResendEligibility: an already-activated operator (state='active') is never eligible", () => {
+  const result = evaluateClaimResendEligibility("approved", makePresentation({ state: "active" }));
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /already activated/);
+});
+
+// ── shouldShowStandaloneResendPanel() — Phase 1C QA correction ──────────────
+//
+// The pure, shared rendering predicate both Claim and Submission detail
+// pages use to decide whether to render the standalone resend panel at all.
+// Directly proves the four required state/action visibility combinations.
+
+test("shouldShowStandaloneResendPanel: unactivated + no lifecycle (not_tracked) — panel hidden", () => {
+  const presentation = makePresentation({ state: "not_tracked", lifecycle: null, operator: null });
+  assert.equal(shouldShowStandaloneResendPanel(presentation), false);
+});
+
+test("shouldShowStandaloneResendPanel: unactivated + live lifecycle (awaiting_setup) — panel shown", () => {
+  const presentation = makePresentation({ state: "awaiting_setup" });
+  assert.equal(shouldShowStandaloneResendPanel(presentation), true);
+});
+
+test("shouldShowStandaloneResendPanel: activated + no lifecycle (active, legacy) — panel hidden", () => {
+  const presentation = makePresentation({
+    state: "active",
+    lifecycle: null,
+    operator: { id: "op-1", accountActivatedAt: "2026-06-10T00:00:00.000Z", name: null, email: "op@example.com" },
+  });
+  assert.equal(shouldShowStandaloneResendPanel(presentation), false);
+});
+
+test("shouldShowStandaloneResendPanel: activated + lifecycle still attached (active) — panel hidden", () => {
+  const presentation = makePresentation({ state: "active" });
+  assert.equal(shouldShowStandaloneResendPanel(presentation), false);
+});
+
+test("shouldShowStandaloneResendPanel: released/release_required/expired lifecycle — panel still shown (blocked at submit time, not hidden)", () => {
+  for (const state of ["released", "release_required", "expired"] as const) {
+    assert.equal(shouldShowStandaloneResendPanel(makePresentation({ state })), true, `state "${state}" should still show the panel`);
+  }
 });
 
 // ── Phase 1C correction: activated legacy operator with NO lifecycle row

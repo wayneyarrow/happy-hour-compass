@@ -7,7 +7,7 @@ import { join } from "node:path";
  * Source-inspection tests for Phase 1B's founder-controls actions:
  *   - extendActivationDeadlineAction (exported wrapper) / extendActivationDeadlineImpl (real logic)
  *   - resendClaimSetupEmailAction (exported wrapper) / resendClaimSetupEmailImpl (real logic)
- *   - resendSubmissionSetupEmailAction (no wrapper/impl split — see rationale below)
+ *   - resendSubmissionSetupEmailAction (exported wrapper) / resendSubmissionSetupEmailImpl (real logic)
  *
  * ARCHITECTURE (Phase 1B correction — "Server Action boundary"): a prior
  * version put a `deps` dependency-override parameter directly on the two
@@ -20,20 +20,26 @@ import { join } from "node:path";
  * splits each into two files:
  *   - A plain module with NO "use server" directive holding the real logic
  *     and the DI seam (resendClaimSetupEmailImpl.ts,
- *     extendActivationDeadlineImpl.ts) — never network-reachable, so `deps`
- *     there is safe. Behavioral tests import these directly (see
- *     activationLifecycleActionsBehavior.test.ts,
- *     resendClaimSetupEmailAuthorization.test.ts).
+ *     resendSubmissionSetupEmailImpl.ts, extendActivationDeadlineImpl.ts) —
+ *     never network-reachable, so `deps` there is safe. Behavioral tests
+ *     import these directly (see activationLifecycleActionsBehavior.test.ts,
+ *     resendClaimSetupEmailAuthorization.test.ts,
+ *     resendSetupEmailLifecycleGate.test.ts).
  *   - The "use server" file keeps only a thin, FIXED-signature wrapper —
  *     `(id, prevState, formData)`, nothing else — that calls the impl with
  *     no `deps`. The tests below pin that this wrapper genuinely has no
  *     override surface.
  *
- * resendSubmissionSetupEmailAction was never given a `deps` parameter in
- * the first place (confirmed below) and has no behavioral tests — its
- * eligibility logic is instead exercised through the pure, exported
- * evaluateSubmissionResendEligibility() predicate (see
- * activationPresentation.test.ts), which needs no Supabase client at all.
+ * PHASE 1C QA CORRECTION (2026-09): resendSubmissionSetupEmailAction was
+ * originally inline in actions.ts with no impl-file split (it never had a
+ * `deps` parameter, so it wasn't a security defect the way the other two
+ * were) — but staging QA found that BOTH resend flows could send a setup
+ * email for a claim/submission with NO activation lifecycle tracked at all,
+ * bypassing the controlled legacy-resume flow entirely. Fixing that
+ * required a real, injectable Supabase client so the fix could be proven
+ * behaviorally (not just via the pure evaluateSubmissionResendEligibility()
+ * predicate), so resendSubmissionSetupEmailAction was split into the same
+ * wrapper/impl shape as its Claim sibling at the same time.
  */
 
 const EXTEND_IMPL_SOURCE = readFileSync(
@@ -52,8 +58,20 @@ const CLAIMS_ACTIONS_SOURCE = readFileSync(
   join(__dirname, "../../../src/app/control-panel/claims/[id]/actions.ts"),
   "utf8"
 );
+const RESEND_SUBMISSION_IMPL_SOURCE = readFileSync(
+  join(__dirname, "../../../src/app/control-panel/operator-submissions/[id]/resendSubmissionSetupEmailImpl.ts"),
+  "utf8"
+);
 const SUBMISSIONS_ACTIONS_SOURCE = readFileSync(
   join(__dirname, "../../../src/app/control-panel/operator-submissions/[id]/actions.ts"),
+  "utf8"
+);
+const CLAIM_DETAIL_PAGE_SOURCE = readFileSync(
+  join(__dirname, "../../../src/app/control-panel/claims/[id]/page.tsx"),
+  "utf8"
+);
+const ACTIVATION_PRESENTATION_SOURCE = readFileSync(
+  join(__dirname, "../../../src/lib/activation/activationPresentation.ts"),
   "utf8"
 );
 const SUBMISSIONS_LIST_PAGE_SOURCE = readFileSync(
@@ -113,6 +131,18 @@ test("resendClaimSetupEmailAction (exported wrapper) has the fixed signature (cl
 
 test("resendClaimSetupEmailImpl.ts has NO \"use server\" directive — it is never itself network-reachable, so its deps parameter is safe", () => {
   assert.doesNotMatch(RESEND_CLAIM_IMPL_SOURCE, /"use server";/);
+});
+
+test("resendSubmissionSetupEmailAction (exported wrapper) has the fixed signature (submissionId, prevState, formData) with no 4th deps parameter", () => {
+  assert.match(SUBMISSIONS_ACTIONS_SOURCE, /"use server";/);
+  assert.match(
+    SUBMISSIONS_ACTIONS_SOURCE,
+    /export async function resendSubmissionSetupEmailAction\(\s*submissionId: string,\s*_prevState: ResendSetupEmailState,\s*_formData: FormData\s*\): Promise<ResendSetupEmailState> \{/
+  );
+});
+
+test("resendSubmissionSetupEmailImpl.ts has NO \"use server\" directive — it is never itself network-reachable, so its deps parameter is safe", () => {
+  assert.doesNotMatch(RESEND_SUBMISSION_IMPL_SOURCE, /"use server";/);
 });
 
 test("no exported function in either claims/[id]/actions.ts, operator-submissions/[id]/actions.ts, or legacyActivationResumeActions.ts declares a `deps` parameter", () => {
@@ -236,32 +266,16 @@ test("extendActivationDeadlineImpl's note metadata never contains a link/token/c
 
 // ── Resend hardening (both flows): unactivated + lifecycle checks ──────────
 //
-// Claims' logic now lives in resendClaimSetupEmailImpl.ts; submissions'
-// stays inline in operator-submissions/[id]/actions.ts (no impl-file split
-// was needed there — see activationPresentation.test.ts for how its
-// eligibility logic is tested instead, via a pure predicate).
-
-// Submissions' resend function body, isolated from the rest of
-// operator-submissions/[id]/actions.ts (which legitimately contains OTHER
-// functions — approveAndCreateVenueAction, resolveExistingVenueMatchAction —
-// that DO call provisionOperatorForVenue/claimOrReuseActivationLifecycle;
-// those calls must not make this test wrongly fail).
-const SUBMISSION_RESEND_FN_START = SUBMISSIONS_ACTIONS_SOURCE.indexOf(
-  "export async function resendSubmissionSetupEmailAction"
-);
-const SUBMISSION_RESEND_FN_END = SUBMISSIONS_ACTIONS_SOURCE.indexOf(
-  "\n// ── Append internal note",
-  SUBMISSION_RESEND_FN_START
-);
-const SUBMISSION_RESEND_SOURCE = SUBMISSIONS_ACTIONS_SOURCE.slice(
-  SUBMISSION_RESEND_FN_START,
-  SUBMISSION_RESEND_FN_END === -1 ? undefined : SUBMISSION_RESEND_FN_END
-);
-
-test("resend logic setup: the isolated submission-resend function slice actually contains the function (sanity check for the other tests using it)", () => {
-  assert.ok(SUBMISSION_RESEND_FN_START !== -1, "resendSubmissionSetupEmailAction must exist");
-  assert.match(SUBMISSION_RESEND_SOURCE, /export async function resendSubmissionSetupEmailAction/);
-});
+// Claims' logic lives in resendClaimSetupEmailImpl.ts; submissions' now
+// lives in the sibling resendSubmissionSetupEmailImpl.ts (Phase 1C QA
+// correction — previously inline in actions.ts). Both delegate their
+// lifecycle-state gate (no-lifecycle / released / release_required-or-
+// expired / active) to the SHARED evaluateClaimResendEligibility() /
+// evaluateSubmissionResendEligibility() predicates in
+// activationPresentation.ts — see activationPresentation.test.ts for the
+// pure-predicate behavioral coverage of those checks. The tests below only
+// confirm each impl file actually CALLS its eligibility predicate before
+// generateLink, and never re-implements the lifecycle-state logic inline.
 
 test("resend logic (claims): confirms the operator is still unactivated before generating a new link", () => {
   const activatedCheckIdx = RESEND_CLAIM_IMPL_SOURCE.indexOf("This operator has already activated their account");
@@ -270,16 +284,23 @@ test("resend logic (claims): confirms the operator is still unactivated before g
   assert.ok(activatedCheckIdx < generateLinkIdx, "claims: activation check must precede link generation");
 });
 
-test("resend logic (submissions): eligibility (which folds in the unactivated check via presentation.state === 'active') is evaluated before generating a new link", () => {
-  const eligibilityIdx = SUBMISSION_RESEND_SOURCE.indexOf("evaluateSubmissionResendEligibility(");
-  const generateLinkIdx = SUBMISSION_RESEND_SOURCE.indexOf("auth.admin.generateLink({");
+test("resend logic (claims): evaluateClaimResendEligibility() is evaluated before generating a new link", () => {
+  const eligibilityIdx = RESEND_CLAIM_IMPL_SOURCE.indexOf("evaluateClaimResendEligibility(");
+  const generateLinkIdx = RESEND_CLAIM_IMPL_SOURCE.indexOf("auth.admin.generateLink({");
+  assert.ok(eligibilityIdx !== -1 && generateLinkIdx !== -1, "claims: both markers must exist");
+  assert.ok(eligibilityIdx < generateLinkIdx, "claims: eligibility check must precede link generation");
+});
+
+test("resend logic (submissions): evaluateSubmissionResendEligibility() is evaluated before generating a new link", () => {
+  const eligibilityIdx = RESEND_SUBMISSION_IMPL_SOURCE.indexOf("evaluateSubmissionResendEligibility(");
+  const generateLinkIdx = RESEND_SUBMISSION_IMPL_SOURCE.indexOf("auth.admin.generateLink({");
   assert.ok(eligibilityIdx !== -1 && generateLinkIdx !== -1, "submissions: both markers must exist");
   assert.ok(eligibilityIdx < generateLinkIdx, "submissions: eligibility check must precede link generation");
 });
 
 for (const [label, source] of [
   ["claims", RESEND_CLAIM_IMPL_SOURCE] as const,
-  ["submissions", SUBMISSION_RESEND_SOURCE] as const,
+  ["submissions", RESEND_SUBMISSION_IMPL_SOURCE] as const,
 ]) {
   test(`resend logic (${label}): writes a structured manual_resend note attributed to the real founder, and never stores the generated link`, () => {
     const noteBlockIdx = source.lastIndexOf('event_type:       "manual_resend"');
@@ -294,34 +315,70 @@ for (const [label, source] of [
     assert.doesNotMatch(source, /provisionOperatorForVenue/, `${label}: resend must never provision a new operator`);
     assert.doesNotMatch(source, /claimOrReuseActivationLifecycle/, `${label}: resend must never create/claim a lifecycle`);
   });
+
+  test(`resend logic (${label}): passes its own (possibly injected) client into the presentation lookup, rather than always resolving a fresh real admin client`, () => {
+    assert.match(
+      source,
+      /getActivationPresentationFor(Claim|Submission)\(\w+Id, supabase\)/,
+      `${label}: the presentation lookup must be given the same client this impl is using (so test DI actually applies to it)`
+    );
+  });
 }
 
-test("resend logic (claims): blocks resend when the activation was already released", () => {
-  assert.match(RESEND_CLAIM_IMPL_SOURCE, /presentation\.lifecycle\.releasedAt/);
+// ── Shared resend eligibility gate (Phase 1C QA correction) ────────────────
+//
+// The actual lifecycle-state rules (no lifecycle / released / overdue /
+// active) live once, in activationPresentation.ts's shared
+// evaluateResendLifecycleGate() — both evaluateClaimResendEligibility() and
+// evaluateSubmissionResendEligibility() delegate to it. See
+// activationPresentation.test.ts for behavioral proof of each state.
+
+test("evaluateClaimResendEligibility and evaluateSubmissionResendEligibility both delegate to one shared lifecycle-state gate — the rules are not duplicated per entity", () => {
+  assert.match(ACTIVATION_PRESENTATION_SOURCE, /function evaluateResendLifecycleGate\(/);
+  const claimFnIdx = ACTIVATION_PRESENTATION_SOURCE.indexOf("export function evaluateClaimResendEligibility(");
+  const submissionFnIdx = ACTIVATION_PRESENTATION_SOURCE.indexOf("export function evaluateSubmissionResendEligibility(");
+  assert.ok(claimFnIdx !== -1 && submissionFnIdx !== -1);
+  const claimBlock = ACTIVATION_PRESENTATION_SOURCE.slice(claimFnIdx, claimFnIdx + 500);
+  const submissionBlock = ACTIVATION_PRESENTATION_SOURCE.slice(submissionFnIdx, submissionFnIdx + 500);
+  assert.match(claimBlock, /evaluateResendLifecycleGate\(/);
+  assert.match(submissionBlock, /evaluateResendLifecycleGate\(/);
 });
 
-test("resend logic (claims): requires the deadline to be extended first when it has already passed (never auto-extends)", () => {
-  const pastDeadlineCheckIdx = RESEND_CLAIM_IMPL_SOURCE.indexOf(
-    'presentation.state === "release_required" || presentation.state === "expired"'
-  );
-  assert.ok(pastDeadlineCheckIdx !== -1, "claims: past-deadline guard must exist");
+test("evaluateResendLifecycleGate refuses a record with no lifecycle at all — the actual Phase 1C QA bug", () => {
+  const gateIdx = ACTIVATION_PRESENTATION_SOURCE.indexOf("function evaluateResendLifecycleGate(");
+  const block = ACTIVATION_PRESENTATION_SOURCE.slice(gateIdx, gateIdx + 600);
+  assert.match(block, /if \(!presentation\.lifecycle\)/);
+  assert.match(block, /eligible: false/);
 });
 
-// ── Submission resend: lifecycle-authoritative eligibility, exposed on the UI ─
+// ── Standalone resend panel visibility (Phase 1C QA correction) ────────────
+//
+// shouldShowStandaloneResendPanel() is the single, shared, pure predicate
+// both detail pages use to decide whether to render the "Account recovery /
+// Resend setup email" panel at all — see activationPresentation.test.ts for
+// its behavioral coverage. These tests only confirm both pages actually use
+// it (rather than the old ad hoc status-only conditions that caused the bug)
+// and that legacy-resume is gated on the genuinely distinct "not_tracked"
+// state, so the two affordances can never both render together.
 
-test("resendSubmissionSetupEmailAction uses evaluateSubmissionResendEligibility() — lifecycle state, not a bare status check — as the eligibility gate", () => {
-  assert.match(SUBMISSIONS_ACTIONS_SOURCE, /evaluateSubmissionResendEligibility\(/);
-  assert.doesNotMatch(
-    SUBMISSIONS_ACTIONS_SOURCE,
-    /if \(\(sub\.status as string\) !== "approved"\)/,
-    "the old status-only eligibility check must be gone"
-  );
+test("Claim detail page gates the standalone resend panel on shouldShowStandaloneResendPanel(), not a bare claim.status check", () => {
+  assert.doesNotMatch(CLAIM_DETAIL_PAGE_SOURCE, /claim\.status === "approved" &&\s*\(\s*<ResendSetupEmailPanel/);
+  assert.match(CLAIM_DETAIL_PAGE_SOURCE, /shouldShowStandaloneResendPanel\(activationPresentation\)/);
 });
 
-test("Submission detail page renders ResendSetupEmailPanel for any activation-relevant status, not only 'approved' — confirmed_auto is now included", () => {
-  assert.doesNotMatch(SUBMISSION_DETAIL_PAGE_SOURCE, /submission\.status === "approved" &&\s*\(\s*<ResendSetupEmailPanel/);
-  assert.match(SUBMISSION_DETAIL_PAGE_SOURCE, /ACTIVATION_RELEVANT_SUBMISSION_STATUSES\.has\(submission\.status\)/);
+test("Submission detail page gates the standalone resend panel on shouldShowStandaloneResendPanel(), not a bare activation-relevant-status check", () => {
+  assert.doesNotMatch(SUBMISSION_DETAIL_PAGE_SOURCE, /ACTIVATION_RELEVANT_SUBMISSION_STATUSES\.has\(submission\.status\)\s*&&\s*\(\s*<ResendSetupEmailPanel/);
+  assert.match(SUBMISSION_DETAIL_PAGE_SOURCE, /shouldShowStandaloneResendPanel\(rawActivationPresentation\)/);
 });
+
+for (const [label, source] of [
+  ["Claim", CLAIM_DETAIL_PAGE_SOURCE] as const,
+  ["Submission", SUBMISSION_DETAIL_PAGE_SOURCE] as const,
+]) {
+  test(`${label} detail page only computes legacyResume when state === "not_tracked" — never alongside a live/active lifecycle`, () => {
+    assert.match(source, /if \(activationPresentation\?\.state === "not_tracked"\) \{/);
+  });
+}
 
 // ── ActivationNoteMeta metadata allowlist (Phase 1B correction) ─────────────
 
@@ -405,17 +462,26 @@ test("legacyActivationResumeImpl never provisions a new Auth user/operator, neve
 });
 
 // ── Phase 1C: "Active — account activated before lifecycle tracking" ───────
+// (Phase 1C QA correction: this branch now covers ANY active operator, with
+// or without a lifecycle — an activated operator with a completed lifecycle
+// has nothing left to track any more than a legacy one who activated before
+// tracking ever existed. See ActivationCard.tsx's header comment on this
+// branch.)
 
-test("ActivationCard shows a distinct 'Active — account activated before lifecycle tracking' message for a legacy-active, no-lifecycle presentation — never 'Not tracked'", () => {
+test("ActivationCard shows an 'Active' message for ANY activationState === \"active\" presentation, with or without a lifecycle — never 'Not tracked'", () => {
   const activationCardSource = readFileSync(join(__dirname, "../../../src/components/ActivationCard.tsx"), "utf8");
   assert.match(activationCardSource, /Active — account activated before lifecycle tracking/);
-  // The two branches must be genuinely distinct conditions, not the same one.
-  assert.match(activationCardSource, /!lifecycle && activationState === "active"/);
+  assert.match(activationCardSource, /Active — account activated/);
+  // The active branch must be its own top-level condition, checked before
+  // the not-tracked (!lifecycle) branch — not folded into it, and not
+  // conditioned on !lifecycle (that would wrongly exclude an active
+  // operator whose lifecycle is still attached).
+  assert.match(activationCardSource, /\{activationState === "active" \? \(/);
 });
 
-test("ActivationCard never renders Start-tracking/Resend/Extend/countdown affordances in the legacy-active (no lifecycle) branch", () => {
+test("ActivationCard never renders Start-tracking/Resend/Extend/countdown affordances in the active branch, regardless of lifecycle presence", () => {
   const activationCardSource = readFileSync(join(__dirname, "../../../src/components/ActivationCard.tsx"), "utf8");
-  const startIdx = activationCardSource.indexOf('!lifecycle && activationState === "active"');
+  const startIdx = activationCardSource.indexOf('{activationState === "active" ? (');
   const endIdx = activationCardSource.indexOf(") : !lifecycle ? (", startIdx);
   assert.ok(startIdx !== -1 && endIdx !== -1);
   const block = activationCardSource.slice(startIdx, endIdx);

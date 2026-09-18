@@ -6,6 +6,7 @@ import {
   getActivationPresentationForClaim,
   resolveLegacyClaimActivationOrigin,
   evaluateLegacyClaimActivationEligibility,
+  shouldShowStandaloneResendPanel,
 } from "@/lib/activation/activationPresentation";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
@@ -399,7 +400,15 @@ export default async function ClaimDetailPage({
             />
           )}
 
-          {claim.status === "approved" && (
+          {/* Account recovery — shown ONLY when a lifecycle actually exists
+              (Phase 1C QA correction). An untracked claim must go through
+              "Start activation tracking & resend setup email" instead —
+              rendering both here was confusing and let standalone resend
+              bypass the controlled legacy-resume flow entirely. Still shown
+              for release_required / expired / released states so the
+              founder can see why resend is currently blocked
+              (evaluateClaimResendEligibility enforces the actual block). */}
+          {activationPresentation && shouldShowStandaloneResendPanel(activationPresentation) && (
             <ResendSetupEmailPanel claimId={claim.id} />
           )}
 

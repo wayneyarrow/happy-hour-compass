@@ -2,7 +2,10 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { sendPasswordSetupEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
-import { getActivationPresentationForClaim } from "@/lib/activation/activationPresentation";
+import {
+  getActivationPresentationForClaim,
+  evaluateClaimResendEligibility,
+} from "@/lib/activation/activationPresentation";
 
 /**
  * Implementation for resendClaimSetupEmailAction, deliberately kept OUT of
@@ -52,8 +55,10 @@ export type ResendClaimSetupEmailDeps = {
  *
  * Eligibility: claim.status === "approved", email present, venue_id present,
  * an operator row exists for the email address, that operator is still
- * unactivated, and — if a lifecycle is tracked — it isn't released or past
- * its deadline.
+ * unactivated, AND a live, unreleased, not-yet-due activation lifecycle is
+ * actually tracked for this claim (evaluateClaimResendEligibility) — an
+ * untracked claim is refused; use the controlled legacy-resume flow instead
+ * (see legacyActivationResumeImpl.ts).
  */
 export async function resendClaimSetupEmailImpl(
   claimId: string,
@@ -121,48 +126,42 @@ export async function resendClaimSetupEmailImpl(
     return { error: "This operator has already activated their account. No setup email is needed." };
   }
 
-  // ── Activation lifecycle checks ────────────────────────────────────────────
-  // No lifecycle row at all (not_tracked) is a legitimate legacy case — this
-  // claim predates the Phase 1A lifecycle table, or activation is otherwise
-  // untracked — and resend must keep working exactly as it always has.
-  const presentation = await getActivationPresentationForClaim(claimId);
-  if (presentation.lifecycle) {
-    if (presentation.lifecycle.releasedAt) {
-      return {
-        error:
-          "This activation has already been released. Resending a setup email is not " +
-          "available — the venue may need to be re-claimed.",
-      };
-    }
-    if (presentation.state === "release_required" || presentation.state === "expired") {
-      return {
-        error:
-          "This activation's deadline has already passed. Extend the deadline before " +
-          "resending the setup email, so the operator gets a working window to use it.",
-      };
-    }
+  // ── Activation lifecycle checks — lifecycle-authoritative, shared with the
+  // Submission resend action's eligibility gate (Phase 1C QA correction). A
+  // missing lifecycle is NO LONGER treated as a legitimate legacy pass-
+  // through: standalone resend could otherwise send a setup email without
+  // ever starting activation tracking, bypassing the controlled legacy-
+  // resume flow entirely. An untracked claim must go through
+  // "Start activation tracking & resend setup email" instead. Passing
+  // `supabase` here (previously omitted) ensures a caller-injected
+  // adminClient is actually honored — the presentation lookup no longer
+  // silently falls back to a real, un-injectable admin client under test DI.
+  const presentation = await getActivationPresentationForClaim(claimId, supabase);
+  const eligibility = evaluateClaimResendEligibility(claimRow.status as string, presentation);
+  if (!eligibility.eligible) {
+    return { error: eligibility.reason };
+  }
 
-    // ── Double-submit guard ──────────────────────────────────────────────────
-    // No dedicated "last resend" column exists on venue_claims — reusing the
-    // structured manual_resend note this action already writes on success is
-    // a practical signal without a new migration. A genuine, deliberate
-    // re-request (e.g. resending after a long wait) is still allowed; this
-    // only suppresses a literal double-click/duplicate-submit landing within
-    // the same short window — same idiom as reviewSubmissionAction's
-    // RETRY_WINDOW_MS guard for needs_more_info.
-    const RETRY_WINDOW_MS = 10_000;
-    const { data: recentResendNotes } = await supabase
-      .from("venue_claim_notes")
-      .select("created_at")
-      .eq("claim_id", claimId)
-      .eq("event_type", "manual_resend")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const lastResendAt = recentResendNotes?.[0]?.created_at as string | undefined;
-    if (lastResendAt && Date.now() - new Date(lastResendAt).getTime() < RETRY_WINDOW_MS) {
-      console.warn("[resendClaimSetupEmailImpl] Duplicate resend suppressed (retry window).", { claimId });
-      return { success: true, successAction: `Setup email resent to ${email}` };
-    }
+  // ── Double-submit guard ──────────────────────────────────────────────────
+  // No dedicated "last resend" column exists on venue_claims — reusing the
+  // structured manual_resend note this action already writes on success is
+  // a practical signal without a new migration. A genuine, deliberate
+  // re-request (e.g. resending after a long wait) is still allowed; this
+  // only suppresses a literal double-click/duplicate-submit landing within
+  // the same short window — same idiom as reviewSubmissionAction's
+  // RETRY_WINDOW_MS guard for needs_more_info.
+  const RETRY_WINDOW_MS = 10_000;
+  const { data: recentResendNotes } = await supabase
+    .from("venue_claim_notes")
+    .select("created_at")
+    .eq("claim_id", claimId)
+    .eq("event_type", "manual_resend")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const lastResendAt = recentResendNotes?.[0]?.created_at as string | undefined;
+  if (lastResendAt && Date.now() - new Date(lastResendAt).getTime() < RETRY_WINDOW_MS) {
+    console.warn("[resendClaimSetupEmailImpl] Duplicate resend suppressed (retry window).", { claimId });
+    return { success: true, successAction: `Setup email resent to ${email}` };
   }
 
   // ── Generate fresh recovery link ──────────────────────────────────────────

@@ -103,15 +103,17 @@ export default function ActivationCard({
         <ActivationBadge state={activationState} />
       </div>
 
-      {!lifecycle && activationState === "active" ? (
-        // Legacy operator who activated their account before lifecycle
-        // tracking existed (Phase 1A/1B), or whose origin's lifecycle was
-        // simply never started — never "Not tracked" (that would wrongly
-        // imply nothing has happened), and never a countdown/resend/extend
-        // affordance, since there is genuinely no lifecycle to act on.
+      {activationState === "active" ? (
+        // Activated operator — never resend/legacy-resume/extend/countdown,
+        // regardless of whether a lifecycle happens to still be attached
+        // (Phase 1C QA correction: an activated operator with a completed
+        // lifecycle has nothing left to track any more than one who
+        // activated before lifecycle tracking ever existed). The
+        // "before lifecycle tracking" wording is only accurate when there
+        // truly was never a lifecycle for this origin.
         <div className="space-y-2.5">
           <p className="text-sm text-gray-600">
-            Active — account activated before lifecycle tracking
+            {lifecycle ? "Active — account activated" : "Active — account activated before lifecycle tracking"}
           </p>
           <dl className="space-y-2.5">
             <MetaRow label="Operator">{operator?.name || operator?.email || "—"}</MetaRow>

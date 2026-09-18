@@ -24,9 +24,9 @@ import { extractGoogleRatingFields } from "@/lib/google/placesMatch";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 import {
-  getActivationPresentationForSubmission,
-  evaluateSubmissionResendEligibility,
-} from "@/lib/activation/activationPresentation";
+  resendSubmissionSetupEmailImpl,
+  type ResendSetupEmailState,
+} from "./resendSubmissionSetupEmailImpl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1011,154 +1011,28 @@ export async function resolveExistingVenueMatchAction(
 }
 
 // ── Resend operator setup email ───────────────────────────────────────────────
+//
+// Real logic lives in resendSubmissionSetupEmailImpl.ts (a plain module, no
+// "use server" — never network-reachable) so tests can inject a fake
+// Supabase client / admin-check without putting a `deps` override on this
+// exported Server Action's public signature. See that file's header and
+// resendClaimSetupEmailImpl.ts (the sibling Claim implementation) for the
+// full "why". This wrapper's signature is fixed and client-safe —
+// (submissionId, prevState, formData) — with no path for a browser request
+// to influence anything inside the impl.
+//
+// submissionId is bound via .bind(null, submissionId).
 
-export type ResendSetupEmailState = {
-  success?: true;
-  successAction?: string;
-  error?: string;
-};
+export type { ResendSetupEmailState };
 
-/**
- * Resends the "set up your account" email to an operator whose submission was
- * approved and whose account was provisioned.
- *
- * Safe to call multiple times — generates a fresh Supabase recovery link each
- * time. Does NOT create a new auth user, a new operator row, or alter venue
- * ownership. Appends an internal note on success.
- *
- * Eligibility: submission.status === "approved" and operator_id is set.
- *
- * submissionId is bound via .bind(null, submissionId).
- */
 export async function resendSubmissionSetupEmailAction(
   submissionId: string,
   _prevState: ResendSetupEmailState,
   _formData: FormData
 ): Promise<ResendSetupEmailState> {
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user || !await isControlPanelAdmin(user.email)) return { error: "Unauthorized." };
-
-  const supabase = createAdminClient();
-
-  // ── Fetch submission ──────────────────────────────────────────────────────
-  const { data: subRaw, error: fetchError } = await supabase
-    .from("operator_submissions")
-    .select("email, first_name, operator_id, status")
-    .eq("id", submissionId)
-    .single();
-
-  if (fetchError || !subRaw) {
-    console.error("[resendSubmissionSetupEmailAction] Fetch failed:", fetchError?.message);
-    return { error: "Submission not found. Please refresh and try again." };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sub = subRaw as any as Record<string, unknown>;
-
-  const email      = sub.email as string;
-  const firstName  = ((sub.first_name as string | null) ?? "").trim() || "there";
-  const operatorId = sub.operator_id as string | null;
-
-  if (!email) return { error: "Submission has no email address." };
-  if (!operatorId) {
-    return {
-      error:
-        "No operator account is linked to this submission. " +
-        "The submission may not have been fully provisioned.",
-    };
-  }
-
-  // ── Eligibility — the authoritative activation lifecycle, not the routing
-  // status label ──────────────────────────────────────────────────────────
-  // A confirmed_auto submission is provisioned immediately at submission
-  // time (before any founder review) and can have a real, resendable
-  // lifecycle — restricting resend to status === "approved" alone silently
-  // hid that entire path. evaluateSubmissionResendEligibility() requires an
-  // actual live, unreleased, not-yet-due lifecycle for a
-  // confirmed_auto/approved submission; a stale status that merely looks
-  // eligible is never enough on its own. See activationPresentation.ts for
-  // the full rule.
-  const presentation = await getActivationPresentationForSubmission(submissionId);
-  const eligibility = evaluateSubmissionResendEligibility(sub.status as string, presentation);
-  if (!eligibility.eligible) {
-    return { error: eligibility.reason };
-  }
-
-  // ── Double-submit guard ──────────────────────────────────────────────────
-  // Same idiom as resendClaimSetupEmailAction / reviewSubmissionAction's
-  // needs_more_info RETRY_WINDOW_MS guard — no dedicated "last resend"
-  // column exists, so the structured manual_resend note this action
-  // already writes on success is reused as the signal.
-  const RETRY_WINDOW_MS = 10_000;
-  const { data: recentResendNotes } = await supabase
-    .from("operator_submission_notes")
-    .select("created_at")
-    .eq("submission_id", submissionId)
-    .eq("event_type", "manual_resend")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const lastResendAt = recentResendNotes?.[0]?.created_at as string | undefined;
-  if (lastResendAt && Date.now() - new Date(lastResendAt).getTime() < RETRY_WINDOW_MS) {
-    console.warn("[resendSubmissionSetupEmailAction] Duplicate resend suppressed (retry window).", { submissionId });
-    return { success: true, successAction: `Setup email resent to ${email}` };
-  }
-
-  // ── Generate fresh recovery link ──────────────────────────────────────────
-  const appUrl     = getSiteUrl();
-  const redirectTo = `${appUrl}/operator/create-password`;
-
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type:    "recovery",
-    email,
-    options: { redirectTo },
-  });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    console.error("[resendSubmissionSetupEmailAction] generateLink failed:", linkError?.message);
-    return { error: "Failed to generate a new setup link. Please try again." };
-  }
-
-  // ── Send email (awaited — fail fast on error) ─────────────────────────────
-  const emailResult = await sendOperatorActivationEmail({
-    to:        email,
-    firstName,
-    setupLink: linkData.properties.action_link,
-  });
-
-  if (!emailResult.ok) {
-    console.error(
-      "[resendSubmissionSetupEmailAction] Email send failed:",
-      { submissionId, email, error: emailResult.error }
-    );
-    return {
-      error: `Email could not be sent to ${email} (${emailResult.error ?? "unknown error"}). Please try again.`,
-    };
-  }
-
-  // ── Append structured internal note ───────────────────────────────────────
-  // Founder-triggered, so attributed to the real signed-in founder — never
-  // the "Happy Hour Compass" system-author string. Never stores the
-  // generated link/token itself — only operational metadata.
-  await supabase.from("operator_submission_notes").insert({
-    submission_id:    submissionId,
-    note:             `Setup email resent to ${email} by founder.`,
-    event_type:       "manual_resend",
-    metadata_json: {
-      recipient: email,
-      sentAt: new Date().toISOString(),
-      lifecycleId: presentation.lifecycle?.id ?? null,
-      currentDeadline: presentation.lifecycle?.deadlineAt ?? null,
-    },
-    created_by:       user.id,
-    created_by_email: user.email ?? null,
-  });
-
-  console.log("[resendSubmissionSetupEmailAction] Complete.", { submissionId, email });
-
-  revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
-  return { success: true, successAction: `Setup email resent to ${email}` };
+  const result = await resendSubmissionSetupEmailImpl(submissionId);
+  if (result.success) revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  return result;
 }
 
 // ── Append internal note ──────────────────────────────────────────────────────

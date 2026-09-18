@@ -4,7 +4,7 @@ import { formatDateTime } from "@/lib/controlPanelDateTime";
 import {
   getActivationPresentationForSubmission,
   shouldShowSubmissionActivationCard,
-  ACTIVATION_RELEVANT_SUBMISSION_STATUSES,
+  shouldShowStandaloneResendPanel,
   resolveLegacySubmissionActivationOrigin,
   evaluateLegacySubmissionActivationEligibility,
 } from "@/lib/activation/activationPresentation";
@@ -404,15 +404,19 @@ export default async function OperatorSubmissionDetailPage({
             />
           )}
 
-          {/* Account recovery — shown for any status where provisioning is
-              expected to have run (confirmed_auto or founder-approved), not
-              only "approved" — confirmed_auto submissions are provisioned
-              immediately at submission time and can be just as resendable.
-              The action itself is the real eligibility gate
-              (evaluateSubmissionResendEligibility) — this only avoids
-              showing a resend button on a rejected/no-match/incomplete
-              submission that could never legitimately need one. */}
-          {ACTIVATION_RELEVANT_SUBMISSION_STATUSES.has(submission.status) && (
+          {/* Account recovery — shown ONLY when a lifecycle actually exists
+              (Phase 1C QA correction). An untracked submission must go
+              through "Start activation tracking & resend setup email"
+              instead — rendering both here was confusing and let standalone
+              resend bypass the controlled legacy-resume flow entirely. Still
+              shown for release_required / expired / released states so the
+              founder can see why resend is currently blocked
+              (evaluateSubmissionResendEligibility enforces the actual
+              block). Uses rawActivationPresentation (not the display-gated
+              activationPresentation) so this is never accidentally hidden by
+              shouldShowSubmissionActivationCard's separate card-visibility
+              rule. */}
+          {shouldShowStandaloneResendPanel(rawActivationPresentation) && (
             <ResendSetupEmailPanel submissionId={submission.id} />
           )}
 

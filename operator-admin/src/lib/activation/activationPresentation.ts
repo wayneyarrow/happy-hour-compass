@@ -106,6 +106,57 @@ export type SubmissionResendEligibility =
   | { eligible: false; reason: string };
 
 /**
+ * Shared lifecycle-state gate for BOTH Claim and Submission standalone
+ * resend eligibility — extracted so the two entities never drift on the
+ * lifecycle-state rules (only their status-label pre-checks differ; see
+ * evaluateClaimResendEligibility / evaluateSubmissionResendEligibility
+ * below). No I/O — pure, unit-testable with plain objects.
+ *
+ * PHASE 1C QA CORRECTION (staging QA, 2026-09): a record with NO lifecycle
+ * row is no longer treated as "a legitimate legacy case where resend must
+ * keep working" — that was the actual bug. Standalone resend can generate a
+ * setup email WITHOUT ever starting activation tracking, which bypasses the
+ * controlled legacy-resume flow entirely (an operator could be re-emailed
+ * indefinitely with no deadline, no countdown, nothing for the founder to
+ * ever act on). An untracked origin must go through
+ * "Start activation tracking & resend setup email" (legacyActivationResumeImpl.ts)
+ * instead — this predicate now refuses standalone resend whenever no
+ * lifecycle exists, for both Claims and Submissions.
+ */
+function evaluateResendLifecycleGate(
+  presentation: ActivationPresentation,
+  entityLabel: "claim" | "submission",
+  releasedReason: string
+): SubmissionResendEligibility {
+  if (!presentation.lifecycle) {
+    return {
+      eligible: false,
+      reason:
+        `No activation lifecycle is tracked for this ${entityLabel} — resend is not available. ` +
+        `Use "Start activation tracking & resend setup email" instead.`,
+    };
+  }
+  if (presentation.lifecycle.releasedAt) {
+    return { eligible: false, reason: releasedReason };
+  }
+  if (presentation.state === "release_required" || presentation.state === "expired") {
+    return {
+      eligible: false,
+      reason:
+        "This activation's deadline has already passed. Extend the deadline before " +
+        "resending the setup email, so the operator gets a working window to use it.",
+    };
+  }
+  if (presentation.state === "active") {
+    return {
+      eligible: false,
+      reason: "This operator has already activated their account. No setup email is needed.",
+    };
+  }
+  return { eligible: true };
+}
+
+/**
  * Pure eligibility predicate for whether a Submission's setup email may be
  * resent — the authoritative rule is the LIFECYCLE's own state, never the
  * routing-status label alone. A `confirmed_auto` submission is provisioned
@@ -129,35 +180,57 @@ export function evaluateSubmissionResendEligibility(
       reason: "Resend is only available for submissions that were successfully provisioned.",
     };
   }
-  if (!presentation.lifecycle) {
-    return {
-      eligible: false,
-      reason: "No activation lifecycle is tracked for this submission — resend is not available.",
-    };
+  return evaluateResendLifecycleGate(
+    presentation,
+    "submission",
+    "This activation has already been released. Resending a setup email is not " +
+      "available — the venue may need to be re-submitted."
+  );
+}
+
+/**
+ * Pure eligibility predicate for whether a Claim's setup email may be
+ * resent — same lifecycle-authoritative rule as
+ * evaluateSubmissionResendEligibility() above, via the shared
+ * evaluateResendLifecycleGate() core. Claims have only one relevant status
+ * ("approved" — the only status under which a claim has ever provisioned an
+ * operator; see reviewClaimAction's approve branch), unlike Submissions'
+ * two-status set.
+ */
+export function evaluateClaimResendEligibility(
+  status: string,
+  presentation: ActivationPresentation
+): SubmissionResendEligibility {
+  if (status !== "approved") {
+    return { eligible: false, reason: "Resend is only available for approved claims." };
   }
-  if (presentation.lifecycle.releasedAt) {
-    return {
-      eligible: false,
-      reason:
-        "This activation has already been released. Resending a setup email is not " +
-        "available — the venue may need to be re-submitted.",
-    };
-  }
-  if (presentation.state === "release_required" || presentation.state === "expired") {
-    return {
-      eligible: false,
-      reason:
-        "This activation's deadline has already passed. Extend the deadline before " +
-        "resending the setup email, so the operator gets a working window to use it.",
-    };
-  }
-  if (presentation.state === "active") {
-    return {
-      eligible: false,
-      reason: "This operator has already activated their account. No setup email is needed.",
-    };
-  }
-  return { eligible: true };
+  return evaluateResendLifecycleGate(
+    presentation,
+    "claim",
+    "This activation has already been released. Resending a setup email is not " +
+      "available — the venue may need to be re-claimed."
+  );
+}
+
+/**
+ * Pure, shared rendering predicate: should a Claim/Submission detail page
+ * render the standalone "Account recovery / Resend setup email" panel at
+ * all? Extracted (matching shouldShowSubmissionActivationCard()'s existing
+ * precedent) specifically so it's unit-testable without rendering a Server
+ * Component.
+ *
+ * A lifecycle must actually exist (otherwise the record belongs to the
+ * controlled legacy-resume flow instead — see ActivationCard's "not_tracked"
+ * branch) AND the operator must not already be active (once activated, no
+ * setup email is ever needed, regardless of whether a lifecycle happens to
+ * still be attached). This intentionally does NOT gate on release_required /
+ * expired / released — those states still show the panel so the founder can
+ * see why resend is currently blocked (evaluateClaimResendEligibility /
+ * evaluateSubmissionResendEligibility enforce the actual block at submit
+ * time); only "not_tracked" and "active" hide the panel entirely.
+ */
+export function shouldShowStandaloneResendPanel(presentation: ActivationPresentation): boolean {
+  return !!presentation.lifecycle && presentation.state !== "active";
 }
 
 type RawLifecycleRow = {
