@@ -2,11 +2,15 @@ import Link from "next/link";
 import { getClaimById, getClaimNotes } from "@/lib/data/claims";
 import { computeTrustSignals, type SignalStatus, type TrustSignal } from "@/lib/trustSignals";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
-import { getActivationPresentationForClaim } from "@/lib/activation/activationPresentation";
+import {
+  getActivationPresentationForClaim,
+  resolveLegacyClaimActivationOrigin,
+  evaluateLegacyClaimActivationEligibility,
+} from "@/lib/activation/activationPresentation";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
-import ActivationCard from "@/components/ActivationCard";
+import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
@@ -192,6 +196,30 @@ export default async function ClaimDetailPage({
     ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
     : null;
 
+  // ── Phase 1C: controlled legacy activation resume — only relevant when
+  // genuinely not_tracked (never for the "active, no lifecycle" legacy
+  // state, which has nothing to start). A fresh, independent re-check runs
+  // again inside the action itself at submit time — this is purely for
+  // deciding whether to show the button. ─────────────────────────────────
+  let legacyResume: LegacyResumeCandidate | undefined;
+  if (activationPresentation?.state === "not_tracked") {
+    const resolved = await resolveLegacyClaimActivationOrigin(claim.id);
+    const eligibility = resolved.found
+      ? evaluateLegacyClaimActivationEligibility({
+          originStatus: resolved.originStatus as string,
+          operatorId: resolved.operatorId,
+          operatorAccountActivatedAt: resolved.operatorAccountActivatedAt,
+          originHasAnyLifecycle: resolved.originHasAnyLifecycle,
+          operatorHasLiveLifecycleElsewhere: resolved.operatorHasLiveLifecycleElsewhere,
+        })
+      : { eligible: false as const, reason: "Claim not found." };
+    legacyResume = {
+      origin: { type: "claim", claimId: claim.id },
+      eligibility,
+      recipientEmail: resolved.operatorEmail,
+    };
+  }
+
   return (
     <div className="max-w-6xl">
       {/* ── Back nav ──────────────────────────────────────────────────────── */}
@@ -376,7 +404,11 @@ export default async function ClaimDetailPage({
           )}
 
           {activationPresentation && (
-            <ActivationCard presentation={activationPresentation} lastEvent={lastActivationEvent} />
+            <ActivationCard
+              presentation={activationPresentation}
+              lastEvent={lastActivationEvent}
+              legacyResume={legacyResume}
+            />
           )}
 
           <Section title="Trust signals">

@@ -4,9 +4,15 @@ import {
   getActivationPresentationsForClaims,
   getActivationPresentationsForSubmissions,
   getActivationPresentationForClaim,
+  getActivationPresentationForSubmission,
   shouldShowSubmissionActivationCard,
   evaluateSubmissionResendEligibility,
+  evaluateLegacyClaimActivationEligibility,
+  evaluateLegacySubmissionActivationEligibility,
+  resolveLegacyClaimActivationOrigin,
+  resolveLegacySubmissionActivationOrigin,
   type ActivationPresentation,
+  type LegacyActivationOriginCheck,
 } from "../../../src/lib/activation/activationPresentation";
 
 /**
@@ -37,9 +43,54 @@ type FakeOperatorRow = {
   email: string | null;
 };
 
-function makeFakeClient(lifecycleRows: FakeLifecycleRow[], operatorRows: FakeOperatorRow[]) {
+type FakeClaimRow = { id: string; status: string; venue_id: string | null };
+type FakeSubmissionRow = { id: string; status: string; operator_id: string | null; venue_id: string | null };
+type FakeVenueRow = { id: string; claimed_by: string | null; created_by_operator_id: string | null };
+
+/**
+ * Backward-compatible: `claims`/`submissions`/`venues` default to empty, so
+ * every pre-existing test (which never populates them) still behaves
+ * exactly as before — a no-lifecycle origin with no claim/submission row in
+ * the fake correctly resolves to "no operator found", not a thrown error.
+ * These extra tables exist so getActivationPresentationsForClaims/
+ * ForSubmissions' Phase 1C fix (resolving an already-activated legacy
+ * operator even with no lifecycle row) can be tested against this same
+ * shared fake.
+ */
+function makeFakeClient(
+  lifecycleRows: FakeLifecycleRow[],
+  operatorRows: FakeOperatorRow[],
+  extra: { claims?: FakeClaimRow[]; submissions?: FakeSubmissionRow[]; venues?: FakeVenueRow[] } = {}
+) {
   let lifecycleQueryCount = 0;
   let operatorQueryCount = 0;
+  const claims = extra.claims ?? [];
+  const submissions = extra.submissions ?? [];
+  const venues = extra.venues ?? [];
+
+  function eqMaybeSingleTable(rows: Record<string, unknown>[]) {
+    return {
+      select() {
+        const filters: { col: string; val: unknown }[] = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const builder: any = {
+          eq(col: string, val: unknown) {
+            filters.push({ col, val });
+            return builder;
+          },
+          in(col: string, ids: unknown[]) {
+            const data = rows.filter((r) => (ids as unknown[]).includes(r[col]));
+            return Promise.resolve({ data, error: null });
+          },
+          maybeSingle: async () => {
+            const match = rows.find((r) => filters.every((f) => r[f.col] === f.val));
+            return { data: match ?? null, error: null };
+          },
+        };
+        return builder;
+      },
+    };
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client: any = {
@@ -47,7 +98,17 @@ function makeFakeClient(lifecycleRows: FakeLifecycleRow[], operatorRows: FakeOpe
       if (table === "operator_activation_lifecycles") {
         return {
           select() {
-            return {
+            const filters: { col: string; val: unknown; op: "eq" | "is" }[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const builder: any = {
+              eq(col: string, val: unknown) {
+                filters.push({ col, val, op: "eq" });
+                return builder;
+              },
+              is(col: string, val: unknown) {
+                filters.push({ col, val, op: "is" });
+                return builder;
+              },
               in(col: string, ids: string[]) {
                 lifecycleQueryCount++;
                 const data = lifecycleRows.filter((r) =>
@@ -55,23 +116,44 @@ function makeFakeClient(lifecycleRows: FakeLifecycleRow[], operatorRows: FakeOpe
                 );
                 return Promise.resolve({ data, error: null });
               },
+              maybeSingle: async () => {
+                const match = lifecycleRows.find((r) =>
+                  filters.every((f) => (r as unknown as Record<string, unknown>)[f.col] === f.val)
+                );
+                return { data: match ?? null, error: null };
+              },
             };
+            return builder;
           },
         };
       }
       if (table === "operators") {
         return {
           select() {
-            return {
+            const filters: { col: string; val: unknown }[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const builder: any = {
+              eq(col: string, val: unknown) {
+                filters.push({ col, val });
+                return builder;
+              },
               in(_col: string, ids: string[]) {
                 operatorQueryCount++;
                 const data = operatorRows.filter((r) => ids.includes(r.id));
                 return Promise.resolve({ data, error: null });
               },
+              maybeSingle: async () => {
+                const match = operatorRows.find((r) => filters.every((f) => (r as unknown as Record<string, unknown>)[f.col] === f.val));
+                return { data: match ?? null, error: null };
+              },
             };
+            return builder;
           },
         };
       }
+      if (table === "venue_claims") return eqMaybeSingleTable(claims);
+      if (table === "operator_submissions") return eqMaybeSingleTable(submissions);
+      if (table === "venues") return eqMaybeSingleTable(venues);
       throw new Error(`unexpected table in fake: ${table}`);
     },
   };
@@ -362,4 +444,228 @@ test("evaluateSubmissionResendEligibility: an already-activated operator (state=
   const result = evaluateSubmissionResendEligibility("approved", makePresentation({ state: "active" }));
   assert.equal(result.eligible, false);
   if (!result.eligible) assert.match(result.reason, /already activated/);
+});
+
+// ── Phase 1C correction: activated legacy operator with NO lifecycle row
+// must present as "active", never "not_tracked" ("Justin/Britannia" case —
+// an operator who completed activation through the existing setup link
+// before any lifecycle row was ever ceated for their origin). ──────────────
+
+test("getActivationPresentationsForClaims: a claim whose operator already activated, but has NO lifecycle row, presents as active (not not_tracked) — the 'Justin/Britannia' case", async () => {
+  const { client } = makeFakeClient(
+    [],
+    [{ id: "op-justin", account_activated_at: "2026-09-18T01:07:29.000Z", first_name: "Justin", last_name: null, email: "justin@bbco.ca" }],
+    {
+      claims: [{ id: "claim-justin", status: "approved", venue_id: "venue-1" }],
+      venues: [{ id: "venue-1", claimed_by: "op-justin", created_by_operator_id: "op-justin" }],
+    }
+  );
+
+  const result = await getActivationPresentationsForClaims(["claim-justin"], client, NOW);
+  const presentation = result.get("claim-justin");
+  assert.ok(presentation);
+  assert.equal(presentation!.state, "active");
+  assert.equal(presentation!.lifecycle, null);
+  assert.equal(presentation!.operator?.accountActivatedAt, "2026-09-18T01:07:29.000Z");
+  assert.equal(presentation!.operator?.email, "justin@bbco.ca");
+});
+
+test("getActivationPresentationsForClaims: a claim whose operator is unactivated and has no lifecycle row still correctly presents as not_tracked", async () => {
+  const { client } = makeFakeClient([], [{ id: "op-1", account_activated_at: null, first_name: "A", last_name: "B", email: "a@b.com" }], {
+    claims: [{ id: "claim-1", status: "approved", venue_id: "venue-1" }],
+    venues: [{ id: "venue-1", claimed_by: "op-1", created_by_operator_id: "op-1" }],
+  });
+  const result = await getActivationPresentationsForClaims(["claim-1"], client, NOW);
+  assert.equal(result.get("claim-1")?.state, "not_tracked");
+  assert.equal(result.get("claim-1")?.lifecycle, null);
+});
+
+test("getActivationPresentationForSubmission: an activated operator with no lifecycle presents as active, using the direct operator_id FK (no venue join needed for display)", async () => {
+  const { client } = makeFakeClient(
+    [],
+    [{ id: "op-2", account_activated_at: "2026-08-20T00:00:00.000Z", first_name: "Dave", last_name: null, email: "dave@example.com" }],
+    { submissions: [{ id: "sub-1", status: "approved", operator_id: "op-2", venue_id: "venue-2" }] }
+  );
+  const presentation = await getActivationPresentationForSubmission("sub-1", client, NOW);
+  assert.equal(presentation.state, "active");
+  assert.equal(presentation.lifecycle, null);
+  assert.equal(presentation.operator?.email, "dave@example.com");
+});
+
+test("getActivationPresentationsForClaims: a claim with genuinely no venue_claims row (orphaned id) resolves to not_tracked, never throws", async () => {
+  const { client } = makeFakeClient([], []); // no claims/venues/operators populated at all
+  const result = await getActivationPresentationsForClaims(["ghost-claim"], client, NOW);
+  assert.equal(result.get("ghost-claim")?.state, "not_tracked");
+});
+
+// ── evaluateLegacyClaimActivationEligibility / evaluateLegacySubmissionActivationEligibility ──
+
+function baseLegacyCheck(overrides: Partial<LegacyActivationOriginCheck> = {}): LegacyActivationOriginCheck {
+  return {
+    originStatus: "approved",
+    operatorId: "op-1",
+    operatorAccountActivatedAt: null,
+    originHasAnyLifecycle: false,
+    operatorHasLiveLifecycleElsewhere: false,
+    ...overrides,
+  };
+}
+
+test("evaluateLegacyClaimActivationEligibility: a clean approved claim with an unactivated operator and no prior lifecycle is eligible", () => {
+  assert.deepEqual(evaluateLegacyClaimActivationEligibility(baseLegacyCheck()), { eligible: true });
+});
+
+test("evaluateLegacyClaimActivationEligibility: any status other than 'approved' is ineligible", () => {
+  for (const status of ["pending", "needs_more_info", "info_submitted", "rejected"]) {
+    const result = evaluateLegacyClaimActivationEligibility(baseLegacyCheck({ originStatus: status }));
+    assert.equal(result.eligible, false, `status "${status}" must be ineligible`);
+  }
+});
+
+test("evaluateLegacySubmissionActivationEligibility: confirmed_auto and approved are both eligible (clean case)", () => {
+  for (const status of ["confirmed_auto", "approved"]) {
+    assert.deepEqual(evaluateLegacySubmissionActivationEligibility(baseLegacyCheck({ originStatus: status })), { eligible: true });
+  }
+});
+
+test("evaluateLegacySubmissionActivationEligibility: any other status is ineligible", () => {
+  for (const status of ["rejected", "no_match", "closed", "pending_review", "double_claim"]) {
+    const result = evaluateLegacySubmissionActivationEligibility(baseLegacyCheck({ originStatus: status }));
+    assert.equal(result.eligible, false, `status "${status}" must be ineligible`);
+  }
+});
+
+test("evaluateLegacyClaimActivationEligibility: no resolvable operator (unclean venue linkage) is ineligible", () => {
+  const result = evaluateLegacyClaimActivationEligibility(baseLegacyCheck({ operatorId: null }));
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /unambiguous operator/);
+});
+
+test("evaluateLegacyClaimActivationEligibility: an already-activated operator is ineligible", () => {
+  const result = evaluateLegacyClaimActivationEligibility(
+    baseLegacyCheck({ operatorAccountActivatedAt: "2026-09-18T01:07:29.000Z" })
+  );
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /already activated/);
+});
+
+test("evaluateLegacyClaimActivationEligibility: any historical lifecycle on the exact origin (any state) is ineligible — a second row for the same origin is permanently impossible", () => {
+  const result = evaluateLegacyClaimActivationEligibility(baseLegacyCheck({ originHasAnyLifecycle: true }));
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /already had activation tracking started/);
+});
+
+test("evaluateLegacyClaimActivationEligibility: a live lifecycle elsewhere for the same operator is ineligible", () => {
+  const result = evaluateLegacyClaimActivationEligibility(baseLegacyCheck({ operatorHasLiveLifecycleElsewhere: true }));
+  assert.equal(result.eligible, false);
+  if (!result.eligible) assert.match(result.reason, /active tracking window under a different/);
+});
+
+test("evaluateLegacyClaimActivationEligibility: expired/released lifecycle on a DIFFERENT origin does not block a legitimate new origin (only originHasAnyLifecycle/operatorHasLiveLifecycleElsewhere gate this)", () => {
+  // Simulated by the absence of both blocking flags — an expired/released
+  // lifecycle elsewhere is, by construction, never "live", so the resolver
+  // that populates operatorHasLiveLifecycleElsewhere would correctly report
+  // false for it (tested directly against the resolver below).
+  assert.deepEqual(evaluateLegacyClaimActivationEligibility(baseLegacyCheck()), { eligible: true });
+});
+
+// ── resolveLegacyClaimActivationOrigin / resolveLegacySubmissionActivationOrigin ──
+
+test("resolveLegacyClaimActivationOrigin: not found → found:false, no other field trusted", async () => {
+  const { client } = makeFakeClient([], []);
+  const result = await resolveLegacyClaimActivationOrigin("missing-claim", client);
+  assert.equal(result.found, false);
+});
+
+test("resolveLegacyClaimActivationOrigin: clean approved claim resolves operator via matching claimed_by/created_by_operator_id", async () => {
+  const { client } = makeFakeClient(
+    [],
+    [{ id: "op-1", account_activated_at: null, first_name: "Marnie", last_name: null, email: "marnie@el-taquero.com" }],
+    {
+      claims: [{ id: "claim-1", status: "approved", venue_id: "venue-1" }],
+      venues: [{ id: "venue-1", claimed_by: "op-1", created_by_operator_id: "op-1" }],
+    }
+  );
+  const result = await resolveLegacyClaimActivationOrigin("claim-1", client);
+  assert.equal(result.found, true);
+  assert.equal(result.originStatus, "approved");
+  assert.equal(result.operatorId, "op-1");
+  assert.equal(result.operatorEmail, "marnie@el-taquero.com");
+  assert.equal(result.operatorAccountActivatedAt, null);
+  assert.equal(result.originHasAnyLifecycle, false);
+  assert.equal(result.operatorHasLiveLifecycleElsewhere, false);
+});
+
+test("resolveLegacyClaimActivationOrigin: mismatched claimed_by/created_by_operator_id resolves NO operator", () => {
+  return (async () => {
+    const { client } = makeFakeClient([], [], {
+      claims: [{ id: "claim-1", status: "approved", venue_id: "venue-1" }],
+      venues: [{ id: "venue-1", claimed_by: "op-1", created_by_operator_id: "op-2" }],
+    });
+    const result = await resolveLegacyClaimActivationOrigin("claim-1", client);
+    assert.equal(result.operatorId, null);
+  })();
+});
+
+test("resolveLegacyClaimActivationOrigin: an existing historical lifecycle row for this exact origin is detected regardless of state", async () => {
+  const { client } = makeFakeClient(
+    [
+      {
+        id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+        started_at: "2026-01-01T00:00:00.000Z", deadline_at: "2026-01-15T00:00:00.000Z", reminder_stage: 0,
+        expired_at: "2026-01-16T00:00:00.000Z", released_at: "2026-01-17T00:00:00.000Z",
+      },
+    ],
+    [{ id: "op-1", account_activated_at: null, first_name: null, last_name: null, email: "a@b.com" }],
+    {
+      claims: [{ id: "claim-1", status: "approved", venue_id: "venue-1" }],
+      venues: [{ id: "venue-1", claimed_by: "op-1", created_by_operator_id: "op-1" }],
+    }
+  );
+  const result = await resolveLegacyClaimActivationOrigin("claim-1", client);
+  assert.equal(result.originHasAnyLifecycle, true);
+});
+
+test("resolveLegacyClaimActivationOrigin: a live lifecycle under a DIFFERENT origin for the same operator is detected as 'elsewhere'", async () => {
+  const { client } = makeFakeClient(
+    [
+      {
+        id: "lc-1", operator_id: "op-1", origin_type: "submission", origin_claim_id: null, origin_submission_id: "sub-other",
+        started_at: "2026-06-01T00:00:00.000Z", deadline_at: "2026-06-20T00:00:00.000Z", reminder_stage: 0,
+        expired_at: null, released_at: null,
+      },
+    ],
+    [{ id: "op-1", account_activated_at: null, first_name: null, last_name: null, email: "a@b.com" }],
+    {
+      claims: [{ id: "claim-1", status: "approved", venue_id: "venue-1" }],
+      venues: [{ id: "venue-1", claimed_by: "op-1", created_by_operator_id: "op-1" }],
+    }
+  );
+  const result = await resolveLegacyClaimActivationOrigin("claim-1", client);
+  assert.equal(result.originHasAnyLifecycle, false);
+  assert.equal(result.operatorHasLiveLifecycleElsewhere, true);
+});
+
+test("resolveLegacySubmissionActivationOrigin: clean confirmed_auto submission resolves the direct operator_id FK, cross-checked against venue linkage", async () => {
+  const { client } = makeFakeClient(
+    [],
+    [{ id: "op-2", account_activated_at: null, first_name: "Dave", last_name: null, email: "dave@example.com" }],
+    {
+      submissions: [{ id: "sub-1", status: "confirmed_auto", operator_id: "op-2", venue_id: "venue-2" }],
+      venues: [{ id: "venue-2", claimed_by: "op-2", created_by_operator_id: "op-2" }],
+    }
+  );
+  const result = await resolveLegacySubmissionActivationOrigin("sub-1", client);
+  assert.equal(result.found, true);
+  assert.equal(result.originStatus, "confirmed_auto");
+  assert.equal(result.operatorId, "op-2");
+});
+
+test("resolveLegacySubmissionActivationOrigin: a drifted venue linkage (venue disagrees with operator_id) resolves NO operator, never guessed", async () => {
+  const { client } = makeFakeClient([], [], {
+    submissions: [{ id: "sub-1", status: "approved", operator_id: "op-2", venue_id: "venue-2" }],
+    venues: [{ id: "venue-2", claimed_by: "op-9", created_by_operator_id: "op-9" }],
+  });
+  const result = await resolveLegacySubmissionActivationOrigin("sub-1", client);
+  assert.equal(result.operatorId, null);
 });

@@ -5,12 +5,14 @@ import {
   getActivationPresentationForSubmission,
   shouldShowSubmissionActivationCard,
   ACTIVATION_RELEVANT_SUBMISSION_STATUSES,
+  resolveLegacySubmissionActivationOrigin,
+  evaluateLegacySubmissionActivationEligibility,
 } from "@/lib/activation/activationPresentation";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
-import ActivationCard from "@/components/ActivationCard";
+import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -210,6 +212,30 @@ export default async function OperatorSubmissionDetailPage({
     ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
     : null;
 
+  // ── Phase 1C: controlled legacy activation resume — only relevant when
+  // genuinely not_tracked (never for the "active, no lifecycle" legacy
+  // state, which has nothing to start). A fresh, independent re-check runs
+  // again inside the action itself at submit time — this is purely for
+  // deciding whether to show the button. ─────────────────────────────────
+  let legacyResume: LegacyResumeCandidate | undefined;
+  if (activationPresentation?.state === "not_tracked") {
+    const resolved = await resolveLegacySubmissionActivationOrigin(submission.id);
+    const eligibility = resolved.found
+      ? evaluateLegacySubmissionActivationEligibility({
+          originStatus: resolved.originStatus as string,
+          operatorId: resolved.operatorId,
+          operatorAccountActivatedAt: resolved.operatorAccountActivatedAt,
+          originHasAnyLifecycle: resolved.originHasAnyLifecycle,
+          operatorHasLiveLifecycleElsewhere: resolved.operatorHasLiveLifecycleElsewhere,
+        })
+      : { eligible: false as const, reason: "Submission not found." };
+    legacyResume = {
+      origin: { type: "submission", submissionId: submission.id },
+      eligibility,
+      recipientEmail: resolved.operatorEmail,
+    };
+  }
+
   return (
     <div className="max-w-6xl">
       {/* ── Back nav ──────────────────────────────────────────────────────── */}
@@ -391,7 +417,11 @@ export default async function OperatorSubmissionDetailPage({
           )}
 
           {activationPresentation && (
-            <ActivationCard presentation={activationPresentation} lastEvent={lastActivationEvent} />
+            <ActivationCard
+              presentation={activationPresentation}
+              lastEvent={lastActivationEvent}
+              legacyResume={legacyResume}
+            />
           )}
 
           {/* Linked Venue */}

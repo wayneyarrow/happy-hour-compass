@@ -64,6 +64,14 @@ const SUBMISSION_DETAIL_PAGE_SOURCE = readFileSync(
   join(__dirname, "../../../src/app/control-panel/operator-submissions/[id]/page.tsx"),
   "utf8"
 );
+const LEGACY_RESUME_IMPL_SOURCE = readFileSync(
+  join(__dirname, "../../../src/lib/activation/legacyActivationResumeImpl.ts"),
+  "utf8"
+);
+const LEGACY_RESUME_WRAPPER_SOURCE = readFileSync(
+  join(__dirname, "../../../src/lib/activation/legacyActivationResumeActions.ts"),
+  "utf8"
+);
 
 // ── Submissions list page: no longer pre-filters the batch fetch by status ──
 
@@ -107,7 +115,7 @@ test("resendClaimSetupEmailImpl.ts has NO \"use server\" directive — it is nev
   assert.doesNotMatch(RESEND_CLAIM_IMPL_SOURCE, /"use server";/);
 });
 
-test("no exported function in either claims/[id]/actions.ts or operator-submissions/[id]/actions.ts declares a `deps` parameter", () => {
+test("no exported function in either claims/[id]/actions.ts, operator-submissions/[id]/actions.ts, or legacyActivationResumeActions.ts declares a `deps` parameter", () => {
   // A deps-shaped override parameter would appear as a parameter named
   // `deps` on some exported async function — scan every exported function
   // signature block for the literal token.
@@ -115,6 +123,7 @@ test("no exported function in either claims/[id]/actions.ts or operator-submissi
   for (const [label, source] of [
     ["claims actions.ts", CLAIMS_ACTIONS_SOURCE] as const,
     ["submissions actions.ts", SUBMISSIONS_ACTIONS_SOURCE] as const,
+    ["legacyActivationResumeActions.ts", LEGACY_RESUME_WRAPPER_SOURCE] as const,
   ]) {
     const matches = [...source.matchAll(exportedFnPattern)];
     assert.ok(matches.length > 0, `${label}: expected at least one exported action`);
@@ -122,6 +131,29 @@ test("no exported function in either claims/[id]/actions.ts or operator-submissi
       assert.doesNotMatch(match[0], /\bdeps\s*:/, `${label}: an exported action's signature contains a deps parameter: ${match[0].slice(0, 120)}...`);
     }
   }
+});
+
+// ── Phase 1C: legacy activation resume — Server Action signature safety ────
+
+test("resumeLegacyClaimActivationAction / resumeLegacySubmissionActionAction (exported wrappers) have fixed signatures with no deps parameter", () => {
+  assert.match(LEGACY_RESUME_WRAPPER_SOURCE, /"use server";/);
+  assert.match(
+    LEGACY_RESUME_WRAPPER_SOURCE,
+    /export async function resumeLegacyClaimActivationAction\(\s*claimId: string,\s*_prevState: LegacyActivationResumeState,\s*_formData: FormData\s*\): Promise<LegacyActivationResumeState> \{/
+  );
+  assert.match(
+    LEGACY_RESUME_WRAPPER_SOURCE,
+    /export async function resumeLegacySubmissionActivationAction\(\s*submissionId: string,\s*_prevState: LegacyActivationResumeState,\s*_formData: FormData\s*\): Promise<LegacyActivationResumeState> \{/
+  );
+  assert.doesNotMatch(LEGACY_RESUME_WRAPPER_SOURCE, /\bdeps\b/, "the exported wrapper file must never mention `deps` at all");
+});
+
+test("legacyActivationResumeImpl.ts has NO \"use server\" directive — it is never itself network-reachable, so its deps parameter (including sendSetupEmail) is safe", () => {
+  assert.doesNotMatch(LEGACY_RESUME_IMPL_SOURCE, /"use server";/);
+});
+
+test("legacyActivationResumeActions.ts does not re-export the impl module (a bare re-export risks being swept into the \"use server\" transform)", () => {
+  assert.doesNotMatch(LEGACY_RESUME_WRAPPER_SOURCE, /export\s*\{[^}]*resumeLegacy(Claim|Submission)ActivationImpl/);
 });
 
 // ── extendActivationDeadlineImpl: founder-only ──────────────────────────────
@@ -300,4 +332,95 @@ test("ActivationNoteMeta's allowlist displays the prior expired timestamp and th
   );
   assert.match(noteMetaSource, /previousExpiredAt:\s*"[^"]+"/);
   assert.match(noteMetaSource, /extendedByEmail:\s*"[^"]+"/);
+});
+
+// ── Phase 1C: legacy activation resume — action ordering ───────────────────
+
+test("legacyActivationResumeImpl checks admin authorization before any claim/submission/operator lookup", () => {
+  const authIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("checkAdmin(user.email)");
+  const resolveIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("resolveLegacyClaimActivationOrigin(origin.claimId, supabase)");
+  assert.ok(authIdx !== -1 && resolveIdx !== -1);
+  assert.ok(authIdx < resolveIdx, "authorization must be checked before any origin/operator lookup");
+});
+
+test("legacyActivationResumeImpl evaluates eligibility (including origin-has-any-lifecycle and live-elsewhere) before ever calling the atomic claim", () => {
+  const eligibilityIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("if (!eligibility.eligible)");
+  const claimIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("await claimOrReuseActivationLifecycle(");
+  assert.ok(eligibilityIdx !== -1 && claimIdx !== -1);
+  assert.ok(eligibilityIdx < claimIdx, "eligibility must be evaluated before the atomic claim");
+});
+
+test("legacyActivationResumeImpl only sends the setup email on decision === 'started' — reused (same or different origin) and claim_failed all return before reaching generateLink", () => {
+  const source = LEGACY_RESUME_IMPL_SOURCE;
+  const alreadyActivatedIdx = source.indexOf('if (lifecycleResult.decision === "already_activated")');
+  const claimFailedIdx = source.indexOf('if (lifecycleResult.decision === "claim_failed")');
+  const reusedIdx = source.indexOf('if (lifecycleResult.decision === "reused")');
+  const generateLinkIdx = source.indexOf("supabase.auth.admin.generateLink(");
+  assert.ok(alreadyActivatedIdx !== -1 && claimFailedIdx !== -1 && reusedIdx !== -1 && generateLinkIdx !== -1);
+  assert.ok(alreadyActivatedIdx < generateLinkIdx && claimFailedIdx < generateLinkIdx && reusedIdx < generateLinkIdx);
+  // Each of these three branches must return before falling through.
+  for (const idx of [alreadyActivatedIdx, claimFailedIdx, reusedIdx]) {
+    const block = source.slice(idx, idx + 800);
+    assert.match(block, /return \{/, "each non-started branch must return immediately, never fall through to email/note");
+  }
+});
+
+test("legacyActivationResumeImpl's reused branch never sends an email or writes a note, and reports different safe messages for same-origin vs different-origin", () => {
+  const reusedIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf('if (lifecycleResult.decision === "reused")');
+  const nextBranchIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("// decision === \"started\"", reusedIdx);
+  const block = LEGACY_RESUME_IMPL_SOURCE.slice(reusedIdx, nextBranchIdx === -1 ? reusedIdx + 1200 : nextBranchIdx);
+  assert.doesNotMatch(block, /generateLink|sendSetupEmail|insert\(/);
+  assert.match(block, /sameOrigin/);
+  assert.match(block, /already started for this record/);
+  assert.match(block, /active tracking window under a different Claim or Submission/);
+});
+
+test("legacyActivationResumeImpl writes the structured note only after a successful email send, never before", () => {
+  const emailResultIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("if (!emailResult.ok)");
+  const noteIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("const notePayload = {");
+  assert.ok(emailResultIdx !== -1 && noteIdx !== -1);
+  assert.ok(emailResultIdx < noteIdx, "the email-failure check must precede the note write");
+});
+
+test("legacyActivationResumeImpl's note is founder-attributed (real user), never the 'Happy Hour Compass' system author, and event_type is legacy_activation_resumed", () => {
+  const noteIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("const notePayload = {");
+  const block = LEGACY_RESUME_IMPL_SOURCE.slice(noteIdx, noteIdx + 500);
+  assert.match(block, /event_type:\s*"legacy_activation_resumed"/);
+  assert.match(block, /created_by:\s*user\.id,/);
+  assert.match(block, /created_by_email:\s*user\.email/);
+  assert.doesNotMatch(block, /SYSTEM_AUTHOR_EMAIL/);
+  assert.doesNotMatch(LEGACY_RESUME_IMPL_SOURCE, /import.*writeActivationNote/);
+});
+
+test("legacyActivationResumeImpl's note metadata never contains a link/token/credential", () => {
+  const metaIdx = LEGACY_RESUME_IMPL_SOURCE.indexOf("metadata_json: {");
+  const block = LEGACY_RESUME_IMPL_SOURCE.slice(metaIdx, LEGACY_RESUME_IMPL_SOURCE.indexOf("},", metaIdx));
+  assert.doesNotMatch(block, /token|link|password|secret/i);
+});
+
+test("legacyActivationResumeImpl never provisions a new Auth user/operator, never creates a venue link/claim/submission — it only ever touches operator_activation_lifecycles and the notes tables", () => {
+  assert.doesNotMatch(LEGACY_RESUME_IMPL_SOURCE, /provisionOperatorForVenue/);
+  assert.doesNotMatch(LEGACY_RESUME_IMPL_SOURCE, /auth\.admin\.createUser/);
+  assert.doesNotMatch(LEGACY_RESUME_IMPL_SOURCE, /\.from\("venues"\)\.insert|\.from\("venue_claims"\)\.insert|\.from\("operator_submissions"\)\.insert/);
+});
+
+// ── Phase 1C: "Active — account activated before lifecycle tracking" ───────
+
+test("ActivationCard shows a distinct 'Active — account activated before lifecycle tracking' message for a legacy-active, no-lifecycle presentation — never 'Not tracked'", () => {
+  const activationCardSource = readFileSync(join(__dirname, "../../../src/components/ActivationCard.tsx"), "utf8");
+  assert.match(activationCardSource, /Active — account activated before lifecycle tracking/);
+  // The two branches must be genuinely distinct conditions, not the same one.
+  assert.match(activationCardSource, /!lifecycle && activationState === "active"/);
+});
+
+test("ActivationCard never renders Start-tracking/Resend/Extend/countdown affordances in the legacy-active (no lifecycle) branch", () => {
+  const activationCardSource = readFileSync(join(__dirname, "../../../src/components/ActivationCard.tsx"), "utf8");
+  const startIdx = activationCardSource.indexOf('!lifecycle && activationState === "active"');
+  const endIdx = activationCardSource.indexOf(") : !lifecycle ? (", startIdx);
+  assert.ok(startIdx !== -1 && endIdx !== -1);
+  const block = activationCardSource.slice(startIdx, endIdx);
+  assert.doesNotMatch(block, /Start activation tracking/);
+  assert.doesNotMatch(block, /Extend deadline/);
+  assert.doesNotMatch(block, /formatDeadlineCountdown/);
+  assert.doesNotMatch(block, /<form/);
 });

@@ -10,13 +10,16 @@
  * src/lib/activation/activationNotes.ts's writer function take a typed
  * `eventType` parameter instead of an unchecked string.
  *
- * PHASE 1A ONLY ACTUALLY EMITS "activation_started" and "account_activated" —
- * see ACTIVATION_STARTED and ACCOUNT_ACTIVATED below, and the call sites in
- * src/lib/operatorActivation.ts / the four provisionOperatorForVenue() call
- * sites. Every other value here is a named placeholder for a later phase
- * (reminders, expiry, OTP) and MUST NOT be written by any code yet — adding a
- * type does not create an event; only an actual write does, and this phase
- * intentionally makes zero writes for any event type outside those two.
+ * ACTUALLY EMITTED TODAY: "activation_started" and "account_activated"
+ * (Phase 1A, from src/lib/operatorActivation.ts / the four
+ * provisionOperatorForVenue() call sites), "manual_resend" and
+ * "deadline_extended" (Phase 1B, founder-triggered — see
+ * resendClaimSetupEmailImpl.ts / extendActivationDeadlineImpl.ts), and
+ * "legacy_activation_resumed" (Phase 1C, founder-triggered — see
+ * legacyActivationResumeImpl.ts). Every other value here remains a named
+ * placeholder for a later phase (reminders, expiry, OTP) and MUST NOT be
+ * written by any code yet — adding a type does not create an event; only an
+ * actual write does.
  */
 
 export const ACTIVATION_EVENT_TYPES = [
@@ -30,6 +33,7 @@ export const ACTIVATION_EVENT_TYPES = [
   "reminder_delivery_failed",
   "manual_resend",
   "deadline_extended",
+  "legacy_activation_resumed",
   "code_verified",
   "password_set",
   "account_activated",
@@ -62,6 +66,7 @@ export const ACTIVATION_EVENT_LABELS: Record<ActivationEventType, string> = {
   reminder_delivery_failed: "Reminder delivery failed",
   manual_resend: "Setup email resent",
   deadline_extended: "Activation deadline extended",
+  legacy_activation_resumed: "Activation tracking resumed (legacy)",
   code_verified: "Code verified",
   password_set: "Password set",
   account_activated: "Account activated",
