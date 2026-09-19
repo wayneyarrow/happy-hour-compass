@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { extendActivationDeadlineImpl } from "../../../src/lib/activation/extendActivationDeadlineImpl";
 import { deriveActivationState } from "../../../src/lib/activation/activationState";
+import { computeStageDue } from "../../../src/lib/activation/activationReminderPolicy";
 
 /**
  * Full behavioral tests for extendActivationDeadlineImpl() — the actual
@@ -37,6 +38,10 @@ type FakeLifecycleRow = {
   expired_at: string | null;
   released_at: string | null;
   reminder_stage: number;
+  reminder_next_attempt_at?: string | null;
+  reminder_attempt_count?: number;
+  reminder_lease_stage?: number | null;
+  reminder_lease_started_at?: string | null;
 };
 
 type Filter = { col: string; val: unknown; op: "eq" | "is" };
@@ -53,7 +58,13 @@ type Filter = { col: string; val: unknown; op: "eq" | "is" };
  */
 function makeStore(initial: FakeLifecycleRow, accountActivatedAt: string | null = null) {
   const store: { lifecycle: FakeLifecycleRow; accountActivatedAt: string | null; notes: Record<string, unknown>[] } = {
-    lifecycle: { ...initial },
+    lifecycle: {
+      reminder_next_attempt_at: null,
+      reminder_attempt_count: 0,
+      reminder_lease_stage: null,
+      reminder_lease_started_at: null,
+      ...initial,
+    },
     accountActivatedAt,
     notes: [],
   };
@@ -209,6 +220,8 @@ test("extendActivationDeadlineAction: future deadline → +7 days from the CURRE
   assert.equal(store.lifecycle.deadline_at, expected);
   assert.equal(store.lifecycle.expired_at, null);
   assert.equal(store.lifecycle.reminder_stage, 0);
+  assert.equal(store.lifecycle.reminder_attempt_count, 0);
+  assert.equal(store.lifecycle.reminder_next_attempt_at, computeStageDue(1, expected));
 });
 
 // ── State B: deadline passed, expired_at IS NULL ────────────────────────────
@@ -232,7 +245,7 @@ test("extendActivationDeadlineAction: passed deadline, not yet expired → +7 da
 
 // ── State C: expired_at IS NOT NULL, released_at IS NULL → explicit reopen ──
 
-test("extendActivationDeadlineAction: expired-but-unreleased lifecycle is explicitly reopened — new deadline from now, expired_at cleared, released_at stays null", async () => {
+test("extendActivationDeadlineAction: expired-but-unreleased lifecycle is explicitly reopened — new deadline from now, expired_at cleared, released_at stays null, reminder_stage PRESERVED (not reset)", async () => {
   const pastDeadline = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
   const priorExpiredAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const { store, makeClient } = makeStore({
@@ -246,9 +259,16 @@ test("extendActivationDeadlineAction: expired-but-unreleased lifecycle is explic
   assert.equal(result.success, true);
   assert.equal(store.lifecycle.expired_at, null, "expired_at must be cleared on reopen");
   assert.equal(store.lifecycle.released_at, null, "released_at must remain untouched");
-  assert.equal(store.lifecycle.reminder_stage, 0);
+  // Phase 2A correction: reminder_stage 2 was already resolved before the
+  // reopen — a flat +7d reopen never obsoletes stage 3 (its 2-day pre-
+  // deadline offset is always smaller than the 7-day window), so stage 2
+  // must be PRESERVED, never blindly reset to 0.
+  assert.equal(store.lifecycle.reminder_stage, 2);
+  assert.equal(store.lifecycle.reminder_attempt_count, 0, "attempt count resets for the newly-scheduled stage");
   const newDeadlineMs = new Date(store.lifecycle.deadline_at).getTime();
   assert.ok(newDeadlineMs >= before + 7 * 24 * 60 * 60 * 1000 - 1000, "reopened deadline must be ~7 days from now, not from the stale deadline");
+  const expectedNextAttempt = computeStageDue(3, store.lifecycle.deadline_at);
+  assert.equal(store.lifecycle.reminder_next_attempt_at, expectedNextAttempt, "next attempt is stage 3's due time under the NEW deadline");
 
   // Structured note preserves the prior expired timestamp, no secrets.
   assert.equal(store.notes.length, 1);
@@ -277,6 +297,148 @@ test("extendActivationDeadlineAction: reopened lifecycle immediately re-derives 
   });
   assert.ok(state === "awaiting_setup" || state === "expiring_soon", `expected awaiting_setup/expiring_soon, got ${state}`);
   assert.notEqual(state, "expired");
+});
+
+// ── Phase 2A design-audit reminder-resolution examples ──────────────────────
+//
+// These prove extendActivationDeadlineImpl() is correctly wired to
+// computeExtensionResolution() for every scenario worked through in the
+// Phase 2A design audit — reminder_stage is preserved, never blindly reset,
+// and only obsolete stages are silently skipped.
+
+test("extendActivationDeadlineAction: Kelly's real lifecycle, stage 0, extended 7 days — stage stays 0, next attempt is the new stage-1 due time", async () => {
+  // Kelly Terris / Buffalo Rouge Brewing Co.'s actual production values
+  // (operator_activation_lifecycles.id = 8b573190-6cf5-4537-82f7-07c10a3f49c9)
+  // as of the Phase 2A design audit — deadline still comfortably future.
+  const kellyDeadline = "2026-10-02T23:41:30.607Z";
+  const { store, makeClient } = makeStore({
+    id: "kelly-lc", operator_id: "op-kelly", origin_type: "submission", origin_claim_id: null, origin_submission_id: "sub-kelly",
+    deadline_at: kellyDeadline, expired_at: null, released_at: null, reminder_stage: 0,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("kelly-lc", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  const expectedNewDeadline = new Date(new Date(kellyDeadline).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  assert.equal(store.lifecycle.deadline_at, expectedNewDeadline, "new deadline = 2026-10-09T23:41:30.607Z");
+  assert.equal(store.lifecycle.reminder_stage, 0, "stage 1's new due time is still future — nothing obsolete yet");
+  assert.equal(store.lifecycle.reminder_next_attempt_at, computeStageDue(1, expectedNewDeadline));
+});
+
+test("extendActivationDeadlineAction: stage 1 resolved, extended 7 days — stage 1 preserved, next attempt is stage 2's new due time", async () => {
+  const originalDeadline = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: originalDeadline, expired_at: null, released_at: null, reminder_stage: 1,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  assert.equal(store.lifecycle.reminder_stage, 1, "stage 1 must never be re-resolved/repeated");
+  assert.equal(store.lifecycle.reminder_next_attempt_at, computeStageDue(2, store.lifecycle.deadline_at));
+});
+
+test("extendActivationDeadlineAction: stage 2 resolved, extended 7 days — stage 2 preserved, next attempt is stage 3's new due time", async () => {
+  const originalDeadline = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: originalDeadline, expired_at: null, released_at: null, reminder_stage: 2,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  assert.equal(store.lifecycle.reminder_stage, 2);
+  assert.equal(store.lifecycle.reminder_next_attempt_at, computeStageDue(3, store.lifecycle.deadline_at));
+});
+
+test("extendActivationDeadlineAction: stage 3 already resolved, extended — stays 3, no further automatic reminders (founder may use manual Resend)", async () => {
+  const originalDeadline = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: originalDeadline, expired_at: null, released_at: null, reminder_stage: 3,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  assert.equal(store.lifecycle.reminder_stage, 3);
+  assert.equal(store.lifecycle.reminder_next_attempt_at, null);
+});
+
+test("extendActivationDeadlineAction: overdue stage-0 lifecycle reopened for 7 days — resolves to stage 2 (stages 1 & 2 obsolete), schedules stage 3 five days out, no reminder sent", async () => {
+  const pastDeadline = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  const priorExpiredAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: pastDeadline, expired_at: priorExpiredAt, released_at: null, reminder_stage: 0,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  // A flat 7-day reopen always obsoletes stage 1 (-11d) and, at the exact
+  // boundary, stage 2 (-7d) as well — both offsets exceed or equal the
+  // 7-day fresh window — leaving only stage 3 (-2d) schedulable.
+  assert.equal(store.lifecycle.reminder_stage, 2, "stages 1 and 2 are silently resolved as obsolete, never sent");
+  assert.equal(
+    store.lifecycle.reminder_next_attempt_at,
+    computeStageDue(3, store.lifecycle.deadline_at),
+    "only stage 3 is scheduled, against the NEW deadline"
+  );
+  // No reminder-related note of any kind is written by this action — only
+  // the existing deadline_extended note.
+  assert.equal(store.notes.length, 1);
+  assert.equal((store.notes[0] as { event_type: string }).event_type, "deadline_extended");
+});
+
+test("extendActivationDeadlineAction: expired stage-3 lifecycle reopened — stays at stage 3, no automatic reminder is ever scheduled", async () => {
+  const pastDeadline = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  const priorExpiredAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: pastDeadline, expired_at: priorExpiredAt, released_at: null, reminder_stage: 3,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  assert.equal(store.lifecycle.reminder_stage, 3);
+  assert.equal(store.lifecycle.reminder_next_attempt_at, null);
+});
+
+// ── Phase 2A design correction: extension must never clear/steal a lease ───
+
+test("extendActivationDeadlineAction: an active reminder lease blocks the extension outright — no state change at all", async () => {
+  const originalDeadline = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: originalDeadline, expired_at: null, released_at: null, reminder_stage: 1,
+    reminder_lease_stage: 2, reminder_lease_started_at: new Date().toISOString(),
+  });
+  const originalSnapshot = { ...store.lifecycle };
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, undefined);
+  assert.equal(result.error, "A reminder is currently being processed. Please refresh and try again shortly.");
+  assert.deepEqual(store.lifecycle, originalSnapshot, "a held lease means absolutely nothing is mutated");
+  assert.equal(store.notes.length, 0, "no note is written when extension is blocked by a lease");
+});
+
+test("extendActivationDeadlineAction: a free (null) lease permits extension normally", async () => {
+  const originalDeadline = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+  const { store, makeClient } = makeStore({
+    id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+    deadline_at: originalDeadline, expired_at: null, released_at: null, reminder_stage: 1,
+    reminder_lease_stage: null, reminder_lease_started_at: null,
+  });
+  const { client } = makeClient();
+  const result = await extendActivationDeadlineImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: client });
+
+  assert.equal(result.success, true);
+  assert.notEqual(store.lifecycle.deadline_at, originalDeadline);
 });
 
 // ── State D: released_at IS NOT NULL → blocked, never reopened ──────────────

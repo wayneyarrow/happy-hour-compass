@@ -209,14 +209,14 @@ test("extendActivationDeadlineImpl's note metadata preserves the prior expired_a
 
 test("extendActivationDeadlineImpl blocks a released lifecycle before ever computing a new deadline", () => {
   const releasedGuardIdx = EXTEND_IMPL_SOURCE.indexOf("if (lifecycleRow.released_at)");
-  const computeCallIdx = EXTEND_IMPL_SOURCE.indexOf("computeExtendedDeadline(currentDeadlineAt)");
+  const computeCallIdx = EXTEND_IMPL_SOURCE.indexOf("computeExtendedDeadline(currentDeadlineAt, now)");
   assert.ok(releasedGuardIdx !== -1 && computeCallIdx !== -1);
   assert.ok(releasedGuardIdx < computeCallIdx);
 });
 
 test("extendActivationDeadlineImpl blocks an already-activated operator before computing a new deadline", () => {
   const activatedGuardIdx = EXTEND_IMPL_SOURCE.indexOf("operatorRow?.account_activated_at");
-  const computeCallIdx = EXTEND_IMPL_SOURCE.indexOf("computeExtendedDeadline(currentDeadlineAt)");
+  const computeCallIdx = EXTEND_IMPL_SOURCE.indexOf("computeExtendedDeadline(currentDeadlineAt, now)");
   assert.ok(activatedGuardIdx !== -1 && computeCallIdx !== -1);
   assert.ok(activatedGuardIdx < computeCallIdx);
 });
@@ -230,20 +230,29 @@ test("extendActivationDeadlineImpl never writes released_at — extension can ne
 
 // ── extendActivationDeadlineImpl: atomic compare-and-swap ───────────────────
 
-test("extendActivationDeadlineImpl's update is pinned to the previously-read deadline AND released_at IS NULL — an atomic compare-and-swap", () => {
+test("extendActivationDeadlineImpl's update is pinned to the previously-read deadline, released_at IS NULL, AND reminder_lease_started_at IS NULL — an atomic compare-and-swap", () => {
   const updateIdx = EXTEND_IMPL_SOURCE.indexOf(".update({");
   const block = EXTEND_IMPL_SOURCE.slice(updateIdx, updateIdx + 500);
   assert.match(block, /\.eq\("id", lifecycleId\)/);
   assert.match(block, /\.eq\("deadline_at", currentDeadlineAt\)/);
   assert.match(block, /\.is\("released_at", null\)/);
+  assert.match(block, /\.is\("reminder_lease_started_at", null\)/, "extension must never clear/steal an active reminder lease");
 });
 
 test("extendActivationDeadlineImpl treats zero matched rows as a concurrency conflict, not a silent success", () => {
   assert.match(EXTEND_IMPL_SOURCE, /if \(!updated\) \{/);
   const guardIdx = EXTEND_IMPL_SOURCE.indexOf("if (!updated) {");
-  const block = EXTEND_IMPL_SOURCE.slice(guardIdx, guardIdx + 300);
+  const block = EXTEND_IMPL_SOURCE.slice(guardIdx, guardIdx + 900);
   assert.match(block, /error:/);
   assert.doesNotMatch(block, /success: true/);
+});
+
+test("extendActivationDeadlineImpl distinguishes an active reminder lease from every other conflict with a distinct founder-facing message, and mutates nothing in that branch", () => {
+  const guardIdx = EXTEND_IMPL_SOURCE.indexOf("if (!updated) {");
+  const block = EXTEND_IMPL_SOURCE.slice(guardIdx, guardIdx + 900);
+  assert.match(block, /reminder_lease_started_at/);
+  assert.match(block, /A reminder is currently being processed\. Please refresh and try again shortly\./);
+  assert.match(block, /changed by another action just now/);
 });
 
 // ── extendActivationDeadlineImpl: structured note, real founder attribution ─

@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { computeExtendedDeadline, DEADLINE_EXTENSION_DAYS } from "@/lib/activation/activationState";
+import { computeExtensionResolution } from "@/lib/activation/activationReminderPolicy";
 import type { ActivationNoteOrigin } from "@/lib/activation/activationNotes";
 
 /**
@@ -68,20 +69,40 @@ export type ExtendActivationDeadlineDeps = {
  * out of deriveActivationState()'s existing precedence once the stored
  * columns are correct.
  *
- * reminder_stage is (re)set to 0 — always factually accurate today since
- * nothing yet increments it; documents the intended future behavior (a
- * fresh window means no reminder has been sent against it) without
- * inventing a stage number that doesn't yet mean anything. No email is ever
- * sent by this action.
+ * REMINDER RESOLUTION (Phase 2A design correction): reminder_stage is NO
+ * LONGER blindly reset to 0 on every extension/reopen — that would incorrectly
+ * imply completed reminder stages need to be resent. Instead,
+ * computeExtensionResolution() (activationReminderPolicy.ts) is used to:
+ *   - preserve every stage already durably resolved,
+ *   - silently resolve (skip, never send) any stage whose NEW due time is
+ *     already <= this extension's own transaction time — the deadline
+ *     moving is what made that stage's original timing obsolete,
+ *   - schedule reminder_next_attempt_at for the earliest stage still
+ *     strictly in the future, or leave it null if stage 3 is already
+ *     resolved (no further automatic reminders — the founder may use
+ *     manual Resend independently).
+ * This function never sends an email and never writes a reminder_sent note
+ * — only the (not-yet-built) reminder worker does that.
+ *
+ * LEASE SAFETY (Phase 2A design correction): if a reminder worker currently
+ * holds this lifecycle's reminder lease (reminder_lease_started_at IS NOT
+ * NULL), this function makes NO change at all — it never clears or steals
+ * an active lease. The CAS below includes `reminder_lease_started_at IS
+ * NULL` as a precondition; a 0-row result specifically caused by an active
+ * lease is reported with a distinct, clear founder-facing message rather
+ * than the generic conflict message. Stale-lease recovery (a future
+ * reminder worker concern — not implemented in this phase) remains the
+ * only mechanism that ever frees an abandoned lease.
  *
  * CONCURRENCY: the update is an atomic compare-and-swap pinning EVERY
  * relevant prior value read above — `deadline_at`, `expired_at` (via `.eq()`
  * when non-null, `.is(..., null)` when null — SQL `NULL = NULL` is never
  * true, so a plain `.eq()` would silently fail to match a null expired_at),
- * and `released_at IS NULL`. Two simultaneous extends/reopens against the
- * same starting state can never both succeed: exactly one UPDATE matches a
- * row; the loser matches zero rows and is told to refresh and retry rather
- * than silently double-extending or clobbering the winner.
+ * `released_at IS NULL`, and now `reminder_lease_started_at IS NULL`. Two
+ * simultaneous extends/reopens against the same starting state can never
+ * both succeed: exactly one UPDATE matches a row; the loser matches zero
+ * rows and is told to refresh and retry rather than silently double-
+ * extending or clobbering the winner.
  *
  * Writes exactly one structured `deadline_extended` note, only after a
  * successful update, attributed to the real founder.
@@ -104,7 +125,9 @@ export async function extendActivationDeadlineImpl(
   // ── Fetch the lifecycle fresh ─────────────────────────────────────────────
   const { data: lifecycleRow, error: fetchError } = await supabase
     .from("operator_activation_lifecycles")
-    .select("id, operator_id, origin_type, origin_claim_id, origin_submission_id, deadline_at, expired_at, released_at")
+    .select(
+      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, deadline_at, expired_at, released_at, reminder_stage"
+    )
     .eq("id", lifecycleId)
     .maybeSingle();
 
@@ -134,20 +157,37 @@ export async function extendActivationDeadlineImpl(
 
   const currentDeadlineAt = lifecycleRow.deadline_at as string;
   const currentExpiredAt = (lifecycleRow.expired_at as string | null) ?? null;
-  const newDeadlineAt = computeExtendedDeadline(currentDeadlineAt);
+  const currentReminderStage = lifecycleRow.reminder_stage as number;
 
-  // ── Atomic compare-and-swap update — pins deadline_at, expired_at, AND
-  // released_at IS NULL, all to the values just read above. ─────────────────
+  // One authoritative transaction-time snapshot, used consistently for both
+  // the new deadline computation and the reminder-resolution walk — never
+  // two separate clock reads for the same logical "now."
+  const now = new Date();
+  const newDeadlineAt = computeExtendedDeadline(currentDeadlineAt, now);
+  const { resolvedStage, nextAttemptAt } = computeExtensionResolution(
+    currentReminderStage,
+    newDeadlineAt,
+    now.toISOString()
+  );
+
+  // ── Atomic compare-and-swap update — pins deadline_at, expired_at,
+  // released_at IS NULL, AND reminder_lease_started_at IS NULL, all to the
+  // values just read above. A worker actively processing a reminder must
+  // never have its lease cleared or stolen by an extension — see the
+  // LEASE SAFETY note above. ─────────────────────────────────────────────
   const baseUpdate = supabase
     .from("operator_activation_lifecycles")
     .update({
       deadline_at: newDeadlineAt,
       expired_at: null,
-      reminder_stage: 0,
+      reminder_stage: resolvedStage,
+      reminder_next_attempt_at: nextAttemptAt,
+      reminder_attempt_count: 0,
     })
     .eq("id", lifecycleId)
     .eq("deadline_at", currentDeadlineAt)
-    .is("released_at", null);
+    .is("released_at", null)
+    .is("reminder_lease_started_at", null);
 
   const casQuery = currentExpiredAt
     ? baseUpdate.eq("expired_at", currentExpiredAt)
@@ -161,6 +201,20 @@ export async function extendActivationDeadlineImpl(
   }
 
   if (!updated) {
+    // Distinguish "a worker currently holds the reminder lease" (make no
+    // state change, tell the founder to wait) from every other conflict
+    // cause (someone else already extended/released/activated it just
+    // now) — a single extra read only on this rare failure path.
+    const { data: leaseCheckRow } = await supabase
+      .from("operator_activation_lifecycles")
+      .select("reminder_lease_started_at")
+      .eq("id", lifecycleId)
+      .maybeSingle();
+
+    if (leaseCheckRow?.reminder_lease_started_at) {
+      return { error: "A reminder is currently being processed. Please refresh and try again shortly." };
+    }
+
     return {
       error:
         "This activation was changed by another action just now (extended, released, or " +
