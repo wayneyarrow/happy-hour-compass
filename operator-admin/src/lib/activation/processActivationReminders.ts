@@ -872,20 +872,27 @@ async function reconcileOneExpiredLifecycle(
   if (!resolved.ok) return; // nothing safe to notify with — leave for a future pass / manual review
 
   // Note — retried every pass until it exists, using event_key uniqueness.
-  const noteResult = await writeNote(
-    {
-      origin: resolved.origin === "claim" ? { type: "claim", claimId: resolved.originId } : { type: "submission", submissionId: resolved.originId },
-      eventType: "activation_expired",
-      note: `Activation expired — deadline was ${row.deadline_at}.`,
-      metadata: { lifecycleId: row.id, deadline: row.deadline_at, operatorEmail: resolved.email, flow: resolved.origin },
-      eventKey: expiryEventKey(row.id),
-    },
-    admin
-  );
+  // PLANNING MODE NEVER CALLS writeNote() AT ALL — not even with a
+  // discarded result. The live branch is the only caller of the real
+  // (mutating) note writer; dry-run only ever appends the already-decided
+  // plannedAction, structurally incapable of an INSERT regardless of what
+  // `writeNote` itself is bound to.
   if (dryRun) {
     result.plannedActions.push({ type: "expiry_note", lifecycleId: row.id });
-  } else if (noteResult.ok && noteResult.alreadyExisted === false) {
-    result.expiryNotesWritten++;
+  } else {
+    const noteResult = await writeNote(
+      {
+        origin: resolved.origin === "claim" ? { type: "claim", claimId: resolved.originId } : { type: "submission", submissionId: resolved.originId },
+        eventType: "activation_expired",
+        note: `Activation expired — deadline was ${row.deadline_at}.`,
+        metadata: { lifecycleId: row.id, deadline: row.deadline_at, operatorEmail: resolved.email, flow: resolved.origin },
+        eventKey: expiryEventKey(row.id),
+      },
+      admin
+    );
+    if (noteResult.ok && noteResult.alreadyExisted === false) {
+      result.expiryNotesWritten++;
+    }
   }
 
   // Slack — fresh activation check immediately before send, at-least-once.

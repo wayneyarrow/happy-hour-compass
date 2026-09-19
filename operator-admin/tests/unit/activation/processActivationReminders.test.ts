@@ -83,6 +83,40 @@ function seedWorld(lifecycle: FakeLifecycleRow, opts?: { activated?: boolean; no
   return createFakeActivationReminderClient({ lifecycles: [lifecycle], operators, submissions, venues });
 }
 
+/**
+ * A single already-expired, unactivated lifecycle with no expiry side
+ * effects reconciled yet (expiry_slack_notified_at / expiry_founder_email_sent_at
+ * both null) — the exact shape reconcileExpirySideEffects()'s query selects
+ * (`.not("expired_at", "is", null)`, `.is("released_at", null)`), for either
+ * origin type.
+ */
+function seedExpiredWorld(origin: "claim" | "submission", opts?: { activated?: boolean }) {
+  const operatorId = "op-1";
+  const lifecycle = makeLifecycleRow({
+    id: "lc-expired",
+    operator_id: operatorId,
+    origin_type: origin,
+    origin_claim_id: origin === "claim" ? "claim-1" : null,
+    origin_submission_id: origin === "submission" ? "sub-1" : null,
+    reminder_stage: 3,
+    deadline_at: "2026-10-10T00:00:00.000Z",
+    expired_at: "2026-10-10T00:00:00.500Z",
+  });
+  const operators = [{ id: operatorId, email: "kelly@example.com", first_name: "Kelly", last_name: "Terris", account_activated_at: opts?.activated ? "2026-01-01T00:00:00.000Z" : null }];
+  const claims = origin === "claim" ? [{ id: "claim-1", venue_id: "venue-1" }] : [];
+  const submissions = origin === "submission" ? [{ id: "sub-1", venue_id: "venue-1" }] : [];
+  const venues = [{ id: "venue-1", name: "Buffalo Rouge Brewing Co." }];
+  const fake = createFakeActivationReminderClient({ lifecycles: [lifecycle], operators, claims, submissions, venues });
+  return { fake, lifecycle };
+}
+
+/** A dependency spy that throws immediately if invoked — used to prove a code path structurally cannot reach it, rather than merely asserting an empty call count after the fact. */
+function throwingSpy(name: string) {
+  return async (...args: unknown[]) => {
+    throw new Error(`${name} must never be invoked in this code path — args: ${JSON.stringify(args)}`);
+  };
+}
+
 // ── Kill switch ──────────────────────────────────────────────────────────────
 
 test("kill switch disabled: returns immediately with zero I/O (no client method ever called)", async () => {
@@ -580,11 +614,59 @@ test("expiry Internal Note reconciliation: retried until it exists, using event_
   const result = await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now }));
   assert.equal(result.expiryNotesWritten, 1);
   assert.equal(fake.operatorSubmissionNotes.filter((n) => n.event_type === "activation_expired").length, 1);
+  assert.equal(
+    fake.operatorSubmissionNotes.find((n) => n.event_type === "activation_expired")?.event_key,
+    "hhc-activation-expiry:lc-1",
+    "live mode must use the deterministic expiry event key"
+  );
 
   // A second pass must not duplicate it.
   const result2 = await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now }));
   assert.equal(result2.expiryNotesWritten, 0, "already exists — 23505 tolerated, not re-counted as newly written");
   assert.equal(fake.operatorSubmissionNotes.filter((n) => n.event_type === "activation_expired").length, 1);
+});
+
+test("expiry Internal Note reconciliation (claim origin): live mode writes the note with the deterministic key and routes to venue_claim_notes, not operator_submission_notes", async () => {
+  const { fake, lifecycle } = seedExpiredWorld("claim");
+  const now = new Date("2026-10-11T00:00:00.000Z");
+  const slack = stubSlack("delivered");
+  const founderEmail = stubFounderEmail(true);
+  const result = await withEnv(VAR, "true", () =>
+    processActivationReminders({
+      adminClient: fake.client,
+      now,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpirySlack: slack.fn as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpiryFounderEmail: founderEmail.fn as any,
+    })
+  );
+  assert.equal(result.expiryNotesWritten, 1);
+  assert.equal(fake.venueClaimNotes.length, 1);
+  assert.equal(fake.operatorSubmissionNotes.length, 0, "claim origin must never write to operator_submission_notes");
+  assert.equal(fake.venueClaimNotes[0].event_type, "activation_expired");
+  assert.equal(fake.venueClaimNotes[0].event_key, `hhc-activation-expiry:${lifecycle.id}`);
+  assert.equal(fake.venueClaimNotes[0].claim_id, "claim-1");
+
+  // Idempotent retry: a second live pass must not duplicate the note.
+  const result2 = await withEnv(VAR, "true", () =>
+    processActivationReminders({
+      adminClient: fake.client,
+      now,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpirySlack: stubSlack("delivered").fn as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpiryFounderEmail: stubFounderEmail(true).fn as any,
+    })
+  );
+  assert.equal(result2.expiryNotesWritten, 0, "23505 tolerated on retry — not re-counted as newly written");
+  assert.equal(fake.venueClaimNotes.length, 1, "no duplicate note");
+
+  // The remaining expiry side effects (Slack, founder email) still proceed normally afterward.
+  assert.equal(result.expirySlackSent, 1);
+  assert.equal(result.expiryFounderEmailsSent, 1);
+  assert.notEqual(fake.lifecycles[0].expiry_slack_notified_at, null);
+  assert.notEqual(fake.lifecycles[0].expiry_founder_email_sent_at, null);
 });
 
 test("expiry Slack and founder email are independently retried — one succeeding does not block the other from retrying", async () => {
@@ -762,10 +844,74 @@ test("dry-run computes lazy-init decisions but persists nothing", async () => {
   assert.ok(result.plannedActions.some((a) => a.type === "lazy_init" && a.lifecycleId === "kelly-lc"));
 });
 
-test("planning cannot mutate even if the underlying client would happily accept a mutation — no update()/insert() is ever invoked", async () => {
+// ── Expiry reconciliation under dry-run: the exact bug class this hotfix
+// closes (reconcileOneExpiredLifecycle() previously called writeNote()
+// unconditionally, before checking dryRun) ──────────────────────────────────
+
+for (const origin of ["claim", "submission"] as const) {
+  test(`dry-run expiry reconciliation (${origin} origin): reports planned expiry_note/expiry_slack/expiry_founder_email without invoking any mutating dependency or changing the row`, async () => {
+    const { fake, lifecycle } = seedExpiredWorld(origin);
+    const originalSnapshot = { ...fake.lifecycles[0] };
+    const now = new Date("2026-10-11T00:00:00.000Z");
+
+    // Every externally-mutating dependency this pass could reach is a
+    // throwing spy — the test fails immediately (not just via a trailing
+    // assertion) the instant planning calls any of them for real.
+    const writeNote = throwingSpy("writeNote");
+    const sendExpirySlack = throwingSpy("sendExpirySlack");
+    const sendExpiryFounderEmail = throwingSpy("sendExpiryFounderEmail");
+    const sendReminderEmail = throwingSpy("sendReminderEmail");
+
+    const result = await withEnv(VAR, undefined, () =>
+      planActivationReminders({
+        adminClient: fake.client,
+        now,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        writeNote: writeNote as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sendExpirySlack: sendExpirySlack as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sendExpiryFounderEmail: sendExpiryFounderEmail as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sendReminderEmail: sendReminderEmail as any,
+      })
+    );
+
+    assert.equal(result.dryRun, true);
+    assert.ok(result.plannedActions.some((a) => a.type === "expiry_note" && a.lifecycleId === lifecycle.id), "must report the planned expiry_note action");
+    assert.ok(result.plannedActions.some((a) => a.type === "expiry_slack" && a.lifecycleId === lifecycle.id), "must report the planned expiry_slack action");
+    assert.ok(result.plannedActions.some((a) => a.type === "expiry_founder_email" && a.lifecycleId === lifecycle.id), "must report the planned expiry_founder_email action");
+
+    assert.deepEqual(fake.lifecycles[0], originalSnapshot, "the expired lifecycle row must be left byte-for-byte unchanged by planning");
+    assert.equal(fake.venueClaimNotes.length, 0, "no Claim note was ever inserted");
+    assert.equal(fake.operatorSubmissionNotes.length, 0, "no Submission note was ever inserted");
+    assert.equal(result.expiryNotesWritten, 0);
+    assert.equal(result.expirySlackSent, 0);
+    assert.equal(result.expiryFounderEmailsSent, 0);
+  });
+}
+
+test("planning cannot mutate even if the underlying client would happily accept a mutation — no update()/insert() is ever invoked, across a reminder-due candidate AND an already-expired candidate in the same pass", async () => {
   const now = new Date("2026-06-15T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 0, deadline_at: deadlineMakingStageDue(now, 1), reminder_next_attempt_at: now.toISOString() });
-  const fake = seedWorld(lifecycle);
+  const reminderDue = makeLifecycleRow({ id: "lc-reminder-due", operator_id: "op-1", reminder_stage: 0, deadline_at: deadlineMakingStageDue(now, 1), reminder_next_attempt_at: now.toISOString() });
+  const expired = makeLifecycleRow({
+    id: "lc-expired", operator_id: "op-2", origin_submission_id: "sub-2", reminder_stage: 3,
+    deadline_at: "2026-06-01T00:00:00.000Z", expired_at: "2026-06-01T00:00:00.500Z",
+  });
+  const operators = [
+    { id: "op-1", email: "kelly@example.com", first_name: "Kelly", last_name: "Terris", account_activated_at: null },
+    { id: "op-2", email: "jamie@example.com", first_name: "Jamie", last_name: "Lee", account_activated_at: null },
+  ];
+  const submissions = [
+    { id: "sub-1", venue_id: "venue-1" },
+    { id: "sub-2", venue_id: "venue-2" },
+  ];
+  const venues = [
+    { id: "venue-1", name: "Buffalo Rouge Brewing Co." },
+    { id: "venue-2", name: "Second Venue" },
+  ];
+  const fake = createFakeActivationReminderClient({ lifecycles: [reminderDue, expired], operators, submissions, venues });
+
   const mutationCalls: { table: string; method: string }[] = [];
   const spiedClient = {
     from(table: string) {
@@ -786,10 +932,33 @@ test("planning cannot mutate even if the underlying client would happily accept 
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
-  const email = stubEmail();
-  await withEnv(VAR, undefined, () =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    planActivationReminders({ adminClient: spiedClient, now, sendReminderEmail: email.fn as any })
+
+  // Every externally-mutating dependency the orchestrator can be handed is a
+  // throwing spy — safety here must never depend on absent env vars or
+  // missing credentials, only on planning's own structural gating.
+  const sendReminderEmail = throwingSpy("sendReminderEmail");
+  const writeNote = throwingSpy("writeNote");
+  const sendExpirySlack = throwingSpy("sendExpirySlack");
+  const sendExpiryFounderEmail = throwingSpy("sendExpiryFounderEmail");
+
+  const result = await withEnv(VAR, undefined, () =>
+    planActivationReminders({
+      adminClient: spiedClient,
+      now,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendReminderEmail: sendReminderEmail as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      writeNote: writeNote as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpirySlack: sendExpirySlack as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendExpiryFounderEmail: sendExpiryFounderEmail as any,
+    })
   );
-  assert.deepEqual(mutationCalls, [], "planning must never call update() or insert() on any table, even when a due candidate exists");
+
+  assert.deepEqual(mutationCalls, [], "planning must never call update() or insert() on any table, even when both a reminder-due and an already-expired candidate exist");
+  assert.ok(result.plannedActions.some((a) => a.type === "reminder_send" && a.lifecycleId === "lc-reminder-due"));
+  assert.ok(result.plannedActions.some((a) => a.type === "expiry_note" && a.lifecycleId === "lc-expired"));
+  assert.ok(result.plannedActions.some((a) => a.type === "expiry_slack" && a.lifecycleId === "lc-expired"));
+  assert.ok(result.plannedActions.some((a) => a.type === "expiry_founder_email" && a.lifecycleId === "lc-expired"));
 });
