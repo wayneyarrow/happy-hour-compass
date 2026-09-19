@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/customer-success-deliveries",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/operator-activation-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

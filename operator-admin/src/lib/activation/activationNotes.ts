@@ -48,6 +48,16 @@ export type ActivationNoteMetadata = Record<string, unknown>;
  * safeguard is that no call site in this phase has a secret in scope to pass
  * in the first place.
  *
+ * `eventKey` (Phase 2A-3) — optional. When provided, it's written to the
+ * note's `event_key` column (migration 099's partial unique index on both
+ * notes tables). A duplicate-`event_key` insert therefore fails with a
+ * 23505 unique-violation, which this function treats as SUCCESS
+ * (`ok: true, alreadyExisted: true`) rather than an error — this is what
+ * makes a reminder/expiry worker's note-write safely retryable: attempting
+ * to write the same event twice is a no-op, never a duplicate note. Callers
+ * that omit `eventKey` (every pre-Phase-2A-3 call site) are completely
+ * unaffected — `event_key` stays NULL, exactly as before.
+ *
  * Best-effort, matches every other note-insert in this codebase: failures
  * are returned (never thrown) so a caller can log them without failing the
  * user-facing operation the note is describing.
@@ -58,23 +68,26 @@ export async function writeActivationNote(
     eventType,
     note,
     metadata,
+    eventKey,
   }: {
     origin: ActivationNoteOrigin;
     eventType: ActivationEventType;
     note: string;
     metadata?: ActivationNoteMetadata;
+    eventKey?: string;
   },
   /** Injectable for tests only — every real call site omits this and gets
    *  the real admin client. Not exported as a type; tests pass a minimal
    *  fake matching only the .from().insert() shape this function uses. */
   client: ReturnType<typeof createAdminClient> = createAdminClient()
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; alreadyExisted?: boolean }> {
   const supabase = client;
 
   const payload = {
     note,
     event_type: eventType,
     metadata_json: metadata ?? null,
+    event_key: eventKey ?? null,
     created_by: null,
     created_by_email: SYSTEM_AUTHOR_EMAIL,
   };
@@ -85,7 +98,10 @@ export async function writeActivationNote(
       : await supabase.from("operator_submission_notes").insert({ submission_id: origin.submissionId, ...payload });
 
   if (error) {
+    if (eventKey && error.code === "23505") {
+      return { ok: true, alreadyExisted: true };
+    }
     return { ok: false, error: error.message };
   }
-  return { ok: true };
+  return { ok: true, alreadyExisted: false };
 }

@@ -58,8 +58,11 @@ const DEFAULT_FROM = "Happy Hour Compass <hello@happyhourcompass.com>";
  *
  * If the FOUNDER_NOTIFICATION_EMAIL env var still exists in any Vercel
  * environment, it is now dead configuration and can be safely removed.
+ *
+ * Exported (Phase 2A-3) so src/lib/activation/activationExpiryNotifications.ts
+ * can reuse this exact canonical address rather than a second hardcoded copy.
  */
-function getFounderNotificationEmail(): string {
+export function getFounderNotificationEmail(): string {
   return "hello@happyhourcompass.com";
 }
 
@@ -172,8 +175,12 @@ async function escalateEmailFailure({
 /**
  * Full email shell: HHC logo header → content cell → branded footer.
  * Every email function calls this and passes its inner HTML + a footer note.
+ * Exported (Phase 2A-3) so src/lib/activation/activationReminderEmails.ts
+ * can reuse the exact same shared visual shell rather than duplicating it —
+ * every HHC transactional email must look identical regardless of which
+ * module builds its content.
  */
-function emailLayout(content: string, footerNote: string): string {
+export function emailLayout(content: string, footerNote: string): string {
   const logoUrl = `${getSiteUrl()}/logo.png`;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -216,8 +223,8 @@ function emailLayout(content: string, footerNote: string): string {
 </html>`;
 }
 
-/** Amber CTA button. Use for all primary email actions. */
-function emailCta(href: string, label: string): string {
+/** Amber CTA button. Use for all primary email actions. Exported (Phase 2A-3) — see emailLayout()'s export note above. */
+export function emailCta(href: string, label: string): string {
   return `<table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
     <tr><td style="background:#d97706;border-radius:8px;">
       <a href="${href}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">${label}</a>

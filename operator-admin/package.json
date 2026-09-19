@@ -25,7 +25,8 @@
     "refresh:seeded-venues": "tsx scripts/refreshSeededVenues.ts",
     "backfill:consumer-brevo-welcome-cohort": "tsx scripts/backfillConsumerBrevoWelcomeCohort.ts",
     "customer-success:detect-venue-view-milestones": "tsx scripts/detectCustomerSuccessMilestones.ts",
-    "customer-success:process-deliveries": "tsx scripts/processCustomerSuccessDeliveries.ts"
+    "customer-success:process-deliveries": "tsx scripts/processCustomerSuccessDeliveries.ts",
+    "activation-reminders:dry-run": "tsx scripts/processActivationReminders.ts"
   },
   "dependencies": {
     "@next/third-parties": "15.5.19",

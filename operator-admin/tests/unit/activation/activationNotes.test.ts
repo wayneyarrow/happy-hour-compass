@@ -42,7 +42,7 @@ test("writeActivationNote: success returns ok:true and inserts into venue_claim_
     },
     fake.client
   );
-  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(result, { ok: true, alreadyExisted: false });
   assert.equal(fake.getTable(), "venue_claim_notes");
   assert.equal((fake.getPayload() as Record<string, unknown>).claim_id, "claim-1");
 });
@@ -81,4 +81,56 @@ test("writeActivationNote: always attributes to the Happy Hour Compass system au
   const payload = fake.getPayload() as Record<string, unknown>;
   assert.equal(payload.created_by, null);
   assert.equal(payload.created_by_email, "Happy Hour Compass");
+});
+
+// ── Phase 2A-3: eventKey / event_key uniqueness ─────────────────────────────
+
+test("writeActivationNote: omitting eventKey writes event_key as null (unaffected pre-Phase-2A-3 behavior)", async () => {
+  const fake = fakeSupabase({ error: null });
+  await writeActivationNote(
+    { origin: { type: "claim", claimId: "claim-1" }, eventType: "activation_started", note: "n" },
+    fake.client
+  );
+  const payload = fake.getPayload() as Record<string, unknown>;
+  assert.equal(payload.event_key, null);
+});
+
+test("writeActivationNote: passing eventKey writes it verbatim into the payload", async () => {
+  const fake = fakeSupabase({ error: null });
+  await writeActivationNote(
+    {
+      origin: { type: "submission", submissionId: "sub-1" },
+      eventType: "reminder_sent",
+      note: "n",
+      eventKey: "hhc-activation-reminder:lc-1:2",
+    },
+    fake.client
+  );
+  const payload = fake.getPayload() as Record<string, unknown>;
+  assert.equal(payload.event_key, "hhc-activation-reminder:lc-1:2");
+});
+
+test("writeActivationNote: a 23505 (event_key already exists) is treated as success, not an error", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fake: any = fakeSupabase({ error: { message: "duplicate key value violates unique constraint", code: "23505" } as any });
+  const result = await writeActivationNote(
+    {
+      origin: { type: "claim", claimId: "claim-1" },
+      eventType: "reminder_sent",
+      note: "n",
+      eventKey: "hhc-activation-reminder:lc-1:1",
+    },
+    fake.client
+  );
+  assert.deepEqual(result, { ok: true, alreadyExisted: true });
+});
+
+test("writeActivationNote: a 23505 WITHOUT an eventKey is still a real failure — the conflict-tolerance only applies to deliberate event_key retries", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fake: any = fakeSupabase({ error: { message: "some other unique constraint", code: "23505" } as any });
+  const result = await writeActivationNote(
+    { origin: { type: "claim", claimId: "claim-1" }, eventType: "activation_started", note: "n" },
+    fake.client
+  );
+  assert.deepEqual(result, { ok: false, error: "some other unique constraint" });
 });
