@@ -23,7 +23,18 @@ type SortCol = "venue_name" | "status" | "submitted_at" | "updated_at" | "attent
  *  server-side routing-status tabs (needs_review/confirmed_auto/all) and
  *  from the stored `status`/`match_status` vocabulary, exactly as with
  *  Claims' equivalent filter. */
-type ActivationFilter = "all" | "awaiting_setup" | "expiring_soon" | "release_required" | "active";
+/** Phase 2A-4 adds expired/released/not_tracked without touching
+ *  attentionRank() or the default sort — active/released still never
+ *  become attention items. */
+type ActivationFilter =
+  | "all"
+  | "awaiting_setup"
+  | "expiring_soon"
+  | "release_required"
+  | "active"
+  | "expired"
+  | "released"
+  | "not_tracked";
 
 /** Attention-first priority for the default sort — mirrors ClaimsTable's
  *  attentionRank() exactly. */
@@ -283,6 +294,9 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
           <option value="expiring_soon">Activation: Expiring soon</option>
           <option value="release_required">Activation: Release required</option>
           <option value="active">Activation: Active</option>
+          <option value="expired">Activation: Expired</option>
+          <option value="released">Activation: Released</option>
+          <option value="not_tracked">Activation: Not tracked</option>
         </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}

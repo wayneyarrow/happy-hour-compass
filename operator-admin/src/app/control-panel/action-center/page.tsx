@@ -70,6 +70,13 @@ const REPORTS = [
     description: "Pro and Premium venues not using all the Search Tags included in their subscription.",
     priority:    "low",
   },
+  {
+    key:         "operatorActivationReviews" as const,
+    href:        "/control-panel/action-center/reports/operator-activation-reviews",
+    name:        "Operator activation reviews",
+    description: "Claims and submissions whose operator never activated — deadline passed, reminders exhausted, or expiry notifications incomplete.",
+    priority:    "high",
+  },
 ] as const;
 
 type ReportKey = (typeof REPORTS)[number]["key"];
@@ -124,9 +131,28 @@ export default async function ActionCenterPage() {
               <p className="text-sm font-semibold text-slate-800 mb-1.5">{report.name}</p>
 
               {/* Description */}
-              <p className="text-xs text-gray-500 flex-1 mb-4 leading-relaxed">
+              <p className="text-xs text-gray-500 mb-2 leading-relaxed">
                 {report.description}
               </p>
+
+              {/* Secondary breakdown — this card only */}
+              {report.key === "operatorActivationReviews" && count > 0 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[11px] text-gray-500">
+                  {summary.operatorActivationReviewsBreakdown.releaseRequired > 0 && (
+                    <span>Release required: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.releaseRequired}</strong></span>
+                  )}
+                  {summary.operatorActivationReviewsBreakdown.expiredAwaitingReview > 0 && (
+                    <span>Expired: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.expiredAwaitingReview}</strong></span>
+                  )}
+                  {summary.operatorActivationReviewsBreakdown.reminderExhausted > 0 && (
+                    <span>Reminders exhausted: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.reminderExhausted}</strong></span>
+                  )}
+                  {summary.operatorActivationReviewsBreakdown.notificationIncomplete > 0 && (
+                    <span>Notification incomplete: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.notificationIncomplete}</strong></span>
+                  )}
+                </div>
+              )}
+              <div className="flex-1" />
 
               {/* CTA */}
               <Link

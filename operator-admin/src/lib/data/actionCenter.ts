@@ -18,6 +18,7 @@ import {
 } from "@/lib/plans";
 import { getMarketById } from "@/lib/markets";
 import { getVenueViewCounts, getEventViewCounts } from "@/lib/data/viewCounts";
+import { getOperatorActivationReviewSummary, type ActivationReviewSummary } from "@/lib/activation/activationReviews";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
 
@@ -216,6 +217,8 @@ export type ActionCenterSummary = {
   upcomingHighDemandEvents: number;
   verifiedWithoutOperators: number;
   unusedSearchTagCapacity: number;
+  operatorActivationReviews: number;
+  operatorActivationReviewsBreakdown: ActivationReviewSummary;
 };
 
 export type SeededNeedingClaimsRow = {
@@ -459,9 +462,10 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
   // (Events-unaware) copy of this logic inline, which would have silently
   // drifted from the report the moment Events was added as an opportunity
   // type, exactly the class of bug this pattern exists to avoid.
-  const [unusedSearchTagRows, upgradeOpportunityRows] = await Promise.all([
+  const [unusedSearchTagRows, upgradeOpportunityRows, operatorActivationReviewsBreakdown] = await Promise.all([
     getUnusedSearchTagsOpportunities(),
     getUpgradeOpportunities(),
+    getOperatorActivationReviewSummary(supabase),
   ]);
 
   return {
@@ -474,6 +478,8 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     upcomingHighDemandEvents,
     verifiedWithoutOperators: r_verifiedNoOp.count ?? 0,
     unusedSearchTagCapacity:  unusedSearchTagRows.length,
+    operatorActivationReviews: operatorActivationReviewsBreakdown.total,
+    operatorActivationReviewsBreakdown,
   };
 }
 

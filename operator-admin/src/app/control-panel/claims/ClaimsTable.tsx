@@ -29,18 +29,27 @@ type StatusFilter =
   | "awaiting_setup"
   | "expiring_soon"
   | "release_required"
-  | "active";
+  | "active"
+  | "expired"
+  | "released"
+  | "not_tracked";
 
 /** Activation states selectable from the status filter — checked against
  *  row.activationState instead of row.status. Kept distinct from claim
  *  approval status so both dimensions stay independently filterable — see
  *  the module header note on why activation is never allowed to obscure
- *  approval status. */
+ *  approval status. Phase 2A-4 adds expired/released/not_tracked — the
+ *  three activation states that previously had no way to filter to
+ *  directly — without changing attentionRank() or the default sort at all;
+ *  active/released still never become attention items. */
 const ACTIVATION_FILTER_VALUES = new Set<StatusFilter>([
   "awaiting_setup",
   "expiring_soon",
   "release_required",
   "active",
+  "expired",
+  "released",
+  "not_tracked",
 ]);
 
 /** Attention-first priority for the default sort — lower sorts first.
@@ -267,6 +276,9 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
           <option value="expiring_soon">Activation: Expiring soon</option>
           <option value="release_required">Activation: Release required</option>
           <option value="active">Activation: Active</option>
+          <option value="expired">Activation: Expired</option>
+          <option value="released">Activation: Released</option>
+          <option value="not_tracked">Activation: Not tracked</option>
         </select>
         <span className="ml-auto text-sm text-gray-400">
           {filtered.length} of {rows.length}

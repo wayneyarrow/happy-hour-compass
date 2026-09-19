@@ -8,6 +8,7 @@ import {
   resolveLegacySubmissionActivationOrigin,
   evaluateLegacySubmissionActivationEligibility,
 } from "@/lib/activation/activationPresentation";
+import { isOperatorActivationReminderProcessingEnabled } from "@/lib/activation/activationReminderConfig";
 import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
@@ -207,6 +208,9 @@ export default async function OperatorSubmissionDetailPage({
   const rawActivationPresentation = await getActivationPresentationForSubmission(submission.id);
   const showActivationCard = shouldShowSubmissionActivationCard(submission.status, !!rawActivationPresentation.lifecycle);
   const activationPresentation = showActivationCard ? rawActivationPresentation : null;
+  // Server-side only — never expose the env var itself to the browser, just
+  // this derived boolean, passed down to the (Client Component) ActivationCard.
+  const remindersEnabled = isOperatorActivationReminderProcessingEnabled();
   const lastStructuredNote = notes.find((n) => n.event_type);
   const lastActivationEvent = lastStructuredNote
     ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
@@ -425,6 +429,7 @@ export default async function OperatorSubmissionDetailPage({
               presentation={activationPresentation}
               lastEvent={lastActivationEvent}
               legacyResume={legacyResume}
+              remindersEnabled={remindersEnabled}
             />
           )}
 

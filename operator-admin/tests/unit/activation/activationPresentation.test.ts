@@ -14,8 +14,26 @@ import {
   resolveLegacyClaimActivationOrigin,
   resolveLegacySubmissionActivationOrigin,
   type ActivationPresentation,
+  type ActivationLifecycleSummary,
   type LegacyActivationOriginCheck,
 } from "../../../src/lib/activation/activationPresentation";
+
+/** Fills in the Phase 2A-4 reminder/expiry observability fields with their
+ *  "never touched by the worker" defaults so existing tests can keep
+ *  constructing a minimal lifecycle literal without repeating all 8 fields. */
+function makeLifecycleSummary(overrides: Partial<ActivationLifecycleSummary> & { id: string; operatorId: string; originType: "claim" | "submission"; startedAt: string; deadlineAt: string; reminderStage: number; expiredAt: string | null; releasedAt: string | null }): ActivationLifecycleSummary {
+  return {
+    reminderNextAttemptAt: null,
+    reminderAttemptCount: 0,
+    reminderLastAttemptedAt: null,
+    reminderLastError: null,
+    reminderLeaseStage: null,
+    reminderLeaseStartedAt: null,
+    expirySlackNotifiedAt: null,
+    expiryFounderEmailSentAt: null,
+    ...overrides,
+  };
+}
 
 /**
  * Behavioral tests for the Phase 1B activation presentation data-access
@@ -35,6 +53,14 @@ type FakeLifecycleRow = {
   reminder_stage: number;
   expired_at: string | null;
   released_at: string | null;
+  reminder_next_attempt_at?: string | null;
+  reminder_attempt_count?: number;
+  reminder_last_attempted_at?: string | null;
+  reminder_last_error?: string | null;
+  reminder_lease_stage?: number | null;
+  reminder_lease_started_at?: string | null;
+  expiry_slack_notified_at?: string | null;
+  expiry_founder_email_sent_at?: string | null;
 };
 
 type FakeOperatorRow = {
@@ -200,6 +226,66 @@ test("getActivationPresentationsForClaims: exactly 2 queries total regardless of
   assert.equal(counts().operatorQueryCount, 1, "exactly one batched operator query");
   assert.equal(result.size, 25);
   assert.equal(result.get("claim-0")?.state, "awaiting_setup");
+});
+
+test("getActivationPresentationsForClaims: the 9 migration-099 reminder/expiry fields map through correctly (Phase 2A-4)", async () => {
+  const lifecycles: FakeLifecycleRow[] = [
+    {
+      id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+      started_at: "2026-06-01T00:00:00.000Z", deadline_at: "2026-06-20T00:00:00.000Z", reminder_stage: 2,
+      expired_at: null, released_at: null,
+      reminder_next_attempt_at: "2026-06-18T00:00:00.000Z", reminder_attempt_count: 1,
+      reminder_last_attempted_at: "2026-06-17T00:00:00.000Z", reminder_last_error: "Resend rejected the message",
+      reminder_lease_stage: 3, reminder_lease_started_at: "2026-06-19T00:00:00.000Z",
+      expiry_slack_notified_at: "2026-06-21T00:00:00.000Z", expiry_founder_email_sent_at: "2026-06-21T00:05:00.000Z",
+    },
+  ];
+  const operators: FakeOperatorRow[] = [
+    { id: "op-1", account_activated_at: null, first_name: "Kelly", last_name: "T", email: "kelly@example.com" },
+  ];
+  const { client } = makeFakeClient(lifecycles, operators);
+
+  const result = await getActivationPresentationsForClaims(["claim-1"], client, NOW);
+  const lifecycle = result.get("claim-1")?.lifecycle;
+
+  assert.ok(lifecycle);
+  assert.equal(lifecycle?.reminderNextAttemptAt, "2026-06-18T00:00:00.000Z");
+  assert.equal(lifecycle?.reminderAttemptCount, 1);
+  assert.equal(lifecycle?.reminderLastAttemptedAt, "2026-06-17T00:00:00.000Z");
+  assert.equal(lifecycle?.reminderLastError, "Resend rejected the message");
+  assert.equal(lifecycle?.reminderLeaseStage, 3);
+  assert.equal(lifecycle?.reminderLeaseStartedAt, "2026-06-19T00:00:00.000Z");
+  assert.equal(lifecycle?.expirySlackNotifiedAt, "2026-06-21T00:00:00.000Z");
+  assert.equal(lifecycle?.expiryFounderEmailSentAt, "2026-06-21T00:05:00.000Z");
+});
+
+test("getActivationPresentationsForClaims: the 9 migration-099 fields correctly map through as null/0 for a lifecycle the reminder worker has never touched", async () => {
+  const lifecycles: FakeLifecycleRow[] = [
+    {
+      id: "lc-1", operator_id: "op-1", origin_type: "claim", origin_claim_id: "claim-1", origin_submission_id: null,
+      started_at: "2026-06-01T00:00:00.000Z", deadline_at: "2026-06-20T00:00:00.000Z", reminder_stage: 0,
+      expired_at: null, released_at: null,
+      reminder_next_attempt_at: null, reminder_attempt_count: 0, reminder_last_attempted_at: null,
+      reminder_last_error: null, reminder_lease_stage: null, reminder_lease_started_at: null,
+      expiry_slack_notified_at: null, expiry_founder_email_sent_at: null,
+    },
+  ];
+  const operators: FakeOperatorRow[] = [
+    { id: "op-1", account_activated_at: null, first_name: "Kelly", last_name: "T", email: "kelly@example.com" },
+  ];
+  const { client } = makeFakeClient(lifecycles, operators);
+
+  const result = await getActivationPresentationsForClaims(["claim-1"], client, NOW);
+  const lifecycle = result.get("claim-1")?.lifecycle;
+
+  assert.ok(lifecycle);
+  assert.equal(lifecycle?.reminderNextAttemptAt, null);
+  assert.equal(lifecycle?.reminderAttemptCount, 0);
+  assert.equal(lifecycle?.reminderLastError, null);
+  assert.equal(lifecycle?.reminderLeaseStage, null);
+  assert.equal(lifecycle?.reminderLeaseStartedAt, null);
+  assert.equal(lifecycle?.expirySlackNotifiedAt, null);
+  assert.equal(lifecycle?.expiryFounderEmailSentAt, null);
 });
 
 test("getActivationPresentationsForClaims: empty input short-circuits with zero queries", async () => {
@@ -371,7 +457,7 @@ test("shouldShowSubmissionActivationCard: a real lifecycle ALWAYS wins over a st
 function makePresentation(overrides: Partial<ActivationPresentation> = {}): ActivationPresentation {
   return {
     state: "awaiting_setup",
-    lifecycle: {
+    lifecycle: makeLifecycleSummary({
       id: "lc-1",
       operatorId: "op-1",
       originType: "submission",
@@ -380,7 +466,7 @@ function makePresentation(overrides: Partial<ActivationPresentation> = {}): Acti
       reminderStage: 0,
       expiredAt: null,
       releasedAt: null,
-    },
+    }),
     operator: { id: "op-1", accountActivatedAt: null, name: null, email: "op@example.com" },
     ...overrides,
   };
@@ -423,11 +509,11 @@ test("evaluateSubmissionResendEligibility: a released lifecycle is never eligibl
     "confirmed_auto",
     makePresentation({
       state: "released",
-      lifecycle: {
+      lifecycle: makeLifecycleSummary({
         id: "lc-1", operatorId: "op-1", originType: "submission",
         startedAt: "2026-06-01T00:00:00.000Z", deadlineAt: "2026-06-20T00:00:00.000Z",
         reminderStage: 0, expiredAt: "2026-06-21T00:00:00.000Z", releasedAt: "2026-06-22T00:00:00.000Z",
-      },
+      }),
     })
   );
   assert.equal(result.eligible, false);
@@ -495,11 +581,11 @@ test("evaluateClaimResendEligibility: a released lifecycle is never eligible", (
     "approved",
     makePresentation({
       state: "released",
-      lifecycle: {
+      lifecycle: makeLifecycleSummary({
         id: "lc-1", operatorId: "op-1", originType: "claim",
         startedAt: "2026-06-01T00:00:00.000Z", deadlineAt: "2026-06-20T00:00:00.000Z",
         reminderStage: 0, expiredAt: "2026-06-21T00:00:00.000Z", releasedAt: "2026-06-22T00:00:00.000Z",
-      },
+      }),
     })
   );
   assert.equal(result.eligible, false);

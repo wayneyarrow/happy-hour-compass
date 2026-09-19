@@ -8,6 +8,7 @@ import {
   evaluateLegacyClaimActivationEligibility,
   shouldShowStandaloneResendPanel,
 } from "@/lib/activation/activationPresentation";
+import { isOperatorActivationReminderProcessingEnabled } from "@/lib/activation/activationReminderConfig";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
@@ -192,6 +193,9 @@ export default async function ClaimDetailPage({
   const signals = await computeTrustSignals(claim);
   const activationPresentation =
     claim.status === "approved" ? await getActivationPresentationForClaim(claim.id) : null;
+  // Server-side only — never expose the env var itself to the browser, just
+  // this derived boolean, passed down to the (Client Component) ActivationCard.
+  const remindersEnabled = isOperatorActivationReminderProcessingEnabled();
   const lastStructuredNote = notes.find((n) => n.event_type);
   const lastActivationEvent = lastStructuredNote
     ? { eventType: lastStructuredNote.event_type, createdAt: lastStructuredNote.created_at }
@@ -417,6 +421,7 @@ export default async function ClaimDetailPage({
               presentation={activationPresentation}
               lastEvent={lastActivationEvent}
               legacyResume={legacyResume}
+              remindersEnabled={remindersEnabled}
             />
           )}
 

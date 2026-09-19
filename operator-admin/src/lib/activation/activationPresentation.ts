@@ -71,6 +71,23 @@ export type ActivationLifecycleSummary = {
   reminderStage: number;
   expiredAt: string | null;
   releasedAt: string | null;
+  /**
+   * Migration-099 reminder/expiry-worker observability fields (Phase 2A-4).
+   * All camelCase here — snake_case stays confined to RawLifecycleRow/
+   * mapLifecycle() below, matching this file's existing convention. These
+   * are read-only presentation data: nothing in this module ever writes to
+   * them, and nothing here exposes a setup link, token, or other secret —
+   * every one of these columns is either a timestamp, a small integer, or a
+   * sanitized error string already written by processActivationReminders.ts.
+   */
+  reminderNextAttemptAt: string | null;
+  reminderAttemptCount: number;
+  reminderLastAttemptedAt: string | null;
+  reminderLastError: string | null;
+  reminderLeaseStage: number | null;
+  reminderLeaseStartedAt: string | null;
+  expirySlackNotifiedAt: string | null;
+  expiryFounderEmailSentAt: string | null;
 };
 
 export type ActivationPresentation = {
@@ -244,6 +261,14 @@ type RawLifecycleRow = {
   reminder_stage: number;
   expired_at: string | null;
   released_at: string | null;
+  reminder_next_attempt_at: string | null;
+  reminder_attempt_count: number;
+  reminder_last_attempted_at: string | null;
+  reminder_last_error: string | null;
+  reminder_lease_stage: number | null;
+  reminder_lease_started_at: string | null;
+  expiry_slack_notified_at: string | null;
+  expiry_founder_email_sent_at: string | null;
 };
 
 type RawOperatorRow = {
@@ -264,6 +289,14 @@ function mapLifecycle(row: RawLifecycleRow): ActivationLifecycleSummary {
     reminderStage: row.reminder_stage,
     expiredAt: row.expired_at,
     releasedAt: row.released_at,
+    reminderNextAttemptAt: row.reminder_next_attempt_at,
+    reminderAttemptCount: row.reminder_attempt_count,
+    reminderLastAttemptedAt: row.reminder_last_attempted_at,
+    reminderLastError: row.reminder_last_error,
+    reminderLeaseStage: row.reminder_lease_stage,
+    reminderLeaseStartedAt: row.reminder_lease_started_at,
+    expirySlackNotifiedAt: row.expiry_slack_notified_at,
+    expiryFounderEmailSentAt: row.expiry_founder_email_sent_at,
   };
 }
 

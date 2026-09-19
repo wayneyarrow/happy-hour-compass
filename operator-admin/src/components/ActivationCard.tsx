@@ -8,6 +8,7 @@ import {
   resumeLegacySubmissionActivationAction,
   type LegacyActivationResumeState,
 } from "@/lib/activation/legacyActivationResumeActions";
+import { releaseActivationLifecycleAction, type ReleaseActivationState } from "@/lib/activation/activationReleaseActions";
 import { formatDeadlineCountdown } from "@/lib/activation/activationState";
 import { getActivationEventLabel } from "@/lib/activation/activationEvents";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
@@ -16,6 +17,7 @@ import type { ActivationPresentation, LegacyActivationEligibility } from "@/lib/
 
 const EXTEND_INITIAL_STATE: ExtendDeadlineState = {};
 const LEGACY_INITIAL_STATE: LegacyActivationResumeState = {};
+const RELEASE_INITIAL_STATE: ReleaseActivationState = {};
 
 export type LastActivationEvent = { eventType: string | null; createdAt: string } | null;
 
@@ -40,14 +42,69 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+type LifecycleSummaryForReminders = NonNullable<ActivationPresentation["lifecycle"]>;
+
+/**
+ * Compact reminder-progress presentation (Phase 2A-4) — replaces the prior
+ * hardcoded "No automated reminders sent" line. Reads only the migration-099
+ * observability fields already forwarded onto ActivationLifecycleSummary
+ * (activationPresentation.ts); never a setup link, token, or raw internal
+ * error beyond the already-sanitized reminder_last_error string the worker
+ * itself truncates before ever writing it.
+ */
+function ReminderStatus({
+  lifecycle,
+  remindersEnabled,
+}: {
+  lifecycle: LifecycleSummaryForReminders;
+  remindersEnabled: boolean;
+}) {
+  if (!remindersEnabled) {
+    return <span className="text-gray-400 italic">Automated reminders are currently disabled</span>;
+  }
+
+  const stageText = `Stage ${lifecycle.reminderStage} of 3 resolved`;
+
+  if (lifecycle.reminderLeaseStartedAt) {
+    return (
+      <span>
+        {stageText} · <span className="text-amber-600 font-medium">Reminder currently processing</span>
+      </span>
+    );
+  }
+  if (lifecycle.reminderNextAttemptAt) {
+    return (
+      <span>
+        {stageText} · Next attempt {formatDateTime(lifecycle.reminderNextAttemptAt)}
+      </span>
+    );
+  }
+  if (lifecycle.reminderStage >= 3) {
+    return <span>{stageText} · No further automatic reminders scheduled</span>;
+  }
+  if (lifecycle.reminderLastError) {
+    return <span className="text-red-600">{stageText} · Last attempt failed — no further reminders scheduled</span>;
+  }
+  return <span>{stageText}</span>;
+}
+
 export default function ActivationCard({
   presentation,
   lastEvent,
   legacyResume,
+  remindersEnabled,
 }: {
   presentation: ActivationPresentation;
   lastEvent: LastActivationEvent;
   legacyResume?: LegacyResumeCandidate;
+  /**
+   * Whether the operator-activation reminder worker's kill switch
+   * (OPERATOR_ACTIVATION_REMINDERS_ENABLED) is currently "true" — resolved
+   * server-side via isOperatorActivationReminderProcessingEnabled() and
+   * passed down as a plain boolean. Never read an env var from a Client
+   * Component; this prop is the only channel.
+   */
+  remindersEnabled: boolean;
 }) {
   const router = useRouter();
   const { state: activationState, lifecycle, operator } = presentation;
@@ -94,7 +151,34 @@ export default function ActivationCard({
     if (!legacyState.success) didRefreshLegacy.current = false;
   }, [legacyState.success, router]);
 
+  // ── Manual Release (Phase 2A-4) ─────────────────────────────────────────────
+  const releaseBoundAction = lifecycle
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (releaseActivationLifecycleAction as any).bind(null, lifecycle.id)
+    : async () => RELEASE_INITIAL_STATE;
+  const [releaseState, releaseFormAction, releasePending] = useActionState<ReleaseActivationState, FormData>(
+    releaseBoundAction,
+    RELEASE_INITIAL_STATE
+  );
+
+  const didRefreshRelease = useRef(false);
+  useEffect(() => {
+    if (releaseState.success && !didRefreshRelease.current) {
+      didRefreshRelease.current = true;
+      router.refresh();
+    }
+    if (!releaseState.success) didRefreshRelease.current = false;
+  }, [releaseState.success, router]);
+
   const canExtend = !!lifecycle && !lifecycle.releasedAt && activationState !== "active";
+
+  // Server-side action eligibility remains authoritative regardless of this
+  // — this only controls whether the button renders at all.
+  const canRelease =
+    !!lifecycle &&
+    !lifecycle.releasedAt &&
+    (activationState === "release_required" || activationState === "expired") &&
+    !lifecycle.reminderLeaseStartedAt;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-resting p-6">
@@ -198,14 +282,32 @@ export default function ActivationCard({
             <MetaRow label="Deadline">{formatDateTime(lifecycle.deadlineAt)}</MetaRow>
             <MetaRow label="Remaining">{formatDeadlineCountdown(lifecycle.deadlineAt) ?? "—"}</MetaRow>
             <MetaRow label="Reminders">
-              <span className="text-gray-500">No automated reminders sent</span>
+              <ReminderStatus lifecycle={lifecycle} remindersEnabled={remindersEnabled} />
             </MetaRow>
+            {remindersEnabled && lifecycle.reminderAttemptCount > 0 && (
+              <MetaRow label="Last attempt">
+                <span className="text-red-600">
+                  {lifecycle.reminderAttemptCount}/3 · {lifecycle.reminderLastAttemptedAt ? formatDateTime(lifecycle.reminderLastAttemptedAt) : "—"}
+                  {lifecycle.reminderLastError ? ` — ${lifecycle.reminderLastError}` : ""}
+                </span>
+              </MetaRow>
+            )}
             {operator?.accountActivatedAt && (
               <MetaRow label="Activated">
                 <span className="text-green-700 font-medium">{formatDateTime(operator.accountActivatedAt)}</span>
               </MetaRow>
             )}
-            {lifecycle.expiredAt && <MetaRow label="Expired">{formatDateTime(lifecycle.expiredAt)}</MetaRow>}
+            {lifecycle.expiredAt && (
+              <>
+                <MetaRow label="Expired">{formatDateTime(lifecycle.expiredAt)}</MetaRow>
+                <MetaRow label="Notified">
+                  <span className="text-xs text-gray-600">
+                    {lifecycle.expirySlackNotifiedAt ? "Slack ✓" : "Slack pending"} ·{" "}
+                    {lifecycle.expiryFounderEmailSentAt ? "Email ✓" : "Email pending"}
+                  </span>
+                </MetaRow>
+              </>
+            )}
             {lifecycle.releasedAt && (
               <MetaRow label="Released">
                 <span className="text-slate-700 font-medium">{formatDateTime(lifecycle.releasedAt)}</span>
@@ -237,6 +339,7 @@ export default function ActivationCard({
                   e.preventDefault();
                 }
               }}
+              className={canRelease ? "mb-3" : undefined}
             >
               <button
                 type="submit"
@@ -244,6 +347,43 @@ export default function ActivationCard({
                 className="w-full px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {extendPending ? "Extending…" : "Extend deadline by 7 days"}
+              </button>
+            </form>
+          )}
+
+          {releaseState.error && (
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {releaseState.error}
+            </div>
+          )}
+          {releaseState.success && (
+            <div className="mb-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+              {releaseState.successAction}
+            </div>
+          )}
+
+          {canRelease && (
+            <form
+              action={releaseFormAction}
+              onSubmit={(e) => {
+                const confirmed = window.confirm(
+                  "Release this venue?\n\n" +
+                    "This will:\n" +
+                    "• Close this activation lifecycle\n" +
+                    "• Clear this venue's ownership so it can be re-claimed\n" +
+                    "• Add an Internal Note\n\n" +
+                    "This does not affect any other venue this operator may own, and does not send any " +
+                    "email or Slack notification."
+                );
+                if (!confirmed) e.preventDefault();
+              }}
+            >
+              <button
+                type="submit"
+                disabled={releasePending}
+                className="w-full px-4 py-2 border border-red-300 hover:bg-red-50 text-red-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {releasePending ? "Releasing…" : "Release venue"}
               </button>
             </form>
           )}

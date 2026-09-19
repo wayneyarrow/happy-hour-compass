@@ -19,12 +19,27 @@ const DATE_METADATA_KEYS: Record<string, string> = {
   newDeadline: "New deadline",
   currentDeadline: "Deadline",
   previousExpiredAt: "Previously expired",
+  // Phase 2A-3/2A-4: the reminder/expiry worker's own notes use "deadline"
+  // (not one of the four names above) for the lifecycle's deadline_at at
+  // the moment the note was written; "releasedAt" is the founder-release
+  // note's own timestamp.
+  deadline: "Deadline",
+  sentAt: "Sent at",
+  releasedAt: "Released at",
 };
 
 const TEXT_METADATA_KEYS: Record<string, string> = {
   recipient: "Sent to",
   extensionDays: "Extension",
   extendedByEmail: "Extended by",
+  // Phase 2A-3 (reminder_sent / reminder_delivery_failed / activation_expired)
+  // and Phase 2A-4 (founder_manual_release) metadata fields.
+  stage: "Stage",
+  attempt: "Attempt",
+  flow: "Flow",
+  lifecycleId: "Lifecycle ID",
+  operatorEmail: "Operator email",
+  venueId: "Venue ID",
 };
 
 export default function ActivationNoteMeta({
