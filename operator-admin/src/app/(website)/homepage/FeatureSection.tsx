@@ -47,6 +47,7 @@ type Props = {
 export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
   const { feature } = section;
   const isVenueFeature = section.kind === "venue_feature";
+  const isGuideFeature = section.kind === "guide_feature";
 
   // Discovery attribution only applies to Featured Venue cards (this
   // phase's scope is venue discovery attribution) and only when the
@@ -93,7 +94,13 @@ export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
               <p className="mt-2 text-sm text-gray-500">{feature.secondaryLabel}</p>
             )}
             {feature.teaser && (
-              <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-md">{feature.teaser}</p>
+              <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-md">
+                {/* Guide teaser only: opts this text out of Google snippet selection so a
+                    single guide's narrow angle (e.g. late-night) can't become the homepage's
+                    search snippet. data-nosnippet is only Google-recognized on span/div/section,
+                    never p, and doesn't affect crawling/indexing of the text or the guide link. */}
+                {isGuideFeature ? <span data-nosnippet>{feature.teaser}</span> : feature.teaser}
+              </p>
             )}
             <div className="mt-6">
               <Link
