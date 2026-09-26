@@ -126,7 +126,7 @@ export default function VerifyEmailCodeScreen({ token, initialView }: Props) {
       if (result.status === "code_sent") {
         applyPending(result, { hasCurrentCode: true, notice: null, expiresAt: result.expiresAt ?? null });
         setCode("");
-        setMessage({ tone: "info", text: messageForStatus("code_sent") });
+        setMessage({ tone: "info", text: messageForStatus("code_sent", null, { isResend: result.isResend === true }) });
       } else if (result.status === "verified") {
         router.refresh();
       } else {

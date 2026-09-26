@@ -33,10 +33,17 @@ export function formatClockTime(iso: string, now: Date = new Date()): string {
 }
 
 /** Plain, non-technical copy for every outcome the server can return. */
-export function messageForStatus(status: EmailCodeVerificationStatus, resendAvailableAt?: string | null): string {
+export function messageForStatus(
+  status: EmailCodeVerificationStatus,
+  resendAvailableAt?: string | null,
+  { isResend = false }: { isResend?: boolean } = {}
+): string {
   switch (status) {
     case "code_sent":
-      return "We sent you a new code. Codes expire after 10 minutes.";
+      // "new" only for a genuine resend, as reported by the server.
+      return isResend
+        ? "We sent you a new code. Codes expire after 10 minutes."
+        : "We sent you a code. Codes expire after 10 minutes.";
     case "invalid_code":
       return "That code isn’t right. Check the email and try again.";
     case "invalid_format":

@@ -368,6 +368,17 @@ export async function issueVerificationCodeForLifecycle(
   if (!daily) return { status: "unavailable" };
   if (daily.blocked) return { status: "rate_limited", resendAvailableAt: daily.availableAt };
 
+  // Display only: whether this lifecycle has ever been issued a code, so the
+  // screen can say "a code" for the first send and "a new code" for a
+  // resend. Read before issuing (the issuance itself decides nothing from
+  // it); a read failure just means the neutral first-send wording.
+  const { data: priorCodes } = await d.admin
+    .from("operator_verification_codes")
+    .select("id")
+    .eq("lifecycle_id", ctx.lifecycleId)
+    .limit(1);
+  const isResend = (priorCodes?.length ?? 0) > 0;
+
   // The plaintext code lives only in this scope: digested for the
   // database, rendered into the email, then discarded.
   const code = d.generateCode();
@@ -413,6 +424,7 @@ export async function issueVerificationCodeForLifecycle(
     status: "code_sent",
     expiresAt: row.code_expires_at ?? null,
     resendAvailableAt: row.resend_available_at ?? null,
+    isResend,
   };
 }
 

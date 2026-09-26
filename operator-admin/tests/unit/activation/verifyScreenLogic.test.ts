@@ -53,3 +53,9 @@ test("clock time: same-day shows just the time; a different day adds the weekday
   assert.ok(!formatClockTime(new Date(2026, 8, 25, 15, 30).toISOString(), now).includes(" at "));
   assert.match(formatClockTime(new Date(2026, 8, 26, 9, 15).toISOString(), now), /^\S+ at /);
 });
+
+test("code-sent copy: first send says 'a code'; only a server-reported resend says 'a new code'", () => {
+  assert.equal(messageForStatus("code_sent"), "We sent you a code. Codes expire after 10 minutes.");
+  assert.equal(messageForStatus("code_sent", null, { isResend: false }), "We sent you a code. Codes expire after 10 minutes.");
+  assert.equal(messageForStatus("code_sent", null, { isResend: true }), "We sent you a new code. Codes expire after 10 minutes.");
+});

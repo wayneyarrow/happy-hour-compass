@@ -33,7 +33,8 @@ function getResend(): Resend {
     console.warn("[EMAIL] RESEND_API_KEY is not set — Resend client cannot be created.");
     throw new Error("RESEND_API_KEY env var is not set.");
   }
-  console.log("[EMAIL] RESEND_API_KEY present, key prefix:", key.slice(0, 8) + "…");
+  // Never log any part of the key (not even a prefix) — credential material
+  // must not reach application logs.
   return new Resend(key);
 }
 

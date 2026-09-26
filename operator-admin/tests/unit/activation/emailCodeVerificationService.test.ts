@@ -418,3 +418,41 @@ test("page: verified, activated, closed, legacy, and forged states", async () =>
   assert.equal((await loadVerificationPageView(legacy.token, browser, legacy.deps)).view, "unavailable");
   assert.equal((await loadVerificationPageView("forged.token", browser, w.deps)).view, "unavailable");
 });
+
+// ── First send vs resend (wording only) ──────────────────────────────────────
+
+test("isResend: the first code for a lifecycle is not a resend; every later issuance is — and nothing else changes", async () => {
+  const w = world();
+  const first = await requestVerificationCode(w.token, { requestIp: null }, w.deps);
+  assert.equal(first.status, "code_sent");
+  assert.equal(first.isResend, false);
+  assert.equal(first.resendAvailableAt, new Date(T0.getTime() + 60_000).toISOString(), "cooldown unchanged");
+  assert.equal(first.expiresAt, new Date(T0.getTime() + 600_000).toISOString(), "expiry unchanged");
+
+  // A blocked resend inside the cooldown carries no isResend and sends nothing.
+  const blocked = await requestVerificationCode(w.token, { requestIp: null }, w.deps);
+  assert.deepEqual(blocked, { status: "resend_cooldown", resendAvailableAt: new Date(T0.getTime() + 60_000).toISOString() });
+
+  w.advance(60_000);
+  const second = await requestVerificationCode(w.token, { requestIp: null }, w.deps);
+  assert.equal(second.status, "code_sent");
+  assert.equal(second.isResend, true);
+  assert.equal(w.emails.length, 2);
+
+  // Verification is unaffected: the newest code still verifies.
+  assert.equal((await submitVerificationCode(w.token, w.emails[1].code, w.deps)).status, "verified");
+});
+
+test("isResend: in-flow (code already issued at submission), the first click on the page IS a resend", async () => {
+  const w = world();
+  await requestVerificationCode(w.token, { requestIp: null }, w.deps); // stands in for the in-flow issuance
+  w.advance(61_000);
+  assert.equal((await requestVerificationCode(w.token, { requestIp: null }, w.deps)).isResend, true);
+});
+
+test("isResend: an expired first code followed by 'Send a new code' is correctly a resend", async () => {
+  const w = world();
+  await requestVerificationCode(w.token, { requestIp: null }, w.deps);
+  w.advance(11 * 60_000);
+  assert.equal((await requestVerificationCode(w.token, { requestIp: null }, w.deps)).isResend, true);
+});

@@ -144,6 +144,8 @@ export type EmailCodeActionResult = {
   resendAvailableAt?: string | null;
   /** Set on "verified" once a session exists — where the browser should go next. */
   next?: string;
+  /** Set on "code_sent": true when an earlier code existed (a resend), for wording only. */
+  isResend?: boolean;
 };
 
 /** The only verification state a future server action/page may send to the browser. */

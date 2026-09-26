@@ -133,7 +133,8 @@ export function buildContinueSetupEmail({
             ${lead} Continue on Happy Hour Compass to verify your email with a short code and set up your Operator Admin account.
           </p>
           ${emailCta(continueUrl, "Finish setting up my account &rarr;")}
-          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${continueUrl}</p>`,
+          <p style="margin:20px 0 4px;font-size:12px;color:#94a3b8;line-height:1.5;">Button not working? Copy and paste this link into your browser:</p>
+          <p style="margin:0;font-size:11px;line-height:1.5;word-break:break-all;overflow-wrap:anywhere;"><a href="${continueUrl}" style="color:#94a3b8;text-decoration:underline;">${continueUrl}</a></p>`,
     footer
   );
   const text = `Hi ${name},

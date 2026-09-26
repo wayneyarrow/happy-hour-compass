@@ -74,3 +74,31 @@ test("continue-setup email: keeps each origin's existing email type so failure e
   }
   assert.deepEqual(types, ["claim_approval/critical", "operator_activation/critical"]);
 });
+
+test("continue-setup email fallback: understated copy + a clickable, wrapping link to the exact URL; CTA stays primary", () => {
+  const url = "https://staging.example/operator/verify?t=11111111-1111-4111-8111-111111111111.AbC_dEf-GhIjKlMnOpQrStUvWxYz0123456789abcdE";
+  const { html, text } = buildContinueSetupEmail({ origin: "submission", firstName: "Sam", continueUrl: url });
+
+  // CTA still first and still the button.
+  const ctaIdx = html.indexOf("Finish setting up my account");
+  const fallbackIdx = html.indexOf("Button not working? Copy and paste this link into your browser:");
+  assert.ok(ctaIdx !== -1 && fallbackIdx > ctaIdx, "fallback sits below the CTA");
+  assert.ok(!html.includes("Or copy this URL"), "old raw-URL line replaced");
+
+  // The fallback is a real link whose href and visible text are the exact, uncorrupted URL.
+  const fallback = html.slice(fallbackIdx);
+  const link = fallback.match(/<a href="([^"]+)" style="([^"]+)">([^<]+)<\/a>/);
+  assert.ok(link, "fallback URL is an anchor");
+  assert.equal(link![1], url);
+  assert.equal(link![3], url);
+  assert.match(fallback, /word-break:break-all;overflow-wrap:anywhere;/, "wraps on narrow screens");
+  assert.match(link![2], /color:#94a3b8/, "subdued, not competing with the amber CTA");
+  assert.equal(html.split(url).length - 1, 3, "URL appears exactly in: CTA href, fallback href, fallback text");
+
+  // Well-formed: balanced anchors and paragraphs across the whole document.
+  assert.equal((html.match(/<a\b/g) ?? []).length, (html.match(/<\/a>/g) ?? []).length);
+  assert.equal((html.match(/<p\b/g) ?? []).length, (html.match(/<\/p>/g) ?? []).length);
+
+  // Plain text keeps the bare, usable URL.
+  assert.ok(text.split("\n").includes(url));
+});
