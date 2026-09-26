@@ -3,6 +3,8 @@ import { sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { escapeHtml } from "@/lib/activation/activationEmailEscape";
 import type { ClaimAutoApprovalDecision } from "./claimAutoApprovalPolicy";
+import { supportingWithoutRole } from "./claimAutoDecisionRecord";
+import { formatPhoneForDisplay } from "./phoneDisplay";
 
 /**
  * Founder notification for an AUTO-APPROVED claim: email + #venue-claims
@@ -42,7 +44,9 @@ export function buildAutoApprovedClaimNotification(ctx: AutoApprovedClaimContext
   const name = `${ctx.claimant.firstName} ${ctx.claimant.lastName}`.trim();
   const why = ctx.decision.humanReasons;
   const noted = ctx.decision.cautions.map((c) => c.explanation);
-  const supporting = ctx.decision.supporting.map((s) => s.explanation);
+  // Role is already in the claimant details, so it isn't repeated here.
+  const supporting = supportingWithoutRole(ctx.decision);
+  const phone = formatPhoneForDisplay(ctx.claimant.phone) ?? ctx.claimant.phone;
   const next = nextStepText(ctx);
 
   const subject = `[CLAIM AUTO-APPROVED] ${where}`;
@@ -69,7 +73,7 @@ export function buildAutoApprovedClaimNotification(ctx: AutoApprovedClaimContext
             ${row("Claimant", name, true)}
             ${row("Role", ctx.claimant.role, false)}
             ${row("Email", ctx.claimant.email, true)}
-            ${row("Phone", ctx.claimant.phone, false)}
+            ${row("Phone", phone, false)}
             ${row("Decision", "Auto-approved (no founder review needed)", true)}
           </table>
           ${section("Why it auto-approved", why, "green")}
@@ -86,7 +90,7 @@ export function buildAutoApprovedClaimNotification(ctx: AutoApprovedClaimContext
     "",
     `Claimant: ${name} (${ctx.claimant.role})`,
     `Email:    ${ctx.claimant.email}`,
-    `Phone:    ${ctx.claimant.phone}`,
+    `Phone:    ${phone}`,
     "",
     "Why it auto-approved:",
     bullets(why),
@@ -101,7 +105,7 @@ export function buildAutoApprovedClaimNotification(ctx: AutoApprovedClaimContext
   const slack = [
     `:white_check_mark: *CLAIM AUTO-APPROVED* — ${where}`,
     `Claimant: ${name} · ${ctx.claimant.role}`,
-    `Email: ${ctx.claimant.email} · Phone: ${ctx.claimant.phone}`,
+    `Email: ${ctx.claimant.email} · Phone: ${phone}`,
     "Why it auto-approved:",
     bullets(why),
     ...(noted.length ? ["Also noted (not enough to require review):", bullets(noted)] : []),

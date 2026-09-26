@@ -14,7 +14,11 @@ import {
 } from "@/lib/turnstile";
 import { reportCriticalAcquisitionFailure } from "@/lib/observability/reportCriticalFailure";
 import { isClaimAutoApprovalEnabled } from "@/lib/claims/claimAutoApprovalConfig";
-import { runClaimAutoApproval, resolveAutoApprovedClaimContinuation } from "@/lib/claims/claimAutoApprovalFlow";
+import {
+  runClaimAutoApproval,
+  resolveAutoApprovedClaimContinuation,
+  type ApprovedClaimSetup,
+} from "@/lib/claims/claimAutoApprovalFlow";
 
 // Flow slug shared by every reportCriticalAcquisitionFailure() call in this
 // file. Only the unexpected primary-insert failure is instrumented — field
@@ -38,6 +42,12 @@ export type ClaimFormState = {
   verificationPath?: string;
   /** Claim auto-approval: an existing activated operator — continue to sign in. */
   nextPath?: "/login";
+  /**
+   * Claim auto-approval, rare path: the claim IS approved but setup
+   * continues by email instead of in-flow. The form must show "approved",
+   * never "we'll review it". See ApprovedClaimSetup.
+   */
+  approvedSetup?: ApprovedClaimSetup;
 };
 
 const VALID_POSITIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
@@ -57,6 +67,9 @@ export async function submitClaimAction(
   _prevState: ClaimFormState,
   formData: FormData
 ): Promise<ClaimFormState> {
+  // Latency measurement only (logged on the auto-approval path; no PII).
+  const actionStartedAt = Date.now();
+
   // ── Extract + sanitize fields ─────────────────────────────────────────────
   const firstName = (formData.get("first_name") as string | null)?.trim() ?? "";
   const lastName  = (formData.get("last_name")  as string | null)?.trim() ?? "";
@@ -94,7 +107,9 @@ export async function submitClaimAction(
 
   // ── Turnstile verification — must pass before any side effect below ──────
   const turnstileToken = formData.get(TURNSTILE_TOKEN_FIELD) as string | null;
+  const turnstileStartedAt = Date.now();
   const verification = await verifyTurnstileToken(turnstileToken, getClientIpFromHeaders(heads));
+  const turnstileMs = Date.now() - turnstileStartedAt;
   if (!verification.success) {
     console.warn("[submitClaimAction] Turnstile verification failed:", verification.reason);
     return { error: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true };
@@ -186,6 +201,7 @@ export async function submitClaimAction(
   // every notification from here (founder email/Slack with the decision,
   // claimant confirmation when held). Flag off: today's flow, unchanged.
   if (isClaimAutoApprovalEnabled()) {
+    const flowStartedAt = Date.now();
     const result = await runClaimAutoApproval({
       claim: { id: insertedClaim.id as string, email, phone, position, ipAddress: ip },
       venue: {
@@ -205,8 +221,20 @@ export async function submitClaimAction(
       venueCity: (venueRow.city as string | null) ?? null,
       submittedAt,
     });
+    console.log("[submitClaimAction] timing", {
+      claimId: insertedClaim.id,
+      turnstileMs,
+      beforeFlowMs: flowStartedAt - actionStartedAt,
+      flowMs: Date.now() - flowStartedAt,
+      totalMs: Date.now() - actionStartedAt,
+    });
     if (result.outcome === "auto_approved") {
-      return { success: true, verificationPath: result.verificationPath, nextPath: result.nextPath };
+      return {
+        success: true,
+        verificationPath: result.verificationPath,
+        nextPath: result.nextPath,
+        approvedSetup: result.approvedSetup,
+      };
     }
     return { success: true };
   }

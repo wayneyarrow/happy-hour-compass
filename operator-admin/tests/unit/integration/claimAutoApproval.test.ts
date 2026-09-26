@@ -156,6 +156,8 @@ test("GOLDEN PATH: an ordinary claim auto-approves and the operator stays in the
 
   // Verify page is already in code-entry state
   const html = await renderVerify(result.verificationPath!);
+  assert.match(html, /Your claim has been approved!/);
+  assert.match(html, /Fixture Taproom<\/span> is now connected to your account\./);
   assert.match(html, /We sent a 6-digit code to/);
   assert.match(html, /id="verification-code"/);
   assert.doesNotMatch(html, />Send code</);
@@ -182,7 +184,7 @@ test("GOLDEN PATH: an ordinary claim auto-approves and the operator stays in the
   const idx = (re: RegExp) => story.findIndex((n) => re.test(n));
   const order = [
     /Claim submitted by Casey Claimant \(casey\.claimant@gmail\.com, Manager\)/,
-    /Claim auto-approved — no founder review needed\. No conflicts, and no combination of concerns that needs review\. Claimant role: Manager\./,
+    /Claim auto-approved — no founder review needed\. No conflicts, and no combination of concerns that needs review\. Also noted: Claim phone \(250\) 555-0199 does not match the venue phone \(250\) 555-0100\. Supporting context: Role entered: Manager\. Operator account created; setup continues with email-code verification\.$/,
     /Activation window started/,
     /Operator account setup completed/,
     /Venue is now publicly verified/,
@@ -436,4 +438,261 @@ test("released venue: a new claim follows the normal rules again (prior approved
   world.tables.venue_claims.push({ id: "c-released", venue_id: VENUE_ID, status: "approved", email: "gone@fixture.example" });
   const r = await submitClaim({ geo: "kelowna" });
   assert.ok(r.verificationPath);
+});
+
+// ── Pre-production polish: stable approval confirmation on /operator/verify ──
+
+const APPROVED_BANNER = /Your claim has been approved!/;
+
+test("VERIFY PAGE: approval is derived server-side; refresh / back-forward / revisit keep it and never issue or send anything", async () => {
+  const result = await submitClaim({ geo: "kelowna" });
+  const path = result.verificationPath!;
+  const codesBefore = world.tables.operator_verification_codes.length;
+  const mailBefore = world.emails.length;
+  const rpcBefore = world.rpcCalls.length;
+
+  for (let visit = 0; visit < 3; visit++) {
+    // Each render is a fresh server load (direct arrival, refresh, back→forward, revisit).
+    const html = await renderVerify(path);
+    assert.match(html, APPROVED_BANNER);
+    assert.match(html, /Fixture Taproom<\/span> is now connected to your account\./);
+    assert.match(html, /We sent a 6-digit code to <span[^>]*>c\*+@gmail\.com<\/span>/, "masked email");
+    assert.match(html, /Enter it below to finish setting up your account\./);
+    assert.match(html, /id="verification-code"/, "code entry on the same stable page");
+    assert.ok(html.indexOf("Your claim has been approved!") < html.indexOf("Verify your email"), "approval above the next action");
+  }
+  assert.equal(world.tables.operator_verification_codes.length, codesBefore, "no code issued by page loads");
+  assert.equal(world.emails.length, mailBefore, "no email sent by page loads");
+  assert.equal(world.rpcCalls.length, rpcBefore, "page loads never call issue/consume");
+});
+
+test("VERIFY PAGE: the venue name comes from the database, never the URL; extra/forged params can't spoof approval", async () => {
+  const result = await submitClaim({ geo: "kelowna" });
+  const t = tokenOf(result.verificationPath!);
+  const spoofed = renderToStaticMarkup(
+    await OperatorVerifyPage({ searchParams: Promise.resolve({ t, approved: "true", venueName: "Evil Bar" } as { t: string }) })
+  );
+  assert.match(spoofed, /Fixture Taproom<\/span> is now connected/);
+  assert.doesNotMatch(spoofed, /Evil Bar/);
+
+  // A forged/tampered token: unavailable, and no approval banner.
+  const forged = renderToStaticMarkup(await OperatorVerifyPage({ searchParams: Promise.resolve({ t: `${t.slice(0, -2)}xx`, approved: "true" } as { t: string }) }));
+  assert.doesNotMatch(forged, APPROVED_BANNER);
+  assert.match(forged, /This link isn’t available/);
+});
+
+test("VERIFY PAGE: no claim-approved banner for non-claim origins or a claim that isn't (still) auto-approved", async () => {
+  const result = await submitClaim({ geo: "kelowna" });
+  const lifecycle = world.tables.operator_activation_lifecycles[0];
+  const claim = claims()[0];
+
+  // Submission-origin lifecycle (Add Your Venue).
+  Object.assign(lifecycle, { origin_type: "submission", origin_claim_id: null, origin_submission_id: "s-fixture" });
+  const html = await renderVerify(result.verificationPath!);
+  assert.match(html, /Verify your email/);
+  assert.doesNotMatch(html, APPROVED_BANNER);
+  assert.match(html, /continue setting up your venue account/, "generic copy unchanged");
+  Object.assign(lifecycle, { origin_type: "claim", origin_claim_id: claim.id, origin_submission_id: null });
+
+  // Claim no longer approved (e.g. returned to review): no banner.
+  claim.status = "pending";
+  assert.doesNotMatch(await renderVerify(result.verificationPath!), APPROVED_BANNER);
+  claim.status = "approved";
+
+  // Approved but NOT by auto-approval (founder decision record): no banner.
+  const decisionNote = world.tables.venue_claim_notes.find((n) => n.event_type === "auto_decision")!;
+  (decisionNote.metadata_json as Record<string, unknown>).decision = "founder_review";
+  assert.doesNotMatch(await renderVerify(result.verificationPath!), APPROVED_BANNER);
+  (decisionNote.metadata_json as Record<string, unknown>).decision = "auto_approved";
+  assert.match(await renderVerify(result.verificationPath!), APPROVED_BANNER);
+});
+
+test("VERIFY PAGE: a founder-approved (manual-review) claim never shows the auto-approval banner", async () => {
+  await submitClaim({ email: "sam.server@gmail.com", role: "Server", geo: "seattle" });
+  assert.equal(claims()[0].status, "pending");
+  world.authUsers.push({ id: "admin-1", email: "founder@fixture.example" });
+  world.tables.platform_admins = [{ id: "pa", email: "founder@fixture.example", status: "active" }];
+  world.sessionUserId = "admin-1";
+  const fd = new FormData();
+  fd.set("action", "approve");
+  assert.equal((await reviewClaimAction(claims()[0].id as string, {}, fd)).success, true);
+  world.sessionUserId = null;
+  const lifecycle = world.tables.operator_activation_lifecycles.find((l) => l.origin_claim_id === claims()[0].id);
+  assert.ok(lifecycle, "founder approval started a lifecycle");
+  const { buildVerificationPath } = await import("../../../src/lib/activation/emailCodeVerificationService");
+  const html = await renderVerify(buildVerificationPath(lifecycle!.id as string, SECRET)!);
+  assert.doesNotMatch(html, APPROVED_BANNER);
+});
+
+test("VERIFY PAGE: failed first code email + approval banner coexist truthfully; a later successful code restores code entry", async () => {
+  world.emailSendFails = true;
+  const result = await submitClaim({ geo: "kelowna" });
+  let html = await renderVerify(result.verificationPath!);
+  assert.match(html, APPROVED_BANNER, "the claim IS approved even though the code email failed");
+  assert.match(html, /We couldn’t send the code/);
+  assert.doesNotMatch(html, /We sent a 6-digit code to/);
+  assert.doesNotMatch(html, /id="verification-code"/);
+
+  // Cooldown still enforced for the failed issuance.
+  world.emailSendFails = false;
+  assert.equal((await requestVerificationCodeAction(tokenOf(result.verificationPath!))).status, "resend_cooldown");
+  for (const c of world.tables.operator_verification_codes) c.issued_at = new Date(Date.now() - 61_000).toISOString();
+  assert.equal((await requestVerificationCodeAction(tokenOf(result.verificationPath!))).status, "code_sent");
+
+  html = await renderVerify(result.verificationPath!);
+  assert.match(html, APPROVED_BANNER);
+  assert.match(html, /We sent a 6-digit code to/);
+  assert.match(html, /id="verification-code"/);
+  assert.doesNotMatch(html, /We couldn’t send the code/, "the old failure doesn't poison the new code");
+});
+
+// ── Claim forms: no fleeting approval message ────────────────────────────────
+
+test("claim forms: the interim render during navigation is neutral; the approval lives on /operator/verify", () => {
+  for (const f of ["src/app/(consumer)/venue/[id]/claim/ClaimForm.tsx", "src/app/(website)/acquisition/ClaimVenueModalContent.tsx"]) {
+    const src = readFileSync(join(__dirname, "../../..", f), "utf8");
+    assert.doesNotMatch(src, /Your claim was approved/, `${f}: no flashing approval message`);
+    assert.doesNotMatch(src, /Taking you to verify your email/);
+    assert.match(src, /"Continuing setup…"/);
+    assert.match(src, /const approvedNotice = state\.success \? approvedClaimEmailNotice\(state\) : null;/);
+    assert.ok(src.indexOf("if (continuation) {") < src.indexOf("if (state.success) {"));
+  }
+});
+
+// ── Rare post-approval fallback: approved, but setup continues by email ──────
+
+test("RARE FALLBACK: a legacy lifecycle appears after approval → approved + 'check your email', never 'we'll review it'", async () => {
+  // A pre-existing unactivated operator with NO lifecycle when signals are
+  // read; a concurrent legacy start lands just before this claim's lifecycle.
+  world.authUsers.push({ id: "op-race", email: "casey.claimant@gmail.com" });
+  world.tables.operators.push({ id: "op-race", email: "casey.claimant@gmail.com", account_activated_at: null });
+  world.beforeInsert = (table, row) => {
+    if (table === "operator_activation_lifecycles" && row.operator_id === "op-race" && !world.tables.operator_activation_lifecycles.length) {
+      world.tables.operator_activation_lifecycles.push({
+        id: "lc-concurrent-legacy", operator_id: "op-race", origin_type: "claim", origin_claim_id: "c-other", origin_submission_id: null,
+        started_at: new Date().toISOString(), deadline_at: "2099-01-01T00:00:00.000Z", reminder_stage: 0,
+        expired_at: null, released_at: null, verification_required: false, verification_completed_at: null,
+      });
+    }
+    return null;
+  };
+  const result = await submitClaim({ geo: "kelowna" });
+  world.beforeInsert = null;
+
+  assert.equal(claims()[0].status, "approved", "the claim really is approved");
+  assert.equal(venue().claimed_by, "op-race");
+  assert.equal(result.success, true);
+  assert.equal(result.verificationPath, undefined);
+  assert.equal(result.nextPath, undefined);
+  assert.equal(result.approvedSetup, "emailed");
+  assert.equal(safeClaimContinuation(result), null);
+  const { approvedClaimEmailNotice } = await import("../../../src/lib/claims/claimContinuation");
+  assert.deepEqual(approvedClaimEmailNotice(result), {
+    title: "Your claim has been approved.",
+    body: "We’ve emailed you instructions to finish setting up your account.",
+  });
+
+  // Nothing duplicated; no "we received your claim" email; exactly one setup email.
+  assert.equal(world.authUsers.length, 1);
+  assert.equal(world.tables.operators.length, 1);
+  assert.equal(world.tables.operator_activation_lifecycles.length, 1, "the concurrent lifecycle is reused, not duplicated");
+  assert.equal(world.tables.operator_verification_codes.length, 0);
+  const mail = emailsTo("casey.claimant@gmail.com");
+  assert.equal(mail.length, 1, "one setup email");
+  assert.ok(!mail.some((e) => /We received your claim/.test(e.subject)));
+  assert.equal(founderEmails().length, 1);
+  assert.match(founderEmails()[0].text, /setup continues by email/);
+});
+
+test("RARE FALLBACK: lifecycle claim fails AND the setup email can't go out → still 'approved', honest about the email", async () => {
+  world.beforeInsert = (table) =>
+    table === "operator_activation_lifecycles" ? { data: null, error: { message: "db unavailable", code: "08006" } } : null;
+  world.emailSendFails = true;
+  const result = await submitClaim({ geo: "kelowna" });
+  world.beforeInsert = null;
+  world.emailSendFails = false;
+
+  assert.equal(claims()[0].status, "approved");
+  assert.equal(result.approvedSetup, "pending_email");
+  const { approvedClaimEmailNotice } = await import("../../../src/lib/claims/claimContinuation");
+  const notice = approvedClaimEmailNotice(result)!;
+  assert.equal(notice.title, "Your claim has been approved.");
+  assert.doesNotMatch(notice.body, /review|pending|resubmit/i);
+  assert.equal(world.authUsers.length, 1);
+  assert.equal(world.tables.operators.length, 1);
+  assert.equal(world.tables.operator_activation_lifecycles.length, 0);
+});
+
+test("RARE FALLBACK copy never implies review; a genuinely pending claim keeps the existing wording", async () => {
+  const { approvedClaimEmailNotice } = await import("../../../src/lib/claims/claimContinuation");
+  for (const v of ["emailed", "pending_email"]) {
+    const n = approvedClaimEmailNotice({ approvedSetup: v })!;
+    assert.doesNotMatch(`${n.title} ${n.body}`, /review|pending|resubmit|verify that you/i);
+  }
+  assert.equal(approvedClaimEmailNotice({}), null);
+  assert.equal(approvedClaimEmailNotice({ approvedSetup: "anything-else" }), null);
+
+  const held = await submitClaim({ email: "sam.server@gmail.com", role: "Server", geo: "seattle" });
+  assert.equal(claims()[0].status, "pending");
+  assert.equal(approvedClaimEmailNotice(held), null, "pending claim → the existing 'we'll review it' screen");
+  assert.equal(safeClaimContinuation(held), null);
+  assert.deepEqual(held, { success: true }, "a held claim returns the plain pending state");
+});
+
+// ── Persisted decision context ───────────────────────────────────────────────
+
+test("DECISION NOTE: caution + supporting context persist in text and metadata; no codes in text; no IP stored", async () => {
+  await submitClaim({ geo: "kelowna", ip: "198.51.100.77" });
+  const decisionNotes = world.tables.venue_claim_notes.filter((n) => n.event_type === "auto_decision");
+  assert.equal(decisionNotes.length, 1, "exactly one auto_decision event");
+  const [note] = decisionNotes;
+  const text = note.note as string;
+  assert.match(text, /Also noted: Claim phone \(250\) 555-0199 does not match the venue phone \(250\) 555-0100\./);
+  assert.match(text, /Supporting context: Claim came from near the venue \(~\d+ km, Kelowna, BC\)\. Role entered: Manager\./);
+  assert.equal((text.match(/Manager/g) ?? []).length, 1, "role stated once");
+  assert.doesNotMatch(text, /\b[HCPR]\d(_\w+)?\b/, "no internal codes in human-readable text");
+
+  const meta = note.metadata_json as Record<string, unknown>;
+  assert.equal(meta.decision, "auto_approved");
+  assert.equal(meta.rule, "default_auto_approve");
+  assert.deepEqual(meta.hardReasons, []);
+  assert.deepEqual(meta.cautions, ["C5_phone_mismatch"]);
+  assert.deepEqual(meta.positives, []);
+  assert.deepEqual(meta.supporting, ["P4_local_ip", "P5_owner_or_manager"]);
+  assert.equal(meta.geoResolved, true);
+  assert.equal(meta.technicalFallbackOnly, false);
+  const ex = meta.explanations as Record<string, string[]>;
+  assert.deepEqual(ex.hardReasons, []);
+  assert.deepEqual(ex.cautions, ["Claim phone (250) 555-0199 does not match the venue phone (250) 555-0100."]);
+  assert.match(ex.supporting[0], /^Claim came from near the venue \(~\d+ km, Kelowna, BC\)\.$/);
+  assert.equal(ex.supporting[1], "Role entered: Manager.");
+  const geo = meta.geo as Record<string, unknown>;
+  assert.deepEqual(Object.keys(geo).sort(), ["city", "country", "distanceKm", "region"]);
+  assert.equal(geo.city, "Kelowna");
+  assert.equal(typeof geo.distanceKm, "number");
+
+  const json = JSON.stringify(meta);
+  assert.doesNotMatch(json, /198\.51\.100\.77/, "raw IP never persisted in note metadata");
+  assert.doesNotMatch(json, /latitude|longitude|"lat"|"lng"|digest|hmac|secret|password|token/i);
+  // Every claim note, not just the decision note, is free of the IP.
+  assert.ok(world.tables.venue_claim_notes.every((n) => !JSON.stringify(n).includes("198.51.100.77")));
+
+  // Venue Internal Notes show the same record once.
+  const story = await venueStory();
+  assert.equal(story.filter((n) => /Claim auto-approved/.test(n)).length, 1);
+  assert.ok(story.every((n) => !/\b[HCP]\d_\w+/.test(n)));
+});
+
+test("DECISION NOTE (manual review): reasons stay explicit and metadata carries readable explanations", async () => {
+  await submitClaim({ email: "sam.server@gmail.com", role: "Server", geo: "seattle" });
+  const note = world.tables.venue_claim_notes.find((n) => n.event_type === "auto_decision")!;
+  assert.match(note.note as string, /Role entered: Server\./, "role is explicit when it's part of the reason");
+  const meta = note.metadata_json as Record<string, unknown>;
+  assert.equal(meta.decision, "founder_review");
+  assert.equal(meta.rule, "R1_foreign_ip_plus_caution");
+  assert.ok((meta.explanations as Record<string, string[]>).cautions.includes("Role entered: Server."));
+  assert.equal((meta.geo as Record<string, unknown>).city, "Seattle");
+  assert.doesNotMatch(JSON.stringify(meta), /203\.0\.113\.10/);
+  const [founder] = founderEmails();
+  assert.match(founder.text, /Role entered: Server\./, "manual-review email still states the role reason");
 });

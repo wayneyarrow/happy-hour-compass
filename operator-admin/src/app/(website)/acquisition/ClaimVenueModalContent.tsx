@@ -2,7 +2,7 @@
 
 import { useState, useActionState, useEffect, useRef } from "react";
 import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[id]/claim/actions";
-import { safeClaimContinuation } from "@/lib/claims/claimContinuation";
+import { approvedClaimEmailNotice, safeClaimContinuation } from "@/lib/claims/claimContinuation";
 import { trackEvent } from "@/lib/analytics";
 import { trackGA4Event } from "@/lib/ga4";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
@@ -76,7 +76,10 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
 
   // ── Auto-approved claim: continue straight into HHC onboarding ───────────
   // The server only returns these for an auto-approved claim; the helper
-  // re-validates the exact internal destination before navigating.
+  // re-validates the exact internal destination before navigating. The
+  // approval itself is confirmed on /operator/verify (derived server-side,
+  // so it survives refresh/back); this interim render stays neutral rather
+  // than flashing a message that vanishes on navigation.
   const continuation = state.success ? safeClaimContinuation(state) : null;
   useEffect(() => {
     if (continuation) window.location.assign(continuation);
@@ -84,13 +87,16 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
   if (continuation) {
     return (
       <div className="px-6 py-10 flex flex-col items-center text-center" role="status" aria-live="polite">
-        <p className="text-base font-semibold text-gray-900">Your claim was approved</p>
-        <p className="text-sm text-gray-500 mt-1">
-          {continuation === "/login" ? "Taking you to sign in…" : "Taking you to verify your email…"}
+        <p className="text-sm text-gray-500">
+          {continuation === "/login" ? "Taking you to sign in…" : "Continuing setup…"}
         </p>
       </div>
     );
   }
+
+  // ── Approved, setup continues by email (rare) ─────────────────────────────
+  // The claim IS approved — never fall through to the "we'll review it" copy.
+  const approvedNotice = state.success ? approvedClaimEmailNotice(state) : null;
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -110,20 +116,29 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
           </svg>
         </div>
 
-        <h3 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">
-          Thanks for your request.
-        </h3>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-2 max-w-[280px]">
-          We just need to verify that you&rsquo;re associated with this venue
-          before granting access.
-        </p>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-6">
-          We typically review claim and venue submissions within 1–2 business days.
-        </p>
+        {approvedNotice ? (
+          <>
+            <h3 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">{approvedNotice.title}</h3>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-10 max-w-[300px]">{approvedNotice.body}</p>
+          </>
+        ) : (
+          <>
+            <h3 className="text-[20px] font-bold text-gray-900 mb-3 leading-snug">
+              Thanks for your request.
+            </h3>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-2 max-w-[280px]">
+              We just need to verify that you&rsquo;re associated with this venue
+              before granting access.
+            </p>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-6">
+              We typically review claim and venue submissions within 1–2 business days.
+            </p>
 
-        <div className="mb-10">
-          <EmailConfirmationNote lead="We’ve sent a confirmation email to your inbox." />
-        </div>
+            <div className="mb-10">
+              <EmailConfirmationNote lead="We’ve sent a confirmation email to your inbox." />
+            </div>
+          </>
+        )}
 
         <button
           type="button"

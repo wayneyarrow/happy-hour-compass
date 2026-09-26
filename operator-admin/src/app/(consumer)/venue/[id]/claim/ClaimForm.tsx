@@ -15,7 +15,7 @@ function formatPhoneInput(raw: string): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 import { submitClaimAction, type ClaimFormState } from "./actions";
-import { safeClaimContinuation } from "@/lib/claims/claimContinuation";
+import { approvedClaimEmailNotice, safeClaimContinuation } from "@/lib/claims/claimContinuation";
 
 const ROLE_OPTIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
 
@@ -52,7 +52,10 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
 
   // ── Auto-approved claim: continue straight into HHC onboarding ───────────
   // The server only returns these for an auto-approved claim; the helper
-  // re-validates the exact internal destination before navigating.
+  // re-validates the exact internal destination before navigating. The
+  // approval itself is confirmed on /operator/verify (derived server-side,
+  // so it survives refresh/back); this interim render stays neutral rather
+  // than flashing a message that vanishes on navigation.
   const continuation = state.success ? safeClaimContinuation(state) : null;
   useEffect(() => {
     if (continuation) window.location.assign(continuation);
@@ -60,13 +63,16 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
   if (continuation) {
     return (
       <div className="px-5 pt-10 pb-12 flex flex-col items-center text-center" role="status" aria-live="polite">
-        <p className="text-base font-semibold text-gray-900">Your claim was approved</p>
-        <p className="text-sm text-gray-500 mt-1">
-          {continuation === "/login" ? "Taking you to sign in…" : "Taking you to verify your email…"}
+        <p className="text-sm text-gray-500">
+          {continuation === "/login" ? "Taking you to sign in…" : "Continuing setup…"}
         </p>
       </div>
     );
   }
+
+  // ── Approved, setup continues by email (rare) ─────────────────────────────
+  // The claim IS approved — never fall through to the "we'll review it" copy.
+  const approvedNotice = state.success ? approvedClaimEmailNotice(state) : null;
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {
@@ -87,17 +93,26 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
           </svg>
         </div>
 
-        {/* Success copy — exact wording per spec */}
-        <h2 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
-          Thanks for your request.
-        </h2>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-2 max-w-[280px]">
-          We just need to verify that you&rsquo;re associated with this venue
-          before granting access.
-        </p>
-        <p className="text-[15px] text-gray-600 leading-relaxed mb-10">
-          This usually takes less than 24 hours.
-        </p>
+        {approvedNotice ? (
+          <>
+            <h2 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">{approvedNotice.title}</h2>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-10 max-w-[280px]">{approvedNotice.body}</p>
+          </>
+        ) : (
+          <>
+            {/* Success copy — exact wording per spec */}
+            <h2 className="text-[20px] font-bold text-gray-900 mb-4 leading-snug">
+              Thanks for your request.
+            </h2>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-2 max-w-[280px]">
+              We just need to verify that you&rsquo;re associated with this venue
+              before granting access.
+            </p>
+            <p className="text-[15px] text-gray-600 leading-relaxed mb-10">
+              This usually takes less than 24 hours.
+            </p>
+          </>
+        )}
 
         {/* Primary nav action — back to venue */}
         <Link

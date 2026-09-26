@@ -45,7 +45,8 @@ test("AUTO-APPROVED notification: unmistakable label, venue, claimant, plain-Eng
     assert.match(body, /verifying their email in HHC now/);
     assert.doesNotMatch(body, /\b[HCPR]\d\b|_(match|ip|role)/, "no internal codes");
   }
-  assert.match(n.text, /Supporting context:\n• Claim came from near the venue \(~4 km, Kelowna, BC\)\.\n• Role entered: Owner\./);
+  assert.match(n.text, /Supporting context:\n• Claim came from near the venue \(~4 km, Kelowna, BC\)\.\n\nNext step:/, "role is not repeated as supporting context");
+  assert.equal((n.text.match(/Owner/g) ?? []).length, 2, "role shown once in the claimant line (+ the name 'Alex Owner')");
   assert.match(n.html, /CLAIM AUTO-APPROVED/);
   assert.match(n.html, /\/control-panel\/claims\/c1/);
 });

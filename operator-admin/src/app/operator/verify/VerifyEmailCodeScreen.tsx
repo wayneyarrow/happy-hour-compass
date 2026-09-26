@@ -284,15 +284,25 @@ export default function VerifyEmailCodeScreen({ token, initialView }: Props) {
       ? messageForStatus(pending.notice === "delivery_failed" ? "send_failed" : pending.notice, pending.resendAvailableAt)
       : null;
 
+  const approval = pending?.approval ?? null;
+
   return (
     <Shell>
+      {approval && (
+        <div role="status" className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+          <p className="text-base font-semibold text-green-900">Your claim has been approved!</p>
+          <p className="text-sm text-green-800 mt-0.5 leading-relaxed">
+            <span className="font-medium">{approval.venueName}</span> is now connected to your account.
+          </p>
+        </div>
+      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Verify your email</h1>
         <p className="text-sm text-gray-500 mt-1 leading-relaxed">
           {showCodeForm ? (
             <>
               We sent a 6-digit code to <span className="font-medium text-gray-700">{view.maskedEmail}</span>. Enter it
-              below to continue setting up your venue account.
+              below to {approval ? "finish setting up your account" : "continue setting up your venue account"}.
             </>
           ) : (
             <>

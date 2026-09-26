@@ -12,7 +12,7 @@ import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { planActivationVerificationMode, deliverDeferredActivationStart } from "@/lib/activation/emailCodeActivationStart";
 import { buildVerificationPath } from "@/lib/activation/emailCodeVerificationService";
 import { gatherClaimSignals, type ClaimSignalInput } from "./claimAutoApprovalSignals";
-import { evaluateClaimAutoApproval, type ClaimAutoApprovalDecision } from "./claimAutoApprovalPolicy";
+import { evaluateClaimAutoApproval } from "./claimAutoApprovalPolicy";
 import {
   claimAutoApprovalFallbackEventKey,
   claimAutoDecisionEventKey,
@@ -21,6 +21,7 @@ import {
   writeClaimSystemNote,
 } from "./claimAutoApprovalNotes";
 import { sendAutoApprovedClaimNotifications } from "./claimAutoApprovalNotifications";
+import { autoApprovedNoteText, autoDecisionMetadata } from "./claimAutoDecisionRecord";
 
 /**
  * Claim auto-approval orchestration — runs inside submitClaimAction, only
@@ -55,8 +56,18 @@ export type ClaimFlowInput = ClaimSignalInput & {
   submittedAt: string;
 };
 
+/**
+ * How an APPROVED claim continues when the browser can't go straight to
+ * /operator/verify (rare: e.g. the lifecycle had to reuse an older setup-link
+ * activation, or code delivery couldn't start). "emailed" = setup
+ * instructions were just sent; "pending_email" = none went out (the founder
+ * is notified of the approval and can follow up). Either way the claim is
+ * approved — the browser must never say it's awaiting review.
+ */
+export type ApprovedClaimSetup = "emailed" | "pending_email";
+
 export type ClaimFlowResult =
-  | { outcome: "auto_approved"; verificationPath?: string; nextPath?: "/login" }
+  | { outcome: "auto_approved"; verificationPath?: string; nextPath?: "/login"; approvedSetup?: ApprovedClaimSetup }
   | { outcome: "founder_review" };
 
 export type ClaimFlowDeps = {
@@ -65,21 +76,6 @@ export type ClaimFlowDeps = {
 };
 
 const LOG = "[claimAutoApproval]";
-
-function decisionMetadata(d: ClaimAutoApprovalDecision, extra: Record<string, unknown> = {}) {
-  return {
-    decision: d.decision,
-    rule: d.rule,
-    hardReasons: d.hardReasons.map((r) => r.code),
-    cautions: d.cautions.map((r) => r.code),
-    positives: d.positives.map((r) => r.code),
-    supporting: d.supporting.map((r) => r.code),
-    geoResolved: d.geoResolved,
-    technicalFallbackOnly: d.technicalFallbackOnly,
-    humanReasons: d.humanReasons,
-    ...extra,
-  };
-}
 
 async function notifyFounderReview(
   input: ClaimFlowInput,
@@ -145,7 +141,33 @@ async function fallBackToFounderReview(
   return { outcome: "founder_review" };
 }
 
+/**
+ * Latency measurement only (no behavior change): elapsed ms per phase,
+ * logged once per claim. Contains no PII — claim id, phase names, the
+ * decision/outcome, and durations.
+ */
+type PhaseTimer = (phase: string) => void;
+
 export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlowDeps = {}): Promise<ClaimFlowResult> {
+  const started = Date.now();
+  let last = started;
+  const phasesMs: Record<string, number> = {};
+  const mark: PhaseTimer = (phase) => {
+    const now = Date.now();
+    phasesMs[phase] = now - last;
+    last = now;
+  };
+  let outcome = "error";
+  try {
+    const result = await runClaimAutoApprovalTimed(input, deps, mark);
+    outcome = result.outcome;
+    return result;
+  } finally {
+    console.log(`${LOG} timing`, { claimId: input.claim.id, outcome, totalMs: Date.now() - started, phasesMs });
+  }
+}
+
+async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowDeps, mark: PhaseTimer): Promise<ClaimFlowResult> {
   const admin = deps.admin ?? (createAdminClient() as unknown as SupabaseClient);
   const claimId = input.claim.id;
 
@@ -154,9 +176,11 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
     note: `Claim submitted by ${input.claimant.firstName} ${input.claimant.lastName} (${input.claimant.email}, ${input.claimant.position}).`,
     eventKey: claimSubmittedEventKey(claimId),
   });
+  mark("submittedNote");
 
   const signals = await (deps.gather ?? gatherClaimSignals)(input, { admin });
   const decision = evaluateClaimAutoApproval(signals);
+  mark("gatherSignals");
 
   // ── Founder review ─────────────────────────────────────────────────────────
   if (decision.decision === "founder_review") {
@@ -168,7 +192,7 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
       note: `${heading} ${decision.humanReasons.join(" ")}`,
       eventType: "auto_decision",
       eventKey: claimAutoDecisionEventKey(claimId),
-      metadata: decisionMetadata(decision),
+      metadata: autoDecisionMetadata(decision, signals.geo),
     });
     await notifyFounderReview(input, decision.humanReasons, decision.technicalFallbackOnly);
     await confirmToClaimant(input);
@@ -186,6 +210,7 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
       });
     }
   }
+  mark("planVerification");
 
   // Claim first: a concurrent founder decision on this claim wins cleanly.
   const { data: approvedRows, error: approveError } = await admin
@@ -198,6 +223,7 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
     console.warn(`${LOG} Claim was no longer pending — a founder decision took precedence.`, { claimId });
     return { outcome: "founder_review" };
   }
+  mark("approveClaim");
 
   const provision = await provisionOperatorForVenue({
     email: input.claimant.email,
@@ -225,18 +251,17 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
       { claimWasApproved: true, technicalFallback: !provision.ownershipConflict }
     );
   }
+  mark("provisionOperator");
 
   // ── Approved and owned from here on ────────────────────────────────────────
-  const why = decision.humanReasons.join(" ");
   await writeClaimSystemNote(admin, {
     claimId,
-    note: `Claim auto-approved — no founder review needed. ${why} Claimant role: ${input.claimant.position}.${
-      returningOperator ? " Existing activated operator: venue added to their account." : " Operator account created; setup continues with email-code verification."
-    }`,
+    note: autoApprovedNoteText(decision, { role: input.claimant.position, returningOperator }),
     eventType: "auto_decision",
     eventKey: claimAutoDecisionEventKey(claimId),
-    metadata: decisionMetadata(decision, { returningOperator }),
+    metadata: autoDecisionMetadata(decision, signals.geo, { returningOperator }),
   });
+  mark("decisionNote");
 
   const lifecycleResult = await claimOrReuseActivationLifecycle({
     operatorId: provision.authUserId,
@@ -259,8 +284,11 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
   } else if (lifecycleResult.decision === "reused") {
     activationDeadline = lifecycleResult.lifecycle.deadlineAt;
   }
+  mark("lifecycle");
 
   let verificationPath: string | undefined;
+  // Non-deferred provisioning only returns ok after its own setup email sent.
+  let approvedSetup: ApprovedClaimSetup = "emailed";
   let nextStep: "new_operator_in_flow" | "returning_operator" | "new_operator_email" = returningOperator
     ? "returning_operator"
     : "new_operator_email";
@@ -278,8 +306,13 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
     if (delivery.kind === "code_issued") {
       verificationPath = delivery.verificationPath;
       nextStep = "new_operator_in_flow";
+    } else {
+      approvedSetup =
+        delivery.kind === "continue_email_sent" || delivery.kind === "legacy_fallback_sent" ? "emailed" : "pending_email";
+      console.warn(`${LOG} Approved claim continues by email, not in-flow.`, { claimId, delivery: delivery.kind });
     }
   }
+  mark("firstCodeDelivery");
 
   await sendAutoApprovedClaimNotifications({
     claimId,
@@ -290,9 +323,10 @@ export async function runClaimAutoApproval(input: ClaimFlowInput, deps: ClaimFlo
     nextStep,
     activationDeadline,
   });
+  mark("founderNotifications");
 
   if (returningOperator) return { outcome: "auto_approved", nextPath: "/login" };
-  return verificationPath ? { outcome: "auto_approved", verificationPath } : { outcome: "auto_approved" };
+  return verificationPath ? { outcome: "auto_approved", verificationPath } : { outcome: "auto_approved", approvedSetup };
 }
 
 /**

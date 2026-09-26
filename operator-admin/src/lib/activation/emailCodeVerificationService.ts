@@ -24,11 +24,13 @@ import {
 import { isVerifiedBrowserProofValid, readVerificationLinkToken, signVerificationLinkToken } from "./emailCodeVerificationTokens";
 import { sendContinueSetupEmail, sendVerificationCodeEmail } from "./emailCodeVerificationEmails";
 import { writeActivationNote, type ActivationNoteOrigin } from "./activationNotes";
+import { isAutoApprovedClaim } from "@/lib/claims/claimAutoApprovalNotes";
 import type {
   ConsumeVerificationCodeOutcome,
   EmailCodeActionResult,
   IssueVerificationCodeOutcome,
   RecordVerificationFailureOutcome,
+  VerificationApprovalContext,
   VerificationPageView,
 } from "./emailCodeVerificationTypes";
 
@@ -368,6 +370,36 @@ async function resolveToken(token: unknown, admin: SupabaseClient, secret: strin
 // ── Page state ───────────────────────────────────────────────────────────────
 
 /**
+ * Read-only: the approval confirmation for a lifecycle that came from an
+ * AUTO-APPROVED claim, or undefined. Everything is derived from this
+ * lifecycle's own origin row (never from the URL): the claim must still be
+ * approved, its auto_decision note must record "auto_approved", and the
+ * venue name comes from the claim's venue. Submissions, founder-approved
+ * claims, and any read failure resolve to undefined — the page then simply
+ * shows the plain verification step.
+ */
+async function loadApprovalContext(
+  admin: SupabaseClient,
+  origin: ActivationNoteOrigin | null
+): Promise<VerificationApprovalContext | undefined> {
+  if (origin?.type !== "claim") return undefined;
+  try {
+    const { data: claim, error } = await admin
+      .from("venue_claims")
+      .select("status, venue_id")
+      .eq("id", origin.claimId)
+      .maybeSingle();
+    if (error || !claim || claim.status !== "approved" || !claim.venue_id) return undefined;
+    if (!(await isAutoApprovedClaim(admin, origin.claimId))) return undefined;
+    const { data: venue } = await admin.from("venues").select("name").eq("id", claim.venue_id as string).maybeSingle();
+    const venueName = typeof venue?.name === "string" ? venue.name.trim() : "";
+    return venueName ? { kind: "claim_auto_approved", venueName } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Read-only: what /operator/verify shows. Never issues or consumes
  * anything, so reloading (or a scanner prefetch) is always harmless.
  */
@@ -398,6 +430,8 @@ export async function loadVerificationPageView(
 
   const daily = await checkDailyLimit(d.admin, ctx.lifecycleId, now);
   if (!daily) return { view: "unavailable" };
+  const approval = await loadApprovalContext(d.admin, ctx.origin);
+  const withApproval = approval ? { approval } : {};
   if (daily.blocked) {
     return {
       view: "pending",
@@ -406,6 +440,7 @@ export async function loadVerificationPageView(
       notice: "rate_limited",
       expiresAt: null,
       resendAvailableAt: daily.availableAt,
+      ...withApproval,
     };
   }
 
@@ -426,6 +461,7 @@ export async function loadVerificationPageView(
     notice,
     expiresAt: hasCurrentCode && code ? code.expiresAt : null,
     resendAvailableAt,
+    ...withApproval,
   };
 }
 

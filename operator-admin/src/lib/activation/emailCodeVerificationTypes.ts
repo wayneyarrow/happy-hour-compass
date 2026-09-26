@@ -136,7 +136,16 @@ export type VerificationPageView =
       notice: "expired" | "attempts_exhausted" | "rate_limited" | "delivery_failed" | null;
       expiresAt: string | null;
       resendAvailableAt: string | null;
+      /**
+       * Set only when this lifecycle came from an AUTO-APPROVED claim —
+       * derived server-side from the lifecycle's origin claim, never from
+       * the URL — so the page can confirm the approval above the code step.
+       */
+      approval?: VerificationApprovalContext;
     };
+
+/** Server-derived confirmation shown on /operator/verify (claim auto-approval only). */
+export type VerificationApprovalContext = { kind: "claim_auto_approved"; venueName: string };
 
 /** The only shape the verification server actions return to the browser. */
 export type EmailCodeActionResult = {

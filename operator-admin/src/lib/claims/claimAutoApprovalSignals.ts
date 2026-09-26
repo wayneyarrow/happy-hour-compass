@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatPhoneForDisplay } from "./phoneDisplay";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   extractEmailDomain,
@@ -272,14 +273,14 @@ export async function gatherClaimSignals(input: ClaimSignalInput, deps: GatherCl
       name: input.venue.name,
       country: input.venue.country,
       websiteDomain: meaningfulWebsiteDomain(input.venue.websiteUrl),
-      phone: input.venue.phone,
+      phone: formatPhoneForDisplay(input.venue.phone),
       phoneLast10: phoneLast10(input.venue.phone),
     },
     claimant: {
       email,
       emailDomain,
       isPublicEmailDomain: isPublicEmailDomain(emailDomain),
-      phone: input.claim.phone,
+      phone: formatPhoneForDisplay(input.claim.phone),
       phoneLast10: phoneLast10(input.claim.phone),
       role: input.claim.position,
     },

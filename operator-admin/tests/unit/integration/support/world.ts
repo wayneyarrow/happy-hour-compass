@@ -65,6 +65,12 @@ function freshState() {
     emailSendFails: false,
     failRpc: new Set<string>(),
     createUserFailsWith: null as string | null,
+    /**
+     * Test hook: runs before each INSERT row is applied. Return a Result to
+     * make that insert fail (e.g. a DB error), or mutate the world first to
+     * simulate a concurrent writer; return null to proceed normally.
+     */
+    beforeInsert: null as null | ((table: string, row: Row) => Result | null),
   };
 }
 
@@ -234,6 +240,8 @@ class Query implements PromiseLike<Result> {
       const inserted: Row[] = [];
       for (const input of inputs) {
         const row = applyInsertDefaults(this.table, input);
+        const injected = world.beforeInsert?.(this.table, row) ?? null;
+        if (injected) return injected;
         const conflict = checkUnique(this.table, row);
         if (conflict) return conflict;
         rows.push(row);
