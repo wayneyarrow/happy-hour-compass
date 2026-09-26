@@ -101,6 +101,70 @@ export function isOneTimeSpecialExpired(oneTimeDate: string, todayIsoDate: strin
   return oneTimeDate < todayIsoDate;
 }
 
+/** "YYYY-MM-DD" + `days` calendar days, computed in UTC (no server-timezone drift). */
+function addDaysIso(isoDate: string, days: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!m) return null;
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days));
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The single "is this Special still relevant to show a consumer" rule —
+ * shared by every consumer surface (venue page, Daily Specials search,
+ * search suggestions) and by the Control Panel's "current or upcoming"
+ * adoption counts, so the two can never disagree.
+ *
+ * True when the Special has at least one occurrence on or after
+ * `todayIsoDate` (which callers must compute in the venue's/market's LOCAL
+ * timezone — see getMarketLocalIsoDate()):
+ *   one_time — its date is today or later. A one-time Special stays
+ *              visible for the whole of its own local calendar day and
+ *              disappears at local midnight.
+ *   weekly   — at least one selected weekday still falls inside the
+ *              recurrence validity window, from today onward. A weekly
+ *              Special whose end date has passed (or whose remaining window
+ *              contains none of its weekdays) is no longer current. A
+ *              future start date still counts ("upcoming"). Generated
+ *              weekly occurrences are never materialized as rows — this
+ *              evaluates the one stored row.
+ *
+ * Publication is NOT checked here — callers filter is_published themselves.
+ * Historical rows are never deleted by this rule; it only decides display
+ * and "current/upcoming" eligibility.
+ */
+export function hasCurrentOrUpcomingOccurrence(schedule: DailySpecialSchedule, todayIsoDate: string): boolean {
+  if (schedule.scheduleType === "one_time") {
+    return schedule.oneTimeDate >= todayIsoDate;
+  }
+
+  const end = schedule.recurrenceEndDate;
+  if (end && end < todayIsoDate) return false;
+
+  const from =
+    schedule.recurrenceStartDate && schedule.recurrenceStartDate > todayIsoDate
+      ? schedule.recurrenceStartDate
+      : todayIsoDate;
+
+  // Seven consecutive days cover every weekday once.
+  for (let i = 0; i < 7; i++) {
+    const date = addDaysIso(from, i);
+    if (date === null) return false;
+    if (end && date > end) return false;
+    const weekday = getWeekdayFromIsoDate(date);
+    if (weekday !== null && weeklyIncludesWeekday(schedule.daysOfWeek, weekday)) return true;
+  }
+  return false;
+}
+
+/** Keeps only items whose schedule passes hasCurrentOrUpcomingOccurrence(). Input order preserved. */
+export function filterCurrentOrUpcoming<T extends { schedule: DailySpecialSchedule }>(
+  items: T[],
+  todayIsoDate: string
+): T[] {
+  return items.filter((item) => hasCurrentOrUpcomingOccurrence(item.schedule, todayIsoDate));
+}
+
 /**
  * Does this special occur on the given calendar date?
  *   one_time — exact date match.

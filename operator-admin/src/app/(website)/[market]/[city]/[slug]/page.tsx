@@ -30,6 +30,8 @@ import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 import { DailySpecialsSection } from "./DailySpecialsSection";
+import { filterCurrentOrUpcoming } from "@/lib/dailySpecialSchedule";
+import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -338,7 +340,16 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
     (slots) => Array.isArray(slots) && slots.length > 0
   );
   const hasHappyHour = hasHappyHourWeekly || hasSpecials;
-  const hasDailySpecials = venue.dailySpecials.length > 0;
+  // Expired Daily Specials (a one-time date before today, or a weekly
+  // Special with no remaining occurrence) are never shown to consumers —
+  // judged against the venue's market-local date, server-side (this route
+  // is force-dynamic, so "today" is always fresh). Rows are untouched in
+  // the database; this is display eligibility only.
+  const dailySpecials = filterCurrentOrUpcoming(
+    venue.dailySpecials,
+    getMarketLocalIsoDate(venue.marketSlug ?? "", new Date())
+  );
+  const hasDailySpecials = dailySpecials.length > 0;
   const hasEvents = venue.events.length > 0;
   const hasAbout = Boolean(venue.aboutYourVenue?.trim());
   const hasBusinessHours = DAY_ORDER.some(
@@ -640,7 +651,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
             {hasDailySpecials && (
               <section id="daily-specials" style={{ scrollMarginTop: SCROLL_MARGIN }}>
                 <SectionHeading>Daily Specials</SectionHeading>
-                <DailySpecialsSection specials={venue.dailySpecials} scrollMargin={SCROLL_MARGIN} />
+                <DailySpecialsSection specials={dailySpecials} scrollMargin={SCROLL_MARGIN} />
               </section>
             )}
 

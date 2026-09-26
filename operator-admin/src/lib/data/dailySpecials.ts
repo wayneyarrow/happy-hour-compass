@@ -29,6 +29,8 @@ import {
 } from "@/lib/dailySpecialTypes";
 import { haversineKm } from "@/lib/discover/discoverEngine";
 import { toMarketConfig, type Market } from "@/lib/markets";
+import { hasCurrentOrUpcomingOccurrence } from "@/lib/dailySpecialSchedule";
+import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
 
 const DAILY_SPECIAL_COLUMNS =
   "id, venue_id, created_by_operator_id, updated_by_operator_id, created_at, updated_at, " +
@@ -204,12 +206,15 @@ export type WebsiteDailySpecialListItem = {
  *     rule today — Events' behavior is a pre-existing, out-of-scope gap,
  *     not a pattern to copy here; Daily Specials' own product requirement
  *     is explicit and applies regardless).
- *   - Expired one-time Specials and day/date-schedule eligibility are NOT
- *     filtered here — that's date-dependent (WHEN filter, "today") and
- *     belongs in the pure occurrence helpers (src/lib/dailySpecialSchedule.ts)
- *     the client-side results page composes against this list, mirroring
- *     how Events' equivalent date filtering also happens client-side in
- *     EventSearchResults.tsx rather than in the server query.
+ *   - Expired Specials are excluded (2026-09 correction): a one-time date
+ *     before today, or a weekly Special with no remaining occurrence, per
+ *     hasCurrentOrUpcomingOccurrence() against the market-local date
+ *     (getMarketLocalIsoDate). Previously nothing filtered these, so the
+ *     unfiltered "browse all" search view and search suggestions showed
+ *     past one-time Specials indefinitely. Day-specific eligibility (WHEN
+ *     filter, "today") still happens in the pure occurrence helpers the
+ *     client-side results page and Today's Specials ranking compose
+ *     against this list.
  *
  * Returns an empty array on any error.
  */
@@ -239,6 +244,7 @@ export async function getPublishedDailySpecialsForWebsite(
     }
 
     const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
+    const marketToday = getMarketLocalIsoDate(market.id, new Date());
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
@@ -252,6 +258,7 @@ export async function getPublishedDailySpecialsForWebsite(
         recurrence_end_date: row.recurrence_end_date,
       });
       if (!schedule) return [];
+      if (!hasCurrentOrUpcomingOccurrence(schedule, marketToday)) return [];
 
       const time = coerceDailySpecialTime({
         time_mode: row.time_mode,

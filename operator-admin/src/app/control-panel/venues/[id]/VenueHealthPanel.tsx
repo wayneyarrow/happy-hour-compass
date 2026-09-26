@@ -206,28 +206,57 @@ export default function VenueHealthPanel({
           Customer Success section (see src/lib/customerSuccess/featureAdoption.ts).
           A query failure renders a neutral message rather than a false
           Red X — see that module's VenueFeatureAdoptionResult comment. */}
-      <Card title="Feature Adoption" subtitle="Specials & Events">
+      <Card title="Feature Adoption" subtitle="Daily Specials & Events">
         {featureAdoption.ok ? (
-          <ul className="space-y-1.5">
-            {(
-              [
-                { key: "specials", label: "Specials", status: featureAdoption.data.specials },
-                { key: "events", label: "Events", status: featureAdoption.data.events },
-              ] as const
-            ).map(({ key, label, status }) => (
-              <li key={key} className="flex items-center justify-between gap-2 text-sm">
-                <span className="flex items-center gap-2">
-                  {status.adopted ? (
-                    <span className="text-green-600">✓</span>
-                  ) : (
-                    <span className="text-red-600">✕</span>
+          <div className="space-y-3">
+            <ul className="space-y-2.5">
+              {(
+                [
+                  {
+                    key: "specials",
+                    label: "Daily Specials",
+                    status: featureAdoption.data.specials,
+                    countLabel: "operator-created, published, current/upcoming",
+                  },
+                  {
+                    key: "events",
+                    label: "Events",
+                    status: featureAdoption.data.events,
+                    countLabel: "operator-managed, published, not past",
+                  },
+                ] as const
+              ).map(({ key, label, status, countLabel }) => (
+                <li key={key} className="text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      {status.adopted ? (
+                        <span className="text-green-600" title="Adopted">✓</span>
+                      ) : (
+                        <span className="text-red-600" title="Not adopted">✕</span>
+                      )}
+                      <span className="text-gray-700">{label}</span>
+                    </span>
+                    <span className="text-gray-500 tabular-nums" title={countLabel}>
+                      {status.activeCount}
+                    </span>
+                  </div>
+                  <p className="ml-6 text-[11px] text-gray-400">{countLabel}</p>
+                  {key === "specials" && (
+                    <p className="ml-6 text-[11px] text-gray-500 tabular-nums">
+                      Operator-created: {featureAdoption.data.dailySpecialCounts.operatorTotal}
+                      {featureAdoption.data.dailySpecialCounts.operatorDrafts > 0 &&
+                        ` (${featureAdoption.data.dailySpecialCounts.operatorDrafts} draft)`}
+                      {" · "}Seeded/platform: {featureAdoption.data.dailySpecialCounts.platformTotal}
+                    </p>
                   )}
-                  <span className="text-gray-700">{label}</span>
-                </span>
-                <span className="text-gray-500 tabular-nums">{status.activeCount}</span>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-gray-400 leading-snug">
+              ✓ = an operator has genuinely created or managed this feature at least once (permanent — it
+              stays after content expires or is deleted). The number is what is live or scheduled now.
+            </p>
+          </div>
         ) : (
           <p className="text-sm text-gray-400 italic">Feature Adoption unavailable</p>
         )}

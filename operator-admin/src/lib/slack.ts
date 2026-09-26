@@ -133,10 +133,25 @@ export async function sendSlackAlert({
  * Sends a concise acquisition notification to a channel-specific Slack webhook.
  *
  * Used for proactive notifications on new venue suggestions, submissions, claims,
- * and contact messages — distinct from the ops-alert escalation path.
+ * and contact messages — distinct from the ops-alert escalation path. Also the
+ * delivery path for every #customer-success notification.
+ *
+ * Returns:
+ *   "no-webhook" — env var not set (silently skipped; safe for local dev)
+ *   "delivered"  — Slack answered with a 2xx status
+ *   "failed"     — non-2xx response, timeout, or network error (logged)
+ * A non-2xx response used to be reported as "delivered" (only a thrown fetch
+ * counted as failure), so a rejected post — e.g. a revoked webhook (404/410)
+ * or invalid payload (400) — looked successful to callers.
+ *
+ * Exactly one POST per call — no retry here. Callers that retry (e.g.
+ * Customer Success milestone notifications, keyed on their own
+ * sent_notification_sent_at marker) only do so when this returns "failed",
+ * i.e. when Slack did not accept the message.
  *
  * `text` is plain mrkdwn. Use `<url|label>` for links.
- * Never throws — Slack must not interrupt user-facing flows.
+ * Never throws — Slack must not interrupt user-facing flows. The webhook URL
+ * is never logged (it is the credential).
  * Timeout: 4 seconds.
  */
 export async function sendSlackAcquisitionNotification({
@@ -158,12 +173,28 @@ export async function sendSlackAcquisitionNotification({
   const timer = setTimeout(() => controller.abort(), 4_000);
 
   try {
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
       signal:  controller.signal,
     });
+    if (!response.ok) {
+      // Slack's webhook error bodies are short codes (e.g. "no_service",
+      // "invalid_payload") — useful, and never contain the webhook URL.
+      let detail = "";
+      try {
+        detail = (await response.text()).slice(0, 200);
+      } catch {
+        // Body unreadable — status alone is enough.
+      }
+      console.error("[SLACK] Acquisition notification failed:", {
+        channel,
+        status: response.status,
+        error: detail || response.statusText || "HTTP error",
+      });
+      return "failed";
+    }
     return "delivered";
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

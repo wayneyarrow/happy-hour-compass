@@ -12,6 +12,11 @@ import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import { isRecurring } from "./recurrenceUtils";
 import { genuineOperatorFieldPatch, recordFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 import {
+  describeEventSchedule,
+  notifyContentCreated,
+  shouldNotifyContentCreated,
+} from "@/lib/customerSuccess/contentCreatedSlack";
+import {
   MAX_SLUG_GENERATION_ATTEMPTS,
   MissingVenueSlugError,
   generateEventSlug,
@@ -381,5 +386,24 @@ export async function saveEventAction(
 
   revalidatePath("/admin/events");
   await recordFeatureAdoption(ctx, targetVenueId, "events");
+
+  // #customer-success — new operator-created Event only (insert branch,
+  // genuine session; a recurring Event is one row, so one message). Never
+  // throws; the row is already committed.
+  if (shouldNotifyContentCreated(ctx)) {
+    await notifyContentCreated({
+      kind: "event",
+      venueId: targetVenueId,
+      venueName: ctx.venues.find((v) => v.id === targetVenueId)?.name ?? "Unknown venue",
+      title: fields.title ?? "Untitled event",
+      schedule: describeEventSchedule({
+        firstDate: fields.first_date,
+        recurrence: fields.recurrence,
+        startTime: fields.start_time,
+      }),
+      isPublished: fields.is_published,
+    });
+  }
+
   return { savedId: inserted.id };
 }

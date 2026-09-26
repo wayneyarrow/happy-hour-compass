@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { WebsiteDailySpecialListItem } from "@/lib/data/dailySpecials";
 import { OFFER_TYPE_LABELS, type OfferType } from "@/lib/dailySpecialTypes";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { getSessionId } from "@/lib/trackingSession";
 import {
   formatDailySpecialSchedule,
   formatDailySpecialTime,
@@ -12,6 +13,38 @@ import {
 type Props = {
   special: WebsiteDailySpecialListItem;
 };
+
+/**
+ * Records a click on this result (opens the venue page at the Special's
+ * anchor) — recorded server-side by /api/track/daily-special-click. keepalive so
+ * the request survives the navigation it triggers; failures are ignored.
+ */
+// A double-click (or click + modifier-click) on the same card within this
+// window records one open, not two.
+const CLICK_DEDUPE_MS = 2_000;
+const lastClickAt = new Map<string, number>();
+
+function trackDailySpecialClick(special: WebsiteDailySpecialListItem) {
+  const now = Date.now();
+  const previous = lastClickAt.get(special.id);
+  if (previous !== undefined && now - previous < CLICK_DEDUPE_MS) return;
+  lastClickAt.set(special.id, now);
+
+  try {
+    fetch("/api/track/daily-special-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        dailySpecialId: special.id,
+        source: "search_results",
+        sessionId: getSessionId(),
+      }),
+    }).catch(() => {});
+  } catch {
+    // Tracking must never block navigation.
+  }
+}
 
 /**
  * Text-first by product decision (correction task): Daily Specials cards
@@ -128,6 +161,7 @@ export function DailySpecialSearchCard({ special }: Props) {
   return (
     <Link
       href={href}
+      onClick={() => trackDailySpecialClick(special)}
       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl"
     >
       {cardBody}

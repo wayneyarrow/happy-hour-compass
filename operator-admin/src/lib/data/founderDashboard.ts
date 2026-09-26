@@ -3,6 +3,7 @@ import { computeOperatorImageCount } from "@/lib/venueReadiness";
 import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import { getVenueViewCounts, getEventViewCounts, sumViews } from "@/lib/data/viewCounts";
+import { getDailySpecialClickSummary, type DailySpecialClickSummary } from "@/lib/data/dailySpecialClicks";
 
 // ── Plan rank for upgrade/downgrade classification ─────────────────────────────
 
@@ -99,6 +100,8 @@ export type FounderDashboardData = {
     eventViewsAllTime: number;
     topVenues:         TopItem[];
     topEvents:         TopItem[];
+    /** Clicks on Daily Special search-result cards (open the venue page at the Special). See dailySpecialClicks.ts. */
+    dailySpecialClicks: DailySpecialClickSummary;
   };
 
   // "What needs attention?"
@@ -234,6 +237,9 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     getVenueViewCounts(null),
     getEventViewCounts(null),
   ]);
+
+  // Separate await: the batch above is already at TS's Promise.all tuple limit.
+  const dailySpecialClicks = await getDailySpecialClickSummary(t30);
 
   // ── Active venues ──────────────────────────────────────────────────────────
   const activeVenues = (r_activeVenueRows.data ?? []) as ActiveVenueRow[];
@@ -458,6 +464,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
       eventViewsAllTime: sumViews(eventViewCountsAllTime),
       topVenues,
       topEvents,
+      dailySpecialClicks,
     },
 
     operationalSignals: {

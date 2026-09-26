@@ -46,11 +46,14 @@
  *           adoption or produce a false Red X, since adoption itself is
  *           already durable by the time this runs.
  *
- * "Active count" is computed live, at read time, from current rows only,
- * filtered to is_published = true AND is_genuine_operator_engaged = true,
- * then evaluated against the existing canonical scheduling rules
- * (occursOnDate() for Daily Specials, upcomingBucket() for Events) — reused
- * unmodified, never a new/different active-state rule.
+ * "Active count" is computed live, at read time, from current rows only.
+ * Events: is_published = true AND is_genuine_operator_engaged = true,
+ * evaluated with upcomingBucket() (not past). Daily Specials (corrected
+ * 2026-09 — previously "occurs today" against a UTC date, which is why a
+ * venue with only future one-time Specials showed "✓ Specials 0"):
+ * operator-created, published, current-or-upcoming Specials against the
+ * venue's market-local date — see dailySpecialAdoptionCounts.ts, shared
+ * with the Action Center Specials Adoption report.
  *
  * Deliberately independent of VenueHealthData/venueHealth.ts so this module
  * can move into a future, permanent Customer Success section without
@@ -74,6 +77,16 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { upcomingBucket } from "@/lib/data/events";
 import { coerceDailySpecialSchedule } from "@/lib/dailySpecialTypes";
 import { occursOnDate } from "@/lib/dailySpecialSchedule";
+import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
+import {
+  countDailySpecialsForAdoption,
+  DAILY_SPECIAL_COUNT_COLUMNS,
+  IMPERSONATION_WINDOW_COLUMNS,
+  toImpersonationWindow,
+  type ImpersonationWindow,
+  type DailySpecialAdoptionCounts,
+  type DailySpecialCountRow,
+} from "./dailySpecialAdoptionCounts";
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -85,7 +98,15 @@ export type FeatureAdoptionStatus = {
 };
 
 export type VenueFeatureAdoption = {
+  /**
+   * Daily Specials. `adopted` = durable Feature Adoption (unchanged
+   * definition). `activeCount` = operator-created Daily Specials that are
+   * published and current or upcoming — see dailySpecialAdoptionCounts.ts,
+   * the same rule the Action Center Specials Adoption report uses.
+   */
   specials: FeatureAdoptionStatus;
+  /** Full Daily Specials breakdown (operator-created vs platform/seeded). */
+  dailySpecialCounts: DailySpecialAdoptionCounts;
   events: FeatureAdoptionStatus;
 };
 
@@ -158,6 +179,10 @@ export type EventActiveRow = {
 
 // ── Active count computation ────────────────────────────────────────────────
 
+/**
+ * "Occurs today" count. No longer used by getVenueFeatureAdoption() (see the
+ * module header) — retained for its existing tests/callers only.
+ */
 export function countActiveDailySpecials(rows: DailySpecialActiveRow[], todayIso: string): number {
   let count = 0;
   for (const row of rows) {
@@ -293,27 +318,38 @@ export async function recordFeatureAdoption(
  */
 export async function getVenueFeatureAdoption(venueId: string): Promise<VenueFeatureAdoptionResult> {
   const supabase = createAdminClient();
+  // Events keep their pre-existing UTC "today" (unchanged metric).
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const [durableResult, specialsResult, eventsResult] = await Promise.all([
+  const [durableResult, specialsResult, eventsResult, venueResult, sessionsResult] = await Promise.all([
     supabase
       .from("venue_feature_adoption")
       .select("feature, first_adopted_at")
       .eq("venue_id", venueId),
+    // Every Daily Special row for the venue (published, draft, seeded,
+    // operator-created) — classified by countDailySpecialsForAdoption().
     supabase
       .from("daily_specials")
-      .select(
-        "schedule_type, one_time_date, days_of_week, recurrence_start_date, recurrence_end_date, is_genuine_operator_engaged"
-      )
-      .eq("venue_id", venueId)
-      .eq("is_published", true)
-      .eq("is_genuine_operator_engaged", true),
+      .select(DAILY_SPECIAL_COUNT_COLUMNS)
+      .eq("venue_id", venueId),
     supabase
       .from("events")
       .select("first_date, recurrence, is_genuine_operator_engaged")
       .eq("venue_id", venueId)
       .eq("is_published", true)
       .eq("is_genuine_operator_engaged", true),
+    supabase
+      .from("venues")
+      .select("market_geo:markets!market_id(slug)")
+      .eq("id", venueId)
+      .maybeSingle(),
+    // Staff "Open as Operator" windows — creation-time evidence that a
+    // Special was created by HHC staff, not the operator (see
+    // dailySpecialAdoptionCounts.ts).
+    supabase
+      .from("operator_impersonation_sessions")
+      .select(IMPERSONATION_WINDOW_COLUMNS)
+      .eq("venue_id", venueId),
   ]);
 
   if (durableResult.error) {
@@ -324,6 +360,10 @@ export async function getVenueFeatureAdoption(venueId: string): Promise<VenueFea
     console.error("[getVenueFeatureAdoption] daily_specials query failed:", venueId, specialsResult.error.message);
     return { ok: false, error: "Failed to load Daily Specials for active-count calculation." };
   }
+  if (sessionsResult.error) {
+    console.error("[getVenueFeatureAdoption] impersonation sessions query failed:", venueId, sessionsResult.error.message);
+    return { ok: false, error: "Failed to load impersonation sessions for Daily Special origin." };
+  }
   if (eventsResult.error) {
     console.error("[getVenueFeatureAdoption] events query failed:", venueId, eventsResult.error.message);
     return { ok: false, error: "Failed to load Events for active-count calculation." };
@@ -333,10 +373,23 @@ export async function getVenueFeatureAdoption(venueId: string): Promise<VenueFea
     (durableResult.data ?? []).map((row) => row.feature as FeatureAdoptionFeature)
   );
 
-  const specialsRows = (specialsResult.data ?? []) as unknown as DailySpecialActiveRow[];
+  const specialsRows = (specialsResult.data ?? []) as unknown as DailySpecialCountRow[];
   const eventsRows = (eventsResult.data ?? []) as unknown as EventActiveRow[];
 
-  const specialsActiveCount = countActiveDailySpecials(specialsRows, todayIso);
+  // Daily Specials "current or upcoming" is judged against the venue's
+  // market-local date (not UTC) — the same date consumers see.
+  const marketSlug =
+    (venueResult.data as { market_geo?: { slug?: string } | null } | null)?.market_geo?.slug ?? "";
+  const venueLocalToday = getMarketLocalIsoDate(marketSlug, new Date());
+  const impersonationWindows = ((sessionsResult.data ?? []) as {
+    started_at: string;
+    ended_at: string | null;
+    expires_at: string | null;
+  }[])
+    .map(toImpersonationWindow)
+    .filter((w): w is ImpersonationWindow => w !== null);
+  const dailySpecialCounts = countDailySpecialsForAdoption(specialsRows, venueLocalToday, impersonationWindows);
+  const specialsActiveCount = dailySpecialCounts.operatorCurrentOrUpcoming;
   const eventsActiveCount = countActiveEvents(eventsRows, todayIso);
 
   const specialsDurableAdopted = durableFeatures.has("daily_specials");
@@ -362,6 +415,7 @@ export async function getVenueFeatureAdoption(venueId: string): Promise<VenueFea
         adopted: specialsDurableAdopted || specialsActiveCount > 0,
         activeCount: specialsActiveCount,
       },
+      dailySpecialCounts,
       events: {
         adopted: eventsDurableAdopted || eventsActiveCount > 0,
         activeCount: eventsActiveCount,

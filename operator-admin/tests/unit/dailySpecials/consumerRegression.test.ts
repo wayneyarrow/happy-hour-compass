@@ -50,8 +50,11 @@ test("Daily Specials nav entry only appears when the venue has published Daily S
   assert.match(VENUE_PAGE_SOURCE, /hasDailySpecials \? \[\{ id: "daily-specials", label: "Daily Specials" \}\] : \[\]/);
 });
 
-test("hasDailySpecials is derived from venue.dailySpecials.length, not a hardcoded true", () => {
-  assert.match(VENUE_PAGE_SOURCE, /const hasDailySpecials = venue\.dailySpecials\.length > 0;/);
+test("hasDailySpecials is derived from the current/upcoming-filtered Daily Specials, not a hardcoded true", () => {
+  // 2026-09: expired Specials are filtered out first (see currentOrUpcoming.test.ts),
+  // so a venue whose Specials have all expired shows no Daily Specials section.
+  assert.match(VENUE_PAGE_SOURCE, /const dailySpecials = filterCurrentOrUpcoming\(\s*venue\.dailySpecials,/);
+  assert.match(VENUE_PAGE_SOURCE, /const hasDailySpecials = dailySpecials\.length > 0;/);
 });
 
 test("Daily Specials section only renders when hasDailySpecials is true", () => {

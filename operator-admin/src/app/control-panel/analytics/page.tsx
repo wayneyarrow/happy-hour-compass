@@ -460,7 +460,7 @@ export default async function PlatformAnalyticsPage() {
           description="Are consumers engaging? Anonymous page views — session IDs are random UUIDs, no PII stored."
         />
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
           <KpiCard
             label="Venue Views — Last 30 Days"
             value={cd.venueViewsLast30d}
@@ -471,6 +471,28 @@ export default async function PlatformAnalyticsPage() {
             value={cd.eventViewsLast30d}
             secondary={{ label: "All Time", value: cd.eventViewsAllTime }}
           />
+          {/* Clicks on Daily Special cards in the Daily Specials search
+              results — each opens the Special's venue page at the Special.
+              Not impressions. No history exists before this tracking was
+              deployed (see migration 101). */}
+          {cd.dailySpecialClicks.available ? (
+            <KpiCard
+              label="Daily Special Opens from Search — Last 30 Days"
+              value={cd.dailySpecialClicks.clicksLast30d}
+              secondary={{ label: "All Time", value: cd.dailySpecialClicks.clicksAllTime }}
+              subtext={
+                cd.dailySpecialClicks.trackingSince
+                  ? `Clicks that opened a Special on its venue page. Tracking since ${new Date(cd.dailySpecialClicks.trackingSince).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })} — no earlier history.`
+                  : "Clicks that opened a Special on its venue page. No clicks recorded yet — tracking starts with this release; no earlier history exists."
+              }
+            />
+          ) : (
+            <KpiCard
+              label="Daily Special Opens from Search — Last 30 Days"
+              value="—"
+              subtext="Tracking not available yet (click table not found). No historical clicks exist before tracking was deployed."
+            />
+          )}
         </div>
 
         {cd.venueViewsLast30d === 0 && cd.eventViewsLast30d === 0 ? (

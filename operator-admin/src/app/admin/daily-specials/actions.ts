@@ -42,6 +42,12 @@ import {
 } from "@/lib/dailySpecialSchedule";
 import { isOfferType, isScheduleType, type DailySpecialDbRow } from "@/lib/dailySpecialTypes";
 import { genuineOperatorFieldPatch, recordFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
+import {
+  describeDailySpecialSchedule,
+  notifyContentCreated,
+  shouldNotifyContentCreated,
+} from "@/lib/customerSuccess/contentCreatedSlack";
+import { coerceDailySpecialSchedule } from "@/lib/dailySpecialTypes";
 
 const REVALIDATE_PATH = "/admin/daily-specials";
 
@@ -311,6 +317,21 @@ export async function saveDailySpecialAction(
 
   revalidatePath(REVALIDATE_PATH);
   await recordFeatureAdoption(ctx, targetVenueId, "daily_specials");
+
+  // #customer-success — new operator-created Special only (insert branch,
+  // genuine session). Never throws; the row is already committed.
+  if (shouldNotifyContentCreated(ctx)) {
+    const schedule = coerceDailySpecialSchedule(fields);
+    await notifyContentCreated({
+      kind: "daily_special",
+      venueId: targetVenueId,
+      venueName: ctx.venues.find((v) => v.id === targetVenueId)?.name ?? "Unknown venue",
+      title: fields.title,
+      schedule: schedule ? describeDailySpecialSchedule(schedule) : "Schedule unavailable",
+      isPublished: fields.is_published,
+    });
+  }
+
   return { savedId: inserted.id as string };
 }
 

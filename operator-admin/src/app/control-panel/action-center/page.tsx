@@ -3,6 +3,7 @@ export const metadata = { title: "Action Center" };
 
 import Link from "next/link";
 import { getActionCenterSummary } from "@/lib/data/actionCenter";
+import { getSpecialsAdoptionSummary } from "@/lib/data/specialsAdoption";
 
 // ── Report definitions ────────────────────────────────────────────────────────
 
@@ -77,6 +78,13 @@ const REPORTS = [
     description: "Claims and submissions whose operator never activated — deadline passed, reminders exhausted, or expiry notifications incomplete.",
     priority:    "high",
   },
+  {
+    key:         "specialsAdoption" as const,
+    href:        "/control-panel/action-center/reports/specials-adoption",
+    name:        "Specials Adoption",
+    description: "Verified venues with at least one operator-created Daily Special. The report lists every verified venue, including Customer Success candidates with none.",
+    priority:    "low",
+  },
 ] as const;
 
 type ReportKey = (typeof REPORTS)[number]["key"];
@@ -90,7 +98,15 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; pill: string
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ActionCenterPage() {
-  const summary = await getActionCenterSummary();
+  const [baseSummary, specialsAdoption] = await Promise.all([
+    getActionCenterSummary(),
+    getSpecialsAdoptionSummary(),
+  ]);
+  // specialsAdoption is null when its summary failed — rendered as "—", never a false 0.
+  const summary = {
+    ...baseSummary,
+    specialsAdoption: specialsAdoption?.adoptedVenues ?? null,
+  };
 
   return (
     <div className="max-w-7xl">
@@ -105,7 +121,7 @@ export default async function ActionCenterPage() {
       {/* Report cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {REPORTS.map((report) => {
-          const count = summary[report.key as ReportKey];
+          const count: number | null = summary[report.key as ReportKey];
           const { dot, label, pill } = PRIORITY_STYLES[report.priority];
           return (
             <div
@@ -124,7 +140,7 @@ export default async function ActionCenterPage() {
 
               {/* Count */}
               <p className="text-4xl font-bold text-slate-900 leading-none mb-2 tabular-nums">
-                {count.toLocaleString()}
+                {count === null ? "—" : count.toLocaleString()}
               </p>
 
               {/* Name */}
@@ -136,7 +152,7 @@ export default async function ActionCenterPage() {
               </p>
 
               {/* Secondary breakdown — this card only */}
-              {report.key === "operatorActivationReviews" && count > 0 && (
+              {report.key === "operatorActivationReviews" && (count ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[11px] text-gray-500">
                   {summary.operatorActivationReviewsBreakdown.releaseRequired > 0 && (
                     <span>Release required: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.releaseRequired}</strong></span>
@@ -151,6 +167,15 @@ export default async function ActionCenterPage() {
                     <span>Notification incomplete: <strong className="text-slate-700">{summary.operatorActivationReviewsBreakdown.notificationIncomplete}</strong></span>
                   )}
                 </div>
+              )}
+              {report.key === "specialsAdoption" && (
+                <p className="mb-3 text-[11px] text-gray-500">
+                  {specialsAdoption ? (
+                    <>of <strong className="text-slate-700">{specialsAdoption.verifiedVenues}</strong> verified venues (seeded Specials excluded)</>
+                  ) : (
+                    "Adoption count unavailable — open the report to retry."
+                  )}
+                </p>
               )}
               <div className="flex-1" />
 
