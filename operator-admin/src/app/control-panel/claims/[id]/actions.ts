@@ -3,6 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { sendPasswordSetupEmail, sendVenueAddedToAccountEmail, sendClaimMoreInfoEmail } from "@/lib/email";
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { sendSlackAlert } from "@/lib/slack";
@@ -98,6 +99,13 @@ export async function reviewClaimAction(
 
   if (!user) {
     return { error: "Session expired. Please sign in again." };
+  }
+  // Authorization, not just authentication: server action IDs ship in public
+  // JavaScript, so any signed-in consumer or operator could otherwise call
+  // this. Same gate as every submission review action; runs before any read,
+  // write, email, or Slack side effect.
+  if (!(await isControlPanelAdmin(user.email))) {
+    return { error: "Unauthorized." };
   }
 
   const supabase = createAdminClient();
@@ -488,6 +496,13 @@ export async function addClaimNoteAction(
 
   if (!user) {
     return { error: "Session expired. Please sign in again." };
+  }
+  // Authorization, not just authentication: server action IDs ship in public
+  // JavaScript, so any signed-in consumer or operator could otherwise call
+  // this. Same gate as every submission review action; runs before any read,
+  // write, email, or Slack side effect.
+  if (!(await isControlPanelAdmin(user.email))) {
+    return { error: "Unauthorized." };
   }
 
   const supabase = createAdminClient();
