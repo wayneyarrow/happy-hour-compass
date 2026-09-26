@@ -9,6 +9,10 @@ import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
 import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
 import { buildTokenHashRecoveryLink } from "@/lib/supabase/recoveryLink";
 import {
+  resolvePasswordRecoveryGate,
+  sendContinueSetupInsteadOfRecovery,
+} from "@/lib/activation/emailCodeVerificationService";
+import {
   verifyTurnstileToken,
   getClientIpFromHeaders,
   TURNSTILE_FAILURE_MESSAGE,
@@ -70,7 +74,7 @@ export async function forgotPasswordAction(
   // Uses maybeSingle() — no row found is not an error, just a no-op.
   const { data: operatorRow } = await supabase
     .from("operators")
-    .select("id, first_name")
+    .select("id, first_name, account_activated_at")
     .eq("email", email)
     .maybeSingle();
 
@@ -78,6 +82,27 @@ export async function forgotPasswordAction(
 
   if (operatorRow?.id) {
     firstName = ((operatorRow.first_name as string | null) ?? "").trim() || undefined;
+
+    // Email-code activation (Phase 2B): an unactivated operator whose
+    // lifecycle still requires an unverified email code must not get a
+    // recovery link — it would grant a session, a password and (through
+    // create-password) completed activation without the code step. They
+    // get the continue-setup email (link to the code screen) instead.
+    // Activated operators skip this with no extra read; legacy and
+    // already-verified lifecycles are allowed through unchanged.
+    const gate = await resolvePasswordRecoveryGate(supabase, {
+      id:                 operatorRow.id as string,
+      accountActivatedAt: (operatorRow.account_activated_at as string | null) ?? null,
+    });
+    if (gate.kind === "error") {
+      // Can't tell legacy from unverified email-code — send nothing rather
+      // than risk the bypass; the operator can simply try again.
+      return { success: true };
+    }
+    if (gate.kind === "requires_email_code") {
+      await sendContinueSetupInsteadOfRecovery({ gate, to: email, firstName });
+      return { success: true };
+    }
   } else {
     // ── Fall back to an active team-member account ─────────────────────────
     // Invited team members (operator_memberships.role='member') are real,

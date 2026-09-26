@@ -19,6 +19,10 @@ import {
 import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
+import {
+  planActivationVerificationMode,
+  deliverDeferredActivationStart,
+} from "@/lib/activation/emailCodeActivationStart";
 import { slugify } from "@/lib/slugify";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import {
@@ -492,15 +496,23 @@ export async function saveOperatorSubmissionAction(
   // succeeds). provisionOperatorForVenue() itself no longer computes or
   // returns any activation state at all — see its own header comment.
   let operatorId: string | null = null;
+  // Email-code activation (Phase 2B): true only when provisioning deferred
+  // the setup email — the operator then continues straight onto the
+  // in-app verification screen instead of waiting for a setup link.
+  let setupEmailDeferred = false;
+  let verificationPath: string | undefined;
 
   if (routedStatus === "confirmed_auto" && venueId) {
     const provisionedVenueName = match?.name ?? formValues.businessName;
+    // "legacy" with no reads whenever the feature flag is off.
+    const verificationPlan = await planActivationVerificationMode({ email: formValues.email });
     const provisionResult = await provisionOperatorForVenue({
       email:     formValues.email,
       firstName: formValues.firstName,
       lastName:  formValues.lastName,
       venueId,
       logTag:    "[saveOperatorSubmissionAction]",
+      deferNewOperatorSetupEmail: verificationPlan === "email_code",
       sendEmail: (setupLink, isReturningOperator) =>
         isReturningOperator
           ? sendVenueAddedToAccountEmail({
@@ -536,6 +548,7 @@ export async function saveOperatorSubmissionAction(
     }
 
     operatorId = provisionResult.authUserId;
+    setupEmailDeferred = provisionResult.setupEmailDeferred === true;
     console.log("[saveOperatorSubmissionAction] Operator provisioned.", {
       authUserId: operatorId,
       venueId,
@@ -690,6 +703,7 @@ export async function saveOperatorSubmissionAction(
         operatorId,
         origin: { type: "submission", submissionId: insertedSubmission.id },
         logTag: "[saveOperatorSubmissionAction]",
+        verificationRequired: setupEmailDeferred,
       });
       if (lifecycleResult.decision === "started") {
         const activationResult = await writeActivationNote({
@@ -704,6 +718,24 @@ export async function saveOperatorSubmissionAction(
             { submissionId: insertedSubmission.id, error: activationResult.error }
           );
         }
+      }
+
+      // Email-code activation: issue the first code now, while the
+      // operator is still here, and send them straight to the code screen.
+      // Falls back to the legacy setup email if the lifecycle turned out
+      // legacy (reused) or couldn't be created.
+      if (setupEmailDeferred) {
+        const delivery = await deliverDeferredActivationStart({
+          lifecycleResult,
+          delivery:  "in_flow",
+          origin:    "submission",
+          recipient: { email: formValues.email, firstName: formValues.firstName },
+          requestIp: ip,
+          logTag:    "[saveOperatorSubmissionAction]",
+          sendLegacySetupEmail: (setupLink) =>
+            sendOperatorActivationEmail({ to: formValues.email, firstName: formValues.firstName, setupLink }),
+        });
+        if (delivery.kind === "code_issued") verificationPath = delivery.verificationPath;
       }
     }
   }
@@ -761,5 +793,5 @@ export async function saveOperatorSubmissionAction(
     }
   }
 
-  return { success: true, routedStatus };
+  return verificationPath ? { success: true, routedStatus, verificationPath } : { success: true, routedStatus };
 }

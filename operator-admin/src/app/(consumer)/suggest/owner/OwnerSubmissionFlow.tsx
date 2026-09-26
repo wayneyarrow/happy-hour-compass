@@ -252,6 +252,12 @@ export function OwnerSubmissionFlow() {
           handleSubmissionError(result.error);
           return;
         }
+        // Email-code activation: continue straight onto the in-app
+        // verification screen (a code was just emailed).
+        if (result.verificationPath) {
+          window.location.assign(result.verificationPath);
+          return;
+        }
         setStep("confirmed");
       } catch {
         handleSubmissionError("Something went wrong. Please try again.");

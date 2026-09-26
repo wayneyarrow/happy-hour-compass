@@ -127,6 +127,21 @@ test("CTA link and days-remaining copy are unaffected by escaping — links stay
 
 // ── Send path: fresh link generation, idempotency, DI ───────────────────────
 
+/**
+ * Fake admin client whose only table read is the lifecycle's
+ * verification mode — legacy (verification_required = false), i.e. every
+ * lifecycle that exists in Production today.
+ */
+function legacyLifecycleClient(verificationRequired = false) {
+  const query = {
+    select: () => query,
+    eq: () => query,
+    maybeSingle: async () => ({ data: { verification_required: verificationRequired, verification_completed_at: null }, error: null }),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { from: () => query } as any;
+}
+
 test("sendActivationReminderEmail: generates a fresh link immediately before sending and passes the deterministic idempotency key", async () => {
   let generateLinkCalls = 0;
   let capturedEmail: string | undefined;
@@ -151,8 +166,7 @@ test("sendActivationReminderEmail: generates a fresh link immediately before sen
       to: "kelly@example.com",
       firstName: "Kelly",
       venueName: "Buffalo Rouge Brewing Co.",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adminClient: {} as any,
+      adminClient: legacyLifecycleClient(),
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { generateLink: generateLink as any, sendEmail: sendEmail as any }
@@ -180,8 +194,7 @@ test("sendActivationReminderEmail: link-generation failure is reported and never
       to: "kelly@example.com",
       firstName: "Kelly",
       venueName: "V",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adminClient: {} as any,
+      adminClient: legacyLifecycleClient(),
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { generateLink: generateLink as any, sendEmail: sendEmail as any }
@@ -203,8 +216,7 @@ test("sendActivationReminderEmail: send failure is reported distinctly from link
       to: "kelly@example.com",
       firstName: "Kelly",
       venueName: "V",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      adminClient: {} as any,
+      adminClient: legacyLifecycleClient(),
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { generateLink: generateLink as any, sendEmail: sendEmail as any }
@@ -220,4 +232,96 @@ test("sendActivationReminderEmail: send failure is reported distinctly from link
 test("no test in this file ever reaches the real Resend/Supabase provider — every generateLink/sendEmail dependency is injected", () => {
   // Static assertion of intent: both prior tests always pass explicit `deps`.
   assert.ok(true);
+});
+
+// ── Email-code lifecycles (Phase 2B) ─────────────────────────────────────────
+
+test("sendActivationReminderEmail: a verification-required lifecycle links to the HHC code screen — no Supabase recovery link is generated", async () => {
+  let generateLinkCalls = 0;
+  const generateLink = async () => {
+    generateLinkCalls++;
+    return { data: { properties: { action_link: "https://supabase.example/should-not-be-used" } }, error: null };
+  };
+  let captured: { html?: string; text?: string; idempotencyKey?: string } = {};
+  const sendEmail = async (params: { html: string; text: string; idempotencyKey?: string }) => {
+    captured = params;
+    return { ok: true, id: "resend-id" };
+  };
+
+  const result = await sendActivationReminderEmail(
+    { stage: 1, lifecycleId: "lc-code", to: "owner@venue.example", firstName: "Sam", venueName: "V", adminClient: legacyLifecycleClient(true) },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { generateLink: generateLink as any, sendEmail: sendEmail as any, buildContinueUrl: (id) => `https://staging.example/operator/verify?t=${id}.sig` }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(generateLinkCalls, 0);
+  assert.ok(captured.text?.includes("https://staging.example/operator/verify?t=lc-code.sig"));
+  assert.ok(!captured.text?.includes("supabase.example"));
+  assert.equal(captured.idempotencyKey, reminderIdempotencyKey("lc-code", 1), "same per-stage idempotency as legacy");
+});
+
+test("sendActivationReminderEmail: a verification-required lifecycle with no HMAC secret fails the attempt — it never falls back to a link that skips verification", async () => {
+  let sends = 0;
+  let generateLinkCalls = 0;
+  const result = await sendActivationReminderEmail(
+    { stage: 2, lifecycleId: "lc-code", to: "owner@venue.example", firstName: "Sam", venueName: "V", adminClient: legacyLifecycleClient(true) },
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      generateLink: (async () => { generateLinkCalls++; return { data: null, error: null }; }) as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendEmail: (async () => { sends++; return { ok: true }; }) as any,
+      buildContinueUrl: () => null,
+    }
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.failedAt, "link_generation");
+  assert.equal(sends, 0);
+  assert.equal(generateLinkCalls, 0);
+});
+
+test("sendActivationReminderEmail: if the lifecycle's mode can't be read, the attempt fails (worker retries) without generating a link or sending", async () => {
+  let sends = 0;
+  let generateLinkCalls = 0;
+  const failing = {
+    from: () => {
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: { message: "db down" } }) };
+      return q;
+    },
+  };
+  const result = await sendActivationReminderEmail(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { stage: 1, lifecycleId: "lc", to: "a@b.example", firstName: null, venueName: "V", adminClient: failing as any },
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      generateLink: (async () => { generateLinkCalls++; return { data: null, error: null }; }) as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendEmail: (async () => { sends++; return { ok: true }; }) as any,
+    }
+  );
+  assert.equal(result.ok, false);
+  assert.equal(sends + generateLinkCalls, 0);
+});
+
+test("sendActivationReminderEmail: a grandfathered legacy lifecycle still gets a fresh Supabase recovery link, exactly as before", async () => {
+  let generateLinkArgs: { type?: string; options?: { redirectTo?: string } } = {};
+  let text = "";
+  const result = await sendActivationReminderEmail(
+    { stage: 1, lifecycleId: "table-19", to: "owner@venue.example", firstName: "Sam", venueName: "Table 19", adminClient: legacyLifecycleClient(false) },
+    {
+      generateLink: (async (_c: unknown, params: typeof generateLinkArgs) => {
+        generateLinkArgs = params;
+        return { data: { properties: { action_link: "https://supabase.example/legacy" } }, error: null };
+      }) as never,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendEmail: (async (p: any) => { text = p.text; return { ok: true }; }) as any,
+      buildContinueUrl: () => {
+        throw new Error("legacy lifecycles must never build a verify link");
+      },
+    }
+  );
+  assert.equal(result.ok, true);
+  assert.equal(generateLinkArgs.type, "recovery");
+  assert.ok(generateLinkArgs.options?.redirectTo?.endsWith("/operator/create-password"));
+  assert.ok(text.includes("https://supabase.example/legacy"));
 });

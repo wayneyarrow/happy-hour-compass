@@ -1,6 +1,11 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { sendOperatorActivationEmail } from "@/lib/email";
+import {
+  buildVerificationContinueUrl,
+  readLifecycleVerificationRequired,
+} from "@/lib/activation/emailCodeVerificationService";
+import { sendContinueSetupEmail } from "@/lib/activation/emailCodeVerificationEmails";
 import { getSiteUrl } from "@/lib/siteUrl";
 import {
   getActivationPresentationForSubmission,
@@ -31,6 +36,9 @@ export type ResendSubmissionSetupEmailDeps = {
   authClient?: Awaited<ReturnType<typeof createClient>>;
   adminClient?: ReturnType<typeof createAdminClient>;
   checkAdmin?: (email: string | undefined) => Promise<boolean>;
+  /** Email-code (Phase 2B) seams — tests only; real callers never pass these. */
+  sendContinueEmail?: typeof sendContinueSetupEmail;
+  buildContinueUrl?: (lifecycleId: string) => string | null;
 };
 
 /**
@@ -119,27 +127,51 @@ export async function resendSubmissionSetupEmailImpl(
     return { success: true, successAction: `Setup email resent to ${email}` };
   }
 
-  // ── Generate fresh recovery link ──────────────────────────────────────────
-  const appUrl     = getSiteUrl();
-  const redirectTo = `${appUrl}/operator/create-password`;
-
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type:    "recovery",
-    email,
-    options: { redirectTo },
-  });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    console.error("[resendSubmissionSetupEmailImpl] generateLink failed:", linkError?.message);
-    return { error: "Failed to generate a new setup link. Please try again." };
+  // ── Email-code lifecycle? (Phase 2B) ──────────────────────────────────────
+  // A verification-required lifecycle gets the continue-setup email (link to
+  // the /operator/verify code screen) — never a Supabase recovery link, which
+  // would skip the required code step. Legacy lifecycles take the unchanged
+  // path below.
+  const lifecycleId = presentation.lifecycle?.id ?? null;
+  const mode = lifecycleId
+    ? await readLifecycleVerificationRequired(supabase, lifecycleId)
+    : ({ ok: true, verificationRequired: false } as const);
+  if (!mode.ok) {
+    console.error("[resendSubmissionSetupEmailImpl] Lifecycle verification-mode lookup failed:", mode.error);
+    return { error: "Could not load this operator's setup details. Please try again." };
   }
 
-  // ── Send email (awaited — fail fast on error) ─────────────────────────────
-  const emailResult = await sendOperatorActivationEmail({
-    to:        email,
-    firstName,
-    setupLink: linkData.properties.action_link,
-  });
+  let emailResult: { ok: boolean; error?: string };
+  if (mode.verificationRequired && lifecycleId) {
+    const continueUrl = (deps.buildContinueUrl ?? ((id: string) => buildVerificationContinueUrl(id)))(lifecycleId);
+    if (!continueUrl) {
+      console.error("[resendSubmissionSetupEmailImpl] Email-code verification link unavailable (HMAC secret not configured).", { lifecycleId });
+      return { error: "Email-code verification is not configured, so the setup email can't be sent. Please contact support." };
+    }
+    emailResult = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({ to: email, firstName, origin: "submission", continueUrl });
+  } else {
+    // ── Generate fresh recovery link ──────────────────────────────────────────
+    const appUrl     = getSiteUrl();
+    const redirectTo = `${appUrl}/operator/create-password`;
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type:    "recovery",
+      email,
+      options: { redirectTo },
+    });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      console.error("[resendSubmissionSetupEmailImpl] generateLink failed:", linkError?.message);
+      return { error: "Failed to generate a new setup link. Please try again." };
+    }
+
+    // ── Send email (awaited — fail fast on error) ─────────────────────────────
+    emailResult = await sendOperatorActivationEmail({
+      to:        email,
+      firstName,
+      setupLink: linkData.properties.action_link,
+    });
+  }
 
   if (!emailResult.ok) {
     console.error(

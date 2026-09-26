@@ -4,6 +4,10 @@ import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { reminderIdempotencyKey } from "@/lib/activation/activationReminderPolicy";
 import { escapeHtml } from "@/lib/activation/activationEmailEscape";
+import {
+  buildVerificationContinueUrl,
+  readLifecycleVerificationRequired,
+} from "@/lib/activation/emailCodeVerificationService";
 
 /**
  * The three reviewed operator-activation reminder email templates
@@ -24,6 +28,14 @@ import { escapeHtml } from "@/lib/activation/activationEmailEscape";
  * A fresh link is generated immediately before every send attempt — never
  * reused or persisted. Nothing in this module ever logs or stores the
  * generated link, its token, or any provider secret.
+ *
+ * EMAIL-CODE LIFECYCLES (Phase 2B): for a lifecycle created with
+ * verification_required = true, the link is the HHC /operator/verify page
+ * (a signed, non-expiring link to the code screen) instead of a Supabase
+ * recovery link — a recovery link would skip the required code step. The
+ * copy is identical for both flows (it never describes the link's own
+ * lifetime). Legacy lifecycles — every lifecycle created while the flag is
+ * off — take the exact pre-Phase-2B path.
  */
 
 export type ActivationReminderStage = 1 | 2 | 3;
@@ -149,6 +161,8 @@ type SendEmailFn = typeof sendTransactionalEmail;
 export type ActivationReminderEmailDeps = {
   generateLink?: GenerateLinkFn;
   sendEmail?: SendEmailFn;
+  readVerificationRequired?: typeof readLifecycleVerificationRequired;
+  buildContinueUrl?: (lifecycleId: string) => string | null;
 };
 
 export type ActivationReminderEmailResult =
@@ -182,22 +196,42 @@ export async function sendActivationReminderEmail(
 ): Promise<ActivationReminderEmailResult> {
   const generateLink = deps.generateLink ?? generateLinkWithRetry;
   const sendEmail = deps.sendEmail ?? sendTransactionalEmail;
+  const readVerificationRequired = deps.readVerificationRequired ?? readLifecycleVerificationRequired;
+  const buildContinueUrl = deps.buildContinueUrl ?? ((id: string) => buildVerificationContinueUrl(id));
 
-  const redirectTo = `${getSiteUrl()}/operator/create-password`;
-  const { data: linkData, error: linkError } = await generateLink(adminClient, {
-    type: "recovery",
-    email: to,
-    options: { redirectTo },
-  });
+  // A read failure fails this attempt (retried by the worker's normal
+  // backoff) rather than guessing — guessing "legacy" could send a
+  // verification-required operator a link that skips the code step.
+  const mode = await readVerificationRequired(adminClient, lifecycleId);
+  if (!mode.ok) {
+    return { ok: false, failedAt: "link_generation", error: mode.error };
+  }
 
-  if (linkError || !linkData?.properties?.action_link) {
-    return { ok: false, failedAt: "link_generation", error: linkError?.message ?? "No action_link returned." };
+  let setupLink: string;
+  if (mode.verificationRequired) {
+    const continueUrl = buildContinueUrl(lifecycleId);
+    if (!continueUrl) {
+      return { ok: false, failedAt: "link_generation", error: "Email-code verification link unavailable (HMAC secret not configured)." };
+    }
+    setupLink = continueUrl;
+  } else {
+    const redirectTo = `${getSiteUrl()}/operator/create-password`;
+    const { data: linkData, error: linkError } = await generateLink(adminClient, {
+      type: "recovery",
+      email: to,
+      options: { redirectTo },
+    });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      return { ok: false, failedAt: "link_generation", error: linkError?.message ?? "No action_link returned." };
+    }
+    setupLink = linkData.properties.action_link;
   }
 
   const { subject, html, text } = buildActivationReminderEmail(stage, {
     firstName,
     venueName,
-    setupLink: linkData.properties.action_link,
+    setupLink,
   });
 
   const result = await sendEmail({

@@ -4,6 +4,10 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
+import {
+  resolvePasswordRecoveryGateForEmail,
+  sendContinueSetupInsteadOfRecovery,
+} from "@/lib/activation/emailCodeVerificationService";
 import { buildTokenHashRecoveryLink } from "@/lib/supabase/recoveryLink";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
@@ -90,6 +94,19 @@ export async function requestConsumerPasswordReset({
   const supabase = createAdminClient();
   const normalizedEmail = email.trim().toLowerCase();
   const redirectTo = `${getSiteUrl()}/account/reset-password`;
+
+  // Email-code activation (Phase 2B): a recovery link from here would give
+  // an unverified email-code operator a session and password — and with it
+  // Business sign-in — without the required code step. Same gate as the
+  // operator Forgot Password: such an operator gets the continue-setup
+  // email instead. Consumers, activated operators, legacy and verified
+  // lifecycles are unaffected. The response is identical either way.
+  const gate = await resolvePasswordRecoveryGateForEmail(supabase, normalizedEmail);
+  if (gate.kind === "error") return { ok: true };
+  if (gate.kind === "requires_email_code") {
+    await sendContinueSetupInsteadOfRecovery({ gate, to: normalizedEmail, firstName: null });
+    return { ok: true };
+  }
 
   // Retries the known transient Supabase JWT/kid failure (see
   // generateLinkWithRetry's header comment) — the same intermittent

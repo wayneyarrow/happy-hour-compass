@@ -242,6 +242,12 @@ export function AddVenueModalContent({ onDone }: Props) {
         trackGA4Event("venue_submission_completed", {
           outcome: isAutoConfirmed ? "auto_confirmed" : "manual_review",
         });
+        // Email-code activation: continue straight onto the in-app
+        // verification screen (a code was just emailed).
+        if (result.verificationPath) {
+          window.location.assign(result.verificationPath);
+          return;
+        }
         setStep(isAutoConfirmed ? "confirmed" : "submitted");
       } catch {
         handleSubmissionError("Something went wrong. Please try again.");

@@ -56,6 +56,8 @@ export type ActivationLifecycleRow = {
   reminderStage: number;
   expiredAt: string | null;
   releasedAt: string | null;
+  /** true only for an email-code (migration 100) lifecycle; false/absent column = legacy setup-link flow. */
+  verificationRequired: boolean;
 };
 
 export type ClaimActivationLifecycleResult =
@@ -91,6 +93,7 @@ function mapRow(row: Record<string, unknown>): ActivationLifecycleRow {
     reminderStage: row.reminder_stage as number,
     expiredAt: (row.expired_at as string | null) ?? null,
     releasedAt: (row.released_at as string | null) ?? null,
+    verificationRequired: row.verification_required === true,
   };
 }
 
@@ -107,12 +110,20 @@ export async function claimOrReuseActivationLifecycle(
     operatorId,
     origin,
     logTag,
+    verificationRequired = false,
   }: {
     operatorId: string;
     origin: ActivationNoteOrigin;
     /** Prefix for log lines, e.g. "[reviewClaimAction]" — matches the
      *  convention already used throughout operatorActivation.ts. */
     logTag: string;
+    /**
+     * Create the lifecycle on the email-code flow (migration 100). Only
+     * ever true when planActivationVerificationMode() said so for a NEW
+     * lifecycle; it never changes a reused one. Omitted/false writes the
+     * exact legacy payload (the column then takes its default, false).
+     */
+    verificationRequired?: boolean;
   },
   client: ReturnType<typeof createAdminClient> = createAdminClient()
 ): Promise<ClaimActivationLifecycleResult> {
@@ -167,6 +178,7 @@ export async function claimOrReuseActivationLifecycle(
     started_at: startedAt,
     deadline_at: deadlineAt,
     reminder_stage: reminderStage,
+    ...(verificationRequired ? { verification_required: true } : {}),
   };
 
   const { data: inserted, error: insertError } = await supabase

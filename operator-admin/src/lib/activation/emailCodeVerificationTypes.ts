@@ -1,6 +1,6 @@
 /**
- * Types for the operator email-code activation flow (migration 100).
- * Foundation only — nothing imports these yet.
+ * Types for the operator email-code activation flow (migration 100;
+ * wired by Phase 2B — see emailCodeVerificationService.ts).
  *
  * Two deliberately separate groups:
  *
@@ -96,7 +96,55 @@ export type EmailCodeVerificationStatus =
   | "attempts_exhausted"
   | "resend_cooldown"
   | "rate_limited"
-  | "unavailable";
+  | "unavailable"
+  /** Input was not six digits — rejected before any lookup; never counts as an attempt. */
+  | "invalid_format"
+  /** A code was issued (so cooldown applies) but the email provider rejected it. */
+  | "send_failed";
+
+/**
+ * What /operator/verify renders on load, derived server-side from the
+ * lifecycle, operator, and current-code rows. Client-safe: no ids,
+ * digests, counters, or raw email.
+ */
+export type VerificationPageView =
+  /** Token malformed/forged, secret unset, or lifecycle not usable for email-code verification. */
+  | { view: "unavailable" }
+  /** Lifecycle expired, released, or past its deadline. */
+  | { view: "closed" }
+  /** Operator already activated — nothing left to verify. */
+  | { view: "activated" }
+  /**
+   * Verified; password not yet created. `continueVia` = how THIS browser
+   * reaches the password step: "session" (it already holds this operator's
+   * session — go straight there), "proof" (it verified the code moments ago
+   * — start a session first), or null (anyone else — the page points at
+   * Forgot password; a lifecycle verifies exactly once, never twice).
+   */
+  | { view: "verified"; maskedEmail: string; continueVia: "session" | "proof" | null }
+  /** Pending verification. `hasCurrentCode` = an unexpired, unexhausted code is outstanding. */
+  | {
+      view: "pending";
+      maskedEmail: string;
+      hasCurrentCode: boolean;
+      /**
+       * Why no usable code is outstanding, when relevant. "rate_limited" =
+       * the rolling-24h lifecycle limit is reached; resendAvailableAt then
+       * says when it frees up.
+       */
+      notice: "expired" | "attempts_exhausted" | "rate_limited" | null;
+      expiresAt: string | null;
+      resendAvailableAt: string | null;
+    };
+
+/** The only shape the verification server actions return to the browser. */
+export type EmailCodeActionResult = {
+  status: EmailCodeVerificationStatus;
+  expiresAt?: string | null;
+  resendAvailableAt?: string | null;
+  /** Set on "verified" once a session exists — where the browser should go next. */
+  next?: string;
+};
 
 /** The only verification state a future server action/page may send to the browser. */
 export type EmailCodeVerificationClientState = {

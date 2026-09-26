@@ -2,8 +2,8 @@
  * Pure policy + security functions for the operator email-code activation
  * flow (email-code initiative, Phase 1B foundation — migration 100).
  *
- * NO I/O — no Supabase, no email, no Slack, no environment reads. Nothing
- * imports this module yet; it has zero runtime effect. The HMAC secret is
+ * NO I/O — no Supabase, no email, no Slack, no environment reads (the
+ * I/O lives in emailCodeVerificationService.ts). The HMAC secret is
  * always passed in explicitly (see getOperatorVerificationCodeHmacSecret()
  * in emailCodeVerificationConfig.ts) so this module stays testable and
  * fails closed when configuration is missing.
@@ -235,6 +235,23 @@ export function toClientVerificationStatus(
   }
 }
 
+// ── Display ──────────────────────────────────────────────────────────────────
+
+/**
+ * Privacy-conscious display form of an address for the verification
+ * screen: first character of the local part, then asterisks, full domain
+ * ("w******@example.com"). Enough for the operator to recognize their own
+ * inbox without printing the full address on a page anyone holding the
+ * link can open. Anything unparseable masks entirely.
+ */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1 || at === email.length - 1) return "your email address";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  return `${local[0]}${"*".repeat(Math.max(3, Math.min(local.length - 1, 8)))}@${domain}`;
+}
+
 // ── Resend cooldown ──────────────────────────────────────────────────────────
 
 /** When a resend becomes available (lastIssuedAt + 60s), as an ISO string. */
@@ -282,6 +299,86 @@ export function canIssueWithinSendWindow(
   limit: number = VERIFICATION_MAX_SENDS_PER_WINDOW
 ): boolean {
   return countIssuancesInSendWindow(issuedAts, now) < limit;
+}
+
+// ── Daily lifecycle limit (Phase 2B hardening) ───────────────────────────────
+//
+// The migration-100 limits are per CODE (5 incorrect attempts) and per HOUR
+// (5 issuances). Because each new code starts with a fresh 5-attempt budget,
+// those alone allow ~25 guesses/hour, sustained across the whole 14-day
+// activation window. This daily cap bounds the AGGREGATE per lifecycle —
+// which, with at most one live lifecycle per operator, is also the per-email
+// scope — over a rolling 24 hours, so resending never resets it.
+//
+// Computed entirely from existing operator_verification_codes rows
+// (issued_at + attempt_count — the table is append-only apart from those
+// counters), so no schema change is needed. Enforced server-side in
+// emailCodeVerificationService.ts BEFORE issuing and BEFORE comparing a code.
+// Each attempt is attributed to its code's issued_at; attempts can only
+// happen in the 10 minutes after issuance, so that's accurate to within the
+// code lifetime.
+
+export const VERIFICATION_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Codes a lifecycle may be sent per rolling 24h (the hourly cap of 5 still applies within it). */
+export const VERIFICATION_MAX_CODES_PER_DAY = 10;
+/** Incorrect attempts a lifecycle may make per rolling 24h, across all its codes. */
+export const VERIFICATION_MAX_INCORRECT_PER_DAY = 10;
+
+export type IssuedCodeUsage = { issuedAt: string; attemptCount: number };
+
+export type DailyVerificationLimit =
+  | { blocked: false; codesInWindow: number; incorrectInWindow: number }
+  | { blocked: true; reason: "codes" | "incorrect_attempts"; availableAt: string };
+
+/**
+ * Whether a lifecycle has used up its rolling-24h allowance, and if so when
+ * it frees up (when enough of the oldest counted codes age out of the
+ * window). Fails closed: an unparseable timestamp counts as inside the
+ * window, and a malformed attempt count counts as a full code's worth.
+ */
+export function evaluateDailyVerificationLimit(
+  codes: ReadonlyArray<IssuedCodeUsage>,
+  now: Date = new Date()
+): DailyVerificationLimit {
+  const windowStart = now.getTime() - VERIFICATION_DAILY_WINDOW_MS;
+  const inWindow = codes
+    .map((c) => {
+      const ms = toMs(c.issuedAt);
+      return {
+        ms: Number.isNaN(ms) ? now.getTime() : ms,
+        attempts: Number.isInteger(c.attemptCount) && c.attemptCount >= 0 ? c.attemptCount : VERIFICATION_CODE_MAX_ATTEMPTS,
+      };
+    })
+    .filter((c) => c.ms > windowStart)
+    .sort((a, b) => a.ms - b.ms);
+
+  const incorrect = inWindow.reduce((sum, c) => sum + c.attempts, 0);
+  let freeAtMs = 0;
+  let reason: "codes" | "incorrect_attempts" | null = null;
+
+  if (inWindow.length >= VERIFICATION_MAX_CODES_PER_DAY) {
+    // Oldest codes must age out until the count is below the cap.
+    freeAtMs = inWindow[inWindow.length - VERIFICATION_MAX_CODES_PER_DAY].ms + VERIFICATION_DAILY_WINDOW_MS;
+    reason = "codes";
+  }
+  if (incorrect >= VERIFICATION_MAX_INCORRECT_PER_DAY) {
+    let remaining = incorrect;
+    for (const c of inWindow) {
+      remaining -= c.attempts;
+      if (remaining < VERIFICATION_MAX_INCORRECT_PER_DAY) {
+        const ms = c.ms + VERIFICATION_DAILY_WINDOW_MS;
+        if (ms > freeAtMs) {
+          freeAtMs = ms;
+          reason = "incorrect_attempts";
+        }
+        break;
+      }
+    }
+  }
+
+  return reason
+    ? { blocked: true, reason, availableAt: new Date(freeAtMs).toISOString() }
+    : { blocked: false, codesInWindow: inWindow.length, incorrectInWindow: incorrect };
 }
 
 // ── Digest (HMAC) ────────────────────────────────────────────────────────────

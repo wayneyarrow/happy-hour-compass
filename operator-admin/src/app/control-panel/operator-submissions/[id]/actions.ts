@@ -24,6 +24,10 @@ import { extractGoogleRatingFields } from "@/lib/google/placesMatch";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 import {
+  planActivationVerificationMode,
+  deliverDeferredActivationStart,
+} from "@/lib/activation/emailCodeActivationStart";
+import {
   resendSubmissionSetupEmailImpl,
   type ResendSetupEmailState,
 } from "./resendSubmissionSetupEmailImpl";
@@ -585,12 +589,17 @@ export async function approveAndCreateVenueAction(
   const lastName  = ((sub.last_name  as string | null) ?? "").trim();
   const email     = sub.email as string;
 
+  // Email-code activation decision (Phase 2B) — "legacy" with no reads
+  // whenever the feature flag is off.
+  const verificationPlan = await planActivationVerificationMode({ email });
+
   const provisionResult = await provisionOperatorForVenue({
     email,
     firstName,
     lastName,
     venueId,
     logTag: "[approveAndCreateVenueAction]",
+    deferNewOperatorSetupEmail: verificationPlan === "email_code",
     sendEmail: (setupLink, isReturningOperator) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
@@ -671,6 +680,7 @@ export async function approveAndCreateVenueAction(
     operatorId: provisionResult.authUserId,
     origin: { type: "submission", submissionId },
     logTag: "[approveAndCreateVenueAction]",
+    verificationRequired: provisionResult.setupEmailDeferred === true,
   });
   if (lifecycleResult.decision === "started") {
     const activationResult = await writeActivationNote({
@@ -685,6 +695,23 @@ export async function approveAndCreateVenueAction(
         { submissionId, error: activationResult.error }
       );
     }
+  }
+
+  // Email-code activation: the setup email was deferred out of provisioning
+  // and is sent now that the lifecycle exists. A failure here never undoes
+  // the approval — the founder can Resend.
+  let deferredEmailFailed = false;
+  if (provisionResult.setupEmailDeferred) {
+    const delivery = await deliverDeferredActivationStart({
+      lifecycleResult,
+      delivery:  "email_link",
+      origin:    "submission",
+      recipient: { email, firstName: firstName || "there" },
+      logTag:    "[approveAndCreateVenueAction]",
+      sendLegacySetupEmail: (setupLink) =>
+        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink }),
+    });
+    deferredEmailFailed = delivery.kind === "failed";
   }
 
   await logAuditEvent({
@@ -703,6 +730,12 @@ export async function approveAndCreateVenueAction(
 
   revalidatePath("/control-panel/operator-submissions");
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  if (deferredEmailFailed) {
+    return {
+      success:       true,
+      successAction: "Venue created — but the setup email could not be sent. Use Resend setup email.",
+    };
+  }
   return {
     success:       true,
     successAction: "Venue created and operator account activated — activation email sent",
@@ -891,12 +924,17 @@ export async function resolveExistingVenueMatchAction(
     return { error: "Submission has no email address — cannot provision operator." };
   }
 
+  // Email-code activation decision (Phase 2B) — "legacy" with no reads
+  // whenever the feature flag is off.
+  const verificationPlan = await planActivationVerificationMode({ email });
+
   const provisionResult = await provisionOperatorForVenue({
     email,
     firstName,
     lastName,
     venueId,
     logTag: "[resolveExistingVenueMatchAction]",
+    deferNewOperatorSetupEmail: verificationPlan === "email_code",
     sendEmail: (setupLink, isReturningOperator) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
@@ -972,6 +1010,7 @@ export async function resolveExistingVenueMatchAction(
     operatorId: provisionResult.authUserId,
     origin: { type: "submission", submissionId },
     logTag: "[resolveExistingVenueMatchAction]",
+    verificationRequired: provisionResult.setupEmailDeferred === true,
   });
   if (lifecycleResult.decision === "started") {
     const activationResult = await writeActivationNote({
@@ -986,6 +1025,23 @@ export async function resolveExistingVenueMatchAction(
         { submissionId, error: activationResult.error }
       );
     }
+  }
+
+  // Email-code activation: the setup email was deferred out of provisioning
+  // and is sent now that the lifecycle exists. A failure here never undoes
+  // the approval — the founder can Resend.
+  let deferredEmailFailed = false;
+  if (provisionResult.setupEmailDeferred) {
+    const delivery = await deliverDeferredActivationStart({
+      lifecycleResult,
+      delivery:  "email_link",
+      origin:    "submission",
+      recipient: { email, firstName: firstName || "there" },
+      logTag:    "[resolveExistingVenueMatchAction]",
+      sendLegacySetupEmail: (setupLink) =>
+        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink }),
+    });
+    deferredEmailFailed = delivery.kind === "failed";
   }
 
   await logAuditEvent({
@@ -1004,6 +1060,12 @@ export async function resolveExistingVenueMatchAction(
 
   revalidatePath("/control-panel/operator-submissions");
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
+  if (deferredEmailFailed) {
+    return {
+      success:       true,
+      successAction: "Approved — linked to existing venue, but the setup email could not be sent. Use Resend setup email.",
+    };
+  }
   return {
     success:       true,
     successAction: "Approved — linked to existing venue, activation email sent",

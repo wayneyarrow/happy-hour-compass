@@ -43,7 +43,8 @@ const OWNER_ACTIONS_SOURCE = readFileSync(
 test("provisionOperatorForVenue's success return no longer carries an `activation` field", () => {
   assert.match(
     OPERATOR_ACTIVATION_SOURCE,
-    /Promise<\{ ok: true; authUserId: string \} \| \{ ok: false; error: string; hhcErrorId\?: string \}>/
+    // Phase 2B added only the optional setupEmailDeferred flag — still no `activation` field.
+    /\| \{ ok: true; authUserId: string; setupEmailDeferred\?: true \}\s*\| \{ ok: false; error: string; hhcErrorId\?: string \}/
   );
 });
 
@@ -74,7 +75,7 @@ test("reviewClaimAction claims the lifecycle AFTER the claim-approved UPDATE suc
 });
 
 test("approveAndCreateVenueAction and resolveExistingVenueMatchAction each claim the lifecycle with a submission origin", () => {
-  const claimCalls = [...SUBMISSIONS_ACTIONS_SOURCE.matchAll(/claimOrReuseActivationLifecycle\(\{[\s\S]{0,200}?\}\);/g)];
+  const claimCalls = [...SUBMISSIONS_ACTIONS_SOURCE.matchAll(/claimOrReuseActivationLifecycle\(\{[\s\S]{0,300}?\}\);/g)];
   assert.equal(claimCalls.length, 2, "both submission-approval actions must call the atomic claim");
   for (const match of claimCalls) {
     assert.match(match[0], /operatorId: provisionResult\.authUserId,/);

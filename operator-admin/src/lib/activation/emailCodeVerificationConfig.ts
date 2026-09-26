@@ -2,8 +2,11 @@
  * Server-only configuration for the operator email-code activation flow
  * (email-code initiative, Phase 1B foundation — migration 100).
  *
- * NOT WIRED ANYWHERE. Nothing in claims, submissions, approval, email,
- * reminders, or any UI imports this module yet; the feature is unreachable.
+ * Wired by Phase 2B: isOperatorEmailCodeVerificationEnabled() is read in
+ * exactly one place — planActivationVerificationMode()
+ * (emailCodeActivationStart.ts) — which decides whether a NEWLY approved
+ * lifecycle uses the email-code flow. Unset in every environment today, so
+ * the feature is off.
  *
  * Server-only — never import into a Client Component. Neither function
  * logs or otherwise exposes an environment value.
@@ -19,9 +22,10 @@ export const OPERATOR_VERIFICATION_CODE_HMAC_SECRET_MIN_LENGTH = 32;
  * comparison — so " TRUE " enables, while "1", "yes", "false", empty, or an
  * absent variable all mean DISABLED.
  *
- * Intended future use: gating whether a NEWLY approved lifecycle is created
- * with verification_required = true. It never moves an existing lifecycle
- * out of the legacy setup-link flow.
+ * Gates only whether a NEWLY approved lifecycle is created with
+ * verification_required = true. It never moves an existing lifecycle out
+ * of the legacy setup-link flow, and turning it off never strands an
+ * email-code lifecycle already in flight (those keep their own mode).
  */
 export function isOperatorEmailCodeVerificationEnabled(): boolean {
   return (process.env.OPERATOR_EMAIL_CODE_VERIFICATION_ENABLED ?? "").trim().toLowerCase() === "true";

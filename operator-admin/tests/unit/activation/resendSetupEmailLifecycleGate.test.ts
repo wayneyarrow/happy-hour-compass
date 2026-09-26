@@ -337,3 +337,99 @@ test("resendClaimSetupEmailImpl: an overdue (release_required) lifecycle is bloc
   assert.match(result.error ?? "", /deadline has already passed/);
   assert.equal(wasGenerateLinkCalled(), false);
 });
+
+// ── Email-code lifecycles (Phase 2B) ─────────────────────────────────────────
+
+function emailCodeLifecycle(id: string, operatorId: string, origin: { claim?: string; submission?: string }): Row {
+  return {
+    id,
+    operator_id: operatorId,
+    origin_type: origin.claim ? "claim" : "submission",
+    origin_claim_id: origin.claim ?? null,
+    origin_submission_id: origin.submission ?? null,
+    started_at: "2026-06-01T00:00:00.000Z",
+    deadline_at: FAR_FUTURE_DEADLINE,
+    reminder_stage: 0,
+    expired_at: null,
+    released_at: null,
+    verification_required: true,
+    verification_completed_at: null,
+  };
+}
+
+test("resendClaimSetupEmailImpl: a verification-required lifecycle resends the continue-setup email to the code screen — never a Supabase link", async () => {
+  const { client, wasGenerateLinkCalled } = makeResendWorld({
+    venueClaims: [{ id: "claim-9", email: "code@example.com", first_name: "Cody", venue_id: "venue-9", status: "approved" }],
+    venues: [{ id: "venue-9", claimed_by: "op-9", created_by_operator_id: "op-9" }],
+    operators: [{ id: "op-9", email: "code@example.com", account_activated_at: null, first_name: "Cody", last_name: null }],
+    lifecycles: [emailCodeLifecycle("lc-9", "op-9", { claim: "claim-9" })],
+  });
+  const sent: { to: string; origin: string; continueUrl: string }[] = [];
+
+  const result = await resendClaimSetupEmailImpl("claim-9", {
+    authClient: fakeAuthClient(FOUNDER),
+    checkAdmin: async () => true,
+    adminClient: client,
+    buildContinueUrl: (id) => `https://staging.example/operator/verify?t=${id}.sig`,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sendContinueEmail: (async (p: any) => {
+      sent.push({ to: p.to, origin: p.origin, continueUrl: p.continueUrl });
+      return { ok: true };
+    }) as never,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(wasGenerateLinkCalled(), false);
+  assert.deepEqual(sent, [{ to: "code@example.com", origin: "claim", continueUrl: "https://staging.example/operator/verify?t=lc-9.sig" }]);
+});
+
+test("resendSubmissionSetupEmailImpl: a verification-required lifecycle resends the continue-setup email with submission copy", async () => {
+  const { client, wasGenerateLinkCalled } = makeResendWorld({
+    operatorSubmissions: [
+      { id: "sub-9", email: "sub@example.com", first_name: "Sue", operator_id: "op-10", status: "approved", venue_id: "venue-10" },
+    ],
+    venues: [{ id: "venue-10", claimed_by: "op-10", created_by_operator_id: "op-10" }],
+    operators: [{ id: "op-10", email: "sub@example.com", account_activated_at: null, first_name: "Sue", last_name: null }],
+    lifecycles: [emailCodeLifecycle("lc-10", "op-10", { submission: "sub-9" })],
+  });
+  const sent: { origin: string }[] = [];
+
+  const result = await resendSubmissionSetupEmailImpl("sub-9", {
+    authClient: fakeAuthClient(FOUNDER),
+    checkAdmin: async () => true,
+    adminClient: client,
+    buildContinueUrl: (id) => `https://staging.example/operator/verify?t=${id}.sig`,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sendContinueEmail: (async (p: any) => {
+      sent.push({ origin: p.origin });
+      return { ok: true };
+    }) as never,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(wasGenerateLinkCalled(), false);
+  assert.deepEqual(sent, [{ origin: "submission" }]);
+});
+
+test("resend: a verification-required lifecycle with no HMAC secret refuses to send rather than falling back to a Supabase link", async () => {
+  const { client, wasGenerateLinkCalled } = makeResendWorld({
+    venueClaims: [{ id: "claim-11", email: "x@example.com", first_name: "X", venue_id: "venue-11", status: "approved" }],
+    venues: [{ id: "venue-11", claimed_by: "op-11", created_by_operator_id: "op-11" }],
+    operators: [{ id: "op-11", email: "x@example.com", account_activated_at: null, first_name: "X", last_name: null }],
+    lifecycles: [emailCodeLifecycle("lc-11", "op-11", { claim: "claim-11" })],
+  });
+  let sends = 0;
+  const result = await resendClaimSetupEmailImpl("claim-11", {
+    authClient: fakeAuthClient(FOUNDER),
+    checkAdmin: async () => true,
+    adminClient: client,
+    buildContinueUrl: () => null,
+    sendContinueEmail: (async () => {
+      sends++;
+      return { ok: true };
+    }) as never,
+  });
+  assert.match(result.error ?? "", /not configured/);
+  assert.equal(sends, 0);
+  assert.equal(wasGenerateLinkCalled(), false);
+});

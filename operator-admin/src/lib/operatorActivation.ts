@@ -4,6 +4,7 @@ import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 import { writeActivationNote, SYSTEM_AUTHOR_EMAIL } from "@/lib/activation/activationNotes";
+import { resolvePasswordRecoveryGate } from "@/lib/activation/emailCodeVerificationService";
 
 // ── Observability ────────────────────────────────────────────────────────────
 //
@@ -119,6 +120,7 @@ export async function provisionOperatorForVenue({
   venueId,
   logTag,
   sendEmail,
+  deferNewOperatorSetupEmail = false,
 }: {
   email: string;
   firstName: string;
@@ -130,7 +132,21 @@ export async function provisionOperatorForVenue({
     setupLink: string,
     isReturningOperator: boolean
   ) => Promise<{ ok: boolean; error?: string }>;
-}): Promise<{ ok: true; authUserId: string } | { ok: false; error: string; hhcErrorId?: string }> {
+  /**
+   * Email-code activation (Phase 2B): for a genuinely NEW operator, skip
+   * Steps 4-5 entirely — no Supabase recovery link is generated and no
+   * setup email is sent; the caller sends the email-code flow's own email
+   * once the lifecycle exists (deliverDeferredActivationStart(),
+   * src/lib/activation/emailCodeActivationStart.ts). A returning operator
+   * is unaffected: `sendEmail` still runs with the plain /login link.
+   * Only ever true when planActivationVerificationMode() said so;
+   * omitted/false is the unchanged legacy flow.
+   */
+  deferNewOperatorSetupEmail?: boolean;
+}): Promise<
+  | { ok: true; authUserId: string; setupEmailDeferred?: true }
+  | { ok: false; error: string; hhcErrorId?: string }
+> {
   const supabase = createAdminClient();
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
 
@@ -391,6 +407,22 @@ export async function provisionOperatorForVenue({
     return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
   }
 
+  // ── Email-code activation: new operator's setup email is deferred ────────
+  // Nothing below this point can fail for this call, so there is nothing to
+  // roll back: the caller delivers the email-code flow's email after the
+  // lifecycle exists.
+  if (deferNewOperatorSetupEmail && !isReturningOperator) {
+    console.log(`${logTag} Operator provisioning complete — setup email deferred to email-code activation.`, { authUserId, venueId });
+    await sendSlackAlert({
+      channel:  "ops-alerts",
+      severity: "success",
+      title:    "Operator Provisioned",
+      message:  "Operator account created and venue linked. Setup continues through email-code verification.",
+      metadata: { Email: email, "Venue ID": venueId, "Auth User": authUserId, Flow: logTag },
+    });
+    return { ok: true, authUserId, setupEmailDeferred: true };
+  }
+
   // ── Step 4: Resolve the link to send ──────────────────────────────────────
   //
   // A returning operator (isReturningOperator) already has a password and an
@@ -549,6 +581,25 @@ export async function completeOperatorAccountActivation({
   operatorId: string;
 }): Promise<void> {
   const supabase = createAdminClient();
+
+  // ── Email-code backstop (Phase 2B hardening) ────────────────────────────
+  // An operator whose live lifecycle requires an email code that hasn't
+  // been verified must not be recorded as activated by any path that
+  // skipped the code step. Both Forgot Password actions already refuse to
+  // issue such an operator a recovery link; this is defense in depth.
+  // Legacy lifecycles, verified email-code lifecycles, team members and
+  // already-activated operators all resolve to "allow". A read error also
+  // falls through to the unchanged update: blocking here on a transient
+  // failure would permanently strand legacy operators (this gate is never
+  // retried), and the recovery-link paths already fail closed.
+  const gate = await resolvePasswordRecoveryGate(supabase, { id: operatorId, accountActivatedAt: null });
+  if (gate.kind === "requires_email_code") {
+    console.warn(
+      "[completeOperatorAccountActivation] Refused: email-code verification not completed for this lifecycle.",
+      { operatorId, lifecycleId: gate.lifecycleId }
+    );
+    return;
+  }
 
   const { data: activatedRow, error: updateError } = await supabase
     .from("operators")

@@ -11,6 +11,10 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 import {
+  planActivationVerificationMode,
+  deliverDeferredActivationStart,
+} from "@/lib/activation/emailCodeActivationStart";
+import {
   resendClaimSetupEmailImpl,
   type ResendSetupEmailState as ImplResendSetupEmailState,
 } from "./resendClaimSetupEmailImpl";
@@ -265,6 +269,10 @@ export async function reviewClaimAction(
     .maybeSingle();
   const claimVenueName = (claimVenueRow?.name as string | null) ?? "Your venue";
 
+  // Email-code activation decision (Phase 2B) — "legacy" with no reads
+  // whenever the feature flag is off.
+  const verificationPlan = await planActivationVerificationMode({ email: claimEmail });
+
   // Provision: create auth user, operator row, link venue, generate recovery
   // link, send setup/notification email. Full rollback on any step failure.
   const provisionResult = await provisionOperatorForVenue({
@@ -273,6 +281,7 @@ export async function reviewClaimAction(
     lastName,
     venueId,
     logTag:    "[reviewClaimAction]",
+    deferNewOperatorSetupEmail: verificationPlan === "email_code",
     sendEmail: (setupLink, isReturningOperator) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
@@ -291,6 +300,7 @@ export async function reviewClaimAction(
   if (!provisionResult.ok) {
     return { error: provisionResult.error };
   }
+  const setupEmailDeferred = provisionResult.setupEmailDeferred === true;
 
   // Mark claim approved — last step so full rollback was still possible above.
   // If this fails: operator is live and email was sent; log for manual recovery.
@@ -335,7 +345,9 @@ export async function reviewClaimAction(
   // Append internal note
   await supabase.from("venue_claim_notes").insert({
     claim_id:         claimId,
-    note:             `Claim approved — operator account provisioned and setup email sent to ${claimEmail}.`,
+    note:             setupEmailDeferred
+      ? `Claim approved — operator account provisioned for ${claimEmail}; setup continues through email-code verification.`
+      : `Claim approved — operator account provisioned and setup email sent to ${claimEmail}.`,
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });
@@ -349,6 +361,7 @@ export async function reviewClaimAction(
     operatorId: provisionResult.authUserId,
     origin: { type: "claim", claimId },
     logTag: "[reviewClaimAction]",
+    verificationRequired: setupEmailDeferred,
   });
   if (lifecycleResult.decision === "started") {
     const activationResult = await writeActivationNote({
@@ -363,6 +376,23 @@ export async function reviewClaimAction(
         { claimId, error: activationResult.error }
       );
     }
+  }
+
+  // Email-code activation: the setup email was deferred out of provisioning
+  // and is sent now that the lifecycle exists. A failure here never undoes
+  // the approval — the founder can Resend.
+  let deferredEmailFailed = false;
+  if (setupEmailDeferred) {
+    const delivery = await deliverDeferredActivationStart({
+      lifecycleResult,
+      delivery: "email_link",
+      origin:   "claim",
+      recipient: { email: claimEmail, firstName: firstName || "there" },
+      logTag:   "[reviewClaimAction]",
+      sendLegacySetupEmail: (setupLink) =>
+        sendPasswordSetupEmail({ to: claimEmail, firstName: firstName || "there", setupLink }),
+    });
+    deferredEmailFailed = delivery.kind === "failed";
   }
 
   // Fetch venue name for audit log (best-effort — all critical work is done)
@@ -383,6 +413,12 @@ export async function reviewClaimAction(
   revalidatePath("/control-panel/claims");
   revalidatePath(`/control-panel/claims/${claimId}`);
 
+  if (deferredEmailFailed) {
+    return {
+      success: true,
+      successAction: "Approved — but the setup email could not be sent. Use Resend setup email.",
+    };
+  }
   return { success: true, successAction: ACTION_LABELS.approve };
 }
 

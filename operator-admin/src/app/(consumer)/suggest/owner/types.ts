@@ -65,4 +65,12 @@ export type SaveResult = {
    * instant approval without checking this.
    */
   routedStatus?: string;
+  /**
+   * Email-code activation (Phase 2B): set only for a confirmed_auto
+   * submission whose operator continues on the in-app verification screen
+   * (a code was just emailed). Callers should navigate here instead of
+   * showing the "check your email for a setup link" confirmation. Never
+   * set while the feature flag is off.
+   */
+  verificationPath?: string;
 };
