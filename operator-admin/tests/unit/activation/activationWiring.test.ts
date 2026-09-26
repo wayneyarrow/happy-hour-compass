@@ -43,8 +43,9 @@ const OWNER_ACTIONS_SOURCE = readFileSync(
 test("provisionOperatorForVenue's success return no longer carries an `activation` field", () => {
   assert.match(
     OPERATOR_ACTIVATION_SOURCE,
-    // Phase 2B added only the optional setupEmailDeferred flag — still no `activation` field.
-    /\| \{ ok: true; authUserId: string; setupEmailDeferred\?: true \}\s*\| \{ ok: false; error: string; hhcErrorId\?: string \}/
+    // Phase 2B added only the optional setupEmailDeferred flag, and claim
+    // auto-approval only the optional ownershipConflict failure flag — still no `activation` field.
+    /\| \{ ok: true; authUserId: string; setupEmailDeferred\?: true \}\s*\| \{ ok: false; error: string; hhcErrorId\?: string; ownershipConflict\?: true \}/
   );
 });
 

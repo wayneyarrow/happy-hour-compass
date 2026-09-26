@@ -15,6 +15,7 @@ function formatPhoneInput(raw: string): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 import { submitClaimAction, type ClaimFormState } from "./actions";
+import { safeClaimContinuation } from "@/lib/claims/claimContinuation";
 
 const ROLE_OPTIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
 
@@ -48,6 +49,24 @@ export function ClaimForm({ venueRouteParam, venueName }: Props) {
       turnstileRef.current?.reset();
     }
   }, [state.turnstileFailed]);
+
+  // ── Auto-approved claim: continue straight into HHC onboarding ───────────
+  // The server only returns these for an auto-approved claim; the helper
+  // re-validates the exact internal destination before navigating.
+  const continuation = state.success ? safeClaimContinuation(state) : null;
+  useEffect(() => {
+    if (continuation) window.location.assign(continuation);
+  }, [continuation]);
+  if (continuation) {
+    return (
+      <div className="px-5 pt-10 pb-12 flex flex-col items-center text-center" role="status" aria-live="polite">
+        <p className="text-base font-semibold text-gray-900">Your claim was approved</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {continuation === "/login" ? "Taking you to sign in…" : "Taking you to verify your email…"}
+        </p>
+      </div>
+    );
+  }
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {

@@ -141,15 +141,24 @@ const OPERATOR_ACTIVATION_SOURCE = readFileSync(
   "utf8"
 );
 
-test("provisionOperatorForVenue's venue-link UPDATE still sets is_verified: true atomically with created_by_operator_id", () => {
-  const updateBlock = OPERATOR_ACTIVATION_SOURCE.match(
-    /\.from\("venues"\)\s*\.update\(\{[\s\S]*?\}\)\s*\.eq\("id", venueId\);/
-  );
-  assert.ok(updateBlock, "the venue-link UPDATE block must still exist, unchanged in shape");
-  assert.match(updateBlock![0], /claimed_by:\s*authUserId/);
-  assert.match(updateBlock![0], /claimed_at:\s*now/);
-  assert.match(updateBlock![0], /created_by_operator_id:\s*authUserId/);
-  assert.match(updateBlock![0], /is_verified:\s*true/);
+test("provisionOperatorForVenue's venue-link UPDATE still sets is_verified: true atomically with created_by_operator_id (by default)", () => {
+  // Claim auto-approval (2026-09) moved the payload into `venueLink` so it can
+  // opt OUT of is_verified (markVenueVerified: false) until activation. The
+  // default is unchanged: one UPDATE sets ownership AND is_verified together.
+  const linkBlock = OPERATOR_ACTIVATION_SOURCE.match(/const venueLink[^=]*= \{[\s\S]*?\};\s*if \(markVenueVerified\) venueLink\.is_verified = true;/);
+  assert.ok(linkBlock, "the venue-link payload must still be built in one place");
+  assert.match(linkBlock![0], /claimed_by:\s*authUserId/);
+  assert.match(linkBlock![0], /claimed_at:\s*now/);
+  assert.match(linkBlock![0], /created_by_operator_id:\s*authUserId/);
+  assert.match(OPERATOR_ACTIVATION_SOURCE, /markVenueVerified = true,/, "is_verified is set by default");
+  assert.match(OPERATOR_ACTIVATION_SOURCE, /supabase\.from\("venues"\)\.update\(venueLink\)\.eq\("id", venueId\)/, "a single UPDATE carries it");
+  for (const caller of [
+    "../../../src/app/control-panel/claims/[id]/actions.ts",
+    "../../../src/app/control-panel/operator-submissions/[id]/actions.ts",
+    "../../../src/app/(consumer)/suggest/owner/actions.ts",
+  ]) {
+    assert.ok(!/markVenueVerified/.test(readFileSync(join(__dirname, caller), "utf8")), `${caller} keeps the default`);
+  }
 });
 
 test("both claim approval and operator-submission approval call the shared provisionOperatorForVenue()", () => {

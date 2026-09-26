@@ -5,6 +5,11 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 import { writeActivationNote, SYSTEM_AUTHOR_EMAIL } from "@/lib/activation/activationNotes";
 import { resolvePasswordRecoveryGate } from "@/lib/activation/emailCodeVerificationService";
+import {
+  isAutoApprovedClaim,
+  writeClaimSystemNote,
+  claimVerifiedOnActivationEventKey,
+} from "@/lib/claims/claimAutoApprovalNotes";
 
 // ── Observability ────────────────────────────────────────────────────────────
 //
@@ -121,6 +126,8 @@ export async function provisionOperatorForVenue({
   logTag,
   sendEmail,
   deferNewOperatorSetupEmail = false,
+  requireUnclaimedVenue = false,
+  markVenueVerified = true,
 }: {
   email: string;
   firstName: string;
@@ -143,9 +150,27 @@ export async function provisionOperatorForVenue({
    * omitted/false is the unchanged legacy flow.
    */
   deferNewOperatorSetupEmail?: boolean;
+  /**
+   * Claim auto-approval: link the venue ONLY if it is still unowned at the
+   * moment of the write (claimed_at, claimed_by and created_by_operator_id
+   * all null), as a single conditional UPDATE. If another approval/claim
+   * won the race, nothing is overwritten, anything this call created is
+   * rolled back, and the result is { ok: false, ownershipConflict: true }
+   * with no critical alert (a lost race is an expected outcome the caller
+   * routes to founder review). Default false: existing callers keep the
+   * unconditional link.
+   */
+  requireUnclaimedVenue?: boolean;
+  /**
+   * Whether linking the venue also sets is_verified = true (the public
+   * "verified" badge). Default true (every existing caller). Claim
+   * auto-approval passes false for a not-yet-activated operator; the badge
+   * is then set when activation completes (completeOperatorAccountActivation).
+   */
+  markVenueVerified?: boolean;
 }): Promise<
   | { ok: true; authUserId: string; setupEmailDeferred?: true }
-  | { ok: false; error: string; hhcErrorId?: string }
+  | { ok: false; error: string; hhcErrorId?: string; ownershipConflict?: true }
 > {
   const supabase = createAdminClient();
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
@@ -370,15 +395,30 @@ export async function provisionOperatorForVenue({
 
   const now = new Date().toISOString();
 
-  const { error: venueError } = await supabase
-    .from("venues")
-    .update({
-      claimed_by:             authUserId,
-      claimed_at:             now,
-      created_by_operator_id: authUserId,
-      is_verified:            true,
-    })
-    .eq("id", venueId);
+  const venueLink: Record<string, unknown> = {
+    claimed_by:             authUserId,
+    claimed_at:             now,
+    created_by_operator_id: authUserId,
+  };
+  if (markVenueVerified) venueLink.is_verified = true;
+
+  let venueUpdate = supabase.from("venues").update(venueLink).eq("id", venueId);
+  if (requireUnclaimedVenue) {
+    venueUpdate = venueUpdate.is("claimed_at", null).is("claimed_by", null).is("created_by_operator_id", null);
+  }
+  const { data: linkedRows, error: venueError } = requireUnclaimedVenue
+    ? await venueUpdate.select("id")
+    : await venueUpdate;
+
+  if (!venueError && requireUnclaimedVenue && (linkedRows?.length ?? 0) === 0) {
+    // Lost the race: someone else owns the venue now. Never overwrite —
+    // undo only what THIS call created, and let the caller route the claim
+    // to founder review.
+    console.warn(`${logTag} Venue was claimed by someone else during provisioning — not overwriting.`, { venueId, authUserId });
+    if (createdNewOperator) await rbOperator(authUserId, "venue ownership changed during provisioning");
+    if (createdNewAuthUser) await rbAuthUser(authUserId, "venue ownership changed during provisioning");
+    return { ok: false, error: "The venue was claimed by someone else while this claim was processing.", ownershipConflict: true };
+  }
 
   if (venueError) {
     console.error(
@@ -861,6 +901,39 @@ export async function completeOperatorAccountActivation({
         "Sentry Event":  report.sentryEventId ?? "unavailable",
       },
     });
+  }
+
+  // ── Auto-approved claims: the public "verified" badge waits for activation ──
+  // Claim auto-approval links the venue WITHOUT is_verified (the claimant
+  // hadn't proved anything beyond the claim form yet). Now that they've
+  // verified their email and set a password, mark it verified — only for an
+  // auto-approved claim's venue, only while this operator still owns it,
+  // idempotently. Founder-approved venues were already verified at approval.
+  if (claimId && venueId) {
+    try {
+      const admin = supabase as unknown as Parameters<typeof isAutoApprovedClaim>[0];
+      if (await isAutoApprovedClaim(admin, claimId)) {
+        const { data: verifiedRows, error: verifyError } = await supabase
+          .from("venues")
+          .update({ is_verified: true })
+          .eq("id", venueId)
+          .eq("created_by_operator_id", operatorId)
+          .eq("is_verified", false)
+          .select("id");
+        if (verifyError) {
+          console.error("[completeOperatorAccountActivation] Could not mark auto-approved venue verified.", { venueId, error: verifyError.message });
+        } else if ((verifiedRows?.length ?? 0) > 0) {
+          await writeClaimSystemNote(admin, {
+            claimId,
+            note: "Venue is now publicly verified — the operator completed email verification and account activation.",
+            eventKey: claimVerifiedOnActivationEventKey(claimId),
+            metadata: { venueId },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[completeOperatorAccountActivation] Auto-approved venue verification step failed.", err);
+    }
   }
 
   const emailResult = await sendOperatorAccountActivatedNotificationEmail({

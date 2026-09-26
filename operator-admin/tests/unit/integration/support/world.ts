@@ -27,7 +27,7 @@ type Row = Record<string, unknown>;
 type Result = { data: unknown; error: { message: string; code?: string } | null; count?: number | null };
 
 export type SentEmail = { from?: string; to: string; subject: string; html: string; text: string; idempotencyKey?: string };
-export type SlackPost = { kind: "alert" | "acquisition"; channel?: string; title?: string; message?: string };
+export type SlackPost = { kind: "alert" | "acquisition"; channel?: string; title?: string; message?: string; text?: string };
 
 function freshState() {
   return {
@@ -80,8 +80,17 @@ function uniqueViolation(detail: string): Result {
   return { data: null, error: { code: "23505", message: `duplicate key value violates unique constraint (${detail})` } };
 }
 
+// Postgres stamps each INSERT with its own (microsecond) now(); ms-resolution
+// Date values would tie within one request and make created_at ordering
+// meaningless. Keep insert timestamps strictly increasing instead.
+let lastInsertMs = 0;
+function insertTimestamp(): string {
+  lastInsertMs = Math.max(world.now().getTime(), lastInsertMs + 1);
+  return new Date(lastInsertMs).toISOString();
+}
+
 function applyInsertDefaults(table: string, row: Row): Row {
-  const now = world.now().toISOString();
+  const now = insertTimestamp();
   const base: Row = { id: row.id ?? randomUUID(), created_at: now, ...row };
   if (table === "operators") return { account_activated_at: null, ...base };
   if (table === "operator_activation_lifecycles") {
@@ -107,6 +116,10 @@ function checkUnique(table: string, row: Row): Result | null {
   const rows = world.tables[table];
   if (rows.some((r) => r.id === row.id)) return uniqueViolation(`${table}_pkey`);
   if (table === "operators" && rows.some((r) => r.email === row.email)) return uniqueViolation("operators_email_key");
+  // venue_claims_one_pending_per_venue_idx: unique (venue_id) WHERE status = 'pending'.
+  if (table === "venue_claims" && row.status === "pending" && rows.some((r) => r.venue_id === row.venue_id && r.status === "pending")) {
+    return uniqueViolation("venue_claims_one_pending_per_venue_idx");
+  }
   // migration 099: partial unique index on event_key (WHERE event_key IS NOT NULL) on both notes tables.
   if ((table === "venue_claim_notes" || table === "operator_submission_notes") && row.event_key != null && rows.some((r) => r.event_key === row.event_key)) {
     return uniqueViolation(`${table}_event_key_uidx`);

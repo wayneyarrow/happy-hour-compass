@@ -199,7 +199,7 @@ export async function getRelatedClaimNotesForVenue(
 
   const { data, error } = await supabase
     .from("venue_claim_notes")
-    .select("id, claim_id, note, created_by, created_by_email, created_at")
+    .select("id, claim_id, note, event_type, created_by, created_by_email, created_at")
     .in("claim_id", claimIds)
     .order("created_at", { ascending: false });
 
@@ -208,7 +208,19 @@ export async function getRelatedClaimNotesForVenue(
     return { notes: [] };
   }
 
-  const notes: VenueNote[] = (data ?? []).map((row) => ({
+  // Account activation writes the same sentence twice on a claim — a free-
+  // text note and its structured "account_activated" twin — so the venue's
+  // story would show one event twice. Collapse exact same-claim, same-text
+  // pairs to a single entry (display only; both rows stay stored).
+  const seen = new Set<string>();
+  const deduped = (data ?? []).filter((row) => {
+    const key = `${row.claim_id as string}\u0000${row.note as string}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const notes: VenueNote[] = deduped.map((row) => ({
     id:               row.id as string,
     venue_id:         venueId,
     note:             `(via venue claim) ${row.note as string}`,

@@ -352,6 +352,7 @@ export async function sendClaimNotificationEmail({
   claimantEmail,
   phone,
   submittedAt,
+  reviewReasons,
 }: {
   claimId: string;
   venueName: string;
@@ -361,13 +362,38 @@ export async function sendClaimNotificationEmail({
   claimantEmail: string;
   phone: string;
   submittedAt: string;
+  /**
+   * Claim auto-approval (when enabled): why this claim was held for founder
+   * review, in plain English. `technicalFallback` = auto-approval was
+   * unavailable, not a claimant risk signal. Omitted (flag off) → the email
+   * and Slack post are exactly as before.
+   */
+  reviewReasons?: { reasons: string[]; technicalFallback: boolean; role?: string };
 }): Promise<{ ok: boolean; error?: string }> {
   const to = getFounderNotificationEmail();
   const appUrl = getSiteUrl();
   const reviewUrl = `${appUrl}/control-panel/claims/${claimId}`;
+  const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const reviewHeading = reviewReasons
+    ? reviewReasons.technicalFallback
+      ? "Manual review required — automatic approval was unavailable"
+      : "Manual review required because:"
+    : null;
+  const reviewHtml = reviewReasons
+    ? `<table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 24px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+            <tr><td style="padding:14px 16px;">
+              <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">${reviewHeading}</p>
+              <ul style="margin:0;padding-left:18px;font-size:14px;color:#78350f;line-height:1.6;">
+                ${reviewReasons.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}
+              </ul>
+              ${reviewReasons.technicalFallback ? `<p style="margin:8px 0 0;font-size:13px;color:#92400e;">No claimant risk signal triggered this review.</p>` : ""}
+            </td></tr>
+          </table>`
+    : "";
 
   const html = emailLayout(`
-          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">New venue claim submitted</h1>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">${reviewReasons ? "Venue claim needs manual review" : "New venue claim submitted"}</h1>
+          ${reviewHtml}
           <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
             <tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;width:38%;">Venue</td>
@@ -385,6 +411,10 @@ export async function sendClaimNotificationEmail({
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Phone</td>
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${phone}</td>
             </tr>
+            ${reviewReasons?.role ? `<tr>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Role</td>
+              <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${esc(reviewReasons.role)}</td>
+            </tr>` : ""}
             <tr style="background:#f8fafc;">
               <td style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;border-top:1px solid #e2e8f0;">Submitted</td>
               <td style="padding:10px 14px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${submittedAt}</td>
@@ -395,13 +425,19 @@ export async function sendClaimNotificationEmail({
     "Happy Hour Compass &middot; Control Panel notification"
   );
 
-  const text = `New venue claim submitted — Happy Hour Compass
+  const reviewText = reviewReasons
+    ? `${reviewHeading}
+${reviewReasons.reasons.map((r) => `• ${r}`).join("\n")}
+${reviewReasons.technicalFallback ? "No claimant risk signal triggered this review.\n" : ""}
+`
+    : "";
+  const text = `${reviewReasons ? "Venue claim needs manual review" : "New venue claim submitted"} — Happy Hour Compass
 
-Venue:     ${venueName}
+${reviewText}Venue:     ${venueName}
 Name:      ${firstName} ${lastName}
 Email:     ${claimantEmail}
 Phone:     ${phone}
-Submitted: ${submittedAt}
+${reviewReasons?.role ? `Role:      ${reviewReasons.role}\n` : ""}Submitted: ${submittedAt}
 
 Review the claim:
 ${reviewUrl}
@@ -412,7 +448,7 @@ Happy Hour Compass Control Panel`;
   const result = await sendTransactionalEmail({
     type:        "claim_notification",
     to,
-    subject:     `[Venue Claim] ${venueName}${city ? ` (${city})` : ""}`,
+    subject:     `${reviewReasons ? "[Venue Claim — Manual Review]" : "[Venue Claim]"} ${venueName}${city ? ` (${city})` : ""}`,
     html,
     text,
     criticality: "important",
@@ -420,7 +456,19 @@ Happy Hour Compass Control Panel`;
 
   await sendSlackAcquisitionNotification({
     channel: "venue-claims",
-    text: `${venueName}${city ? `\n${city}` : ""}\n<${reviewUrl}|Open in Control Panel →>`,
+    text: reviewReasons
+      ? [
+          reviewReasons.technicalFallback
+            ? `:gear: *CLAIM NEEDS MANUAL REVIEW — automatic approval unavailable* — ${venueName}${city ? ` (${city})` : ""}`
+            : `:mag: *CLAIM NEEDS MANUAL REVIEW* — ${venueName}${city ? ` (${city})` : ""}`,
+          `Claimant: ${firstName} ${lastName}${reviewReasons.role ? ` · ${reviewReasons.role}` : ""}`,
+          `Email: ${claimantEmail} · Phone: ${phone}`,
+          reviewReasons.technicalFallback ? "Why:" : "Manual review required because:",
+          ...reviewReasons.reasons.map((r) => `• ${r}`),
+          ...(reviewReasons.technicalFallback ? ["No claimant risk signal triggered this review."] : []),
+          `<${reviewUrl}|Review claim →>`,
+        ].join("\n")
+      : `${venueName}${city ? `\n${city}` : ""}\n<${reviewUrl}|Open in Control Panel →>`,
   });
 
   return result;

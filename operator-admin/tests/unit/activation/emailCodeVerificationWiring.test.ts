@@ -53,6 +53,9 @@ const ALLOWED_IMPORTERS = new Set([
   "app/forgot-password/actions.ts",
   "app/(consumer-auth)/account/forgot-password/actions.ts",
   "lib/operatorActivation.ts",
+  // claim auto-approval: availability check + in-flow orchestration (reuses the shared email-code start)
+  "lib/claims/claimAutoApprovalSignals.ts",
+  "lib/claims/claimAutoApprovalFlow.ts",
 ]);
 
 function listSourceFiles(dir: string): string[] {

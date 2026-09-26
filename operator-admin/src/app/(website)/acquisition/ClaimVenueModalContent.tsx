@@ -2,6 +2,7 @@
 
 import { useState, useActionState, useEffect, useRef } from "react";
 import { submitClaimAction, type ClaimFormState } from "@/app/(consumer)/venue/[id]/claim/actions";
+import { safeClaimContinuation } from "@/lib/claims/claimContinuation";
 import { trackEvent } from "@/lib/analytics";
 import { trackGA4Event } from "@/lib/ga4";
 import { EmailConfirmationNote } from "./emailConfirmationCopy";
@@ -72,6 +73,24 @@ export function ClaimVenueModalContent({ venueRouteParam, venueName, onDone }: P
       trackGA4Event("claim_submitted", { venue_id: venueRouteParam });
     }
   }, [state.success, venueRouteParam]);
+
+  // ── Auto-approved claim: continue straight into HHC onboarding ───────────
+  // The server only returns these for an auto-approved claim; the helper
+  // re-validates the exact internal destination before navigating.
+  const continuation = state.success ? safeClaimContinuation(state) : null;
+  useEffect(() => {
+    if (continuation) window.location.assign(continuation);
+  }, [continuation]);
+  if (continuation) {
+    return (
+      <div className="px-6 py-10 flex flex-col items-center text-center" role="status" aria-live="polite">
+        <p className="text-base font-semibold text-gray-900">Your claim was approved</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {continuation === "/login" ? "Taking you to sign in…" : "Taking you to verify your email…"}
+        </p>
+      </div>
+    );
+  }
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (state.success) {

@@ -215,13 +215,13 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 
 /** Returns a canonical ISO-2 key for comparison, or the lowercased input if unknown. */
-function normalizeCountry(value: string): string {
+export function normalizeCountry(value: string): string {
   const key = value.trim().toLowerCase();
   return COUNTRY_ALIASES[key] ?? key;
 }
 
 /** Returns the reviewer-facing display name for a country value. */
-function displayCountry(value: string): string {
+export function displayCountry(value: string): string {
   const canonical = normalizeCountry(value);
   return COUNTRY_NAMES[canonical] ?? value;
 }

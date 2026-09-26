@@ -13,6 +13,8 @@ import {
   TURNSTILE_TOKEN_FIELD,
 } from "@/lib/turnstile";
 import { reportCriticalAcquisitionFailure } from "@/lib/observability/reportCriticalFailure";
+import { isClaimAutoApprovalEnabled } from "@/lib/claims/claimAutoApprovalConfig";
+import { runClaimAutoApproval, resolveAutoApprovedClaimContinuation } from "@/lib/claims/claimAutoApprovalFlow";
 
 // Flow slug shared by every reportCriticalAcquisitionFailure() call in this
 // file. Only the unexpected primary-insert failure is instrumented — field
@@ -28,6 +30,14 @@ export type ClaimFormState = {
   /** Per-field validation errors. */
   fieldErrors?: Record<string, string>;
   turnstileFailed?: boolean;
+  /**
+   * Claim auto-approval (flag on): the claim was auto-approved for a new
+   * operator — the browser goes straight to this HHC code screen (a code was
+   * just emailed). Always a server-built relative "/operator/verify?t=…".
+   */
+  verificationPath?: string;
+  /** Claim auto-approval: an existing activated operator — continue to sign in. */
+  nextPath?: "/login";
 };
 
 const VALID_POSITIONS = ["Owner", "Manager", "Bartender", "Server", "Other"];
@@ -97,7 +107,7 @@ export async function submitClaimAction(
   async function queryVenueFull(field: "slug" | "id"): Promise<Record<string, any> | null> {
     const { data } = await supabase
       .from("venues")
-      .select("id, name, city, claimed_at")
+      .select("id, name, city, claimed_at, claimed_by, created_by_operator_id, phone, website_url, country, lat, lng")
       .eq(field, venueRouteParam)
       .eq("is_published", true)
       .maybeSingle();
@@ -111,6 +121,17 @@ export async function submitClaimAction(
   }
 
   if (venueRow.claimed_at) {
+    // Claim auto-approval: the same claimant re-submitting (retry/double
+    // click) for a venue their own auto-approved claim already owns gets
+    // the same HHC next step back, with nothing new issued.
+    if (isClaimAutoApprovalEnabled()) {
+      const continuation = await resolveAutoApprovedClaimContinuation({
+        venueId: venueRow.id as string,
+        claimedBy: (venueRow.claimed_by as string | null) ?? null,
+        email,
+      });
+      if (continuation) return { success: true, ...continuation };
+    }
     // Venue is already claimed — do not reveal claim details to public
     return { error: "This venue is not available to claim." };
   }
@@ -158,6 +179,37 @@ export async function submitClaimAction(
     dateStyle: "medium",
     timeStyle: "short",
   });
+
+  // ── Claim auto-approval (flag on only) ────────────────────────────────────
+  // The claim row above was inserted as `pending`, so the one-pending-claim-
+  // per-venue index has already serialized competing claims. The flow owns
+  // every notification from here (founder email/Slack with the decision,
+  // claimant confirmation when held). Flag off: today's flow, unchanged.
+  if (isClaimAutoApprovalEnabled()) {
+    const result = await runClaimAutoApproval({
+      claim: { id: insertedClaim.id as string, email, phone, position, ipAddress: ip },
+      venue: {
+        id: venueRow.id as string,
+        name: venueRow.name as string,
+        country: (venueRow.country as string | null) ?? null,
+        lat: (venueRow.lat as number | null) ?? null,
+        lng: (venueRow.lng as number | null) ?? null,
+        phone: (venueRow.phone as string | null) ?? null,
+        websiteUrl: (venueRow.website_url as string | null) ?? null,
+        claimedAt: (venueRow.claimed_at as string | null) ?? null,
+        claimedBy: (venueRow.claimed_by as string | null) ?? null,
+        createdByOperatorId: (venueRow.created_by_operator_id as string | null) ?? null,
+      },
+      requestHeaders: heads,
+      claimant: { firstName, lastName, email, phone, position },
+      venueCity: (venueRow.city as string | null) ?? null,
+      submittedAt,
+    });
+    if (result.outcome === "auto_approved") {
+      return { success: true, verificationPath: result.verificationPath, nextPath: result.nextPath };
+    }
+    return { success: true };
+  }
 
   // Founder notification
   console.log("[EMAIL] submitClaimAction — sending founder notification", {
