@@ -326,17 +326,20 @@ test("failure: initial code issuance fails → operator still lands on the verif
   assert.match(html, />Send code</);
 });
 
-test(
-  "KNOWN GAP: code EMAIL delivery fails after the code was issued → the page still says a code was sent",
-  { todo: "Reported, not fixed in this task: the page derives 'code sent' from the code row, not from delivery. Recoverable via 'resend' after the 60s cooldown." },
-  async () => {
-    world.emailSendFails = true;
-    const { save } = await submitThroughAddYourVenue();
-    assert.equal(world.tables.operator_verification_codes.length, 1);
-    const html = await renderVerifyPage(save.verificationPath!);
-    assert.ok(!/We sent a 6-digit code/.test(html), "should not claim a code was sent when delivery failed");
-  }
-);
+test("failure: code issued but its EMAIL fails → the verify page does not claim it was sent; it offers a new code", async () => {
+  world.emailSendFails = true;
+  const { save } = await submitThroughAddYourVenue();
+  assert.equal(world.tables.operator_verification_codes.length, 1, "the code was issued");
+  assert.equal(world.emails.filter((e) => e.to === EMAIL).length, 0, "but nothing was delivered");
+  assert.ok(save.verificationPath, "the operator still lands on the HHC verify page");
+  const html = await renderVerifyPage(save.verificationPath!);
+  assert.ok(!/We sent a 6-digit code/.test(html), "no false 'code sent' claim");
+  assert.ok(!/id="verification-code"/.test(html), "no code-entry form for an undelivered code");
+  assert.match(html, /We couldn’t send the code/);
+  assert.match(html, /Send a new code/);
+  const failure = world.tables.operator_submission_notes.filter((n) => n.event_type === "setup_delivery_failed");
+  assert.equal(failure.length, 1, "failure recorded once, on this submission's Internal Notes");
+});
 
 test("failure: provisioning fails → an error response, no success, no lifecycle, no code, no redirect", async () => {
   world.createUserFailsWith = "Database error creating new user";

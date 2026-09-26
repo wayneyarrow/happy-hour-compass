@@ -12,6 +12,7 @@ import {
   evaluateDailyVerificationLimit,
   generateVerificationCode,
   VERIFICATION_DAILY_WINDOW_MS,
+  VERIFICATION_MAX_CODES_PER_DAY,
   isVerificationCodeExhausted,
   isVerificationCodeExpired,
   maskEmail,
@@ -22,6 +23,7 @@ import {
 } from "./emailCodeVerificationPolicy";
 import { isVerifiedBrowserProofValid, readVerificationLinkToken, signVerificationLinkToken } from "./emailCodeVerificationTokens";
 import { sendContinueSetupEmail, sendVerificationCodeEmail } from "./emailCodeVerificationEmails";
+import { writeActivationNote, type ActivationNoteOrigin } from "./activationNotes";
 import type {
   ConsumeVerificationCodeOutcome,
   EmailCodeActionResult,
@@ -84,6 +86,8 @@ type LifecycleContext = {
   email: string;
   firstName: string | null;
   accountActivatedAt: string | null;
+  /** The claim/submission whose Internal Notes hold this lifecycle's history. */
+  origin: ActivationNoteOrigin | null;
 };
 
 type CurrentCode = {
@@ -159,7 +163,9 @@ export async function readLifecycleVerificationRequired(
 async function loadLifecycleContext(admin: SupabaseClient, lifecycleId: string): Promise<LifecycleContext | null> {
   const { data: lifecycle, error } = await admin
     .from("operator_activation_lifecycles")
-    .select("id, operator_id, deadline_at, expired_at, released_at, verification_required, verification_completed_at")
+    .select(
+      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, deadline_at, expired_at, released_at, verification_required, verification_completed_at"
+    )
     .eq("id", lifecycleId)
     .maybeSingle();
   if (error || !lifecycle) return null;
@@ -182,7 +188,95 @@ async function loadLifecycleContext(admin: SupabaseClient, lifecycleId: string):
     email: operator.email as string,
     firstName: (operator.first_name as string | null) ?? null,
     accountActivatedAt: (operator.account_activated_at as string | null) ?? null,
+    origin:
+      lifecycle.origin_type === "claim" && lifecycle.origin_claim_id
+        ? { type: "claim", claimId: lifecycle.origin_claim_id as string }
+        : lifecycle.origin_type === "submission" && lifecycle.origin_submission_id
+          ? { type: "submission", submissionId: lifecycle.origin_submission_id as string }
+          : null,
   };
+}
+
+// ── Code delivery state ──────────────────────────────────────────────────────
+//
+// A code row proves a code was ISSUED, not that its email arrived. When the
+// email provider rejects the send, issueVerificationCodeForLifecycle()
+// records a structured `setup_delivery_failed` Internal Note on the
+// lifecycle's claim/submission, keyed to that exact code id. The page then
+// treats that code as undelivered (the "send a new code" state) instead of
+// claiming it was sent. The key is per code, so a later successful send —
+// a new code id — is never affected by an older failure, and the failure
+// stays in the notes as history. No schema change: this reuses migration
+// 099's event_key column and its unique index (duplicate writes are no-ops).
+
+/** Deterministic Internal Note key for "this code's email was not delivered". */
+export function codeDeliveryFailedEventKey(codeId: string): string {
+  return `hhc-operator-verification-code-delivery-failed:${codeId}`;
+}
+
+async function recordCodeDeliveryFailure(admin: SupabaseClient, ctx: LifecycleContext, codeId: string): Promise<void> {
+  if (!ctx.origin) return;
+  try {
+    const result = await writeActivationNote(
+      {
+        origin: ctx.origin,
+        eventType: "setup_delivery_failed",
+        // Operational fact only: never the code, digest, provider error, or credentials.
+        note: "Verification code email delivery failed. The operator can request a new code.",
+        metadata: { flow: ctx.origin.type },
+        eventKey: codeDeliveryFailedEventKey(codeId),
+      },
+      admin as unknown as Parameters<typeof writeActivationNote>[1]
+    );
+    if (!result.ok) {
+      console.error("[emailCodeVerification] Could not record code delivery failure.", { lifecycleId: ctx.lifecycleId, error: result.error });
+    }
+  } catch (err) {
+    console.error("[emailCodeVerification] Could not record code delivery failure.", {
+      lifecycleId: ctx.lifecycleId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Whether any code already issued for this lifecycle reached the operator (i.e. has no delivery-failure record). */
+async function hasDeliveredPriorCode(admin: SupabaseClient, ctx: LifecycleContext): Promise<boolean> {
+  const { data: prior } = await admin
+    .from("operator_verification_codes")
+    .select("id")
+    .eq("lifecycle_id", ctx.lifecycleId)
+    .order("issued_at", { ascending: false })
+    .limit(VERIFICATION_MAX_CODES_PER_DAY);
+  const ids = (prior ?? []).map((r) => r.id as string);
+  if (ids.length === 0) return false;
+  if (!ctx.origin) return true;
+  const table = ctx.origin.type === "claim" ? "venue_claim_notes" : "operator_submission_notes";
+  const { data: failures, error } = await admin
+    .from(table)
+    .select("event_key")
+    .in("event_key", ids.map(codeDeliveryFailedEventKey));
+  if (error) return true;
+  return (failures?.length ?? 0) < ids.length;
+}
+
+/**
+ * Whether this code's email is known to have failed. A read error answers
+ * "not known to have failed" — the pre-fix behaviour — rather than hiding a
+ * code that was most likely delivered.
+ */
+async function isCodeDeliveryFailed(admin: SupabaseClient, ctx: LifecycleContext, codeId: string): Promise<boolean> {
+  if (!ctx.origin) return false;
+  const table = ctx.origin.type === "claim" ? "venue_claim_notes" : "operator_submission_notes";
+  const { data, error } = await admin
+    .from(table)
+    .select("id")
+    .eq("event_key", codeDeliveryFailedEventKey(codeId))
+    .maybeSingle();
+  if (error) {
+    console.error("[emailCodeVerification] Code delivery-state read failed.", { lifecycleId: ctx.lifecycleId, error: error.message });
+    return false;
+  }
+  return !!data;
 }
 
 function isLifecycleClosed(ctx: LifecycleContext, now: Date): boolean {
@@ -317,11 +411,12 @@ export async function loadVerificationPageView(
 
   const code = await loadCurrentCode(d.admin, ctx.lifecycleId);
   const resendAvailableAt = await computeResendAvailability(d.admin, ctx.lifecycleId, now);
-  let notice: "expired" | "attempts_exhausted" | null = null;
+  let notice: "expired" | "attempts_exhausted" | "delivery_failed" | null = null;
   let hasCurrentCode = false;
   if (code) {
     if (isVerificationCodeExpired(code.expiresAt, now)) notice = "expired";
     else if (isVerificationCodeExhausted(code.attemptCount, code.maxAttempts)) notice = "attempts_exhausted";
+    else if (await isCodeDeliveryFailed(d.admin, ctx, code.id)) notice = "delivery_failed";
     else hasCurrentCode = true;
   }
   return {
@@ -368,16 +463,12 @@ export async function issueVerificationCodeForLifecycle(
   if (!daily) return { status: "unavailable" };
   if (daily.blocked) return { status: "rate_limited", resendAvailableAt: daily.availableAt };
 
-  // Display only: whether this lifecycle has ever been issued a code, so the
-  // screen can say "a code" for the first send and "a new code" for a
-  // resend. Read before issuing (the issuance itself decides nothing from
-  // it); a read failure just means the neutral first-send wording.
-  const { data: priorCodes } = await d.admin
-    .from("operator_verification_codes")
-    .select("id")
-    .eq("lifecycle_id", ctx.lifecycleId)
-    .limit(1);
-  const isResend = (priorCodes?.length ?? 0) > 0;
+  // Display only: whether an earlier code was actually DELIVERED, so the
+  // screen says "a code" for the first code the operator receives and "a
+  // new code" for a genuine resend (a code whose email failed never reached
+  // them, so it doesn't count). Read before issuing — issuance decides
+  // nothing from it; a read failure just means the neutral first-send wording.
+  const isResend = await hasDeliveredPriorCode(d.admin, ctx);
 
   // The plaintext code lives only in this scope: digested for the
   // database, rendered into the email, then discarded.
@@ -412,11 +503,15 @@ export async function issueVerificationCodeForLifecycle(
     idempotencyKey: `hhc-operator-verification-code:${row.code_id}`,
   });
   if (!sent.ok) {
-    // The code row exists (and counts toward cooldown/cap), but nobody got
-    // it. Never report "sent" — the operator can request another once the
-    // cooldown passes; the provider failure already escalated via
+    // The code row exists (and counts toward the 60-second cooldown and the
+    // hourly/daily caps — all enforced by migration 100's function), but
+    // nobody got it. Never report "sent": record the failure against this
+    // code so the page shows the "send a new code" state on this and every
+    // later load (including the in-flow redirect, which ignores this
+    // return value). The provider failure already escalated via
     // sendTransactionalEmail's critical routing.
     console.error("[emailCodeVerification] Verification code email failed.", { lifecycleId: ctx.lifecycleId });
+    await recordCodeDeliveryFailure(d.admin, ctx, row.code_id);
     return { status: "send_failed", resendAvailableAt: row.resend_available_at ?? null };
   }
 

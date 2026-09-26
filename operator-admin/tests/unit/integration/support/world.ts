@@ -14,7 +14,8 @@ import { randomUUID } from "node:crypto";
  * FIDELITY NOTES
  *  - Tables enforce the unique constraints the journey relies on:
  *    operators(id, email), one LIVE lifecycle per operator (migration 098's
- *    partial unique index), one lifecycle per origin, auth users by email.
+ *    partial unique index), one lifecycle per origin, auth users by email,
+ *    and notes' event_key (migration 099).
  *  - The three migration-100 functions mirror the SQL's check order and
  *    writes; each runs with no await inside, so — like the real function
  *    under its lifecycle row lock — calls never interleave.
@@ -106,6 +107,10 @@ function checkUnique(table: string, row: Row): Result | null {
   const rows = world.tables[table];
   if (rows.some((r) => r.id === row.id)) return uniqueViolation(`${table}_pkey`);
   if (table === "operators" && rows.some((r) => r.email === row.email)) return uniqueViolation("operators_email_key");
+  // migration 099: partial unique index on event_key (WHERE event_key IS NOT NULL) on both notes tables.
+  if ((table === "venue_claim_notes" || table === "operator_submission_notes") && row.event_key != null && rows.some((r) => r.event_key === row.event_key)) {
+    return uniqueViolation(`${table}_event_key_uidx`);
+  }
   if (table === "operator_activation_lifecycles") {
     const live = (r: Row) => r.expired_at == null && r.released_at == null;
     if (live(row) && rows.some((r) => r.operator_id === row.operator_id && live(r))) {

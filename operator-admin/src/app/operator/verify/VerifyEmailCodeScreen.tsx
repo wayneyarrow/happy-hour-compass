@@ -129,6 +129,12 @@ export default function VerifyEmailCodeScreen({ token, initialView }: Props) {
         setMessage({ tone: "info", text: messageForStatus("code_sent", null, { isResend: result.isResend === true }) });
       } else if (result.status === "verified") {
         router.refresh();
+      } else if (result.status === "send_failed") {
+        // A code was issued but its email didn't go out (the server records
+        // this against that code). Whatever code form was showing is now
+        // stale, so switch to the same "send a new code" state a reload shows.
+        applyPending(result, { hasCurrentCode: false, notice: "delivery_failed", expiresAt: null });
+        setCode("");
       } else {
         applyPending(result, {});
         setMessage({ tone: "error", text: messageForStatus(result.status, result.resendAvailableAt) });
@@ -275,7 +281,7 @@ export default function VerifyEmailCodeScreen({ token, initialView }: Props) {
   const lapsedNotice = codeLapsed
     ? messageForStatus("expired")
     : pending?.notice
-      ? messageForStatus(pending.notice, pending.resendAvailableAt)
+      ? messageForStatus(pending.notice === "delivery_failed" ? "send_failed" : pending.notice, pending.resendAvailableAt)
       : null;
 
   return (

@@ -130,9 +130,10 @@ export type VerificationPageView =
       /**
        * Why no usable code is outstanding, when relevant. "rate_limited" =
        * the rolling-24h lifecycle limit is reached; resendAvailableAt then
-       * says when it frees up.
+       * says when it frees up. "delivery_failed" = a code was issued but its
+       * email was not delivered (server-recorded), so it is not usable.
        */
-      notice: "expired" | "attempts_exhausted" | "rate_limited" | null;
+      notice: "expired" | "attempts_exhausted" | "rate_limited" | "delivery_failed" | null;
       expiresAt: string | null;
       resendAvailableAt: string | null;
     };
