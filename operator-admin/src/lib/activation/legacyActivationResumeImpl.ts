@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
-import { sendPasswordSetupEmail, sendOperatorActivationEmail } from "@/lib/email";
+import { sendPasswordSetupEmail, sendOperatorActivationEmail, type EmailRecordContext } from "@/lib/email";
 import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
@@ -79,6 +79,7 @@ type SendSetupEmailFn = (args: {
   to: string;
   firstName: string;
   setupLink: string;
+  record?: EmailRecordContext;
 }) => Promise<{ ok: boolean; error?: string }>;
 
 /**
@@ -250,7 +251,18 @@ async function resumeLegacyActivation(
 
   const sendSetupEmail: SendSetupEmailFn =
     deps.sendSetupEmail ?? (origin.type === "claim" ? sendPasswordSetupEmail : sendOperatorActivationEmail);
-  const emailResult = await sendSetupEmail({ to: email, firstName, setupLink: linkData.properties.action_link });
+  const emailResult = await sendSetupEmail({
+    to: email,
+    firstName,
+    setupLink: linkData.properties.action_link,
+    record: {
+      lifecycleId: lifecycle.id,
+      operatorId,
+      claimId: origin.type === "claim" ? origin.claimId : null,
+      submissionId: origin.type === "submission" ? origin.submissionId : null,
+      context: { trigger: "legacy_resume" },
+    },
+  });
 
   if (!emailResult.ok) {
     // ── Lifecycle starts but email fails: keep the lifecycle (never delete,

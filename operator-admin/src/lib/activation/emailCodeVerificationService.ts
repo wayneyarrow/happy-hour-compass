@@ -537,6 +537,12 @@ export async function issueVerificationCodeForLifecycle(
     expiresInMinutes: Math.round(VERIFICATION_CODE_LIFETIME_MS / 60000),
     continueUrl: continueUrl ?? `${d.siteUrl}${OPERATOR_VERIFY_PATH}`,
     idempotencyKey: `hhc-operator-verification-code:${row.code_id}`,
+    record: {
+      lifecycleId: ctx.lifecycleId,
+      operatorId: ctx.operatorId,
+      claimId: ctx.origin?.type === "claim" ? ctx.origin.claimId : null,
+      submissionId: ctx.origin?.type === "submission" ? ctx.origin.submissionId : null,
+    },
   });
   if (!sent.ok) {
     // The code row exists (and counts toward the 60-second cooldown and the
@@ -839,6 +845,12 @@ export async function sendContinueSetupInsteadOfRecovery(
     });
     return { ok: false };
   }
-  const sent = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({ to, firstName, origin: gate.origin, continueUrl });
+  const sent = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
+    to,
+    firstName,
+    origin: gate.origin,
+    continueUrl,
+    record: { lifecycleId: gate.lifecycleId, context: { trigger: "recovery_redirect" } },
+  });
   return { ok: sent.ok };
 }

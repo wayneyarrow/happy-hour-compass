@@ -148,7 +148,13 @@ export async function resendSubmissionSetupEmailImpl(
       console.error("[resendSubmissionSetupEmailImpl] Email-code verification link unavailable (HMAC secret not configured).", { lifecycleId });
       return { error: "Email-code verification is not configured, so the setup email can't be sent. Please contact support." };
     }
-    emailResult = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({ to: email, firstName, origin: "submission", continueUrl });
+    emailResult = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
+      to: email,
+      firstName,
+      origin: "submission",
+      continueUrl,
+      record: { submissionId, lifecycleId, context: { trigger: "founder_resend" } },
+    });
   } else {
     // ── Generate fresh recovery link ──────────────────────────────────────────
     const appUrl     = getSiteUrl();
@@ -170,6 +176,7 @@ export async function resendSubmissionSetupEmailImpl(
       to:        email,
       firstName,
       setupLink: linkData.properties.action_link,
+      record:    { submissionId, lifecycleId, context: { trigger: "founder_resend" } },
     });
   }
 

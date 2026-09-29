@@ -9,7 +9,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const EFFECTIVE_DATE = "June 19, 2026";
-const LAST_UPDATED   = "July 25, 2026";
+const LAST_UPDATED   = "September 29, 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -219,6 +219,17 @@ export default function PrivacyPolicyPage() {
         <p>
           We send email using Resend, a third-party email delivery service. Your email address
           is shared with Resend solely for the purpose of delivering messages on our behalf.
+        </p>
+        <p>
+          <strong>Email open tracking:</strong> Emails we send may contain a small tracking image.
+          When your email program loads images, Resend reports to us that the email was opened,
+          and we record the time of the first open. We use this to confirm that account setup,
+          verification, and venue update emails are reaching the people they are meant for and
+          to follow up when they are not. An &ldquo;open&rdquo; only means the email&rsquo;s images
+          were loaded &mdash; some email programs, privacy features, and security scanners load
+          images automatically, so it does not show that you read the message. You can prevent
+          open tracking by turning off automatic image loading in your email program. We do not
+          track clicks on links in our emails.
         </p>
       </Section>
 

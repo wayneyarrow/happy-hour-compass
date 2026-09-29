@@ -245,6 +245,9 @@ export async function sendActivationReminderEmail(
     // separate Slack call is needed here for that purpose.
     criticality: "important",
     idempotencyKey: reminderIdempotencyKey(lifecycleId, stage),
+    // Email send registry (open tracking) only — the registry resolves the
+    // venue/operator from the lifecycle. No effect on sending or retries.
+    record: { lifecycleId, context: { reminderStage: stage } },
   });
 
   if (!result.ok) {

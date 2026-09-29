@@ -179,7 +179,8 @@ test("provisioning: the deferral returns BEFORE any recovery link is generated, 
   const code = stripComments(read("lib/operatorActivation.ts"));
   const deferIdx = code.indexOf("if (deferNewOperatorSetupEmail && !isReturningOperator) {");
   const generateIdx = code.indexOf("supabase.auth.admin.generateLink(");
-  const sendIdx = code.indexOf("await sendEmail(actionLink, isReturningOperator)");
+  // Prefix match: the call also passes the email-registry record (3rd arg).
+  const sendIdx = code.indexOf("await sendEmail(actionLink, isReturningOperator");
   assert.ok(deferIdx !== -1, "deferral branch present and gated on !isReturningOperator");
   assert.ok(deferIdx < generateIdx && deferIdx < sendIdx, "deferral must precede link generation and the email send");
   const branch = code.slice(deferIdx, code.indexOf("}", code.indexOf("return { ok: true, authUserId, setupEmailDeferred: true };")));

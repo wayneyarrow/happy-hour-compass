@@ -1,4 +1,4 @@
-import { sendTransactionalEmail, emailLayout, emailCta } from "@/lib/email";
+import { sendTransactionalEmail, emailLayout, emailCta, type EmailRecordContext } from "@/lib/email";
 import { escapeHtml } from "@/lib/activation/activationEmailEscape";
 
 /**
@@ -82,6 +82,8 @@ export async function sendVerificationCodeEmail(
     continueUrl: string;
     /** One key per issued code row, so a retried send of the SAME code can never duplicate. */
     idempotencyKey: string;
+    /** Email send registry context (lifecycle → venue/operator). */
+    record?: EmailRecordContext;
   },
   sendEmail: SendEmailFn = sendTransactionalEmail
 ): Promise<{ ok: boolean; error?: string }> {
@@ -96,6 +98,7 @@ export async function sendVerificationCodeEmail(
     // never receives the code cannot finish activation.
     criticality: "critical",
     idempotencyKey: params.idempotencyKey,
+    record: params.record,
   });
 }
 
@@ -148,7 +151,14 @@ Happy Hour Compass`;
 }
 
 export async function sendContinueSetupEmail(
-  params: { to: string; firstName: string | null | undefined; origin: ContinueSetupOrigin; continueUrl: string },
+  params: {
+    to: string;
+    firstName: string | null | undefined;
+    origin: ContinueSetupOrigin;
+    continueUrl: string;
+    /** Email send registry context (lifecycle → venue/operator). */
+    record?: EmailRecordContext;
+  },
   sendEmail: SendEmailFn = sendTransactionalEmail
 ): Promise<{ ok: boolean; error?: string }> {
   const { subject, html, text } = buildContinueSetupEmail(params);
@@ -161,5 +171,6 @@ export async function sendContinueSetupEmail(
     html,
     text,
     criticality: "critical",
+    record: params.record,
   });
 }

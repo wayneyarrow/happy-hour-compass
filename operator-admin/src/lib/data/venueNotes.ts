@@ -5,6 +5,8 @@ import {
   type CustomerSuccessMilestoneEventRow,
 } from "@/lib/customerSuccess/customerSuccessMilestoneNotes";
 import type { VenueNote } from "@/lib/data/venueNoteDisplay";
+import { formatEmailOpenNote, EMAIL_OPEN_ACTIVITY_AUTHOR_LABEL } from "@/lib/emailTracking/emailOpenNotes";
+import { createSupabaseEmailTrackingStore, isStoreError, type EmailTrackingStore } from "@/lib/emailTracking/emailTrackingStore";
 
 // VenueNote's canonical definition (and resolveNoteAuthor(), the pure
 // author-resolution helper) now live in ./venueNoteDisplay — a module with
@@ -296,6 +298,42 @@ export async function getCustomerSuccessNotesForVenue(
       created_by:       null,
       created_by_email: null,
       author_label:     CUSTOMER_SUCCESS_ACTIVITY_AUTHOR_LABEL,
+      created_at:       n.created_at,
+    }));
+
+  return { notes };
+}
+
+/**
+ * "Email opened" activity for this venue, from the email send registry
+ * (public.email_messages, migration 102): one read-only entry per email
+ * associated with this venue whose images have loaded at least once, dated
+ * at the first open. Projected on read like the Customer Success entries
+ * above — never copied into venue_notes. "Opened" is not "read": a privacy
+ * proxy, security scanner, or forwarded copy can also trigger it.
+ */
+export async function getEmailOpenNotesForVenue(
+  venueId: string,
+  store: EmailTrackingStore = createSupabaseEmailTrackingStore()
+): Promise<{ notes: VenueNote[] }> {
+  const rows = await store.listOpenedEmailsForVenue(venueId);
+  if (isStoreError(rows)) {
+    // Includes "table does not exist" before migration 102 is applied —
+    // the timeline simply omits this activity.
+    console.error("[getEmailOpenNotesForVenue]", rows.error);
+    return { notes: [] };
+  }
+
+  const notes: VenueNote[] = rows
+    .map(formatEmailOpenNote)
+    .filter((n): n is NonNullable<typeof n> => n !== null)
+    .map((n) => ({
+      id:               n.id,
+      venue_id:         venueId,
+      note:             n.note,
+      created_by:       null,
+      created_by_email: null,
+      author_label:     EMAIL_OPEN_ACTIVITY_AUTHOR_LABEL,
       created_at:       n.created_at,
     }));
 

@@ -62,8 +62,8 @@ import type { CustomerSuccessEventType } from "./types";
 const EVENT_TYPE: CustomerSuccessEventType = "venue_view_milestone";
 
 /** Approved sender/reply-to (Section 3) — never used for any other HHC email. */
-const CUSTOMER_SUCCESS_FROM = "Wayne <wayne@happyhourcompass.com>";
-const CUSTOMER_SUCCESS_REPLY_TO = "wayne@happyhourcompass.com";
+export const CUSTOMER_SUCCESS_FROM = "Wayne <wayne@happyhourcompass.com>";
+export const CUSTOMER_SUCCESS_REPLY_TO = "wayne@happyhourcompass.com";
 
 const MAX_ERROR_LENGTH = 500;
 
@@ -484,6 +484,12 @@ async function processDueEvent(
     from: CUSTOMER_SUCCESS_FROM,
     replyTo: CUSTOMER_SUCCESS_REPLY_TO,
     idempotencyKey,
+    record: {
+      venueId: event.venueId,
+      operatorId: event.operatorId,
+      customerSuccessEventId: event.id,
+      context: { milestone: event.milestoneValue },
+    },
   });
 
   if (sendResult.ok) {

@@ -196,6 +196,7 @@ export async function reviewClaimAction(
       firstName,
       venueName,
       moreInfoUrl,
+      record: { venueId: claimRow.venue_id as string, claimId },
     });
 
     if (!emailResult.ok) {
@@ -290,18 +291,20 @@ export async function reviewClaimAction(
     venueId,
     logTag:    "[reviewClaimAction]",
     deferNewOperatorSetupEmail: verificationPlan === "email_code",
-    sendEmail: (setupLink, isReturningOperator) =>
+    sendEmail: (setupLink, isReturningOperator, record) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
             to:        claimEmail,
             firstName: firstName || "there",
             venueName: claimVenueName,
             accessLink: setupLink,
+            record:    { ...record, claimId },
           })
         : sendPasswordSetupEmail({
             to:        claimEmail,
             firstName: firstName || "there",
             setupLink,
+            record:    { ...record, claimId },
           }),
   });
 
@@ -397,8 +400,8 @@ export async function reviewClaimAction(
       origin:   "claim",
       recipient: { email: claimEmail, firstName: firstName || "there" },
       logTag:   "[reviewClaimAction]",
-      sendLegacySetupEmail: (setupLink) =>
-        sendPasswordSetupEmail({ to: claimEmail, firstName: firstName || "there", setupLink }),
+      sendLegacySetupEmail: (setupLink, record) =>
+        sendPasswordSetupEmail({ to: claimEmail, firstName: firstName || "there", setupLink, record: { venueId, claimId, ...record } }),
     });
     deferredEmailFailed = delivery.kind === "failed";
   }

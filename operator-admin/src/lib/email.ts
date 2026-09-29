@@ -24,6 +24,13 @@ import { Resend } from "resend";
 import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
+import { registerEmailSend, recordEmailSendResult, type EmailRecordContext } from "@/lib/emailTracking/emailSendRegistry";
+import { planSendVariants, sendWithVariants, senderDomain, type SendAttemptResult } from "@/lib/emailTracking/trackedSend";
+import { buildSendKey, computeSendRef, resolveEmailEnvironment, usesTrackedSender } from "@/lib/emailTracking/emailTrackingPolicy";
+import { getTrackedSenderDomain, isEmailOpenTrackingEnabled } from "@/lib/emailTracking/emailTrackingConfig";
+import { randomUUID } from "node:crypto";
+
+export type { EmailRecordContext };
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +91,13 @@ export type EmailCriticality = "critical" | "important" | "standard";
  *   standard  → console only   (informational / non-blocking)
  *
  * Slack failures are silently swallowed — sendSlackAlert never throws.
+ *
+ * THE REQUIRED PATH for every email HHC code sends. It is also the email
+ * send registry's single integration point (src/lib/emailTracking/,
+ * migration 102): each send is registered in public.email_messages and
+ * tagged so Resend `email.opened` webhooks can record its first open. Do
+ * not call resend.emails.send() anywhere else — a direct call would bypass
+ * registration, open tracking, logging, and failure escalation.
  */
 export async function sendTransactionalEmail({
   type,
@@ -92,6 +106,7 @@ export async function sendTransactionalEmail({
   html,
   text,
   criticality,
+  record,
   replyTo,
   from,
   idempotencyKey,
@@ -114,27 +129,64 @@ export async function sendTransactionalEmail({
    * flows that don't need this (every existing call site is unaffected).
    */
   idempotencyKey?: string;
+  /**
+   * What this email is about, for the email send registry & open tracking
+   * (src/lib/emailTracking/). Every send is registered (when
+   * EMAIL_OPEN_TRACKING_ENABLED is on) whether or not this is passed; pass
+   * it whenever the email concerns a venue/operator/lifecycle/Customer
+   * Success event so a first open can appear in that venue's Internal Notes
+   * and, for notify-eligible types, in #customer-success. Omit for
+   * consumer/founder/internal emails.
+   */
+  record?: EmailRecordContext;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
-  try {
-    const resend = getResend();
-    const { data, error } = await resend.emails.send(
-      { from: from ?? DEFAULT_FROM, to, subject, html, text, replyTo },
-      idempotencyKey ? { idempotencyKey } : undefined
-    );
+  // The request never depends on the database: every variant is derived
+  // from the send key alone (see trackedSend.ts). When tracking is on, the
+  // send is registered BEFORE the provider call (so an early open still
+  // matches); registration is time-bounded, never throws, and only affects
+  // whether an open can be matched later — never what is sent.
+  const trackingEnabled = isEmailOpenTrackingEnabled();
+  const sendKey = buildSendKey(idempotencyKey, randomUUID);
+  const variants = planSendVariants({
+    from: from ?? DEFAULT_FROM,
+    replyTo,
+    emailType: type,
+    sendRef: computeSendRef(sendKey),
+    environment: resolveEmailEnvironment(),
+    trackingEnabled,
+    trackedDomain: getTrackedSenderDomain(),
+    useTrackedSender: usesTrackedSender(type, record?.context),
+  });
+  const registered = trackingEnabled ? await registerEmailSend({ type, to, sendKey, record }) : null;
 
-    if (error) {
-      console.error(`[EMAIL] FAILED type=${type} to=${to} error=${error.message}`);
-      await escalateEmailFailure({ type, to, error: error.message, criticality });
-      return { ok: false, error: error.message };
+  const sent = await sendWithVariants({ attempt: sendViaResend, variants, hasIdempotencyKey: Boolean(idempotencyKey), logContext: { type } });
+
+  const result: { ok: boolean; id?: string; error?: string } = sent.ok
+    ? { ok: true, id: sent.id }
+    : { ok: false, error: sent.error };
+
+  if (sent.ok) {
+    console.log(`[EMAIL] SUCCESS type=${type} to=${to} id=${sent.id}`);
+  } else {
+    console.error(`[EMAIL] FAILED type=${type} to=${to} error=${sent.error}`);
+    await escalateEmailFailure({ type, to, error: sent.error, criticality });
+  }
+
+  await recordEmailSendResult(registered, { ...result, sentFromDomain: sent.ok ? senderDomain(sent.variant.from) : null });
+  return result;
+
+  async function sendViaResend(p: { from: string; replyTo?: string; tags?: { name: string; value: string }[] }): Promise<SendAttemptResult> {
+    try {
+      const resend = getResend();
+      const { data, error } = await resend.emails.send(
+        { from: p.from, to, subject, html, text, replyTo: p.replyTo, ...(p.tags ? { tags: p.tags } : {}) },
+        idempotencyKey ? { idempotencyKey } : undefined
+      );
+      if (error) return { ok: false, error: error.message, errorName: error.name };
+      return { ok: true, id: data?.id ?? undefined };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-
-    console.log(`[EMAIL] SUCCESS type=${type} to=${to} id=${data?.id}`);
-    return { ok: true, id: data?.id ?? undefined };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[EMAIL] FAILED type=${type} to=${to} error=${msg}`);
-    await escalateEmailFailure({ type, to, error: msg, criticality });
-    return { ok: false, error: msg };
   }
 }
 
@@ -289,13 +341,16 @@ function emailWhatHappensNext(steps: string[]): string {
  */
 export async function sendPasswordSetupEmail({
   to,
+  record,
   firstName,
   setupLink,
 }: {
   to: string;
   firstName: string;
   setupLink: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue claim was approved</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -323,6 +378,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "claim_approval",
+    record,
     to,
     subject:     "Your Happy Hour Compass claim was approved — set up your password",
     html,
@@ -484,13 +540,16 @@ Happy Hour Compass Control Panel`;
  */
 export async function sendClaimSubmissionConfirmationEmail({
   to,
+  record,
   firstName,
   venueName,
 }: {
   to: string;
   firstName: string;
   venueName: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">We received your claim</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -528,6 +587,7 @@ Founder, Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "claim_submission_confirmation",
+    record,
     to,
     subject:     `We received your claim — ${venueName}`,
     html,
@@ -1073,6 +1133,7 @@ Founder, Happy Hour Compass`;
  */
 export async function sendOperatorSubmissionMoreInfoEmail({
   to,
+  record,
   firstName,
   venueName,
   moreInfoUrl,
@@ -1082,7 +1143,9 @@ export async function sendOperatorSubmissionMoreInfoEmail({
   venueName: string;
   /** Secure link to the structured more-info form. Expires in 72 hours. */
   moreInfoUrl: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1125,6 +1188,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "operator_submission_more_info",
+    record,
     to,
     subject:     `More information needed for your venue submission — ${venueName}`,
     html,
@@ -1144,13 +1208,16 @@ Happy Hour Compass`;
  */
 export async function sendOperatorSubmissionClosedEmail({
   to,
+  record,
   firstName,
   venueName,
 }: {
   to: string;
   firstName: string;
   venueName: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">About your submission</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1183,6 +1250,7 @@ Founder, Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "operator_submission_closed",
+    record,
     to,
     subject:     `Your Happy Hour Compass submission — ${venueName}`,
     html,
@@ -1205,13 +1273,16 @@ Founder, Happy Hour Compass`;
  */
 export async function sendOperatorSubmissionConfirmationEmail({
   to,
+  record,
   firstName,
   businessName,
 }: {
   to: string;
   firstName: string;
   businessName: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">We received your submission</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1249,6 +1320,7 @@ Founder, Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "operator_submission_confirmation",
+    record,
     to,
     subject:     `We received your submission — ${businessName}`,
     html,
@@ -1364,13 +1436,16 @@ Happy Hour Compass Control Panel`;
  */
 export async function sendOperatorActivationEmail({
   to,
+  record,
   firstName,
   setupLink,
 }: {
   to: string;
   firstName: string;
   setupLink: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue is on Happy Hour Compass</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1397,6 +1472,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "operator_activation",
+    record,
     to,
     subject:     "Your venue is on Happy Hour Compass — set up your account",
     html,
@@ -1424,6 +1500,7 @@ Happy Hour Compass`;
  */
 export async function sendVenueAddedToAccountEmail({
   to,
+  record,
   firstName,
   venueName,
   accessLink,
@@ -1432,7 +1509,9 @@ export async function sendVenueAddedToAccountEmail({
   firstName: string;
   venueName: string;
   accessLink: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">${venueName} has been added to your account</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1460,6 +1539,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "operator_venue_added",
+    record,
     to,
     subject:     `${venueName} has been added to your Happy Hour Compass account`,
     html,
@@ -1480,6 +1560,7 @@ Happy Hour Compass`;
  */
 export async function sendClaimMoreInfoEmail({
   to,
+  record,
   firstName,
   venueName,
   moreInfoUrl,
@@ -1488,7 +1569,9 @@ export async function sendClaimMoreInfoEmail({
   firstName: string;
   venueName: string;
   moreInfoUrl: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 24px;font-size:22px;font-weight:700;color:#0f172a;">A few more details needed</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1531,6 +1614,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "claim_more_info",
+    record,
     to,
     subject:     `More information needed for your venue claim — ${venueName}`,
     html,
@@ -1783,6 +1867,7 @@ Happy Hour Compass`;
  */
 export async function sendMemberInviteEmail({
   to,
+  record,
   firstName,
   venueName,
   inviterName,
@@ -1793,7 +1878,9 @@ export async function sendMemberInviteEmail({
   venueName: string;
   inviterName: string;
   inviteUrl: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Venue/claim/submission this email concerns — see sendTransactionalEmail's `record`. */
+  record?: EmailRecordContext;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">You&rsquo;ve been invited to manage ${venueName}</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1824,6 +1911,7 @@ Happy Hour Compass`;
 
   return sendTransactionalEmail({
     type:        "member_invite",
+    record,
     to,
     subject:     `You've been invited to manage ${venueName} on Happy Hour Compass`,
     html,

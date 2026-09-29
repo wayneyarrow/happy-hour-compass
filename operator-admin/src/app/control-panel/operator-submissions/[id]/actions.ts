@@ -188,6 +188,7 @@ export async function reviewSubmissionAction(
       firstName,
       venueName,
       moreInfoUrl,
+      record:      { submissionId },
     });
 
     if (!emailResult.ok) {
@@ -264,6 +265,7 @@ export async function reviewSubmissionAction(
     to:        submitterEmail,
     firstName,
     venueName,
+    record:    { submissionId },
   });
 
   if (!emailResult.ok) {
@@ -600,18 +602,20 @@ export async function approveAndCreateVenueAction(
     venueId,
     logTag: "[approveAndCreateVenueAction]",
     deferNewOperatorSetupEmail: verificationPlan === "email_code",
-    sendEmail: (setupLink, isReturningOperator) =>
+    sendEmail: (setupLink, isReturningOperator, record) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
             to:        email,
             firstName: firstName || "there",
             venueName,
             accessLink: setupLink,
+            record:    { ...record, submissionId },
           })
         : sendOperatorActivationEmail({
             to:        email,
             firstName: firstName || "there",
             setupLink,
+            record:    { ...record, submissionId },
           }),
   });
 
@@ -708,8 +712,8 @@ export async function approveAndCreateVenueAction(
       origin:    "submission",
       recipient: { email, firstName: firstName || "there" },
       logTag:    "[approveAndCreateVenueAction]",
-      sendLegacySetupEmail: (setupLink) =>
-        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink }),
+      sendLegacySetupEmail: (setupLink, record) =>
+        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink, record: { venueId, submissionId, ...record } }),
     });
     deferredEmailFailed = delivery.kind === "failed";
   }
@@ -935,18 +939,20 @@ export async function resolveExistingVenueMatchAction(
     venueId,
     logTag: "[resolveExistingVenueMatchAction]",
     deferNewOperatorSetupEmail: verificationPlan === "email_code",
-    sendEmail: (setupLink, isReturningOperator) =>
+    sendEmail: (setupLink, isReturningOperator, record) =>
       isReturningOperator
         ? sendVenueAddedToAccountEmail({
             to:        email,
             firstName: firstName || "there",
             venueName,
             accessLink: setupLink,
+            record:    { ...record, submissionId },
           })
         : sendOperatorActivationEmail({
             to:        email,
             firstName: firstName || "there",
             setupLink,
+            record:    { ...record, submissionId },
           }),
   });
 
@@ -1038,8 +1044,8 @@ export async function resolveExistingVenueMatchAction(
       origin:    "submission",
       recipient: { email, firstName: firstName || "there" },
       logTag:    "[resolveExistingVenueMatchAction]",
-      sendLegacySetupEmail: (setupLink) =>
-        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink }),
+      sendLegacySetupEmail: (setupLink, record) =>
+        sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink, record: { venueId, submissionId, ...record } }),
     });
     deferredEmailFailed = delivery.kind === "failed";
   }

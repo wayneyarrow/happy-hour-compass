@@ -276,6 +276,7 @@ export async function submitClaimAction(
       to:        email,
       firstName,
       venueName: venueRow.name as string,
+      record:    { venueId: venueRow.id as string, claimId: insertedClaim.id as string },
     });
     if (!confirmResult.ok) {
       console.error("[EMAIL] submitClaimAction — claimant confirmation not-ok:", confirmResult.error);

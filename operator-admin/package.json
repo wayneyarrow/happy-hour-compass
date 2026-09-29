@@ -26,7 +26,8 @@
     "backfill:consumer-brevo-welcome-cohort": "tsx scripts/backfillConsumerBrevoWelcomeCohort.ts",
     "customer-success:detect-venue-view-milestones": "tsx scripts/detectCustomerSuccessMilestones.ts",
     "customer-success:process-deliveries": "tsx scripts/processCustomerSuccessDeliveries.ts",
-    "activation-reminders:dry-run": "tsx scripts/processActivationReminders.ts"
+    "activation-reminders:dry-run": "tsx scripts/processActivationReminders.ts",
+    "email-open-tracking:verify": "tsx scripts/verifyEmailOpenTracking.ts"
   },
   "dependencies": {
     "@next/third-parties": "15.5.19",

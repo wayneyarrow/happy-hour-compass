@@ -11,6 +11,7 @@ import {
 } from "./emailCodeVerificationService";
 import { sendContinueSetupEmail, type ContinueSetupOrigin } from "./emailCodeVerificationEmails";
 import type { ClaimActivationLifecycleResult } from "./activationLifecycle";
+import type { EmailRecordContext } from "@/lib/email";
 
 /**
  * The ONE decision point for whether a newly approved operator uses the
@@ -148,7 +149,7 @@ export async function deliverDeferredActivationStart(
     requestIp?: string | null;
     logTag: string;
     /** The exact legacy email this call site would have sent from provisioning. */
-    sendLegacySetupEmail: (setupLink: string) => Promise<{ ok: boolean; error?: string }>;
+    sendLegacySetupEmail: (setupLink: string, record: EmailRecordContext) => Promise<{ ok: boolean; error?: string }>;
   },
   deps: DeliverDeferredActivationDeps = {}
 ): Promise<DeferredActivationResult> {
@@ -182,6 +183,7 @@ export async function deliverDeferredActivationStart(
           firstName: recipient.firstName,
           origin,
           continueUrl,
+          record: { lifecycleId: lifecycle.id, context: { trigger: "continue_setup" } },
         });
         if (sent.ok) return { kind: "continue_email_sent" };
         console.error(`${logTag} Continue-setup email failed.`, { lifecycleId: lifecycle.id, error: sent.error });
@@ -201,7 +203,7 @@ export async function deliverDeferredActivationStart(
     console.error(`${logTag} Legacy fallback setup link generation failed.`, { error: error?.message });
     return { kind: "failed", error: error?.message ?? "Setup link generation failed." };
   }
-  const sent = await sendLegacySetupEmail(data.properties.action_link);
+  const sent = await sendLegacySetupEmail(data.properties.action_link, lifecycle ? { lifecycleId: lifecycle.id } : {});
   if (!sent.ok) {
     console.error(`${logTag} Legacy fallback setup email failed.`, { error: sent.error });
     return { kind: "failed", error: sent.error ?? "Setup email failed." };

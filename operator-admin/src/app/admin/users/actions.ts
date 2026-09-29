@@ -179,6 +179,7 @@ export async function inviteUserAction(
     venueName,
     inviterName,
     inviteUrl,
+    record:      { venueId: ctx.activeVenueId ?? null, operatorId },
   });
 
   if (!emailResult.ok) {

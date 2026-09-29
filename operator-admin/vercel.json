@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/operator-activation-reminders",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/email-open-tracking",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

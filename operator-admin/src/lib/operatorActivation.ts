@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSlackAlert } from "@/lib/slack";
-import { sendOperatorAccountActivatedNotificationEmail } from "@/lib/email";
+import { sendOperatorAccountActivatedNotificationEmail, type EmailRecordContext } from "@/lib/email";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 import { writeActivationNote, SYSTEM_AUTHOR_EMAIL } from "@/lib/activation/activationNotes";
@@ -137,7 +137,12 @@ export async function provisionOperatorForVenue({
   logTag: string;
   sendEmail: (
     setupLink: string,
-    isReturningOperator: boolean
+    isReturningOperator: boolean,
+    /**
+     * Venue + operator this email concerns, for the email send registry
+     * (open tracking). Callers forward it as the email helper's `record`.
+     */
+    record: EmailRecordContext
   ) => Promise<{ ok: boolean; error?: string }>;
   /**
    * Email-code activation (Phase 2B): for a genuinely NEW operator, skip
@@ -542,7 +547,7 @@ export async function provisionOperatorForVenue({
 
   // ── Step 5: Send activation email ────────────────────────────────────────
 
-  const emailResult = await sendEmail(actionLink, isReturningOperator);
+  const emailResult = await sendEmail(actionLink, isReturningOperator, { venueId, operatorId: authUserId });
 
   if (!emailResult.ok) {
     // Sentry-only here (no reportCriticalFailure/new Slack alert): the

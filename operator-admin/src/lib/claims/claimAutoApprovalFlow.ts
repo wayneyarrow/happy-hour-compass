@@ -106,6 +106,7 @@ async function confirmToClaimant(input: ClaimFlowInput): Promise<void> {
       to: input.claimant.email,
       firstName: input.claimant.firstName,
       venueName: input.venue.name,
+      record: { venueId: input.venue.id, claimId: input.claim.id },
     });
   } catch (err) {
     console.error(`${LOG} Claimant confirmation threw.`, err);
@@ -236,10 +237,10 @@ async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowD
     // A returning operator has nothing left to complete, so the badge is
     // earned now; a new operator earns it at activation.
     markVenueVerified: returningOperator,
-    sendEmail: (link, isReturning) =>
+    sendEmail: (link, isReturning, record) =>
       isReturning
-        ? sendVenueAddedToAccountEmail({ to: input.claimant.email, firstName: input.claimant.firstName || "there", venueName: input.venue.name, accessLink: link })
-        : sendPasswordSetupEmail({ to: input.claimant.email, firstName: input.claimant.firstName || "there", setupLink: link }),
+        ? sendVenueAddedToAccountEmail({ to: input.claimant.email, firstName: input.claimant.firstName || "there", venueName: input.venue.name, accessLink: link, record: { ...record, claimId } })
+        : sendPasswordSetupEmail({ to: input.claimant.email, firstName: input.claimant.firstName || "there", setupLink: link, record: { ...record, claimId } }),
   });
   if (!provision.ok) {
     return fallBackToFounderReview(
@@ -300,8 +301,13 @@ async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowD
       recipient: { email: input.claimant.email, firstName: input.claimant.firstName },
       requestIp: input.claim.ipAddress,
       logTag: LOG,
-      sendLegacySetupEmail: (setupLink) =>
-        sendPasswordSetupEmail({ to: input.claimant.email, firstName: input.claimant.firstName || "there", setupLink }),
+      sendLegacySetupEmail: (setupLink, record) =>
+        sendPasswordSetupEmail({
+          to: input.claimant.email,
+          firstName: input.claimant.firstName || "there",
+          setupLink,
+          record: { venueId: input.venue.id, claimId, ...record },
+        }),
     });
     if (delivery.kind === "code_issued") {
       verificationPath = delivery.verificationPath;

@@ -513,18 +513,20 @@ export async function saveOperatorSubmissionAction(
       venueId,
       logTag:    "[saveOperatorSubmissionAction]",
       deferNewOperatorSetupEmail: verificationPlan === "email_code",
-      sendEmail: (setupLink, isReturningOperator) =>
+      sendEmail: (setupLink, isReturningOperator, record) =>
         isReturningOperator
           ? sendVenueAddedToAccountEmail({
               to:        formValues.email,
               firstName: formValues.firstName,
               venueName: provisionedVenueName,
               accessLink: setupLink,
+              record,
             })
           : sendOperatorActivationEmail({
               to:        formValues.email,
               firstName: formValues.firstName,
               setupLink,
+              record,
             }),
     });
 
@@ -732,8 +734,8 @@ export async function saveOperatorSubmissionAction(
           recipient: { email: formValues.email, firstName: formValues.firstName },
           requestIp: ip,
           logTag:    "[saveOperatorSubmissionAction]",
-          sendLegacySetupEmail: (setupLink) =>
-            sendOperatorActivationEmail({ to: formValues.email, firstName: formValues.firstName, setupLink }),
+          sendLegacySetupEmail: (setupLink, record) =>
+            sendOperatorActivationEmail({ to: formValues.email, firstName: formValues.firstName, setupLink, record: { ...record, venueId } }),
         });
         if (delivery.kind === "code_issued") verificationPath = delivery.verificationPath;
       }
@@ -787,6 +789,7 @@ export async function saveOperatorSubmissionAction(
         to:           formValues.email,
         firstName:    formValues.firstName,
         businessName: formValues.businessName,
+        record:       { venueId, submissionId: insertedSubmission?.id ?? null },
       });
     } catch (confirmErr) {
       console.error("[EMAIL] saveOperatorSubmissionAction — confirmation email threw:", confirmErr);
