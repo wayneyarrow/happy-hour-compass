@@ -27,6 +27,7 @@ import { MobileActionBar } from "./MobileActionBar";
 import { VenueDetailMap } from "./VenueDetailMap";
 import { ClaimVenueCTA } from "./ClaimVenueCTA";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
+import { TrackedVenueLink } from "@/app/(website)/venueIntentTracking";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 import { DailySpecialsSection } from "./DailySpecialsSection";
@@ -557,7 +558,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                     </div>
                     {/* Pass empty specials — offers render in their own subsection below */}
                     <HappyHourTimesCard
-                      venueId={venue.id}
+                      venueId={venue.venueUuid}
                       happyHourWeekly={venue.happyHourWeekly}
                       specialsFood={[]}
                       specialsDrinks={[]}
@@ -719,7 +720,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
               {/* Business hours — rendered outside divide-y because BusinessHoursRow
                   manages its own border-b internally (consumer component, can't modify). */}
               {hasBusinessHours && (
-                <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={venue.id} />
+                <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={venue.venueUuid} />
               )}
 
               <div className="divide-y divide-gray-100">
@@ -770,14 +771,16 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                       </svg>
                     }
                   >
-                    <a
+                    <TrackedVenueLink
+                      venueId={venue.venueUuid}
+                      clickType="website"
                       href={websiteUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 transition-colors break-all"
                     >
                       {formatDisplayUrl(websiteUrl)}
-                    </a>
+                    </TrackedVenueLink>
                   </InfoRow>
                 )}
 
@@ -793,14 +796,16 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                       </svg>
                     }
                   >
-                    <a
+                    <TrackedVenueLink
+                      venueId={venue.venueUuid}
+                      clickType="menu"
                       href={menuUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 transition-colors"
                     >
                       View menu
-                    </a>
+                    </TrackedVenueLink>
                   </InfoRow>
                 )}
 
@@ -860,6 +865,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                 websiteUrl={websiteUrl ?? ""}
                 menuUrl={menuUrl}
                 mapsUrl={directionsUrl}
+                venueId={venue.venueUuid}
               />
             </div>
           </div>
@@ -872,6 +878,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
         mapsUrl={directionsUrl}
         menuUrl={menuUrl}
         websiteUrl={websiteUrl ?? ""}
+        venueId={venue.venueUuid}
       />
     </div>
   );

@@ -1,3 +1,5 @@
+import { TrackedVenueLink } from "@/app/(website)/venueIntentTracking";
+
 type Props = {
   mapsUrl: string | null;
   websiteUrl: string | null;
@@ -6,6 +8,8 @@ type Props = {
   ticketUrl: string | null;
   soldOut: boolean;
   isExpired: boolean;
+  /** Venue database UUID — for Website Intent tracking. */
+  venueId: string;
 };
 
 export function EventMobileActionBar({
@@ -16,6 +20,7 @@ export function EventMobileActionBar({
   ticketUrl,
   soldOut,
   isExpired,
+  venueId,
 }: Props) {
   const showGetTickets =
     ticketingEnabled && !soldOut && Boolean(ticketUrl) && !isExpired;
@@ -44,6 +49,7 @@ export function EventMobileActionBar({
           {
             href: websiteUrl,
             label: "Website",
+            intent: "website" as const,
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
@@ -99,8 +105,10 @@ export function EventMobileActionBar({
             </div>
           )}
           {secondaryActions.map((action) => (
-            <a
+            <TrackedVenueLink
               key={action.href}
+              venueId={venueId}
+              clickType={"intent" in action ? action.intent : undefined}
               href={action.href}
               target={action.href.startsWith("http") ? "_blank" : undefined}
               rel={action.href.startsWith("http") ? "noopener noreferrer" : undefined}
@@ -108,15 +116,17 @@ export function EventMobileActionBar({
             >
               {action.icon}
               <span className="text-[10px] font-semibold tracking-wide">{action.label}</span>
-            </a>
+            </TrackedVenueLink>
           ))}
         </div>
       ) : (
         // No ticket CTA — full-width icon tab row (mirrors VenueMobileActionBar)
         <div className="flex divide-x divide-gray-100">
           {secondaryActions.map((action) => (
-            <a
+            <TrackedVenueLink
               key={action.href}
+              venueId={venueId}
+              clickType={"intent" in action ? action.intent : undefined}
               href={action.href}
               target={action.href.startsWith("http") ? "_blank" : undefined}
               rel={action.href.startsWith("http") ? "noopener noreferrer" : undefined}
@@ -124,7 +134,7 @@ export function EventMobileActionBar({
             >
               {action.icon}
               <span className="text-[10px] font-semibold tracking-wide">{action.label}</span>
-            </a>
+            </TrackedVenueLink>
           ))}
         </div>
       )}

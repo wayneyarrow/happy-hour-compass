@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatPrice } from "./eventFormatters";
+import { TrackedVenueLink, type VenueIntentLinkType } from "@/app/(website)/venueIntentTracking";
 
 type Props = {
   /** Pre-formatted label from buildDetailDateLabel, e.g. "Tuesdays • 8:00 PM" */
@@ -14,6 +15,8 @@ type Props = {
   ticketUrl: string | null;
   soldOut: boolean;
   isExpired: boolean;
+  /** Venue database UUID — for Website Intent tracking. */
+  venueId: string;
 };
 
 // ─── Shared icon SVG paths ────────────────────────────────────────────────────
@@ -71,15 +74,21 @@ function ActionBtn({
   label,
   icon,
   subtle = false,
+  venueId,
+  intent,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   subtle?: boolean;
+  venueId: string;
+  intent?: VenueIntentLinkType;
 }) {
   const isExternal = href.startsWith("http");
   return (
-    <a
+    <TrackedVenueLink
+      venueId={venueId}
+      clickType={intent}
       href={href}
       target={isExternal ? "_blank" : undefined}
       rel={isExternal ? "noopener noreferrer" : undefined}
@@ -91,7 +100,7 @@ function ActionBtn({
     >
       {icon}
       {label}
-    </a>
+    </TrackedVenueLink>
   );
 }
 
@@ -118,6 +127,7 @@ export function EventActionCard({
   ticketUrl,
   soldOut,
   isExpired,
+  venueId,
 }: Props) {
   const showGetTickets =
     ticketingEnabled && !soldOut && Boolean(ticketUrl) && !isExpired;
@@ -159,6 +169,7 @@ export function EventActionCard({
           {/* Primary: Get Tickets */}
           {showGetTickets && (
             <ActionBtn
+              venueId={venueId}
               href={ticketUrl!}
               label="Get Tickets"
               icon={<TicketIcon />}
@@ -176,6 +187,7 @@ export function EventActionCard({
           {/* Directions */}
           {mapsUrl && (
             <ActionBtn
+              venueId={venueId}
               href={mapsUrl}
               label="Get Directions"
               icon={<DirectionsIcon />}
@@ -186,16 +198,19 @@ export function EventActionCard({
           {/* Venue website */}
           {websiteUrl && (
             <ActionBtn
+              venueId={venueId}
               href={websiteUrl}
               label="Visit Website"
               icon={<GlobeIcon />}
               subtle
+              intent="website"
             />
           )}
 
           {/* Call */}
           {phone && (
             <ActionBtn
+              venueId={venueId}
               href={`tel:${phone}`}
               label="Call Venue"
               icon={<PhoneIcon />}

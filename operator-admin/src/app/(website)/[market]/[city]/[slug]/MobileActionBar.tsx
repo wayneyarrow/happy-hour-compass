@@ -1,19 +1,25 @@
 "use client";
 
+import { trackVenueIntentClick, type VenueIntentLinkType } from "@/app/(website)/venueIntentTracking";
+
 type Props = {
   phone: string;
   mapsUrl: string | null;
   menuUrl: string | null;
   websiteUrl: string;
+  /** Venue database UUID — for Website/Menu Intent tracking. */
+  venueId: string;
 };
 
 type ActionItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Intent event recorded when this action is activated, if any. */
+  intent?: VenueIntentLinkType;
 };
 
-export function MobileActionBar({ phone, mapsUrl, menuUrl, websiteUrl }: Props) {
+export function MobileActionBar({ phone, mapsUrl, menuUrl, websiteUrl, venueId }: Props) {
   const actions: ActionItem[] = [
     ...(mapsUrl
       ? [
@@ -34,6 +40,7 @@ export function MobileActionBar({ phone, mapsUrl, menuUrl, websiteUrl }: Props) 
           {
             href: menuUrl,
             label: "Menu",
+            intent: "menu" as const,
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
@@ -49,6 +56,7 @@ export function MobileActionBar({ phone, mapsUrl, menuUrl, websiteUrl }: Props) 
           {
             href: websiteUrl,
             label: "Website",
+            intent: "website" as const,
             icon: (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <circle cx="12" cy="12" r="10" />
@@ -86,6 +94,7 @@ export function MobileActionBar({ phone, mapsUrl, menuUrl, websiteUrl }: Props) 
           <a
             key={action.href}
             href={action.href}
+            onClick={action.intent ? () => trackVenueIntentClick(venueId, action.intent!) : undefined}
             target={action.href.startsWith("http") ? "_blank" : undefined}
             rel={action.href.startsWith("http") ? "noopener noreferrer" : undefined}
             className="flex-1 flex flex-col items-center gap-1 py-3 text-gray-700 hover:text-amber-600 hover:bg-amber-50 transition-colors active:bg-amber-100"

@@ -19,6 +19,7 @@ import { KnowBeforeYouGo } from "./KnowBeforeYouGo";
 import { BusinessHoursPanel } from "./BusinessHoursPanel";
 import { formatPrice, buildDetailDateLabel } from "./eventFormatters";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
+import { TrackedVenueLink } from "@/app/(website)/venueIntentTracking";
 
 /**
  * Shared event detail page body — rendered by both the canonical route
@@ -496,9 +497,9 @@ export function EventDetailContent({
                           </svg>
                         }
                       >
-                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors break-all">
+                        <TrackedVenueLink venueId={event.venueId} clickType="website" href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors break-all">
                           {formatDisplayUrl(websiteUrl)}
-                        </a>
+                        </TrackedVenueLink>
                       </InfoRow>
                     )}
 
@@ -514,9 +515,9 @@ export function EventDetailContent({
                           </svg>
                         }
                       >
-                        <a href={menuUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors">
+                        <TrackedVenueLink venueId={event.venueId} clickType="menu" href={menuUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors">
                           View menu
-                        </a>
+                        </TrackedVenueLink>
                       </InfoRow>
                     )}
 
@@ -689,6 +690,7 @@ export function EventDetailContent({
                 ticketUrl={event.ticketUrl}
                 soldOut={event.soldOut}
                 isExpired={event.isExpired}
+                venueId={event.venueId}
               />
             </div>
           </div>
@@ -704,6 +706,7 @@ export function EventDetailContent({
         ticketUrl={event.ticketUrl}
         soldOut={event.soldOut}
         isExpired={event.isExpired}
+        venueId={event.venueId}
       />
     </div>
   );

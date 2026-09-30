@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { computeHhStatus } from "@/lib/happyHourStatus";
 import { haversineKm } from "@/lib/geo";
+import { trackVenueIntentClick } from "@/app/(website)/venueIntentTracking";
 
 type HHSlot = { start: string; end: string };
 
@@ -15,6 +16,8 @@ type Props = {
   websiteUrl: string;
   menuUrl: string | null;
   mapsUrl: string | null;
+  /** Venue database UUID — for Website/Menu Intent tracking. */
+  venueId: string;
 };
 
 // ─── Open / Closed status ─────────────────────────────────────────────────────
@@ -106,15 +109,18 @@ function ActionBtn({
   icon,
   label,
   subtle = false,
+  onClick,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   subtle?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <a
       href={href}
+      onClick={onClick}
       target={href.startsWith("http") ? "_blank" : undefined}
       rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
       className={`flex items-center gap-2.5 w-full px-4 rounded-xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 ${
@@ -140,6 +146,7 @@ export function VenueActionCard({
   websiteUrl,
   menuUrl,
   mapsUrl,
+  venueId,
 }: Props) {
   const [openStatus, setOpenStatus] = useState<string | null>(null);
   const [nextOpen, setNextOpen] = useState<string | null>(null);
@@ -282,6 +289,7 @@ export function VenueActionCard({
             href={menuUrl}
             subtle
             label="View Menu"
+            onClick={() => trackVenueIntentClick(venueId, "menu")}
             icon={
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                 <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
@@ -298,6 +306,7 @@ export function VenueActionCard({
             href={websiteUrl}
             subtle
             label="Visit Website"
+            onClick={() => trackVenueIntentClick(venueId, "website")}
             icon={
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                 <circle cx="12" cy="12" r="10" />

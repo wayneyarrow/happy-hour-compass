@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { recordVenueClick } from "@/lib/venueClickTracking";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const VALID_CLICK_TYPES = new Set([
-  "website",
-  "menu",
-  "hh_schedule_expand",
-  "business_hours_expand",
-]);
-
+/**
+ * Records an Operator Admin "Intent" action (website/menu click, happy hour
+ * schedule or business hours expand) in venue_click_events.
+ *
+ * Accepts either the venue UUID or its slug — see
+ * src/lib/venueClickTracking.ts for why. Responses: 204 stored,
+ * 400 malformed payload, 404 unknown venue, 500 lookup/insert failure.
+ * Callers are fire-and-forget, so a non-2xx never affects the consumer.
+ */
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -18,28 +19,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { venueId, clickType, sessionId } = body as Record<string, unknown>;
-
-  if (typeof venueId !== "string" || !UUID_RE.test(venueId)) {
-    return NextResponse.json({ error: "Invalid venueId" }, { status: 400 });
-  }
-  if (typeof clickType !== "string" || !VALID_CLICK_TYPES.has(clickType)) {
-    return NextResponse.json({ error: "Invalid clickType" }, { status: 400 });
-  }
-  if (typeof sessionId !== "string" || sessionId.length === 0) {
-    return NextResponse.json({ error: "Invalid sessionId" }, { status: 400 });
-  }
-
+  let supabase: ReturnType<typeof createAdminClient>;
   try {
-    const supabase = createAdminClient();
-    await supabase.from("venue_click_events").insert({
-      venue_id:   venueId,
-      click_type: clickType,
-      session_id: sessionId,
-    });
-  } catch {
-    // Intentionally swallowed — tracking failures must not affect the consumer.
+    supabase = createAdminClient();
+  } catch (err) {
+    console.error("[track/venue-click] admin client unavailable", err);
+    return NextResponse.json({ error: "Tracking unavailable" }, { status: 500 });
   }
 
-  return new NextResponse(null, { status: 204 });
+  const result = await recordVenueClick(body, {
+    findVenueId: async (identifier) => {
+      const { data, error } = await supabase
+        .from("venues")
+        .select("id")
+        .eq(identifier.kind === "uuid" ? "id" : "slug", identifier.value)
+        .maybeSingle();
+      return { venueId: (data?.id as string | undefined) ?? null, error };
+    },
+    insertClick: async (row) => {
+      const { error } = await supabase.from("venue_click_events").insert(row);
+      return { error };
+    },
+    logError: (message, detail) => {
+      console.error(`[track/venue-click] ${message}`, detail);
+    },
+  });
+
+  if (result.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
+  return NextResponse.json({ error: result.error }, { status: result.status });
 }
