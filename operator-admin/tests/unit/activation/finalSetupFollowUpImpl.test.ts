@@ -31,6 +31,7 @@ function seed(opts: {
   activated?: boolean;
   owner?: string | null;
   onLifecycleSelect?: (callIndex: number, lifecycles: FakeLifecycleRow[]) => void;
+  postgrestTimestamps?: boolean;
 } = {}) {
   const origin = opts.origin ?? "claim";
   const lifecycle = makeLifecycleRow({
@@ -51,7 +52,7 @@ function seed(opts: {
     claims: origin === "claim" ? [{ id: "claim-1", venue_id: "venue-1" }] : [],
     submissions: origin === "submission" ? [{ id: "sub-1", venue_id: "venue-1" }] : [],
     venues: [{ id: "venue-1", name: "Buffalo Rouge Brewing Co.", created_by_operator_id: opts.owner === undefined ? "op-1" : opts.owner }],
-  }, opts.onLifecycleSelect ? { onLifecycleSelect: opts.onLifecycleSelect } : undefined);
+  }, { onLifecycleSelect: opts.onLifecycleSelect, postgrestTimestamps: opts.postgrestTimestamps });
   return fake;
 }
 
@@ -501,4 +502,45 @@ test("a returned provider failure is not ambiguous-in-flight: the claim is relea
   const result = await sendFinalSetupEmailImpl(originFor("claim"), d);
   assert.match(result.error ?? "", /may not have been sent/);
   assert.equal(fake.lifecycles[0].setup_link_claimed_at, null);
+});
+
+// ── Staging QA regression: PostgREST timestamp format (2026-10-02) ──────────
+// Supabase returns the stored claim as "…26.005+00:00" while the code wrote
+// "…26.005Z". An exact string comparison treated every request as having
+// lost its own claim: Copy setup link returned "This request took too long…"
+// after ~2 s with no competing request, and left the claim held.
+
+test("regression: with PostgREST-formatted timestamps, Copy setup link returns the link and releases its claim", async () => {
+  const fake = seed({ postgrestTimestamps: true });
+  const { d, linkCalls } = deps(fake);
+  const result = await generateFinalSetupLinkImpl(originFor("claim"), d);
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  assert.equal(linkCalls.length, 1);
+  assert.equal(fake.lifecycles[0].setup_link_claimed_at, null, "own claim released, not left blocking retries");
+  assert.equal(fake.venueClaimNotes[0].event_type, "final_setup_link_generated");
+});
+
+test("regression: with PostgREST-formatted timestamps, Final resend sends once with no false 'newer link' warning and releases its claim", async () => {
+  const fake = seed({ postgrestTimestamps: true });
+  const { d, emailCalls } = deps(fake);
+  const result = await sendFinalSetupEmailImpl(originFor("claim"), d);
+  assert.equal(result.success, true, result.error);
+  assert.equal(result.warning, undefined);
+  assert.equal(emailCalls.length, 1);
+  assert.equal(fake.lifecycles[0].setup_link_claimed_at, null);
+  assert.equal((fake.venueClaimNotes[0].metadata_json as Record<string, unknown>).supersededDuringSend, undefined);
+});
+
+test("regression: a genuine takeover is still detected when timestamps are PostgREST-formatted", async () => {
+  const fake = seed({ postgrestTimestamps: true });
+  const { d, emailCalls } = deps(fake);
+  const realGenerate = d.generateLink!;
+  d.generateLink = (async (...args: any[]) => {
+    const r = await (realGenerate as any)(...args);
+    fake.lifecycles[0].setup_link_claimed_at = new Date(NOW.getTime() + 61_000).toISOString().replace(/Z$/, "+00:00");
+    return r;
+  }) as typeof d.generateLink;
+  const result = await sendFinalSetupEmailImpl(originFor("claim"), d);
+  assert.match(result.error ?? "", /took too long/);
+  assert.equal(emailCalls.length, 0);
 });

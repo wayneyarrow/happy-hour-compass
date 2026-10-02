@@ -246,12 +246,26 @@ async function claimSetupLinkLock(admin: AdminClient, ctx: FollowUpContext, now:
     .eq("id", ctx.lifecycleId)
     .is("released_at", null);
   const cas = ctx.setupLinkClaimedAt ? base.eq("setup_link_claimed_at", ctx.setupLinkClaimedAt) : base.is("setup_link_claimed_at", null);
-  const { data, error } = await cas.select("id").maybeSingle();
+  const { data, error } = await cas.select("id, setup_link_claimed_at").maybeSingle();
   if (error) {
     console.error("[finalSetupFollowUp] Setup-link lock claim failed:", error.message);
     return null;
   }
-  return data ? claimedAt : null;
+  if (!data) return null;
+  // Our ownership token is the value the database stored, as it returns it
+  // (PostgREST formats timestamptz as "…+00:00", not the "…Z" we wrote).
+  return (data.setup_link_claimed_at as string | null) ?? claimedAt;
+}
+
+/**
+ * Same instant, regardless of how each side was formatted ("…Z" vs
+ * "…+00:00", trailing zeros). Never compare timestamptz values as strings.
+ */
+function isSameInstant(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  return Number.isFinite(ta) && ta === tb;
 }
 
 /**
@@ -270,7 +284,16 @@ async function stillHoldsSetupLinkLock(admin: AdminClient, lifecycleId: string, 
     console.error("[finalSetupFollowUp] Setup-link lock re-check failed:", error.message);
     return false;
   }
-  return data?.setup_link_claimed_at === claimedAt;
+  const holds = isSameInstant(data?.setup_link_claimed_at as string | null | undefined, claimedAt);
+  if (!holds) {
+    // Diagnostic only — never the link or token.
+    console.warn("[finalSetupFollowUp] Setup-link claim no longer ours.", {
+      lifecycleId,
+      ourClaim: claimedAt,
+      currentClaim: (data?.setup_link_claimed_at as string | null | undefined) ?? null,
+    });
+  }
+  return holds;
 }
 
 async function releaseSetupLinkLock(admin: AdminClient, lifecycleId: string, claimedAt: string): Promise<void> {

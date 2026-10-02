@@ -165,6 +165,15 @@ function makeSelectBuilder(getRows: () => Row[]) {
   return builder;
 }
 
+const ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/** Mirrors PostgREST's timestamptz output format for any ISO-Z string value in a patch. */
+function toPostgrestTimestamps(patch: Row): Row {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(patch)) out[k] = typeof v === "string" && ISO_Z.test(v) ? v.replace(/Z$/, "+00:00") : v;
+  return out;
+}
+
 function makeUpdateBuilder(getRows: () => Row[], patch: Row) {
   const filters: Filter[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -236,7 +245,16 @@ export function createFakeActivationReminderClient(
    * changes deadline_at between the lease claim and the pre-send
    * validation re-read") without needing genuine async interleaving.
    */
-  hooks?: { onLifecycleSelect?: (callIndex: number, lifecycles: FakeLifecycleRow[]) => void }
+  hooks?: {
+    onLifecycleSelect?: (callIndex: number, lifecycles: FakeLifecycleRow[]) => void;
+    /**
+     * Store written timestamps the way PostgREST returns timestamptz
+     * ("2026-10-02T17:33:26.005+00:00"), not as the JS ISO string the code
+     * wrote ("…26.005Z"). Real Supabase does this; opt-in so existing tests
+     * that compare exact ISO strings are unaffected.
+     */
+    postgrestTimestamps?: boolean;
+  }
 ) {
   const lifecycles: Row[] = seed.lifecycles as unknown as Row[];
   const operators: Row[] = seed.operators as unknown as Row[];
@@ -258,7 +276,8 @@ export function createFakeActivationReminderClient(
               hooks?.onLifecycleSelect?.(lifecycleSelectCallCount, lifecycles as unknown as FakeLifecycleRow[]);
               return makeSelectBuilder(() => lifecycles);
             },
-            update: (patch: Row) => makeUpdateBuilder(() => lifecycles, patch),
+            update: (patch: Row) =>
+              makeUpdateBuilder(() => lifecycles, hooks?.postgrestTimestamps ? toPostgrestTimestamps(patch) : patch),
           };
         case "operators":
           return { select: () => makeSelectBuilder(() => operators) };
