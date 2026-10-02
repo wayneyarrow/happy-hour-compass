@@ -60,6 +60,9 @@ import {
   type ActivationExpiryOrigin,
 } from "@/lib/activation/activationExpiryNotifications";
 import { REMINDER_LEASE_STALE_MINUTES, isSetupLinkClaimActive } from "@/lib/activation/setupLinkLock";
+import { isSetupContactCoordinationEnabled } from "@/lib/activation/setupContactConfig";
+import { decideReminder, type ReminderDecision } from "@/lib/activation/setupContactPolicy";
+import { createSetupContactCoordinator, type SetupContactCoordinator } from "@/lib/activation/setupContactStore";
 import {
   loadExpiryFollowUpDetails,
   type ExpiryFollowUpLifecycleRow,
@@ -84,6 +87,8 @@ export type PlannedAction =
   | { type: "expiry_slack"; lifecycleId: string }
   | { type: "expiry_founder_email"; lifecycleId: string }
   | { type: "expiry_follow_up_skipped"; lifecycleId: string; reason: ExpiryFollowUpSkipReason }
+  | { type: "reminder_deferred"; lifecycleId: string; stage: ActivationReminderStage; until: string }
+  | { type: "reminder_skipped_spacing"; lifecycleId: string; stage: ActivationReminderStage }
   | { type: "reminder_send"; lifecycleId: string; stage: ActivationReminderStage; to: string };
 
 export type ActivationReminderProcessingResult = {
@@ -106,6 +111,10 @@ export type ActivationReminderProcessingResult = {
   reminderSkippedRaced: number;
   reminderSkippedActivated: number;
   reminderSkippedUnresolvedOrigin: number;
+  /** Reminders rescheduled to 48 h after an incomplete-setup milestone (not attempts). */
+  reminderDeferredForMilestone: number;
+  /** Reminders skipped because 48 h milestone spacing would reach the setup deadline. */
+  reminderSkippedForSpacing: number;
   /** Only ever populated when dryRun is true. */
   plannedActions: PlannedAction[];
   errors: { lifecycleId: string; message: string }[];
@@ -142,6 +151,8 @@ function zeroCounters(): Omit<ActivationReminderProcessingResult, "enabled" | "d
     reminderSkippedRaced: 0,
     reminderSkippedActivated: 0,
     reminderSkippedUnresolvedOrigin: 0,
+    reminderDeferredForMilestone: 0,
+    reminderSkippedForSpacing: 0,
     plannedActions: [],
     errors: [],
   };
@@ -167,7 +178,12 @@ export type ProcessActivationRemindersDeps = {
   sendExpiryFounderEmail?: typeof sendActivationExpiryFounderEmail;
   writeNote?: typeof writeActivationNote;
   loadExpiryFollowUpDetails?: typeof loadExpiryFollowUpDetails;
+  /** Setup-contact coordination seams (migration 104) — tests only. */
+  coordinator?: SetupContactCoordinator;
+  coordinationEnabled?: boolean;
 };
+
+type ReminderCoordination = { enabled: boolean; coordinator: SetupContactCoordinator };
 
 /**
  * LIVE entry point. The only function the cron route ever imports/calls,
@@ -226,7 +242,11 @@ async function runActivationReminderPass(
   result.expiryTransitioned = await transitionDueExpiries(admin, now, dryRun, result.plannedActions, result.errors);
 
   // ── 4. Due reminders SECOND ───────────────────────────────────────────────
-  await processDueReminders(admin, now, dryRun, result, sendReminderEmail, writeNote);
+  const coordination: ReminderCoordination = {
+    enabled: deps.coordinationEnabled ?? isSetupContactCoordinationEnabled(),
+    coordinator: deps.coordinator ?? createSetupContactCoordinator(admin),
+  };
+  await processDueReminders(admin, now, dryRun, result, sendReminderEmail, writeNote, coordination);
 
   // ── 5. Post-expiry personal follow-up (note, #customer-success, founder email)
   await reconcileExpirySideEffects(admin, now, dryRun, result, { sendExpirySlack, sendExpiryFounderEmail, writeNote, loadFollowUp });
@@ -457,7 +477,8 @@ async function processDueReminders(
   dryRun: boolean,
   result: ActivationReminderProcessingResult,
   sendReminderEmail: NonNullable<ProcessActivationRemindersDeps["sendReminderEmail"]>,
-  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>
+  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>,
+  coordination: ReminderCoordination
 ): Promise<void> {
   const nowIso = now.toISOString();
 
@@ -481,7 +502,7 @@ async function processDueReminders(
 
   for (const row of rows) {
     try {
-      await processReminderCandidate(admin, row, now, dryRun, result, sendReminderEmail, writeNote);
+      await processReminderCandidate(admin, row, now, dryRun, result, sendReminderEmail, writeNote, coordination);
     } catch (err) {
       result.errors.push({ lifecycleId: row.id as string, message: err instanceof Error ? err.message : String(err) });
     }
@@ -507,7 +528,8 @@ async function processReminderCandidate(
   dryRun: boolean,
   result: ActivationReminderProcessingResult,
   sendReminderEmail: NonNullable<ProcessActivationRemindersDeps["sendReminderEmail"]>,
-  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>
+  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>,
+  coordination: ReminderCoordination
 ): Promise<void> {
   const lifecycleId = row.id;
   const currentStage = row.reminder_stage;
@@ -535,6 +557,17 @@ async function processReminderCandidate(
   }
 
   if (dryRun) {
+    // Read-only preview of the coordination decision (no claim, no write).
+    const planned = coordination.enabled ? await coordination.coordinator.read(row.operator_id) : null;
+    const plannedDecision: ReminderDecision = planned ? decideReminder(planned, deadlineAt, now) : { action: "send" };
+    if (plannedDecision.action === "defer") {
+      result.plannedActions.push({ type: "reminder_deferred", lifecycleId, stage: selectedStage as ActivationReminderStage, until: plannedDecision.until.toISOString() });
+      return;
+    }
+    if (plannedDecision.action === "skip") {
+      result.plannedActions.push({ type: "reminder_skipped_spacing", lifecycleId, stage: selectedStage as ActivationReminderStage });
+      return;
+    }
     result.plannedActions.push({
       type: "reminder_send",
       lifecycleId,
@@ -610,6 +643,191 @@ async function processReminderCandidate(
     return;
   }
 
+  // ── Setup-contact coordination (migration 104) ──────────────────────────
+  // Lock order: lifecycle lease (held) → operator contact claim (try-lock).
+  // Busy → abandon our lease exactly as for a race; the next pass retries.
+  let contactClaimToken: string | null = null;
+  if (coordination.enabled) {
+    contactClaimToken = await coordination.coordinator.claim(row.operator_id, "reminder", now);
+    if (!contactClaimToken) {
+      await admin
+        .from("operator_activation_lifecycles")
+        .update({ reminder_lease_stage: null, reminder_lease_started_at: null })
+        .eq("id", lifecycleId)
+        .eq("reminder_lease_started_at", claimedLeaseStartedAt);
+      result.reminderSkippedRaced++;
+      return;
+    }
+    try {
+      const contactState = await coordination.coordinator.read(row.operator_id);
+      const decision: ReminderDecision = contactState ? decideReminder(contactState, deadlineAt, now) : { action: "send" };
+      if (decision.action !== "send") {
+        await applyReminderSpacing(admin, {
+          decision,
+          lifecycleId,
+          currentStage,
+          selectedStage: selectedStage as ActivationReminderStage,
+          deadlineAt,
+          leaseStartedAt: claimedLeaseStartedAt,
+          origin: resolved.origin,
+          originId: resolved.originId,
+          result,
+          writeNote,
+        });
+        await coordination.coordinator.release(row.operator_id, contactClaimToken);
+        return;
+      }
+    } catch (err) {
+      await coordination.coordinator.release(row.operator_id, contactClaimToken);
+      await admin
+        .from("operator_activation_lifecycles")
+        .update({ reminder_lease_stage: null, reminder_lease_started_at: null })
+        .eq("id", lifecycleId)
+        .eq("reminder_lease_started_at", claimedLeaseStartedAt);
+      throw err;
+    }
+  }
+
+  // Evidence first, under the claim (the email hook also records it, but
+  // that path is best-effort): if this write fails, keep the claim so it is
+  // folded in later as an unconfirmed setup contact.
+  let safeToRelease = true;
+  if (contactClaimToken) {
+    safeToRelease = await coordination.coordinator.recordSetupContact(row.operator_id, "reminder", now);
+  }
+
+  try {
+    await sendAndAcknowledgeReminder({
+      admin,
+      row,
+      now,
+      result,
+      sendReminderEmail,
+      writeNote,
+      lifecycleId,
+      currentStage,
+      selectedStage: selectedStage as ActivationReminderStage,
+      deadlineAt,
+      claimedLeaseStartedAt,
+      resolved,
+    });
+  } finally {
+    if (contactClaimToken && safeToRelease) await coordination.coordinator.release(row.operator_id, contactClaimToken);
+  }
+}
+
+/**
+ * Applies a coordination decision that is NOT "send": either reschedules the
+ * stage to 48 h after the operator's incomplete-setup milestone, or — when
+ * that would reach the setup deadline — resolves the stage without delivery.
+ * Never writes reminder_sent, never touches deadline_at/expired_at, so
+ * expiry processing and its founder alerts proceed exactly as before.
+ * Both writes are pinned to this worker's own lease.
+ */
+async function applyReminderSpacing(
+  admin: AdminClient,
+  p: {
+    decision: Exclude<ReminderDecision, { action: "send" }>;
+    lifecycleId: string;
+    currentStage: number;
+    selectedStage: ActivationReminderStage;
+    deadlineAt: string;
+    leaseStartedAt: string;
+    origin: ActivationExpiryOrigin;
+    originId: string;
+    result: ActivationReminderProcessingResult;
+    writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>;
+  }
+): Promise<void> {
+  const noteOrigin = p.origin === "claim" ? { type: "claim" as const, claimId: p.originId } : { type: "submission" as const, submissionId: p.originId };
+  const milestoneSentAt = p.decision.milestoneAt.toISOString();
+  const until = p.decision.until.toISOString();
+
+  if (p.decision.action === "defer") {
+    await admin
+      .from("operator_activation_lifecycles")
+      .update({ reminder_lease_stage: null, reminder_lease_started_at: null, reminder_next_attempt_at: until })
+      .eq("id", p.lifecycleId)
+      .eq("reminder_lease_started_at", p.leaseStartedAt);
+    await p.writeNote(
+      {
+        origin: noteOrigin,
+        eventType: "reminder_deferred",
+        note: `Reminder ${p.selectedStage} deferred to ${until} — a milestone email went to this operator at ${milestoneSentAt} (48-hour spacing). Not a send attempt.`,
+        metadata: { lifecycleId: p.lifecycleId, stage: p.selectedStage, deferredUntil: until, milestoneSentAt, reason: "milestone_spacing", flow: p.origin },
+        eventKey: `hhc-activation-reminder-deferred:${p.lifecycleId}:${p.selectedStage}:${milestoneSentAt}`,
+      },
+      admin
+    );
+    p.result.reminderDeferredForMilestone++;
+    return;
+  }
+
+  // Skip: resolve the stage without delivery and schedule the next one as usual.
+  const nextAttemptAt = p.selectedStage === 3 ? null : computeStageDue((p.selectedStage + 1) as 1 | 2 | 3, p.deadlineAt);
+  const { data: resolvedRow } = await admin
+    .from("operator_activation_lifecycles")
+    .update({
+      reminder_stage: p.selectedStage,
+      reminder_lease_stage: null,
+      reminder_lease_started_at: null,
+      reminder_next_attempt_at: nextAttemptAt,
+      reminder_attempt_count: 0,
+      reminder_last_attempted_at: null,
+      reminder_last_error: null,
+    })
+    .eq("id", p.lifecycleId)
+    .eq("reminder_stage", p.currentStage)
+    .eq("reminder_lease_started_at", p.leaseStartedAt)
+    .eq("deadline_at", p.deadlineAt)
+    .is("expired_at", null)
+    .is("released_at", null)
+    .select("id")
+    .maybeSingle();
+  if (!resolvedRow) return; // state moved under us — nothing written; a later pass decides afresh
+  await p.writeNote(
+    {
+      origin: noteOrigin,
+      eventType: "reminder_skipped",
+      note:
+        `Reminder ${p.selectedStage} skipped — a milestone email went to this operator at ${milestoneSentAt}, and 48-hour spacing ` +
+        `would have pushed it to ${until}, at or after the setup deadline (${p.deadlineAt}). It was not sent. Expiry and its founder alerts are unaffected.`,
+      metadata: { lifecycleId: p.lifecycleId, stage: p.selectedStage, milestoneSentAt, wouldHaveSentAt: until, deadline: p.deadlineAt, reason: "spacing_crosses_deadline", flow: p.origin },
+      eventKey: `hhc-activation-reminder-skipped:${p.lifecycleId}:${p.selectedStage}`,
+    },
+    admin
+  );
+  p.result.reminderSkippedForSpacing++;
+}
+
+/** The pre-existing send → note → acknowledge sequence, unchanged. */
+async function sendAndAcknowledgeReminder({
+  admin,
+  row,
+  now,
+  result,
+  sendReminderEmail,
+  writeNote,
+  lifecycleId,
+  currentStage,
+  selectedStage,
+  deadlineAt,
+  claimedLeaseStartedAt,
+  resolved,
+}: {
+  admin: AdminClient;
+  row: ReminderCandidateRow;
+  now: Date;
+  result: ActivationReminderProcessingResult;
+  sendReminderEmail: NonNullable<ProcessActivationRemindersDeps["sendReminderEmail"]>;
+  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>;
+  lifecycleId: string;
+  currentStage: number;
+  selectedStage: ActivationReminderStage;
+  deadlineAt: string;
+  claimedLeaseStartedAt: string;
+  resolved: Extract<ResolvedLifecycle, { ok: true }>;
+}): Promise<void> {
   // ── Send ──────────────────────────────────────────────────────────────────
   const sendResult = await sendReminderEmail({
     stage: selectedStage as ActivationReminderStage,

@@ -29,6 +29,10 @@ const DATE_METADATA_KEYS: Record<string, string> = {
   // Post-expiry final follow-up (final_setup_email_sent / final_setup_link_generated).
   generatedAt: "Generated at",
   linkExpiresAt: "Link expires",
+  // Setup-contact coordination (reminder_deferred / reminder_skipped).
+  deferredUntil: "Deferred until",
+  milestoneSentAt: "Milestone email sent",
+  wouldHaveSentAt: "Spacing ends",
 };
 
 const TEXT_METADATA_KEYS: Record<string, string> = {

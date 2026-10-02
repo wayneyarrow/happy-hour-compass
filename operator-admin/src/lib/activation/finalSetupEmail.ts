@@ -98,3 +98,79 @@ export async function sendFinalSetupEmail(
     record,
   });
 }
+
+// ── Operator-requested setup email (/operator/finish-setup) ─────────────────
+
+/**
+ * Sent when an operator who hasn't activated asks for a setup link from the
+ * durable finish-setup page (the CTA in incomplete-setup milestone emails).
+ * Setup wording; a scanner-safe token_hash link with intent=setup; expires
+ * in 24 hours and replaces earlier setup links. Never open-tracked
+ * (NEVER_TRACKED_SENDER_EMAIL_TYPES).
+ */
+export const SETUP_REQUEST_EMAIL_TYPE = "operator_setup_request";
+
+export function buildSetupRequestEmail({
+  firstName,
+  setupLink,
+}: {
+  firstName: string | null | undefined;
+  setupLink: string;
+}): { subject: string; html: string; text: string } {
+  const name = firstName?.trim() || "there";
+  const safeName = escapeHtml(name);
+  const subject = "Finish setting up your Happy Hour Compass account";
+  const html = emailLayout(
+    `
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Finish setting up your account</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${safeName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+            Use the button below to choose a password and finish setting up your Happy Hour Compass Business account.
+          </p>
+          ${emailCta(setupLink, "Finish your setup &rarr;")}
+          <p style="margin:0 0 8px;font-size:13px;color:#94a3b8;">
+            This link expires in 24 hours and replaces any earlier setup link. If it expires, you can request a new one
+            from the same page.
+          </p>
+          <p style="margin:0;font-size:12px;color:#cbd5e1;word-break:break-all;">Or copy this URL: ${setupLink}</p>`,
+    "If you didn&rsquo;t request this, you can safely ignore this email."
+  );
+  const text = `Hi ${name},
+
+Use the link below to choose a password and finish setting up your Happy Hour Compass Business account:
+${setupLink}
+
+This link expires in 24 hours and replaces any earlier setup link. If it expires, you can request a new one from the same page.
+
+If you didn't request this, you can safely ignore this email.
+
+—
+Happy Hour Compass`;
+  return { subject, html, text };
+}
+
+export async function sendSetupRequestEmail(
+  { to, firstName, setupLink }: { to: string; firstName: string | null | undefined; setupLink: string },
+  deps: { sendEmail?: typeof sendTransactionalEmail } = {}
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const { subject, html, text } = buildSetupRequestEmail({ firstName, setupLink });
+  return (deps.sendEmail ?? sendTransactionalEmail)({
+    type: SETUP_REQUEST_EMAIL_TYPE,
+    to,
+    subject,
+    html,
+    text,
+    criticality: "critical",
+  });
+}
+
+/**
+ * Pure: which email a Forgot Password / finish-setup request sends once the
+ * recovery gate allowed it. The setup wording is only used for a request
+ * from the finish-setup page by an operator who hasn't activated; every
+ * other case keeps the existing password-reset email (so /forgot-password
+ * and activated visitors behave exactly as before).
+ */
+export function chooseRecoveryEmail(params: { intent: "reset" | "setup"; isOwner: boolean; activated: boolean }): "setup" | "reset" {
+  return params.intent === "setup" && params.isOwner && !params.activated ? "setup" : "reset";
+}

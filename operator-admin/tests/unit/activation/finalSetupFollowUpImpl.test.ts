@@ -10,6 +10,7 @@ import {
 } from "../../../src/lib/activation/finalSetupFollowUpImpl";
 import { buildFinalSetupEmail } from "../../../src/lib/activation/finalSetupEmail";
 import { createFakeActivationReminderClient, makeLifecycleRow, type FakeLifecycleRow } from "./support/fakeActivationReminderClient";
+import { createMemoryContactCoordinator } from "./support/memoryContactCoordinator";
 
 /**
  * Founder post-expiry final follow-up: "Final resend setup email" and "Copy
@@ -88,6 +89,8 @@ function deps(
     revalidate: () => {},
     now: () => NOW,
     siteUrl: SITE,
+    // One contact coordinator per test world, shared by every request in it.
+    coordinator: ((fake as any).__contact ??= createMemoryContactCoordinator()).coordinator,
     ...overrides,
   };
   return { d, linkCalls, emailCalls, alerts };

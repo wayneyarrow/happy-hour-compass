@@ -4,6 +4,7 @@ import { useState } from "react";
 
 export type MilestoneEmailVariant = {
   milestone: number;
+  kind: "standard" | "incomplete_setup";
   subject: string;
   previewText: string;
   html: string;
@@ -26,7 +27,12 @@ export function MilestoneEmailPreviewClient({
   venueName: string;
 }) {
   const [selectedMilestone, setSelectedMilestone] = useState(variants[0]?.milestone);
-  const active = variants.find((v) => v.milestone === selectedMilestone) ?? variants[0];
+  const [selectedKind, setSelectedKind] = useState<MilestoneEmailVariant["kind"]>("standard");
+  const milestones = [...new Set(variants.map((v) => v.milestone))];
+  const active =
+    variants.find((v) => v.milestone === selectedMilestone && v.kind === selectedKind) ??
+    variants.find((v) => v.kind === selectedKind) ??
+    variants[0];
 
   if (!active) {
     return (
@@ -48,15 +54,32 @@ export function MilestoneEmailPreviewClient({
           </p>
         </div>
 
+        {/* ── Template switcher ────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {(["standard", "incomplete_setup"] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => setSelectedKind(kind)}
+              className={
+                "px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-colors " +
+                (active.kind === kind ? "bg-slate-800 border-slate-800 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-slate-400")
+              }
+            >
+              {kind === "standard" ? "Setup finished (standard)" : "Setup not finished (with Finish your setup)"}
+            </button>
+          ))}
+        </div>
+
         {/* ── Milestone switcher ───────────────────────────────────────── */}
         <div className="flex flex-wrap gap-2 mb-6">
-          {variants.map((v) => {
-            const isActive = v.milestone === active.milestone;
+          {milestones.map((milestone) => {
+            const isActive = milestone === active.milestone;
             return (
               <button
-                key={v.milestone}
+                key={milestone}
                 type="button"
-                onClick={() => setSelectedMilestone(v.milestone)}
+                onClick={() => setSelectedMilestone(milestone)}
                 className={
                   "px-3.5 py-1.5 rounded-full text-sm font-semibold border transition-colors " +
                   (isActive
@@ -64,7 +87,7 @@ export function MilestoneEmailPreviewClient({
                     : "bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:text-amber-700")
                 }
               >
-                {v.milestone.toLocaleString("en-US")}
+                {milestone.toLocaleString("en-US")}
               </button>
             );
           })}
@@ -91,7 +114,7 @@ export function MilestoneEmailPreviewClient({
             body itself looks like. */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-resting overflow-hidden">
           <iframe
-            key={active.milestone}
+            key={`${active.kind}-${active.milestone}`}
             title={`Milestone email preview — ${active.milestone} views`}
             srcDoc={active.html}
             className="w-full"

@@ -12,6 +12,7 @@ import {
 import { sendContinueSetupEmail, type ContinueSetupOrigin } from "./emailCodeVerificationEmails";
 import type { ClaimActivationLifecycleResult } from "./activationLifecycle";
 import type { EmailRecordContext } from "@/lib/email";
+import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
 
 /**
  * The ONE decision point for whether a newly approved operator uses the
@@ -165,48 +166,58 @@ export async function deliverDeferredActivationStart(
   const lifecycle =
     lifecycleResult.decision === "started" || lifecycleResult.decision === "reused" ? lifecycleResult.lifecycle : null;
 
-  if (lifecycle?.verificationRequired && secret) {
-    if (delivery === "in_flow") {
-      const verificationPath = buildVerificationPath(lifecycle.id, secret);
-      if (verificationPath) {
-        // The page reflects whatever happened here (sent, cooldown from a
-        // concurrent request, or send_failed with a resend button) — the
-        // redirect happens regardless, so the operator stays in the flow.
-        await (deps.issueCode ?? issueVerificationCodeForLifecycle)(lifecycle.id, { requestIp }, { adminClient: admin, secret });
-        return { kind: "code_issued", verificationPath };
-      }
-    } else {
-      const continueUrl = buildVerificationContinueUrl(lifecycle.id, { secret, siteUrl });
-      if (continueUrl) {
-        const sent = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
-          to: recipient.email,
-          firstName: recipient.firstName,
-          origin,
-          continueUrl,
-          record: { lifecycleId: lifecycle.id, context: { trigger: "continue_setup" } },
-        });
-        if (sent.ok) return { kind: "continue_email_sent" };
-        console.error(`${logTag} Continue-setup email failed.`, { lifecycleId: lifecycle.id, error: sent.error });
-        return { kind: "failed", error: sent.error ?? "Continue-setup email failed." };
+  // Coordinated with the per-operator contact claim (migration 104): waits
+  // briefly for any in-flight automated email to this operator, never
+  // refuses (setupContactAutomatic.ts). Covers the first code, the continue
+  // email and the legacy fallback alike.
+  return withAutomaticSetupContact(
+    { operatorId: lifecycle?.operatorId ?? null, email: recipient.email, admin, logTag },
+    async (): Promise<DeferredActivationResult> => {
+
+    if (lifecycle?.verificationRequired && secret) {
+      if (delivery === "in_flow") {
+        const verificationPath = buildVerificationPath(lifecycle.id, secret);
+        if (verificationPath) {
+          // The page reflects whatever happened here (sent, cooldown from a
+          // concurrent request, or send_failed with a resend button) — the
+          // redirect happens regardless, so the operator stays in the flow.
+          await (deps.issueCode ?? issueVerificationCodeForLifecycle)(lifecycle.id, { requestIp }, { adminClient: admin, secret });
+          return { kind: "code_issued", verificationPath };
+        }
+      } else {
+        const continueUrl = buildVerificationContinueUrl(lifecycle.id, { secret, siteUrl });
+        if (continueUrl) {
+          const sent = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
+            to: recipient.email,
+            firstName: recipient.firstName,
+            origin,
+            continueUrl,
+            record: { lifecycleId: lifecycle.id, context: { trigger: "continue_setup" } },
+          });
+          if (sent.ok) return { kind: "continue_email_sent" };
+          console.error(`${logTag} Continue-setup email failed.`, { lifecycleId: lifecycle.id, error: sent.error });
+          return { kind: "failed", error: sent.error ?? "Continue-setup email failed." };
+        }
       }
     }
-  }
 
-  // Legacy fallback — reused legacy lifecycle, failed lifecycle claim, or
-  // (defensively) a secret that vanished between plan and delivery.
-  const { data, error } = await (deps.generateLink ?? generateLinkWithRetry)(admin, {
-    type: "recovery",
-    email: recipient.email,
-    options: { redirectTo: `${siteUrl}${OPERATOR_CREATE_PASSWORD_PATH}` },
-  });
-  if (error || !data?.properties?.action_link) {
-    console.error(`${logTag} Legacy fallback setup link generation failed.`, { error: error?.message });
-    return { kind: "failed", error: error?.message ?? "Setup link generation failed." };
-  }
-  const sent = await sendLegacySetupEmail(data.properties.action_link, lifecycle ? { lifecycleId: lifecycle.id } : {});
-  if (!sent.ok) {
-    console.error(`${logTag} Legacy fallback setup email failed.`, { error: sent.error });
-    return { kind: "failed", error: sent.error ?? "Setup email failed." };
-  }
-  return { kind: "legacy_fallback_sent" };
+    // Legacy fallback — reused legacy lifecycle, failed lifecycle claim, or
+    // (defensively) a secret that vanished between plan and delivery.
+    const { data, error } = await (deps.generateLink ?? generateLinkWithRetry)(admin, {
+      type: "recovery",
+      email: recipient.email,
+      options: { redirectTo: `${siteUrl}${OPERATOR_CREATE_PASSWORD_PATH}` },
+    });
+    if (error || !data?.properties?.action_link) {
+      console.error(`${logTag} Legacy fallback setup link generation failed.`, { error: error?.message });
+      return { kind: "failed", error: error?.message ?? "Setup link generation failed." };
+    }
+    const sent = await sendLegacySetupEmail(data.properties.action_link, lifecycle ? { lifecycleId: lifecycle.id } : {});
+    if (!sent.ok) {
+      console.error(`${logTag} Legacy fallback setup email failed.`, { error: sent.error });
+      return { kind: "failed", error: sent.error ?? "Setup email failed." };
+    }
+    return { kind: "legacy_fallback_sent" };
+    }
+  );
 }

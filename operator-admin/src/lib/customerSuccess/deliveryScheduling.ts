@@ -152,6 +152,27 @@ export function computeInitialSendTime(detectedAt: Date, timeZone: string): Date
   return localWallTimeToUtc(targetIso, TARGET_SEND_HOUR, TARGET_SEND_MINUTE, timeZone);
 }
 
+/**
+ * The first normal delivery slot — 3:00 PM venue-local on a business day —
+ * at or after `earliest`. Used to reschedule a milestone deferred by
+ * setup-contact spacing (setupContactPolicy.ts): unlike
+ * computeInitialSendTime(), the slot may fall on the SAME local day as
+ * `earliest` when 3:00 PM that day is still at or after it.
+ */
+export function firstBusinessSlotAtOrAfter(earliest: Date, timeZone: string): Date {
+  let isoDate = getLocalIsoDate(earliest, timeZone);
+  for (let i = 0; i < 14; i++) {
+    const weekday = getWeekdayFromIsoDate(isoDate);
+    if (weekday !== null && isBusinessDay(weekday)) {
+      const slot = localWallTimeToUtc(isoDate, TARGET_SEND_HOUR, TARGET_SEND_MINUTE, timeZone);
+      if (slot.getTime() >= earliest.getTime()) return slot;
+    }
+    isoDate = addIsoDays(isoDate, 1);
+  }
+  // Unreachable (a business day occurs within any 14-day span).
+  return earliest;
+}
+
 // ── Venue timezone lookup (impure) ──────────────────────────────────────────
 
 type AdminClient = ReturnType<typeof createAdminClient>;

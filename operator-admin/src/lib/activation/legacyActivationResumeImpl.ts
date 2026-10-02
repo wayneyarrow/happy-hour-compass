@@ -11,6 +11,7 @@ import {
   evaluateLegacySubmissionActivationEligibility,
   type ResolvedLegacyActivationOrigin,
 } from "@/lib/activation/activationPresentation";
+import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
 
 /**
  * Implementation for the Phase 1C controlled legacy-activation-resume
@@ -251,7 +252,7 @@ async function resumeLegacyActivation(
 
   const sendSetupEmail: SendSetupEmailFn =
     deps.sendSetupEmail ?? (origin.type === "claim" ? sendPasswordSetupEmail : sendOperatorActivationEmail);
-  const emailResult = await sendSetupEmail({
+  const emailResult = await withAutomaticSetupContact({ operatorId, admin: supabase as never, logTag: "[legacyActivationResume]" }, () => sendSetupEmail({
     to: email,
     firstName,
     setupLink: linkData.properties.action_link,
@@ -262,7 +263,7 @@ async function resumeLegacyActivation(
       submissionId: origin.type === "submission" ? origin.submissionId : null,
       context: { trigger: "legacy_resume" },
     },
-  });
+  }));
 
   if (!emailResult.ok) {
     // ── Lifecycle starts but email fails: keep the lifecycle (never delete,

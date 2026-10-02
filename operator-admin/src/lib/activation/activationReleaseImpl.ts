@@ -5,6 +5,7 @@ import { sendSlackAlert } from "@/lib/slack";
 import { deriveActivationState } from "@/lib/activation/activationState";
 import type { ActivationNoteOrigin } from "@/lib/activation/activationNotes";
 import { SETUP_LINK_LOCK_MS } from "@/lib/activation/setupLinkLock";
+import { isClaimActive } from "@/lib/activation/setupContactPolicy";
 
 /**
  * Implementation for releaseActivationLifecycleAction (Phase 2A-4 "manual
@@ -535,7 +536,7 @@ export async function releaseActivationLifecycleImpl(
   // be overdue (release_required or expired) — never a still-live window. ──
   const { data: operatorRow, error: operatorError } = await supabase
     .from("operators")
-    .select("account_activated_at")
+    .select("account_activated_at, setup_contact_claimed_at")
     .eq("id", lifecycleRow.operator_id as string)
     .maybeSingle();
 
@@ -545,6 +546,12 @@ export async function releaseActivationLifecycleImpl(
   }
   if (operatorRow?.account_activated_at) {
     return { error: "This operator has already activated their account. There is nothing to release." };
+  }
+  // An automatic email (milestone/reminder) or a founder resend/copy holds
+  // the operator's contact claim while it is sending (migration 104) —
+  // never release the venue out from under it.
+  if (isClaimActive((operatorRow as { setup_contact_claimed_at?: string | null } | null)?.setup_contact_claimed_at, now)) {
+    return { error: "An email to this operator is being sent right now. Wait a minute, then refresh and try again." };
   }
 
   const currentDeadlineAt = lifecycleRow.deadline_at as string;

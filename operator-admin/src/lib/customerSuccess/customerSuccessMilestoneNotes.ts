@@ -33,7 +33,7 @@
  */
 
 import { getMilestoneEmailCopy } from "./milestoneEmailCopy";
-import { parseDeliverySnapshot } from "./deliverySnapshot";
+import { parseDeliverySnapshot, parseMilestoneDeferral } from "./deliverySnapshot";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
 
 export type CustomerSuccessMilestoneEventRow = {
@@ -97,9 +97,10 @@ export function formatCustomerSuccessMilestoneNote(
 
   switch (row.communication_status) {
     case "sent": {
+      const withSetup = snapshot?.variant === "incomplete_setup" ? " (with a Finish your setup link)" : "";
       const note = recipient
-        ? `Customer Success: ${label}-view milestone email sent to ${recipient}.`
-        : `Customer Success: ${label}-view milestone email sent.`;
+        ? `Customer Success: ${label}-view milestone email${withSetup} sent to ${recipient}.`
+        : `Customer Success: ${label}-view milestone email${withSetup} sent.`;
       return { id, note, created_at: row.sent_at ?? row.last_attempted_at ?? row.achieved_at };
     }
 
@@ -142,6 +143,22 @@ export function formatCustomerSuccessMilestoneNote(
         };
       }
 
+      const deferral = parseMilestoneDeferral(row.metadata_json);
+      if (deferral && deferral.deferredUntil === row.next_attempt_at) {
+        const because =
+          deferral.reason === "recent_setup_pause"
+            ? "a setup link was copied"
+            : deferral.reason === "recent_milestone"
+              ? "another milestone email went to this operator"
+              : "a setup email went to this operator";
+        return {
+          id,
+          note:
+            `Customer Success: ${label}-view milestone email deferred to ${formatDateTime(row.next_attempt_at)} — ` +
+            `${because} at ${formatDateTime(deferral.contactAt)} and account setup isn't finished (48-hour spacing). Not a send attempt.`,
+          created_at: timestamp,
+        };
+      }
       const note = recipient
         ? `Customer Success: ${label}-view milestone email scheduled for ${formatDateTime(row.next_attempt_at)} — ${recipient}.`
         : `Customer Success: ${label}-view milestone email scheduled for ${formatDateTime(row.next_attempt_at)}.`;

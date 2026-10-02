@@ -45,7 +45,11 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendTransactionalEmail } from "@/lib/email";
 import { runVenueViewMilestoneDetection, type VenueViewMilestoneDetectionResult } from "./detectVenueViewMilestones";
 import { isCustomerSuccessEmailDeliveryEnabled } from "./customerSuccessConfig";
-import { resolveVenueTimeZone, computeInitialSendTime } from "./deliveryScheduling";
+import { resolveVenueTimeZone, computeInitialSendTime, firstBusinessSlotAtOrAfter } from "./deliveryScheduling";
+import { isSetupContactCoordinationEnabled } from "@/lib/activation/setupContactConfig";
+import { decideMilestone, type MilestoneDecision } from "@/lib/activation/setupContactPolicy";
+import { createSetupContactCoordinator, type SetupContactCoordinator } from "@/lib/activation/setupContactStore";
+import type { MilestoneEmailVariantKind } from "./milestoneEmailTemplate";
 import { resolveRecipientForOperator, type DeliveryBlockedReason } from "./recipientResolution";
 import { decideAfterFailedAttempt, isProcessingStale, customerSuccessIdempotencyKey } from "./deliveryRetryPolicy";
 import { parseDeliverySnapshot, type DeliverySnapshot } from "./deliverySnapshot";
@@ -94,6 +98,8 @@ export type CustomerSuccessDeliveryResult = {
   recipientBlocked: number;
   /** Due events not sent because the venue's owner changed (e.g. released) after the milestone was detected. */
   skippedOwnershipChanged: number;
+  /** Due events rescheduled (not attempted) by setup-contact spacing, or because the other worker held the operator's claim. */
+  deferredForSetupContact: number;
   errors: { eventId: string; message: string }[];
 };
 
@@ -111,14 +117,25 @@ function emptyDisabledResult(): CustomerSuccessDeliveryResult {
     failedTerminal: 0,
     recipientBlocked: 0,
     skippedOwnershipChanged: 0,
+    deferredForSetupContact: 0,
     errors: [],
   };
 }
 
+/**
+ * Setup-contact coordination seams (migration 104). Real callers omit these;
+ * tests inject an in-memory coordinator and an explicit flag value.
+ */
+export type CustomerSuccessDeliveryOptions = {
+  coordinator?: SetupContactCoordinator;
+  coordinationEnabled?: boolean;
+};
+
 export async function processCustomerSuccessDeliveries(
   admin: AdminClient = createAdminClient(),
   now: Date = new Date(),
-  sendEmail: SendEmailFn = sendTransactionalEmail
+  sendEmail: SendEmailFn = sendTransactionalEmail,
+  options: CustomerSuccessDeliveryOptions = {}
 ): Promise<CustomerSuccessDeliveryResult> {
   // Kill switch checked BEFORE any Supabase call of any kind — see module header.
   if (!isCustomerSuccessEmailDeliveryEnabled()) {
@@ -140,6 +157,7 @@ export async function processCustomerSuccessDeliveries(
     failedTerminal: 0,
     recipientBlocked: 0,
     skippedOwnershipChanged: 0,
+    deferredForSetupContact: 0,
     errors: [],
   };
 
@@ -150,15 +168,20 @@ export async function processCustomerSuccessDeliveries(
   result.successNotificationsRetried = await retryPendingSuccessNotifications(admin);
 
   const due = await fetchDueEvents(admin, now);
+  const coordination: CoordinationContext = {
+    enabled: options.coordinationEnabled ?? isSetupContactCoordinationEnabled(),
+    coordinator: options.coordinator ?? createSetupContactCoordinator(admin),
+  };
 
   for (const event of due) {
     try {
-      const outcome = await processDueEvent(event, admin, now, sendEmail);
+      const outcome = await processDueEvent(event, admin, now, sendEmail, coordination);
       if (outcome === "sent") { result.attempted++; result.sent++; }
       else if (outcome === "retry") { result.attempted++; result.retried++; }
       else if (outcome === "failed_terminal") { result.attempted++; result.failedTerminal++; }
       else if (outcome === "recipient_blocked") { result.recipientBlocked++; }
       else if (outcome === "skipped_ownership_changed") { result.skippedOwnershipChanged++; }
+      else if (outcome === "deferred_setup_contact") { result.deferredForSetupContact++; }
       // "already_claimed" — another worker got there first; not an error, not counted.
     } catch (err) {
       result.errors.push({ eventId: event.id, message: err instanceof Error ? err.message : String(err) });
@@ -399,7 +422,60 @@ function mergeDeliverySnapshotIntoMetadata(existingMetadataJson: unknown, snapsh
   return { ...base, deliverySnapshot: snapshot };
 }
 
-type DueEventOutcome = "sent" | "retry" | "failed_terminal" | "recipient_blocked" | "already_claimed" | "skipped_ownership_changed";
+type DueEventOutcome =
+  | "sent"
+  | "retry"
+  | "failed_terminal"
+  | "recipient_blocked"
+  | "already_claimed"
+  | "skipped_ownership_changed"
+  | "deferred_setup_contact";
+
+type CoordinationContext = { enabled: boolean; coordinator: SetupContactCoordinator };
+
+/**
+ * Reschedules a not-yet-attempted milestone to the first business-day 3 PM
+ * venue-local slot at least 48 h after the operator's latest setup contact.
+ * Never an attempt: attempt_count, status and the recipient snapshot are
+ * untouched; the reason is merged into metadata_json.coordination for the
+ * venue timeline.
+ */
+async function deferMilestoneForSetupContact(
+  event: DueEvent,
+  decision: Extract<MilestoneDecision, { action: "defer" }>,
+  admin: AdminClient,
+  now: Date
+): Promise<void> {
+  const tz = await resolveVenueTimeZone(event.venueId, admin);
+  const slot = tz.ok ? firstBusinessSlotAtOrAfter(decision.earliest, tz.timeZone) : decision.earliest;
+  const base =
+    event.rawMetadataJson && typeof event.rawMetadataJson === "object" && !Array.isArray(event.rawMetadataJson)
+      ? (event.rawMetadataJson as Record<string, unknown>)
+      : {};
+  const existingCoordination =
+    base.coordination && typeof base.coordination === "object" ? (base.coordination as Record<string, unknown>) : {};
+  const { error } = await admin
+    .from("customer_success_events")
+    .update({
+      next_attempt_at: slot.toISOString(),
+      metadata_json: {
+        ...base,
+        coordination: {
+          ...existingCoordination,
+          lastDeferral: {
+            deferredAt: now.toISOString(),
+            deferredUntil: slot.toISOString(),
+            reason: decision.reason,
+            contactAt: decision.contactAt.toISOString(),
+            contactKind: decision.contactKind,
+          },
+        },
+      },
+    })
+    .eq("id", event.id)
+    .eq("communication_status", "pending");
+  if (error) throw new Error(error.message);
+}
 
 /**
  * Send-time ownership check. A milestone event is detected for the venue's
@@ -438,7 +514,8 @@ async function processDueEvent(
   event: DueEvent,
   admin: AdminClient,
   now: Date,
-  sendEmail: SendEmailFn
+  sendEmail: SendEmailFn,
+  coordination: CoordinationContext
 ): Promise<DueEventOutcome> {
   // Checked before any recipient resolution/claim, on first attempts and
   // retries alike — a snapshot locked for the former owner is never reused.
@@ -450,6 +527,74 @@ async function processDueEvent(
 
   const hasSnapshot = event.recipientEmail !== null;
 
+  // ── Template + setup-contact coordination (migration 104) ────────────────
+  // A previous provider attempt (snapshot locked) might have been accepted,
+  // so its locked template is reused verbatim — same content under the
+  // same idempotency key. Without a previous attempt, the template follows
+  // the operator's CURRENT activation status. The incomplete-setup CTA is a
+  // durable token-free page, so it stays safe even if the operator
+  // activates after the template was locked.
+  let variant: MilestoneEmailVariantKind = hasSnapshot ? event.deliverySnapshot?.variant ?? "standard" : "standard";
+  let contactClaimToken: string | null = null;
+
+  if (coordination.enabled && event.operatorId) {
+    const state = await coordination.coordinator.read(event.operatorId);
+    if (state && !state.activated) {
+      if (!hasSnapshot) {
+        const decision = decideMilestone(state, now);
+        if (decision.action === "defer") {
+          await deferMilestoneForSetupContact(event, decision, admin, now);
+          return "deferred_setup_contact";
+        }
+      }
+      // Serialize with the reminder worker and founder actions for this
+      // operator (try-lock; the event is picked up again next pass if busy).
+      contactClaimToken = await coordination.coordinator.claim(event.operatorId, "milestone", now);
+      if (!contactClaimToken) return "deferred_setup_contact";
+      // Re-check ownership under the claim: Release refuses while a contact
+      // claim is active, so a venue still owned now stays owned until we're done.
+      if (!(await isVenueStillOwnedByEventOperator(event, admin))) {
+        await coordination.coordinator.release(event.operatorId, contactClaimToken);
+        await skipEventForOwnershipChange(event.id, admin);
+        return "skipped_ownership_changed";
+      }
+      if (!hasSnapshot) {
+        // Re-check under the claim: a reminder may have just been sent.
+        const fresh = await coordination.coordinator.read(event.operatorId);
+        const recheck = fresh && !fresh.activated ? decideMilestone(fresh, now) : null;
+        if (recheck?.action === "defer") {
+          await coordination.coordinator.release(event.operatorId, contactClaimToken);
+          await deferMilestoneForSetupContact(event, recheck, admin, now);
+          return "deferred_setup_contact";
+        }
+        variant = recheck?.action === "send" ? recheck.variant : "standard";
+      }
+    }
+  }
+
+  // The claim is released only once milestone evidence (if any) is safely
+  // written. If that write fails, the claim is left to go stale and is
+  // folded in later as an unconfirmed milestone — never silently lost.
+  const evidence = { safeToRelease: true };
+  try {
+    return await sendDueEvent(event, admin, now, sendEmail, coordination, hasSnapshot, variant, evidence);
+  } finally {
+    if (contactClaimToken && event.operatorId && evidence.safeToRelease) {
+      await coordination.coordinator.release(event.operatorId, contactClaimToken);
+    }
+  }
+}
+
+async function sendDueEvent(
+  event: DueEvent,
+  admin: AdminClient,
+  now: Date,
+  sendEmail: SendEmailFn,
+  coordination: CoordinationContext,
+  hasSnapshot: boolean,
+  variant: MilestoneEmailVariantKind,
+  evidence: { safeToRelease: boolean }
+): Promise<DueEventOutcome> {
   let recipientEmail: string;
   let recipientFirstName: string;
   let venueNameForEmail: string;
@@ -488,9 +633,17 @@ async function processDueEvent(
 
     // Locked in the SAME atomic UPDATE as the claim below — see claimEvent().
     // Merges into (never replaces) any pre-existing metadata_json content.
+    // The template variant is locked here too, so every retry of this
+    // event sends identical content under its idempotency key.
     claimPatch = {
       recipient_email: recipientEmail,
-      metadata_json: mergeDeliverySnapshotIntoMetadata(event.rawMetadataJson, { recipientFirstName, venueName: venueNameForEmail }),
+      metadata_json: mergeDeliverySnapshotIntoMetadata(event.rawMetadataJson, {
+        recipientFirstName,
+        venueName: venueNameForEmail,
+        // Absent = standard (as on every pre-coordination snapshot), so the
+        // stored snapshot is unchanged whenever the standard template is used.
+        ...(variant === "incomplete_setup" ? { variant } : {}),
+      }),
       recipient_blocked_reason: null,
       recipient_blocked_notified_at: null,
     };
@@ -512,11 +665,16 @@ async function processDueEvent(
     milestone: event.milestoneValue,
     firstName: recipientFirstName,
     venueName: venueNameForEmail,
+    variant,
   });
 
   const idempotencyKey = customerSuccessIdempotencyKey(event.id);
   const attemptNumber = event.attemptCount + 1;
 
+  // From here until the outcome is recorded, a crash or unexpected throw
+  // may hide an accepted email: the operator claim must then NOT be
+  // released, so it goes stale and is folded in as an unconfirmed milestone.
+  evidence.safeToRelease = false;
   const sendResult = await sendEmail({
     type: "customer_success_milestone",
     to: recipientEmail,
@@ -551,6 +709,11 @@ async function processDueEvent(
       })
       .eq("id", event.id);
 
+    // Milestone evidence for reminder spacing — only while the operator is
+    // unactivated (recordMilestone filters). Collected with the coordination
+    // flag off too, so enabling it later doesn't start blind. Never throws.
+    evidence.safeToRelease = event.operatorId ? await coordination.coordinator.recordMilestone(event.operatorId, now, "accepted") : true;
+
     const slackResult = await sendMilestoneSuccessSlackNotification({
       venueName: venueNameForEmail,
       displayValue: copy.displayValue,
@@ -567,6 +730,16 @@ async function processDueEvent(
     // retryPendingSuccessNotifications() — the email stays 'sent' either way.
 
     return "sent";
+  }
+
+  // A failure that isn't a definite provider rejection (network error,
+  // 5xx, unknown) may hide an accepted email: record it as an UNCONFIRMED
+  // milestone so it protects the full 48 h — never labelled sent. A
+  // definite rejection records nothing, so it can't defer or skip a reminder.
+  if (sendResult.deliveryUncertain !== false && event.operatorId) {
+    evidence.safeToRelease = await coordination.coordinator.recordMilestone(event.operatorId, now, "unconfirmed");
+  } else {
+    evidence.safeToRelease = true; // definite rejection — nothing was sent
   }
 
   const sanitizedError = sanitizeError(sendResult.error);

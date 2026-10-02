@@ -10,6 +10,7 @@ import {
   writeClaimSystemNote,
   claimVerifiedOnActivationEventKey,
 } from "@/lib/claims/claimAutoApprovalNotes";
+import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
 
 // ── Observability ────────────────────────────────────────────────────────────
 //
@@ -547,7 +548,13 @@ export async function provisionOperatorForVenue({
 
   // ── Step 5: Send activation email ────────────────────────────────────────
 
-  const emailResult = await sendEmail(actionLink, isReturningOperator, { venueId, operatorId: authUserId });
+  // Coordinated with the per-operator contact claim (migration 104) so a
+  // milestone already being sent to this operator can't land at the same
+  // moment; waits briefly, never refuses (setupContactAutomatic.ts).
+  const emailResult = await withAutomaticSetupContact(
+    { operatorId: authUserId, admin: supabase as never, logTag },
+    async () => await sendEmail(actionLink, isReturningOperator, { venueId, operatorId: authUserId })
+  );
 
   if (!emailResult.ok) {
     // Sentry-only here (no reportCriticalFailure/new Slack alert): the

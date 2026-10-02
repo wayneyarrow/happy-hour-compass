@@ -50,6 +50,37 @@ export const TAGGED_REJECTION_ERROR_NAMES: ReadonlySet<string> = new Set([
 ]);
 export const IDEMPOTENCY_MISMATCH_ERROR_NAME = "invalid_idempotent_request";
 
+/**
+ * Resend error names that mean the request was REJECTED before anything was
+ * sent (validation, auth, quota/rate limit). Every other failure — a thrown
+ * network error (no error name), a provider 5xx, an unknown error name, or
+ * an idempotency mismatch (an earlier request with the key WAS accepted) —
+ * leaves delivery uncertain: the provider may have accepted the email.
+ */
+export const DEFINITE_REJECTION_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "validation_error",
+  "missing_required_field",
+  "invalid_from_address",
+  "invalid_parameter",
+  "invalid_attachment",
+  "invalid_idempotency_key",
+  "missing_api_key",
+  "invalid_api_key",
+  "restricted_api_key",
+  "invalid_access",
+  "not_found",
+  "method_not_allowed",
+  "security_error",
+  "rate_limit_exceeded",
+  "daily_quota_exceeded",
+  "monthly_quota_exceeded",
+]);
+
+/** Pure: whether a failed send might still have been delivered. */
+export function isDeliveryUncertain(errorName: string | undefined): boolean {
+  return !errorName || !DEFINITE_REJECTION_ERROR_NAMES.has(errorName);
+}
+
 /** Bare email address from "Name <local@domain>" or "local@domain". */
 export function senderAddress(from: string): string {
   const m = from.match(/<([^>]+)>/);

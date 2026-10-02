@@ -331,6 +331,34 @@ Migration `103_operator_activation_expiry_follow_up.sql` (**not yet applied** �
   - **An ambiguous provider timeout** is recorded as `final_setup_email_unconfirmed`, never "sent", and is never retried automatically. Notes: `final_setup_email_sent` (`recipient`, plus the email registry with trigger `final_follow_up`) and `final_setup_link_generated` (`operatorEmail`, explicitly "not emailed"). Neither note ever contains the link. Email type `activation_final_setup` is never open-tracked.
 - **Milestones never email a former owner:** `processCustomerSuccessDeliveries` checks `venues.created_by_operator_id === event.operator_id` before every send attempt (including snapshot retries), and marks a mismatched event `skipped`.
 
+### Setup-contact / milestone email coordination (2026-10 — built, flag off)
+
+Migration `104_setup_contact_coordination.sql` (applied to the shared project 2026-10-02 for staging; Production code not yet promoted). The 48 h observation period starts only when this code is live in **Production** with the flag off; staging doesn't start it. Rollout runbook and evidence-based initialization SQL: `docs/operations/SETUP_CONTACT_COORDINATION_ROLLOUT.md`.
+
+- **Rules** (`src/lib/activation/setupContactPolicy.ts`, pure). While an operator has not activated:
+  - Keep **48 h** between setup contacts and milestone emails, per operator, across venues and origins.
+  - A milestone defers to the first business-day 3 PM venue-local slot at least 48 h after the latest setup email, Copy-link pause, or other incomplete-setup milestone.
+  - A reminder defers to 48 h after a milestone, or is **skipped** (never sent early) if that reaches the deadline.
+  - Deadlines never move, and expiry and founder alerts are unaffected.
+  - Activated operators: standard milestone, no coordination.
+- **Evidence** lives on `public.operators` (never the email registry or note run-start times):
+  - **Setup emails** are recorded *before* sending: under the contact claim for workers and founder actions, plus by `sendTransactionalEmail()` for every setup email.
+  - **Milestones** are recorded as `accepted` or `unconfirmed`. Uncertain deliveries (network error, 5xx, unknown error; see `isDeliveryUncertain()`) protect the full 48 h, and a definite rejection records nothing.
+  - **Copy setup link** is recorded as a pause, not an email.
+- **One per-operator CAS claim** (`setup_contact_claimed_at`, 6 minutes) is taken by the reminder worker, the milestone worker, **and** founder Final resend / Resend / Copy setup link.
+  - Founder actions are exempt from 48 h spacing, not from the claim. While it's busy they answer "being sent right now".
+  - **Automatic initial setup emails** (approval and auto-approval provisioning, deferred email-code start, legacy tracking start) also take the claim, as `initial_setup`. They are never refused: they wait up to 8 s, then log a warning, record evidence and send (`setupContactAutomatic.ts`, re-entrant).
+  - **Operator-requested emails** stay immediate and only record evidence.
+  - Lock order: reminder = lease, then claim; milestone = claim, then event claim; Final resend/Copy = setup-link claim, then contact claim. Release refuses while either claim is active.
+  - All locks are try-locks, so there's no deadlock.
+  - A holder releases the claim only after its evidence write succeeded. Otherwise it is left to go stale and is folded in as a possible contact of its kind, which also covers crashes after provider acceptance. An old holder can't clear a newer claim.
+- **Milestone template:**
+  - `incomplete_setup` adds "Make the most of those views" with a durable `/operator/finish-setup` button (no token).
+  - It is locked in the delivery snapshot at the first attempt, so retries send identical content under the same idempotency key.
+  - The ownership skip runs first and again under the claim.
+- **`/operator/finish-setup`** reuses `forgotPasswordAction` with `intent=setup`: the gate, Turnstile and non-enumeration are unchanged.
+- **Flag:** `SETUP_CONTACT_COORDINATION_ENABLED` (fail closed). When off, both workers send exactly as at `937f254`; evidence is still collected.
+
 ### Operator email-code activation (email-code initiative Phase 1B foundation — 2026-09)
 
 A separate initiative from the Control Panel "Phase 1B" above — don't conflate the two. **Foundation only: the schema is live in Production, but no user-facing behavior exists — the feature is not enabled anywhere.** Approved design is **Model A**: approval → provision operator/auth identity **and** activation lifecycle (unchanged — so the existing 14-day window and reminders still recover an operator who abandons before code verification, after verification but before password creation, or later) → verify email with a six-digit code → create password → activate/sign in → existing Operator Dashboard.

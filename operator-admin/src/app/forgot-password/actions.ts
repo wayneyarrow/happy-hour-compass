@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { sendSetupRequestEmail, chooseRecoveryEmail } from "@/lib/activation/finalSetupEmail";
 import { sendSlackAlert } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { getActiveMemberMembershipByEmail } from "@/lib/memberships";
@@ -50,6 +51,11 @@ export async function forgotPasswordAction(
 ): Promise<ForgotPasswordState> {
   const rawEmail = (formData.get("email") as string | null)?.trim() ?? "";
   const email = rawEmail.toLowerCase();
+  // "setup" when submitted from /operator/finish-setup (the CTA in
+  // incomplete-setup milestone emails). Only changes the wording of the
+  // email an unactivated operator receives — the gate, Turnstile and
+  // non-enumerating response are identical.
+  const intent = formData.get("intent") === "setup" ? "setup" : "reset";
 
   // ── Basic validation ───────────────────────────────────────────────────────
   if (!email) {
@@ -79,9 +85,11 @@ export async function forgotPasswordAction(
     .maybeSingle();
 
   let firstName: string | undefined;
+  let emailChoice: "setup" | "reset" = "reset";
 
   if (operatorRow?.id) {
     firstName = ((operatorRow.first_name as string | null) ?? "").trim() || undefined;
+    emailChoice = chooseRecoveryEmail({ intent, isOwner: true, activated: !!operatorRow.account_activated_at });
 
     // Email-code activation (Phase 2B): an unactivated operator whose
     // lifecycle still requires an unverified email code must not get a
@@ -172,11 +180,15 @@ export async function forgotPasswordAction(
   // page load. See that page's header comment for the full flow.
   const resetLink = buildTokenHashRecoveryLink(redirectTo, linkData.properties.hashed_token);
 
-  await sendPasswordResetEmail({
-    to:        email,
-    firstName,
-    resetLink,
-  });
+  if (emailChoice === "setup") {
+    await sendSetupRequestEmail({ to: email, firstName, setupLink: `${resetLink}&intent=setup` });
+  } else {
+    await sendPasswordResetEmail({
+      to:        email,
+      firstName,
+      resetLink,
+    });
+  }
 
   // Slack escalation on failure is handled by sendTransactionalEmail
   // (password_reset → critical → #ops-critical). Always return success to

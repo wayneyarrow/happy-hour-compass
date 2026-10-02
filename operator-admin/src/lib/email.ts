@@ -25,10 +25,11 @@ import { sendSlackAlert, sendSlackAcquisitionNotification } from "@/lib/slack";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { PLAN_LABELS, type OperatorPlan } from "@/lib/plans";
 import { registerEmailSend, recordEmailSendResult, type EmailRecordContext } from "@/lib/emailTracking/emailSendRegistry";
-import { planSendVariants, sendWithVariants, senderDomain, type SendAttemptResult } from "@/lib/emailTracking/trackedSend";
+import { planSendVariants, sendWithVariants, senderDomain, isDeliveryUncertain, type SendAttemptResult } from "@/lib/emailTracking/trackedSend";
 import { buildSendKey, computeSendRef, resolveEmailEnvironment, usesTrackedSender } from "@/lib/emailTracking/emailTrackingPolicy";
 import { getTrackedSenderDomain, isEmailOpenTrackingEnabled } from "@/lib/emailTracking/emailTrackingConfig";
 import { randomUUID } from "node:crypto";
+import { recordSetupContactBeforeSend } from "@/lib/activation/setupContactEvidence";
 
 export type { EmailRecordContext };
 
@@ -77,6 +78,14 @@ export function getFounderNotificationEmail(): string {
 // ── Centralized transactional email sender ────────────────────────────────────
 
 export type EmailCriticality = "critical" | "important" | "standard";
+
+/**
+ * `deliveryUncertain` (failures only): true unless the provider definitively
+ * rejected the request (trackedSend.ts DEFINITE_REJECTION_ERROR_NAMES) — a
+ * network error or provider 5xx may hide an accepted email. Callers that
+ * coordinate spacing must treat an uncertain failure as a possible send.
+ */
+export type TransactionalSendResult = { ok: boolean; id?: string; error?: string; deliveryUncertain?: boolean };
 
 /**
  * Standardized send path for all transactional emails.
@@ -139,7 +148,7 @@ export async function sendTransactionalEmail({
    * consumer/founder/internal emails.
    */
   record?: EmailRecordContext;
-}): Promise<{ ok: boolean; id?: string; error?: string }> {
+}): Promise<TransactionalSendResult> {
   // The request never depends on the database: every variant is derived
   // from the send key alone (see trackedSend.ts). When tracking is on, the
   // send is registered BEFORE the provider call (so an early open still
@@ -158,12 +167,17 @@ export async function sendTransactionalEmail({
     useTrackedSender: usesTrackedSender(type, record?.context),
   });
   const registered = trackingEnabled ? await registerEmailSend({ type, to, sendKey, record }) : null;
+  // Setup-contact evidence for milestone/reminder spacing (migration 104):
+  // recorded BEFORE the provider call so an ambiguous outcome still counts.
+  // Bounded, never throws, no-op unless this is a setup email to an
+  // unactivated operator — never affects what is sent.
+  await recordSetupContactBeforeSend({ emailType: type, to, trigger: record?.context?.trigger ?? null });
 
   const sent = await sendWithVariants({ attempt: sendViaResend, variants, hasIdempotencyKey: Boolean(idempotencyKey), logContext: { type } });
 
-  const result: { ok: boolean; id?: string; error?: string } = sent.ok
+  const result: TransactionalSendResult = sent.ok
     ? { ok: true, id: sent.id }
-    : { ok: false, error: sent.error };
+    : { ok: false, error: sent.error, deliveryUncertain: isDeliveryUncertain(sent.errorName) };
 
   if (sent.ok) {
     console.log(`[EMAIL] SUCCESS type=${type} to=${to} id=${sent.id}`);

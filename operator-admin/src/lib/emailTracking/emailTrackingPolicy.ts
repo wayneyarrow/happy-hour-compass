@@ -109,6 +109,8 @@ export const NEVER_TRACKED_SENDER_EMAIL_TYPES: ReadonlySet<string> = new Set([
   "consumer_signup_confirmation",
   // Founder post-expiry final follow-up — carries a recovery (setup) link.
   "activation_final_setup",
+  // Operator-requested setup link from /operator/finish-setup.
+  "operator_setup_request",
 ]);
 
 export function usesTrackedSender(emailType: string, context?: EmailSendContext | null): boolean {
@@ -188,6 +190,7 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   operator_venue_added: "Venue added to existing account email",
   activation_reminder: "Account setup reminder",
   activation_final_setup: "Final setup email (founder follow-up)",
+  operator_setup_request: "Setup link (requested by operator)",
   operator_verification_code: "Verification code email",
 };
 

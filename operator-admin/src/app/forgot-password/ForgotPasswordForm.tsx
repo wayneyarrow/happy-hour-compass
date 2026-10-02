@@ -6,9 +6,16 @@ import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 
 type Props = {
   showLinkExpiredMessage: boolean;
+  /**
+   * "setup" on /operator/finish-setup (the CTA in incomplete-setup milestone
+   * emails): first-time setup wording. Same action, Turnstile gate and
+   * non-enumerating response as the default "reset".
+   */
+  intent?: "reset" | "setup";
 };
 
-export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
+export default function ForgotPasswordForm({ showLinkExpiredMessage, intent = "reset" }: Props) {
+  const isSetup = intent === "setup";
   const [state, formAction, isPending] = useActionState(forgotPasswordAction, {});
   const turnstileRef = useRef<TurnstileHandle>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -30,8 +37,9 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
         </div>
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Check your email</h2>
         <p className="text-sm text-gray-500 mb-6">
-          If an operator account exists for that email, a password reset link has been sent.
-          Check your inbox — the link expires in 24 hours.
+          {isSetup
+            ? "If a Happy Hour Compass Business account exists for that email, we’ve sent a link to finish setting it up. The link expires in 24 hours and replaces any earlier setup link."
+            : "If an operator account exists for that email, a password reset link has been sent. Check your inbox — the link expires in 24 hours."}
         </p>
         <a
           href="/login"
@@ -46,9 +54,13 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Reset your Business password</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isSetup ? "Finish setting up your account" : "Reset your Business password"}
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Enter the email address on your operator account and we&rsquo;ll send you a reset link.
+          {isSetup
+            ? "Enter the email address for your Happy Hour Compass Business account and we’ll email you a secure link to choose your password. Requesting a new setup email replaces any earlier setup links."
+            : "Enter the email address on your operator account and we’ll send you a reset link."}
         </p>
       </div>
 
@@ -93,13 +105,14 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
           onExpire={() => setTurnstileToken(null)}
         />
         <input type="hidden" name="cf_turnstile_token" value={turnstileToken ?? ""} />
+        <input type="hidden" name="intent" value={intent} />
 
         <button
           type="submit"
           disabled={isPending || !turnstileToken}
           className="w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? "Sending…" : "Send reset link"}
+          {isPending ? "Sending…" : isSetup ? "Email me a setup link" : "Send reset link"}
         </button>
       </form>
 
@@ -109,7 +122,7 @@ export default function ForgotPasswordForm({ showLinkExpiredMessage }: Props) {
             href="/login"
             className="text-sm text-gray-500 hover:text-gray-700"
           >
-            Back to Business Login
+            {isSetup ? "Already set up? Sign in to your Business account" : "Back to Business Login"}
           </a>
         </p>
         <p>

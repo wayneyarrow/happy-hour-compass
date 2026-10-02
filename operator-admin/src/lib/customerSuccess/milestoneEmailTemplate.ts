@@ -67,7 +67,30 @@ export type VenueViewMilestoneEmailInput = {
   senderFirstName?: string;
   /** Defaults to "Founder" — rendered as "{senderFirstName} | {senderTitle}". */
   senderTitle?: string;
+  /**
+   * "incomplete_setup" (operator hasn't finished account setup) adds a short
+   * Finish-your-setup block whose button links to the durable, token-free
+   * FINISH_SETUP_PATH page. Defaults to "standard" (unchanged email).
+   */
+  variant?: MilestoneEmailVariantKind;
 };
+
+export type MilestoneEmailVariantKind = "standard" | "incomplete_setup";
+
+/** Durable, non-secret finish-setup page. Opening it never creates or uses a setup token. */
+export const FINISH_SETUP_PATH = "/operator/finish-setup";
+
+/** Approved-for-review copy for the incomplete-setup block. `{venue}` is filled at render time. */
+export const INCOMPLETE_SETUP_COPY = {
+  heading: "Make the most of those views",
+  body: "People are finding {venue} on Happy Hour Compass. Finish setting up your account so you can keep your happy hour details and events up to date.",
+  button: "Finish your setup",
+  footnote: "It only takes a couple of minutes. Already set up? You can ignore this.",
+} as const;
+
+export function finishSetupUrl(): string {
+  return `${getSiteUrl()}${FINISH_SETUP_PATH}`;
+}
 
 export type RenderedVenueViewMilestoneEmail = {
   subject: string;
@@ -136,6 +159,7 @@ function buildHtml({
   const bodyParagraph1 = escapeHtml(fillVenue(copy.body[0], input.venueName));
   const bodyParagraph2 = escapeHtml(copy.body[1]);
   const closing = escapeHtml(MILESTONE_EMAIL_CLOSING);
+  const setupBlock = input.variant === "incomplete_setup" ? buildSetupBlockHtml(input.venueName) : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -191,7 +215,7 @@ function buildHtml({
               <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.65;">${bodyParagraph1}</p>
               <p style="margin:0;font-size:15px;color:#475569;line-height:1.65;">${bodyParagraph2}</p>
             </td>
-          </tr>
+          </tr>${setupBlock}
 
           <!-- Sign-off — HHC branding lives here now, not at the top -->
           <tr>
@@ -212,6 +236,39 @@ function buildHtml({
   </table>
 </body>
 </html>`;
+}
+
+// ── Incomplete-setup block ───────────────────────────────────────────────────
+
+function buildSetupBlockHtml(venueName: string): string {
+  const body = escapeHtml(fillVenue(INCOMPLETE_SETUP_COPY.body, venueName));
+  return `
+          <!-- Incomplete setup: finish-setup invitation (durable, non-secret link) -->
+          <tr>
+            <td style="padding:24px 0 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e2e8f0;">
+                <tr>
+                  <td style="padding:22px 0 0;">
+                    <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#0f172a;">${escapeHtml(INCOMPLETE_SETUP_COPY.heading)}</p>
+                    <p style="margin:0 0 18px;font-size:15px;color:#475569;line-height:1.65;">${body}</p>
+                    <a href="${finishSetupUrl()}" style="display:inline-block;background:#d97706;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:10px;">${escapeHtml(INCOMPLETE_SETUP_COPY.button)} &rarr;</a>
+                    <p style="margin:12px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">${escapeHtml(INCOMPLETE_SETUP_COPY.footnote)}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+}
+
+function buildSetupBlockText(venueName: string): string {
+  return `
+${INCOMPLETE_SETUP_COPY.heading}
+
+${fillVenue(INCOMPLETE_SETUP_COPY.body, venueName)}
+
+${INCOMPLETE_SETUP_COPY.button}: ${finishSetupUrl()}
+${INCOMPLETE_SETUP_COPY.footnote}
+`;
 }
 
 // ── Plain text ───────────────────────────────────────────────────────────────
@@ -239,7 +296,7 @@ ${copy.displayValue} ${copy.label}
 ${bodyParagraph1}
 
 ${bodyParagraph2}
-
+${input.variant === "incomplete_setup" ? buildSetupBlockText(input.venueName) : ""}
 ${MILESTONE_EMAIL_CLOSING}
 
 ${senderFirstName} | ${senderTitle}

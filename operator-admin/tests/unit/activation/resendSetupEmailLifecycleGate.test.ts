@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resendClaimSetupEmailImpl } from "../../../src/app/control-panel/claims/[id]/resendClaimSetupEmailImpl";
 import { resendSubmissionSetupEmailImpl } from "../../../src/app/control-panel/operator-submissions/[id]/resendSubmissionSetupEmailImpl";
+import { createMemoryContactCoordinator } from "./support/memoryContactCoordinator";
 
 /**
  * Phase 1C QA correction: staging QA found that BOTH the Claim and
@@ -171,6 +172,7 @@ test("resendClaimSetupEmailImpl: a claim with NO activation lifecycle row sends 
   });
 
   const result = await resendClaimSetupEmailImpl("claim-1", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -203,6 +205,7 @@ test("resendClaimSetupEmailImpl: a claim WITH a live lifecycle proceeds past eli
   });
 
   const result = await resendClaimSetupEmailImpl("claim-2", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -229,6 +232,7 @@ test("resendSubmissionSetupEmailImpl: a submission with NO activation lifecycle 
   });
 
   const result = await resendSubmissionSetupEmailImpl("sub-1", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -263,6 +267,7 @@ test("resendSubmissionSetupEmailImpl: a submission WITH a live lifecycle proceed
   });
 
   const result = await resendSubmissionSetupEmailImpl("sub-2", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -298,6 +303,7 @@ test("resendSubmissionSetupEmailImpl: a released lifecycle is blocked before gen
   });
 
   const result = await resendSubmissionSetupEmailImpl("sub-3", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -329,6 +335,7 @@ test("resendClaimSetupEmailImpl: an overdue (release_required) lifecycle is bloc
   });
 
   const result = await resendClaimSetupEmailImpl("claim-3", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -367,6 +374,7 @@ test("resendClaimSetupEmailImpl: a verification-required lifecycle resends the c
   const sent: { to: string; origin: string; continueUrl: string }[] = [];
 
   const result = await resendClaimSetupEmailImpl("claim-9", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -395,6 +403,7 @@ test("resendSubmissionSetupEmailImpl: a verification-required lifecycle resends 
   const sent: { origin: string }[] = [];
 
   const result = await resendSubmissionSetupEmailImpl("sub-9", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,
@@ -420,6 +429,7 @@ test("resend: a verification-required lifecycle with no HMAC secret refuses to s
   });
   let sends = 0;
   const result = await resendClaimSetupEmailImpl("claim-11", {
+    coordinator: createMemoryContactCoordinator().coordinator,
     authClient: fakeAuthClient(FOUNDER),
     checkAdmin: async () => true,
     adminClient: client,

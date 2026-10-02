@@ -40,15 +40,21 @@ export default function CustomerSuccessEmailPreviewPage() {
     notFound();
   }
 
-  const variants: MilestoneEmailVariant[] = MILESTONE_EMAIL_VALUES.map((milestone) => ({
-    milestone,
-    ...renderVenueViewMilestoneEmail({
+  // Both templates for every milestone: the standard celebration and the
+  // incomplete-setup variant (Finish your setup CTA → /operator/finish-setup).
+  const variants: MilestoneEmailVariant[] = (["standard", "incomplete_setup"] as const).flatMap((kind) =>
+    MILESTONE_EMAIL_VALUES.map((milestone) => ({
       milestone,
-      firstName: PREVIEW_FIRST_NAME,
-      venueName: PREVIEW_VENUE_NAME,
-      senderFirstName: PREVIEW_SENDER_FIRST_NAME,
-    }),
-  }));
+      kind,
+      ...renderVenueViewMilestoneEmail({
+        milestone,
+        firstName: PREVIEW_FIRST_NAME,
+        venueName: PREVIEW_VENUE_NAME,
+        senderFirstName: PREVIEW_SENDER_FIRST_NAME,
+        variant: kind,
+      }),
+    }))
+  );
 
   return (
     <MilestoneEmailPreviewClient

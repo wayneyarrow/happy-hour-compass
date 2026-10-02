@@ -7,6 +7,7 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import { generateLinkWithRetry } from "@/lib/supabase/generateLinkWithRetry";
 import { buildTokenHashRecoveryLink } from "@/lib/supabase/recoveryLink";
 import { sendFinalSetupEmail } from "@/lib/activation/finalSetupEmail";
+import { createSetupContactCoordinator, type SetupContactCoordinator } from "@/lib/activation/setupContactStore";
 import {
   SETUP_LINK_LOCK_MS,
   GENERATE_LINK_TIMEOUT_MS,
@@ -97,7 +98,12 @@ export type FinalSetupFollowUpDeps = {
   siteUrl?: string;
   /** Test-only overrides for the in-process waits (setupLinkLock.ts). */
   timeoutsMs?: { generateLink?: number; send?: number };
+  /** Per-operator contact coordination (migration 104) — tests only. */
+  coordinator?: SetupContactCoordinator;
 };
+
+const CONTACT_BUSY_MESSAGE =
+  "An automatic email to this operator is being sent right now. Wait a minute, then refresh and try again.";
 
 type Bounded<T> = { timedOut: false; value: T } | { timedOut: true };
 
@@ -306,7 +312,16 @@ async function releaseSetupLinkLock(admin: AdminClient, lifecycleId: string, cla
 }
 
 type Prepared =
-  | { ok: true; ctx: FollowUpContext; user: { id: string; email: string | null }; link: string; expiresAt: string; claimedAt: string }
+  | {
+      ok: true;
+      ctx: FollowUpContext;
+      user: { id: string; email: string | null };
+      link: string;
+      expiresAt: string;
+      claimedAt: string;
+      coordinator: SetupContactCoordinator;
+      contactToken: string;
+    }
   | { ok: false; error: string };
 
 /**
@@ -318,7 +333,8 @@ type Prepared =
 async function prepareSetupLink(
   origin: FinalFollowUpOrigin,
   admin: AdminClient,
-  deps: FinalSetupFollowUpDeps
+  deps: FinalSetupFollowUpDeps,
+  contactKind: "founder_resend" | "founder_copy"
 ): Promise<Prepared> {
   const authClient = deps.authClient ?? (await createClient());
   const { data: { user } } = await authClient.auth.getUser();
@@ -347,6 +363,24 @@ async function prepareSetupLink(
     return { ok: false, error: REMINDER_IN_FLIGHT_MESSAGE };
   }
 
+  // Per-operator contact claim (migration 104), taken AFTER the setup-link
+  // claim. Founder actions are exempt from 48 h spacing but not from this
+  // claim: it stops an automatic milestone from passing its spacing check
+  // while this founder contact is being recorded and sent. Busy → a brief
+  // "still finishing" answer, never a wait.
+  const coordinator = deps.coordinator ?? createSetupContactCoordinator(admin);
+  let contactToken: string | null = null;
+  try {
+    contactToken = await coordinator.claim(ctx.operatorId, contactKind, now);
+  } catch (err) {
+    console.error("[finalSetupFollowUp] Operator contact claim failed:", err instanceof Error ? err.message : String(err));
+  }
+  if (!contactToken) {
+    await releaseSetupLinkLock(admin, ctx.lifecycleId, claimedAt);
+    return { ok: false, error: CONTACT_BUSY_MESSAGE };
+  }
+  const releaseContact = () => coordinator.release(ctx.operatorId, contactToken as string);
+
   const redirectTo = `${deps.siteUrl ?? getSiteUrl()}/operator/create-password`;
   const generated = await withTimeout(
     (deps.generateLink ?? generateLinkWithRetry)(admin, {
@@ -359,6 +393,7 @@ async function prepareSetupLink(
   if (generated.timedOut) {
     // Keep our claim: the request may still complete and issue a link.
     console.error("[finalSetupFollowUp] generateLink timed out; claim kept until it expires.", { lifecycleId: ctx.lifecycleId });
+    await releaseContact(); // no email sent and no link handed out
     return { ok: false, error: GENERATE_TIMEOUT_MESSAGE };
   }
   const { data: linkData, error: linkError } = generated.value;
@@ -366,11 +401,14 @@ async function prepareSetupLink(
   if (linkError || !hashedToken) {
     console.error("[finalSetupFollowUp] generateLink failed:", linkError?.message ?? "no hashed_token returned");
     await releaseSetupLinkLock(admin, ctx.lifecycleId, claimedAt);
+    await releaseContact();
     return { ok: false, error: "A setup link could not be generated. Nothing was sent — please try again." };
   }
 
   if (!(await stillHoldsSetupLinkLock(admin, ctx.lifecycleId, claimedAt))) {
-    // Not ours any more — never release someone else's claim.
+    // Not ours any more — never release someone else's setup-link claim.
+    // Our own contact claim is ours to release: we send nothing.
+    await releaseContact();
     return { ok: false, error: LOCK_LOST_MESSAGE };
   }
 
@@ -383,6 +421,8 @@ async function prepareSetupLink(
     link: `${buildTokenHashRecoveryLink(redirectTo, hashedToken)}&intent=setup`,
     expiresAt: new Date(now.getTime() + SETUP_LINK_LIFETIME_MS).toISOString(),
     claimedAt,
+    coordinator,
+    contactToken,
   };
 }
 
@@ -427,11 +467,14 @@ export async function sendFinalSetupEmailImpl(
   deps: FinalSetupFollowUpDeps = {}
 ): Promise<FinalSetupEmailState> {
   const admin = deps.adminClient ?? createAdminClient();
-  const prepared = await prepareSetupLink(origin, admin, deps);
+  const prepared = await prepareSetupLink(origin, admin, deps, "founder_resend");
   if (!prepared.ok) return { error: prepared.error };
-  const { ctx, user, link, expiresAt, claimedAt } = prepared;
+  const { ctx, user, link, expiresAt, claimedAt, coordinator, contactToken } = prepared;
   // Released in `finally` unless the provider call is still unresolved.
   let keepClaim = false;
+  // Evidence first, under the contact claim; the claim is released only if
+  // this write succeeded (otherwise it is folded in later when it goes stale).
+  const contactRecorded = await coordinator.recordSetupContact(ctx.operatorId, "founder_final_resend", (deps.now ?? (() => new Date()))());
 
   try {
     const sendPromise = (deps.sendEmail ?? sendFinalSetupEmail)({
@@ -528,6 +571,7 @@ export async function sendFinalSetupEmailImpl(
   } finally {
     // Never clears a newer request's claim (CAS on our own claimedAt).
     if (!keepClaim) await releaseSetupLinkLock(admin, ctx.lifecycleId, claimedAt);
+    if (contactRecorded) await coordinator.release(ctx.operatorId, contactToken);
   }
 }
 
@@ -538,12 +582,18 @@ export async function generateFinalSetupLinkImpl(
   deps: FinalSetupFollowUpDeps = {}
 ): Promise<FinalSetupLinkResult> {
   const admin = deps.adminClient ?? createAdminClient();
-  const prepared = await prepareSetupLink(origin, admin, deps);
+  const prepared = await prepareSetupLink(origin, admin, deps, "founder_copy");
   if (!prepared.ok) return { ok: false, error: prepared.error };
-  const { ctx, user, link, expiresAt, claimedAt } = prepared;
+  const { ctx, user, link, expiresAt, claimedAt, coordinator, contactToken } = prepared;
+  let pauseRecorded = false;
 
   try {
     const generatedAt = (deps.now ?? (() => new Date()))().toISOString();
+    // Precautionary pause for automated milestone emails (migration 104),
+    // recorded under the contact claim: the founder may paste this link
+    // into their own email, so no incomplete-setup milestone is sent for
+    // 48 h. Not an email sent by HHC.
+    pauseRecorded = await coordinator.recordPause(ctx.operatorId, new Date(generatedAt));
     // Records only that a link was generated for manual sharing — never the
     // link itself, and never a claim that it was sent or received.
     const note = await writeOriginNote(admin, origin, {
@@ -573,5 +623,6 @@ export async function generateFinalSetupLinkImpl(
     return { ok: true, link, expiresAt, recipient: ctx.email };
   } finally {
     await releaseSetupLinkLock(admin, ctx.lifecycleId, claimedAt);
+    if (pauseRecorded) await coordinator.release(ctx.operatorId, contactToken);
   }
 }
