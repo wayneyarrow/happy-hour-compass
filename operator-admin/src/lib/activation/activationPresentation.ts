@@ -88,6 +88,10 @@ export type ActivationLifecycleSummary = {
   reminderLeaseStartedAt: string | null;
   expirySlackNotifiedAt: string | null;
   expiryFounderEmailSentAt: string | null;
+  /** Migration 103: FALSE for lifecycles that expired before the post-expiry follow-up rollout (never notified, never backfilled). */
+  expiryFollowUpRequired: boolean;
+  /** Migration 103: why follow-up stopped without notifying (activated, ownership_changed, origin_unresolved). */
+  expiryFollowUpSkipReason: string | null;
 };
 
 export type ActivationPresentation = {
@@ -250,6 +254,23 @@ export function shouldShowStandaloneResendPanel(presentation: ActivationPresenta
   return !!presentation.lifecycle && presentation.state !== "active";
 }
 
+/**
+ * Pure rendering predicate: should a Claim/Submission detail page show the
+ * post-expiry "Final follow-up" section (Final resend setup email / Copy
+ * setup link) in place of the normal Resend panel? True once the setup
+ * window has ended — Release Required (deadline passed, not yet stamped) or
+ * Expired — while the lifecycle is unreleased. Display only: the actions
+ * re-check activation, ownership and release state at submit time
+ * (finalSetupFollowUpImpl.ts).
+ */
+export function shouldShowFinalFollowUpPanel(presentation: ActivationPresentation): boolean {
+  return (
+    !!presentation.lifecycle &&
+    !presentation.lifecycle.releasedAt &&
+    (presentation.state === "release_required" || presentation.state === "expired")
+  );
+}
+
 type RawLifecycleRow = {
   id: string;
   operator_id: string;
@@ -268,6 +289,8 @@ type RawLifecycleRow = {
   reminder_lease_stage: number | null;
   reminder_lease_started_at: string | null;
   expiry_slack_notified_at: string | null;
+  expiry_follow_up_required?: boolean | null;
+  expiry_follow_up_skip_reason?: string | null;
   expiry_founder_email_sent_at: string | null;
 };
 
@@ -297,6 +320,8 @@ function mapLifecycle(row: RawLifecycleRow): ActivationLifecycleSummary {
     reminderLeaseStartedAt: row.reminder_lease_started_at,
     expirySlackNotifiedAt: row.expiry_slack_notified_at,
     expiryFounderEmailSentAt: row.expiry_founder_email_sent_at,
+    expiryFollowUpRequired: row.expiry_follow_up_required === true,
+    expiryFollowUpSkipReason: row.expiry_follow_up_skip_reason ?? null,
   };
 }
 

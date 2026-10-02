@@ -38,9 +38,17 @@ function reminderProgressText(row: ActivationReviewRow): string {
 
 function notificationText(row: ActivationReviewRow): string | null {
   if (!row.expiredAt) return null;
+  if (row.expiryFollowUpSkipReason) return `Follow-up not sent (${row.expiryFollowUpSkipReason.replace(/_/g, " ")})`;
   const slack = row.expirySlackNotifiedAt ? "Slack ✓" : "Slack pending";
   const email = row.expiryFounderEmailSentAt ? "Email ✓" : "Email pending";
+  // Expired before the post-expiry follow-up rollout (migration 103): never
+  // sent the #customer-success follow-up and never backfilled.
+  if (!row.expiryFollowUpRequired) return `Before follow-up rollout · ${slack} · ${email}`;
   return `${slack} · ${email}`;
+}
+
+function phonesText(row: ActivationReviewRow): string {
+  return row.contactPhones.map((p) => `${p.value} (${p.label})`).join(" · ");
 }
 
 export default function OperatorActivationReviewsTable({ rows }: { rows: ActivationReviewRow[] }) {
@@ -88,9 +96,10 @@ export default function OperatorActivationReviewsTable({ rows }: { rows: Activat
     row.originType === "claim" ? `/control-panel/claims/${row.originId}` : `/control-panel/operator-submissions/${row.originId}`;
 
   const handleExport = () => {
-    const headers = ["Venue", "Operator", "Origin", "State", "Reasons", "Deadline", "Reminder progress", "Last error", "Notification status"];
+    const headers = ["Venue", "Operator", "Email", "Phone", "Ownership", "Origin", "State", "Reasons", "Deadline", "Reminder progress", "Last error", "Notification status"];
     const csvRows = sorted.map((r) => [
-      r.venueName ?? "", r.operatorName ?? r.operatorEmail ?? "",
+      r.venueName ?? "", r.operatorName ?? r.operatorEmail ?? "", r.operatorEmail ?? "", phonesText(r),
+      r.ownershipValid === false ? "Changed" : r.ownershipValid ? "Still owner" : "Unknown",
       r.originType === "claim" ? "Claim" : "Submission",
       r.state, r.reasons.map((x) => REASON_LABELS[x]).join("; "),
       r.deadlineAt, reminderProgressText(r), r.reminderLastError ?? "", notificationText(r) ?? "",
@@ -140,8 +149,34 @@ export default function OperatorActivationReviewsTable({ rows }: { rows: Activat
                 <tbody className="divide-y divide-gray-50">
                   {pageRows.map((r) => (
                     <tr key={r.lifecycleId} onClick={() => router.push(detailHref(r))} className="hover:bg-amber-50 transition-colors cursor-pointer">
-                      <td className="px-4 py-3 font-medium text-slate-900">{r.venueName ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-3 text-gray-600">{r.operatorName ?? r.operatorEmail ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {r.venueName ?? <span className="text-gray-300">—</span>}
+                        {r.venueId && (
+                          <a
+                            href={`/control-panel/venues/${r.venueId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block text-[11px] font-normal text-amber-700 hover:underline"
+                          >
+                            Venue page →
+                          </a>
+                        )}
+                        {r.ownershipValid === false && (
+                          <span className="block text-[11px] font-normal text-red-600">Ownership changed</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {r.operatorName ?? r.operatorEmail ?? <span className="text-gray-300">—</span>}
+                        {r.operatorEmail && r.operatorName && (
+                          <a
+                            href={`mailto:${r.operatorEmail}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block text-[11px] text-amber-700 hover:underline"
+                          >
+                            {r.operatorEmail}
+                          </a>
+                        )}
+                        {r.contactPhones.length > 0 && <span className="block text-[11px] text-gray-500">{phonesText(r)}</span>}
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{r.originType === "claim" ? "Claim" : "Submission"}</td>
                       <td className="px-4 py-3"><ActivationBadge state={r.state} /></td>
                       <td className="px-4 py-3"><ReasonPills reasons={r.reasons} /></td>

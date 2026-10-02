@@ -23,6 +23,11 @@ export default async function OperatorActivationReviewsPage() {
           founder Slack/email notification never completed. Already-activated and already-released records are
           never shown here.
         </p>
+        <p className="mt-2 text-sm text-gray-500">
+          Open a record to send a final setup email, copy a setup link for your own email, or release the venue.
+          Records marked &ldquo;Before follow-up rollout&rdquo; expired before the #customer-success follow-up
+          notification existed and were not sent one.
+        </p>
       </div>
 
       {rows.length === 0 ? (

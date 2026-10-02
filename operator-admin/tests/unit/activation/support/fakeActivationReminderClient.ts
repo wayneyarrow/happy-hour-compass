@@ -28,6 +28,12 @@ export type FakeLifecycleRow = {
   reminder_lease_started_at: string | null;
   expiry_slack_notified_at: string | null;
   expiry_founder_email_sent_at: string | null;
+  // Migration 103 — post-expiry follow-up bookkeeping.
+  expiry_follow_up_required: boolean;
+  expiry_follow_up_resolved_at: string | null;
+  expiry_follow_up_skip_reason: string | null;
+  expiry_follow_up_last_attempted_at: string | null;
+  setup_link_claimed_at: string | null;
 };
 
 export function makeLifecycleRow(overrides: Partial<FakeLifecycleRow> & { id: string; operator_id: string }): FakeLifecycleRow {
@@ -48,6 +54,11 @@ export function makeLifecycleRow(overrides: Partial<FakeLifecycleRow> & { id: st
     reminder_lease_started_at: null,
     expiry_slack_notified_at: null,
     expiry_founder_email_sent_at: null,
+    expiry_follow_up_required: false,
+    expiry_follow_up_resolved_at: null,
+    expiry_follow_up_skip_reason: null,
+    expiry_follow_up_last_attempted_at: null,
+    setup_link_claimed_at: null,
     ...overrides,
   };
 }
@@ -55,7 +66,7 @@ export function makeLifecycleRow(overrides: Partial<FakeLifecycleRow> & { id: st
 export type FakeOperatorRow = { id: string; email: string; first_name: string | null; last_name: string | null; account_activated_at: string | null };
 export type FakeClaimRow = { id: string; venue_id: string | null };
 export type FakeSubmissionRow = { id: string; venue_id: string | null };
-export type FakeVenueRow = { id: string; name: string };
+export type FakeVenueRow = { id: string; name: string; created_by_operator_id?: string | null; phone?: string | null };
 export type FakeNoteRow = Record<string, unknown> & { id: string; event_key: string | null };
 
 type Row = Record<string, unknown>;
@@ -87,6 +98,7 @@ function makeSelectBuilder(getRows: () => Row[]) {
   const inFilters: { col: string; vals: unknown[] }[] = [];
   let orderCol: string | null = null;
   let orderAsc = true;
+  let orderNullsFirst = false;
   let limitN: number | null = null;
 
   const matchesAll = (row: Row) => matchesRow(row, filters) && inFilters.every((f) => f.vals.includes(row[f.col]));
@@ -118,9 +130,10 @@ function makeSelectBuilder(getRows: () => Row[]) {
       inFilters.push({ col, vals });
       return builder;
     },
-    order(col: string, opts?: { ascending?: boolean }) {
+    order(col: string, opts?: { ascending?: boolean; nullsFirst?: boolean }) {
       orderCol = col;
       orderAsc = opts?.ascending !== false;
+      orderNullsFirst = opts?.nullsFirst === true;
       return builder;
     },
     limit(n: number) {
@@ -135,12 +148,15 @@ function makeSelectBuilder(getRows: () => Row[]) {
       let rows = getRows().filter(matchesAll);
       if (orderCol) {
         const col = orderCol;
-        rows = [...rows].sort((a, b) => {
+        const nonNull = rows.filter((r) => r[col] !== null && r[col] !== undefined);
+        const nulls = rows.filter((r) => r[col] === null || r[col] === undefined);
+        const sortedNonNull = [...nonNull].sort((a, b) => {
           const av = a[col] as string | number;
           const bv = b[col] as string | number;
           return av < bv ? -1 : av > bv ? 1 : 0;
         });
-        if (!orderAsc) rows.reverse();
+        if (!orderAsc) sortedNonNull.reverse();
+        rows = orderNullsFirst ? [...nulls, ...sortedNonNull] : [...sortedNonNull, ...nulls];
       }
       if (limitN !== null) rows = rows.slice(0, limitN);
       return Promise.resolve({ data: rows.map((r) => ({ ...r })), error: null }).then(onfulfilled, onrejected);
@@ -253,9 +269,12 @@ export function createFakeActivationReminderClient(
         case "venues":
           return { select: () => makeSelectBuilder(() => venues) };
         case "venue_claim_notes":
-          return { insert: (obj: Row) => makeInsert(() => venueClaimNotes, obj) };
+          return { insert: (obj: Row) => makeInsert(() => venueClaimNotes, obj), select: () => makeSelectBuilder(() => venueClaimNotes) };
         case "operator_submission_notes":
-          return { insert: (obj: Row) => makeInsert(() => operatorSubmissionNotes, obj) };
+          return {
+            insert: (obj: Row) => makeInsert(() => operatorSubmissionNotes, obj),
+            select: () => makeSelectBuilder(() => operatorSubmissionNotes),
+          };
         default:
           throw new Error(`fake client: unexpected table "${table}"`);
       }

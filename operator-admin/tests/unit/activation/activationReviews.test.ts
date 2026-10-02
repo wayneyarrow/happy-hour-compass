@@ -375,3 +375,58 @@ test("empty candidate set short-circuits with zero downstream queries", async ()
   const c = counts();
   assert.equal(c.operatorQueryCount, 0);
 });
+
+// ── Post-expiry personal follow-up (migration 103) ──────────────────────────
+
+test("a pre-rollout expired lifecycle stays visible, is labelled as such, and carries contact details and ownership for a personal follow-up", async () => {
+  const { client } = makeFakeClient({
+    lifecycles: [
+      makeLifecycle({
+        id: "lc-old",
+        operator_id: "op-1",
+        origin_type: "claim",
+        origin_claim_id: "claim-1",
+        origin_submission_id: null,
+        expired_at: "2026-09-16T00:00:00.000Z",
+        expiry_follow_up_required: false,
+      }),
+    ],
+    operators: [{ id: "op-1", account_activated_at: null, first_name: "Jeremy", last_name: null, email: "gm@venue.example" }],
+    claims: [{ id: "claim-1", venue_id: "venue-1", phone: "250-555-0100", info_phone: null }],
+    venues: [{ id: "venue-1", name: "Moxies", phone: "250-555-0199", created_by_operator_id: "op-1" }],
+  });
+  const rows = await getOperatorActivationReviews(client, NOW);
+  assert.equal(rows.length, 1);
+  const row = rows[0];
+  assert.equal(row.expiryFollowUpRequired, false, "visible here even though no follow-up notification was ever sent");
+  assert.equal(row.expirySlackNotifiedAt, null, "no false notification marker");
+  assert.ok(row.reasons.includes("expired"));
+  assert.equal(row.operatorEmail, "gm@venue.example");
+  assert.deepEqual(row.contactPhones, [
+    { label: "claimant", value: "250-555-0100" },
+    { label: "venue", value: "250-555-0199" },
+  ]);
+  assert.equal(row.ownershipValid, true);
+  assert.equal(row.venueId, "venue-1");
+});
+
+test("a follow-up closed as ineligible (skip reason) is not reported as an incomplete notification; changed ownership is surfaced", async () => {
+  const { client } = makeFakeClient({
+    lifecycles: [
+      makeLifecycle({
+        id: "lc-skip",
+        operator_id: "op-1",
+        expired_at: "2026-09-16T00:00:00.000Z",
+        expiry_follow_up_required: true,
+        expiry_follow_up_skip_reason: "ownership_changed",
+      }),
+    ],
+    operators: [{ id: "op-1", account_activated_at: null }],
+    submissions: [{ id: "sub-1", venue_id: "venue-1" }],
+    venues: [{ id: "venue-1", name: "V", created_by_operator_id: "op-2" }],
+  });
+  const rows = await getOperatorActivationReviews(client, NOW);
+  assert.deepEqual(rows[0].reasons, ["expired"]);
+  assert.equal(rows[0].ownershipValid, false);
+  assert.equal(rows[0].expiryFollowUpSkipReason, "ownership_changed");
+});

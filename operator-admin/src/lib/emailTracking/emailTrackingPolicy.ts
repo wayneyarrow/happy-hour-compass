@@ -107,6 +107,8 @@ export const NEVER_TRACKED_SENDER_EMAIL_TYPES: ReadonlySet<string> = new Set([
   "operator_verification_code",
   "password_reset",
   "consumer_signup_confirmation",
+  // Founder post-expiry final follow-up — carries a recovery (setup) link.
+  "activation_final_setup",
 ]);
 
 export function usesTrackedSender(emailType: string, context?: EmailSendContext | null): boolean {
@@ -161,7 +163,7 @@ export function buildResendTags(params: { sendRef: string; emailType: string; en
 
 export type EmailSendContext = {
   /** Why this send happened, when it isn't the normal first send. */
-  trigger?: "founder_resend" | "legacy_resume" | "continue_setup" | "recovery_redirect";
+  trigger?: "founder_resend" | "legacy_resume" | "continue_setup" | "recovery_redirect" | "final_follow_up";
   reminderStage?: number;
   milestone?: number;
 };
@@ -170,7 +172,7 @@ export type EmailSendContext = {
 export function sanitizeSendContext(ctx: EmailSendContext | undefined): EmailSendContext | null {
   if (!ctx) return null;
   const out: EmailSendContext = {};
-  const triggers = ["founder_resend", "legacy_resume", "continue_setup", "recovery_redirect"] as const;
+  const triggers = ["founder_resend", "legacy_resume", "continue_setup", "recovery_redirect", "final_follow_up"] as const;
   if (ctx.trigger && (triggers as readonly string[]).includes(ctx.trigger)) out.trigger = ctx.trigger;
   if (Number.isInteger(ctx.reminderStage)) out.reminderStage = ctx.reminderStage;
   if (Number.isInteger(ctx.milestone)) out.milestone = ctx.milestone;
@@ -185,6 +187,7 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   operator_activation: "Venue added — account setup email",
   operator_venue_added: "Venue added to existing account email",
   activation_reminder: "Account setup reminder",
+  activation_final_setup: "Final setup email (founder follow-up)",
   operator_verification_code: "Verification code email",
 };
 

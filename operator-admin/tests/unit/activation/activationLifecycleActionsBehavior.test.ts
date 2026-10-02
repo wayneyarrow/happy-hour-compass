@@ -316,7 +316,11 @@ test("extendActivationDeadlineAction: Kelly's real lifecycle, stage 0, extended 
     deadline_at: kellyDeadline, expired_at: null, released_at: null, reminder_stage: 0,
   });
   const { client } = makeClient();
-  const result = await extendActivationDeadlineImpl("kelly-lc", { ...authDeps(FOUNDER, true), adminClient: client });
+  // Pinned to the design-audit moment the scenario describes (deadline still
+  // comfortably future). Previously this read the real clock, so the test
+  // began failing once real time passed the new stage-1 due date (2026-09-28).
+  const auditNow = new Date("2026-09-19T12:00:00.000Z");
+  const result = await extendActivationDeadlineImpl("kelly-lc", { ...authDeps(FOUNDER, true), adminClient: client, now: () => auditNow });
 
   assert.equal(result.success, true);
   const expectedNewDeadline = new Date(new Date(kellyDeadline).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();

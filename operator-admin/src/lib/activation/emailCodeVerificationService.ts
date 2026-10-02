@@ -773,16 +773,20 @@ export type PasswordRecoveryGate =
  *   - no live lifecycle, or a legacy one (verification_required = false) → "allow"
  *   - verification-required and verified → "allow" (the code step is done;
  *     Forgot Password is this state's recovery path, e.g. from another device)
- *   - verification-required and NOT verified → "requires_email_code"
+ *   - verification-required and NOT verified → "requires_email_code", unless
+ *     the setup window has closed (deadline passed) → "allow" — the code
+ *     screen is closed then, and an inbox-verified recovery link is the
+ *     post-window path (founder final follow-up / Forgot Password)
  */
 export async function resolvePasswordRecoveryGate(
   admin: SupabaseClient,
-  operator: { id: string; accountActivatedAt: string | null }
+  operator: { id: string; accountActivatedAt: string | null },
+  now: Date = new Date()
 ): Promise<PasswordRecoveryGate> {
   if (operator.accountActivatedAt) return { kind: "allow" };
   const { data, error } = await admin
     .from("operator_activation_lifecycles")
-    .select("id, origin_type, verification_required, verification_completed_at")
+    .select("id, origin_type, verification_required, verification_completed_at, deadline_at")
     .eq("operator_id", operator.id)
     .is("expired_at", null)
     .is("released_at", null)
@@ -795,7 +799,18 @@ export async function resolvePasswordRecoveryGate(
     verificationRequired: (data?.verification_required as boolean | null) ?? null,
     verificationCompletedAt: (data?.verification_completed_at as string | null) ?? null,
   });
-  if (data && mode === "email_code_pending") {
+  // A lifecycle whose setup window has closed (deadline passed — whether or
+  // not the expiry worker has stamped expired_at yet) can no longer issue
+  // or accept codes: every verification SQL function returns
+  // lifecycle_closed once deadline_at <= now (migration 100). The founder's
+  // post-expiry "Final resend setup email" / "Copy setup link" (and Forgot
+  // Password) then use an inbox-verified recovery link instead — the same
+  // path an already-expired (expired_at set) lifecycle has always taken,
+  // since the query above only ever matches unexpired rows. Without this,
+  // a deadline-passed-but-not-yet-stamped lifecycle would be stuck: the
+  // code screen is closed AND recovery would be refused.
+  const windowClosed = !!data?.deadline_at && new Date(data.deadline_at as string).getTime() <= now.getTime();
+  if (data && mode === "email_code_pending" && !windowClosed) {
     return {
       kind: "requires_email_code",
       lifecycleId: data.id as string,

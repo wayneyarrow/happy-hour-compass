@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { deriveActivationState, type ActivationLifecycleState } from "@/lib/activation/activationState";
+import { collectPhones } from "@/lib/activation/activationExpiryFollowUp";
 
 /**
  * N+1-safe query layer for the Founder Control Panel Action Center's
@@ -63,6 +64,10 @@ export type ActivationReviewRow = {
   operatorId: string;
   operatorName: string | null;
   operatorEmail: string | null;
+  /** Claimant/business/venue phone numbers available for a personal follow-up. */
+  contactPhones: { label: string; value: string }[];
+  /** Whether the lifecycle's operator still owns the venue; null when the venue couldn't be resolved. */
+  ownershipValid: boolean | null;
   state: ActivationLifecycleState;
   reasons: ActivationReviewReason[];
   deadlineAt: string;
@@ -74,6 +79,14 @@ export type ActivationReviewRow = {
   expiredAt: string | null;
   expirySlackNotifiedAt: string | null;
   expiryFounderEmailSentAt: string | null;
+  /**
+   * FALSE for lifecycles that expired before the post-expiry follow-up
+   * rollout (migration 103): they were never sent the #customer-success
+   * follow-up and never will be (no backfill) — this report is where they
+   * stay visible.
+   */
+  expiryFollowUpRequired: boolean;
+  expiryFollowUpSkipReason: string | null;
 };
 
 export type ActivationReviewSummary = {
@@ -99,6 +112,8 @@ type RawRow = {
   reminder_last_error: string | null;
   expiry_slack_notified_at: string | null;
   expiry_founder_email_sent_at: string | null;
+  expiry_follow_up_required: boolean | null;
+  expiry_follow_up_skip_reason: string | null;
 };
 
 /**
@@ -138,7 +153,9 @@ function computeReasons(row: RawRow, now: Date): ActivationReviewReason[] {
 
   if (row.expired_at) {
     reasons.push("expired");
-    if (!row.expiry_slack_notified_at || !row.expiry_founder_email_sent_at) {
+    // A follow-up closed as permanently ineligible (skip reason set) is not
+    // an incomplete notification — it was deliberately not sent.
+    if (!row.expiry_follow_up_skip_reason && (!row.expiry_slack_notified_at || !row.expiry_founder_email_sent_at)) {
       reasons.push("notification_incomplete");
     }
   } else if (deadlineMs <= nowMs) {
@@ -178,7 +195,7 @@ export async function getOperatorActivationReviews(
   const { data: lifecycleRows, error: lifecycleError } = await client
     .from("operator_activation_lifecycles")
     .select(
-      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, deadline_at, expired_at, reminder_stage, reminder_next_attempt_at, reminder_attempt_count, reminder_last_attempted_at, reminder_last_error, expiry_slack_notified_at, expiry_founder_email_sent_at"
+      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, deadline_at, expired_at, reminder_stage, reminder_next_attempt_at, reminder_attempt_count, reminder_last_attempted_at, reminder_last_error, expiry_slack_notified_at, expiry_founder_email_sent_at, expiry_follow_up_required, expiry_follow_up_skip_reason"
     )
     .is("released_at", null);
 
@@ -219,11 +236,11 @@ export async function getOperatorActivationReviews(
 
   const [claimsResult, submissionsResult] = await Promise.all([
     claimIds.length > 0
-      ? client.from("venue_claims").select("id, venue_id").in("id", claimIds)
-      : Promise.resolve({ data: [] as { id: string; venue_id: string | null }[], error: null }),
+      ? client.from("venue_claims").select("id, venue_id, phone, info_phone").in("id", claimIds)
+      : Promise.resolve({ data: [] as { id: string; venue_id: string | null; phone?: string | null; info_phone?: string | null }[], error: null }),
     submissionIds.length > 0
-      ? client.from("operator_submissions").select("id, venue_id").in("id", submissionIds)
-      : Promise.resolve({ data: [] as { id: string; venue_id: string | null }[], error: null }),
+      ? client.from("operator_submissions").select("id, venue_id, info_phone").in("id", submissionIds)
+      : Promise.resolve({ data: [] as { id: string; venue_id: string | null; info_phone?: string | null }[], error: null }),
   ]);
 
   if (claimsResult.error) console.error("[getOperatorActivationReviews] Claim batch lookup failed:", claimsResult.error.message);
@@ -231,6 +248,16 @@ export async function getOperatorActivationReviews(
 
   const venueIdByClaimId = new Map((claimsResult.data ?? []).map((r) => [r.id as string, r.venue_id as string | null]));
   const venueIdBySubmissionId = new Map((submissionsResult.data ?? []).map((r) => [r.id as string, r.venue_id as string | null]));
+  const phonesByOriginId = new Map<string, { label: string; value: string | null }[]>();
+  for (const r of (claimsResult.data ?? []) as { id: string; phone?: string | null; info_phone?: string | null }[]) {
+    phonesByOriginId.set(r.id, [
+      { label: "claimant", value: r.phone ?? null },
+      { label: "business, from claim", value: r.info_phone ?? null },
+    ]);
+  }
+  for (const r of (submissionsResult.data ?? []) as { id: string; info_phone?: string | null }[]) {
+    phonesByOriginId.set(r.id, [{ label: "business, from submission", value: r.info_phone ?? null }]);
+  }
 
   const venueIds = [
     ...new Set(
@@ -240,13 +267,17 @@ export async function getOperatorActivationReviews(
     ),
   ];
 
-  let venueById = new Map<string, { id: string; name: string }>();
+  type ReviewVenue = { id: string; name: string; phone?: string | null; created_by_operator_id?: string | null };
+  let venueById = new Map<string, ReviewVenue>();
   if (venueIds.length > 0) {
-    const { data: venueRows, error: venueError } = await client.from("venues").select("id, name").in("id", venueIds);
+    const { data: venueRows, error: venueError } = await client
+      .from("venues")
+      .select("id, name, phone, created_by_operator_id")
+      .in("id", venueIds);
     if (venueError) {
       console.error("[getOperatorActivationReviews] Venue batch lookup failed:", venueError.message);
     } else {
-      venueById = new Map((venueRows ?? []).map((v) => [v.id as string, v as { id: string; name: string }]));
+      venueById = new Map((venueRows ?? []).map((v) => [v.id as string, v as ReviewVenue]));
     }
   }
 
@@ -276,6 +307,8 @@ export async function getOperatorActivationReviews(
       operatorId: row.operator_id,
       operatorName: operator ? [operator.first_name, operator.last_name].filter(Boolean).join(" ") || null : null,
       operatorEmail: operator?.email ?? null,
+      contactPhones: collectPhones([...(phonesByOriginId.get(originId) ?? []), { label: "venue", value: venue?.phone ?? null }]),
+      ownershipValid: venue && venue.created_by_operator_id !== undefined ? venue.created_by_operator_id === row.operator_id : null,
       state,
       reasons,
       deadlineAt: row.deadline_at,
@@ -287,6 +320,8 @@ export async function getOperatorActivationReviews(
       expiredAt: row.expired_at,
       expirySlackNotifiedAt: row.expiry_slack_notified_at,
       expiryFounderEmailSentAt: row.expiry_founder_email_sent_at,
+      expiryFollowUpRequired: row.expiry_follow_up_required === true,
+      expiryFollowUpSkipReason: row.expiry_follow_up_skip_reason ?? null,
     };
   });
 }

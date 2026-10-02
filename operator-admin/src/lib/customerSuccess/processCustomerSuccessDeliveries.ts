@@ -92,6 +92,8 @@ export type CustomerSuccessDeliveryResult = {
   retried: number;
   failedTerminal: number;
   recipientBlocked: number;
+  /** Due events not sent because the venue's owner changed (e.g. released) after the milestone was detected. */
+  skippedOwnershipChanged: number;
   errors: { eventId: string; message: string }[];
 };
 
@@ -108,6 +110,7 @@ function emptyDisabledResult(): CustomerSuccessDeliveryResult {
     retried: 0,
     failedTerminal: 0,
     recipientBlocked: 0,
+    skippedOwnershipChanged: 0,
     errors: [],
   };
 }
@@ -136,6 +139,7 @@ export async function processCustomerSuccessDeliveries(
     retried: 0,
     failedTerminal: 0,
     recipientBlocked: 0,
+    skippedOwnershipChanged: 0,
     errors: [],
   };
 
@@ -154,6 +158,7 @@ export async function processCustomerSuccessDeliveries(
       else if (outcome === "retry") { result.attempted++; result.retried++; }
       else if (outcome === "failed_terminal") { result.attempted++; result.failedTerminal++; }
       else if (outcome === "recipient_blocked") { result.recipientBlocked++; }
+      else if (outcome === "skipped_ownership_changed") { result.skippedOwnershipChanged++; }
       // "already_claimed" — another worker got there first; not an error, not counted.
     } catch (err) {
       result.errors.push({ eventId: event.id, message: err instanceof Error ? err.message : String(err) });
@@ -394,7 +399,40 @@ function mergeDeliverySnapshotIntoMetadata(existingMetadataJson: unknown, snapsh
   return { ...base, deliverySnapshot: snapshot };
 }
 
-type DueEventOutcome = "sent" | "retry" | "failed_terminal" | "recipient_blocked" | "already_claimed";
+type DueEventOutcome = "sent" | "retry" | "failed_terminal" | "recipient_blocked" | "already_claimed" | "skipped_ownership_changed";
+
+/**
+ * Send-time ownership check. A milestone event is detected for the venue's
+ * owner at the time (event.operator_id), but delivery can be days later. If
+ * the venue was released (or otherwise changed hands) in between, the event
+ * must never email the former operator. Recipient resolution keys off
+ * event.operator_id, so without this check a released operator would still
+ * receive the milestone.
+ *
+ * Returns true when the venue is still owned by the event's operator. An
+ * event with no operator_id is left to the existing no-recipient handling.
+ */
+async function isVenueStillOwnedByEventOperator(event: { venueId: string; operatorId: string | null }, admin: AdminClient): Promise<boolean> {
+  if (!event.operatorId) return true;
+  const { data, error } = await admin.from("venues").select("created_by_operator_id").eq("id", event.venueId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as { created_by_operator_id: string | null } | null)?.created_by_operator_id === event.operatorId;
+}
+
+/** Closes a due event without sending — 'skipped' is hidden from the venue timeline (customerSuccessMilestoneNotes.ts). */
+async function skipEventForOwnershipChange(eventId: string, admin: AdminClient): Promise<void> {
+  const { error } = await admin
+    .from("customer_success_events")
+    .update({
+      communication_status: "skipped",
+      next_attempt_at: null,
+      processing_started_at: null,
+      last_error: "Venue ownership changed before delivery — not sent to the former operator.",
+    })
+    .eq("id", eventId)
+    .eq("communication_status", "pending");
+  if (error) throw new Error(error.message);
+}
 
 async function processDueEvent(
   event: DueEvent,
@@ -402,6 +440,14 @@ async function processDueEvent(
   now: Date,
   sendEmail: SendEmailFn
 ): Promise<DueEventOutcome> {
+  // Checked before any recipient resolution/claim, on first attempts and
+  // retries alike — a snapshot locked for the former owner is never reused.
+  if (!(await isVenueStillOwnedByEventOperator(event, admin))) {
+    await skipEventForOwnershipChange(event.id, admin);
+    console.warn("[processCustomerSuccessDeliveries] Skipped — venue ownership changed since detection.", { eventId: event.id, venueId: event.venueId });
+    return "skipped_ownership_changed";
+  }
+
   const hasSnapshot = event.recipientEmail !== null;
 
   let recipientEmail: string;

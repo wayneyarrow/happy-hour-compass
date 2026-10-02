@@ -620,6 +620,33 @@ export async function provisionOperatorForVenue({
  * retried; that gap is covered by the critical Slack alerts below rather
  * than by weakening the gate or adding a queue/outbox.
  */
+export type ActivationOriginLifecycleCandidate = {
+  origin_type: "claim" | "submission";
+  origin_claim_id: string | null;
+  origin_submission_id: string | null;
+  expired_at: string | null;
+  started_at: string;
+};
+
+/**
+ * Pure — which of an operator's unreleased lifecycles an activation belongs
+ * to: the live one (at most one, by migration 098's partial unique index),
+ * otherwise the most recently expired one (an operator finishing setup
+ * through the founder's post-expiry final follow-up). Null when there are
+ * none — the caller then uses the legacy pre-migration-098 fallback.
+ */
+export function selectActivationOriginLifecycle(
+  rows: readonly ActivationOriginLifecycleCandidate[]
+): ActivationOriginLifecycleCandidate | null {
+  const live = rows.find((r) => r.expired_at === null);
+  if (live) return live;
+  const expired = [...rows].sort((a, b) => {
+    const byExpiry = (b.expired_at as string).localeCompare(a.expired_at as string);
+    return byExpiry !== 0 ? byExpiry : b.started_at.localeCompare(a.started_at);
+  });
+  return expired[0] ?? null;
+}
+
 export async function completeOperatorAccountActivation({
   operatorId,
 }: {
@@ -715,13 +742,23 @@ export async function completeOperatorAccountActivation({
     // application logic never racing itself. This single query replaces the
     // earlier two-table, ambiguity-prone lookup entirely for any operator
     // whose provisioning happened through claimOrReuseActivationLifecycle().
-    const { data: lifecycle } = await supabase
+    //
+    // Post-expiry follow-up (2026-10): an operator can now finish setup
+    // AFTER their window expired (founder "Final resend setup email" / "Copy
+    // setup link"). Expired-but-unreleased lifecycles are therefore included
+    // too — otherwise the activation note and the auto-approved venue
+    // verification below would fall back to the legacy heuristic, which
+    // resolves nothing for a multi-venue operator. Released lifecycles stay
+    // excluded: their venue ownership was cleared, and nothing here may act
+    // on a released venue. See selectActivationOriginLifecycle().
+    const { data: unreleasedLifecycles } = await supabase
       .from("operator_activation_lifecycles")
-      .select("origin_type, origin_claim_id, origin_submission_id")
+      .select("origin_type, origin_claim_id, origin_submission_id, expired_at, started_at")
       .eq("operator_id", operatorId)
-      .is("expired_at", null)
-      .is("released_at", null)
-      .maybeSingle();
+      .is("released_at", null);
+    const lifecycle = selectActivationOriginLifecycle(
+      (unreleasedLifecycles ?? []) as ActivationOriginLifecycleCandidate[]
+    );
 
     if (lifecycle?.origin_type === "claim" && lifecycle.origin_claim_id) {
       claimId = lifecycle.origin_claim_id as string;

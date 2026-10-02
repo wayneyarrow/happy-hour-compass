@@ -26,6 +26,9 @@ type Phase = "checking" | "confirm" | "verifying" | "form" | "unavailable";
  *      (src/lib/operatorActivation.ts), still sends Supabase's raw action_link.
  *   2. Operator forgot-password ("Reset your password") — forgotPasswordAction
  *      (src/app/forgot-password/actions.ts), sends a token_hash link.
+ *   3. Founder post-expiry final follow-up — "Final resend setup email" or
+ *      "Copy setup link" (src/lib/activation/finalSetupFollowUpImpl.ts), a
+ *      token_hash link with intent=setup (first-time setup wording).
  *
  * Session flow — two supported shapes, mirroring the Consumer recovery page
  * ((consumer-auth)/account/reset-password/page.tsx):
@@ -61,6 +64,11 @@ export default function CreatePasswordPage() {
 
   const [phase, setPhase] = useState<Phase>("checking");
   const [pendingTokenHash, setPendingTokenHash] = useState<string | null>(null);
+  // intent=setup — the link came from a founder final follow-up (setup email
+  // or copied setup link) for an operator who has never set a password, so
+  // the wording says "finish setting up", not "reset". Wording only; the
+  // verification flow is identical.
+  const [setupIntent, setSetupIntent] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +87,7 @@ export default function CreatePasswordPage() {
       const searchParams = new URLSearchParams(window.location.search);
       const tokenHash = searchParams.get("token_hash");
       const otpType = searchParams.get("type");
+      setSetupIntent(searchParams.get("intent") === "setup");
 
       if (tokenHash && otpType === "recovery") {
         setPendingTokenHash(tokenHash);
@@ -214,11 +223,12 @@ export default function CreatePasswordPage() {
           </div>
           <div className="bg-white p-8 rounded-xl shadow-md text-center">
             <h1 className="text-xl font-bold text-gray-900 mb-2">
-              Reset your password
+              {setupIntent ? "Finish setting up your account" : "Reset your password"}
             </h1>
             <p className="text-sm text-gray-500 mb-5 leading-relaxed">
-              Continue to securely reset the password for your Happy Hour
-              Compass Business account.
+              {setupIntent
+                ? "Continue to choose a password for your Happy Hour Compass Business account."
+                : "Continue to securely reset the password for your Happy Hour Compass Business account."}
             </p>
             <form onSubmit={handleContinue}>
               <button
@@ -226,7 +236,7 @@ export default function CreatePasswordPage() {
                 disabled={phase === "verifying"}
                 className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {phase === "verifying" ? "Continuing…" : "Continue to reset password"}
+                {phase === "verifying" ? "Continuing…" : setupIntent ? "Continue to set up your account" : "Continue to reset password"}
               </button>
             </form>
           </div>

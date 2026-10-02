@@ -5,6 +5,7 @@ import {
   getActivationPresentationForSubmission,
   shouldShowSubmissionActivationCard,
   shouldShowStandaloneResendPanel,
+  shouldShowFinalFollowUpPanel,
   resolveLegacySubmissionActivationOrigin,
   evaluateLegacySubmissionActivationEligibility,
 } from "@/lib/activation/activationPresentation";
@@ -13,6 +14,7 @@ import SubmissionReviewPanel from "./SubmissionReviewPanel";
 import ExistingVenueMatchPanel from "./ExistingVenueMatchPanel";
 import InternalNotesSection from "./InternalNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
+import FinalSetupFollowUpPanel from "@/components/FinalSetupFollowUpPanel";
 import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
@@ -420,8 +422,17 @@ export default async function OperatorSubmissionDetailPage({
               activationPresentation) so this is never accidentally hidden by
               shouldShowSubmissionActivationCard's separate card-visibility
               rule. */}
-          {shouldShowStandaloneResendPanel(rawActivationPresentation) && (
-            <ResendSetupEmailPanel submissionId={submission.id} />
+          {/* Post-expiry final follow-up replaces the normal resend once
+              the setup window has ended (Release Required or Expired). */}
+          {shouldShowFinalFollowUpPanel(rawActivationPresentation) ? (
+            <FinalSetupFollowUpPanel
+              origin={{ type: "submission", submissionId: submission.id }}
+              recipientEmail={rawActivationPresentation.operator?.email ?? null}
+            />
+          ) : (
+            shouldShowStandaloneResendPanel(rawActivationPresentation) && (
+              <ResendSetupEmailPanel submissionId={submission.id} />
+            )
           )}
 
           {activationPresentation && (

@@ -26,6 +26,9 @@ const DATE_METADATA_KEYS: Record<string, string> = {
   deadline: "Deadline",
   sentAt: "Sent at",
   releasedAt: "Released at",
+  // Post-expiry final follow-up (final_setup_email_sent / final_setup_link_generated).
+  generatedAt: "Generated at",
+  linkExpiresAt: "Link expires",
 };
 
 const TEXT_METADATA_KEYS: Record<string, string> = {
@@ -40,6 +43,7 @@ const TEXT_METADATA_KEYS: Record<string, string> = {
   lifecycleId: "Lifecycle ID",
   operatorEmail: "Operator email",
   venueId: "Venue ID",
+  setupFlow: "Setup flow",
 };
 
 export default function ActivationNoteMeta({

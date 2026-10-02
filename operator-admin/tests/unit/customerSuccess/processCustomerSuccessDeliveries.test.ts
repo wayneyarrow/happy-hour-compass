@@ -1012,3 +1012,71 @@ test("an already-'sent' milestone is never superseded/touched when a higher one 
     assert.equal(oldRow.communication_status, "sent"); // untouched
   });
 });
+
+// ── Send-time ownership check (post-expiry Release) ─────────────────────────
+
+for (const scenario of [
+  { name: "released (ownership cleared, unverified)", venue: { ...VENUE, created_by_operator_id: null, is_verified: false } },
+  { name: "re-claimed by a different operator", venue: { ...VENUE, created_by_operator_id: "op-2" } },
+]) {
+  test(`a queued milestone never emails the former operator once the venue is ${scenario.name}`, async () => {
+    await withEnv("CUSTOMER_SUCCESS_EMAILS_ENABLED", "true", async () => {
+      const now = new Date("2026-01-06T15:00:00Z");
+      const { client, csEvents } = makeClient({
+        venues: [scenario.venue],
+        memberships: [OWNER],
+        csBaselines: [baselineFor(VENUE.id)],
+        viewCounts: new Map([[VENUE.id, 100]]),
+        csEvents: [
+          makeFakeCsEventRow({
+            id: "event-owned-before",
+            venue_id: VENUE.id,
+            operator_id: "op-1",
+            milestone_value: 100,
+            communication_status: "pending",
+            next_attempt_at: new Date(now.getTime() - 60_000).toISOString(),
+          }),
+        ],
+      });
+      const spy = makeSendEmailSpy([{ ok: true, id: "should-not-send" }]);
+      const result = await processCustomerSuccessDeliveries(client as never, now, spy.fn);
+
+      assert.equal(spy.calls.length, 0, "no email to the former owner");
+      assert.equal(result.skippedOwnershipChanged, 1);
+      assert.equal(result.attempted, 0);
+      const row = csEvents.find((e) => e.id === "event-owned-before")!;
+      assert.equal(row.communication_status, "skipped");
+      assert.equal(row.next_attempt_at, null);
+      assert.match(row.last_error ?? "", /ownership changed/);
+    });
+  });
+}
+
+test("a retry with a snapshot already locked for the former owner is also skipped after release", async () => {
+  await withEnv("CUSTOMER_SUCCESS_EMAILS_ENABLED", "true", async () => {
+    const now = new Date("2026-01-06T16:00:00Z");
+    const { client, csEvents } = makeClient({
+      venues: [{ ...VENUE, created_by_operator_id: null, is_verified: false }],
+      memberships: [OWNER],
+      csBaselines: [baselineFor(VENUE.id)],
+      viewCounts: new Map([[VENUE.id, 100]]),
+      csEvents: [
+        makeFakeCsEventRow({
+          id: "event-retry-after-release",
+          venue_id: VENUE.id,
+          operator_id: "op-1",
+          milestone_value: 100,
+          communication_status: "pending",
+          attempt_count: 1,
+          recipient_email: "kelly@example.com",
+          metadata_json: { deliverySnapshot: { recipientFirstName: "Kelly", venueName: "Buffalo Rouge Brewing Co." } },
+          next_attempt_at: new Date(now.getTime() - 60_000).toISOString(),
+        }),
+      ],
+    });
+    const spy = makeSendEmailSpy([{ ok: true, id: "should-not-send" }]);
+    await processCustomerSuccessDeliveries(client as never, now, spy.fn);
+    assert.equal(spy.calls.length, 0);
+    assert.equal(csEvents[0].communication_status, "skipped");
+  });
+});

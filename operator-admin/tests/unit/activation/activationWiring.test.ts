@@ -158,11 +158,12 @@ test("completeOperatorAccountActivation resolves origin via the canonical operat
   assert.ok(canonicalIdx < legacyCommentIdx, "canonical lookup must run before the legacy fallback");
 });
 
-test("completeOperatorAccountActivation's canonical lookup filters to a live lifecycle only (expired_at/released_at IS NULL)", () => {
+test("completeOperatorAccountActivation's canonical lookup excludes released lifecycles and picks live-first, else most recently expired (post-expiry final follow-up)", () => {
   const canonicalBlockIdx = OPERATOR_ACTIVATION_SOURCE.indexOf('.from("operator_activation_lifecycles")');
-  const block = OPERATOR_ACTIVATION_SOURCE.slice(canonicalBlockIdx, canonicalBlockIdx + 300);
-  assert.match(block, /\.is\("expired_at", null\)/);
-  assert.match(block, /\.is\("released_at", null\)/);
+  const block = OPERATOR_ACTIVATION_SOURCE.slice(canonicalBlockIdx, canonicalBlockIdx + 400);
+  assert.match(block, /\.is\("released_at", null\)/, "a released lifecycle is never an activation origin");
+  assert.doesNotMatch(block, /\.is\("expired_at", null\)/, "expired-but-unreleased lifecycles are considered (setup finished after expiry)");
+  assert.match(block, /selectActivationOriginLifecycle\(/, "selection is the unit-tested pure selector (activationOriginLifecycle.test.ts)");
 });
 
 test("completeOperatorAccountActivation writes exactly one structured account_activated event, guarded by claimId or submissionId", () => {

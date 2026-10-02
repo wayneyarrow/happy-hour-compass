@@ -302,8 +302,13 @@ export default function ActivationCard({
                 <MetaRow label="Expired">{formatDateTime(lifecycle.expiredAt)}</MetaRow>
                 <MetaRow label="Notified">
                   <span className="text-xs text-gray-600">
-                    {lifecycle.expirySlackNotifiedAt ? "Slack ✓" : "Slack pending"} ·{" "}
-                    {lifecycle.expiryFounderEmailSentAt ? "Email ✓" : "Email pending"}
+                    {lifecycle.expiryFollowUpSkipReason
+                      ? `Follow-up not sent (${lifecycle.expiryFollowUpSkipReason.replace(/_/g, " ")})`
+                      : !lifecycle.expiryFollowUpRequired && !lifecycle.expirySlackNotifiedAt
+                        ? "Expired before follow-up notifications existed — none sent"
+                        : `${lifecycle.expirySlackNotifiedAt ? "Slack ✓" : "Slack pending"} · ${
+                            lifecycle.expiryFounderEmailSentAt ? "Email ✓" : "Email pending"
+                          }`}
                   </span>
                 </MetaRow>
               </>
@@ -369,11 +374,12 @@ export default function ActivationCard({
                 const confirmed = window.confirm(
                   "Release this venue?\n\n" +
                     "This will:\n" +
-                    "• Close this activation lifecycle\n" +
-                    "• Clear this venue's ownership so it can be re-claimed\n" +
-                    "• Add an Internal Note\n\n" +
-                    "This does not affect any other venue this operator may own, and does not send any " +
-                    "email or Slack notification."
+                    "• Remove this operator's ownership of and access to this venue\n" +
+                    "• Return the venue to unclaimed and unverified, so it can be claimed again\n" +
+                    "• End setup emails for this activation\n" +
+                    "• Record your action in the timeline\n\n" +
+                    "The public listing, its happy hour details, offers and history stay as they are. " +
+                    "Any other venue this operator owns is not affected, and no email or Slack message is sent."
                 );
                 if (!confirmed) e.preventDefault();
               }}

@@ -4,6 +4,7 @@ import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
 import { sendSlackAlert } from "@/lib/slack";
 import { deriveActivationState } from "@/lib/activation/activationState";
 import type { ActivationNoteOrigin } from "@/lib/activation/activationNotes";
+import { SETUP_LINK_LOCK_MS } from "@/lib/activation/setupLinkLock";
 
 /**
  * Implementation for releaseActivationLifecycleAction (Phase 2A-4 "manual
@@ -26,10 +27,11 @@ import type { ActivationNoteOrigin } from "@/lib/activation/activationNotes";
  *     expired_at (an expired lifecycle stays expired; Release does not
  *     "unexpire" it). Never creates or modifies any OTHER lifecycle row.
  *   Venue (the one resolved from this origin only): clears claimed_by,
- *     claimed_at, created_by_operator_id. Leaves is_verified and
- *     is_published exactly as they were — no verification/publish-state
- *     product decision was requested for this phase, so none is made
- *     silently here. Never touches venue content (name, hours, media, etc).
+ *     claimed_at, created_by_operator_id, and sets is_verified = false
+ *     (post-expiry follow-up decision: a released venue returns to an
+ *     unclaimed, unverified state). Leaves is_published exactly as it was —
+ *     the public listing stays up. Never touches venue content (name,
+ *     hours, media, offers, etc).
  *   Preserves, always: claim/submission status and history, the operator
  *     record, the Supabase Auth user, operator_memberships, every OTHER
  *     venue linked to the same operator, subscriptions/customer records,
@@ -502,7 +504,7 @@ export async function releaseActivationLifecycleImpl(
   const { data: lifecycleRow, error: fetchError } = await supabase
     .from("operator_activation_lifecycles")
     .select(
-      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, started_at, deadline_at, expired_at, released_at, reminder_stage, reminder_lease_started_at"
+      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, started_at, deadline_at, expired_at, released_at, reminder_stage, reminder_lease_started_at, setup_link_claimed_at"
     )
     .eq("id", lifecycleId)
     .maybeSingle();
@@ -518,6 +520,15 @@ export async function releaseActivationLifecycleImpl(
 
   if (lifecycleRow.reminder_lease_started_at) {
     return { error: LEASE_HELD_MESSAGE };
+  }
+
+  // A founder final follow-up (Final resend setup email / Copy setup link)
+  // holds setup_link_claimed_at (at most SETUP_LINK_LOCK_MS) while it
+  // generates and sends a setup link — don't release the venue out from
+  // under it.
+  const setupLinkClaimedAt = (lifecycleRow.setup_link_claimed_at as string | null | undefined) ?? null;
+  if (setupLinkClaimedAt && now.getTime() - new Date(setupLinkClaimedAt).getTime() < SETUP_LINK_LOCK_MS) {
+    return { error: "A setup email or link is being generated for this operator, or an earlier request is still finishing. Wait a few minutes, then refresh and try again." };
   }
 
   // ── Operator must still be unactivated, and the lifecycle must genuinely
@@ -662,10 +673,15 @@ export async function releaseActivationLifecycleImpl(
 
   // ── Venue CAS — scoped to the ONE resolved venue id, requiring ownership
   // still matches this exact operator. Never a bulk update by operator id;
-  // never touches is_verified/is_published/venue content. ──────────────────
+  // never touches is_published/venue content. ────────────────────────────────
   const { data: venueUpdated, error: venueUpdateError } = await supabase
     .from("venues")
-    .update({ claimed_by: null, claimed_at: null, created_by_operator_id: null })
+    // Unclaimed AND unverified (post-expiry follow-up, migration 103): a
+    // released venue returns to the same state as a never-claimed seeded
+    // one, so the "Verified Venue" signal can't outlive the operator
+    // relationship it came from. is_published, listing content, offers and
+    // history are untouched.
+    .update({ claimed_by: null, claimed_at: null, created_by_operator_id: null, is_verified: false })
     .eq("id", venueId)
     .eq("created_by_operator_id", lifecycleRow.operator_id as string)
     .select("id")
@@ -758,5 +774,5 @@ export async function releaseActivationLifecycleImpl(
     revalidate(`/control-panel/operator-submissions/${origin.submissionId}`);
   }
 
-  return { success: true, successAction: "Venue released — activation closed and ownership cleared" };
+  return { success: true, successAction: "Venue released — ownership and verification cleared; the public listing is unchanged" };
 }

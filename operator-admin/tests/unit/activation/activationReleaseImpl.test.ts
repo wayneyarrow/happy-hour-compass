@@ -153,7 +153,7 @@ test("venue ownership already changed (static pre-check) — blocked before any 
 
 // ── Successful release — exact mutations ────────────────────────────────────
 
-test("successful release (submission origin): exact lifecycle + venue mutations, is_verified/is_published preserved, founder-attributed note", async () => {
+test("successful release (submission origin): exact lifecycle + venue mutations — unclaimed AND unverified, is_published preserved, founder-attributed note", async () => {
   const fake = seedWorld({ lifecycle: { origin_type: "submission", origin_submission_id: "sub-1", reminder_stage: 1 } });
   const result = await releaseActivationLifecycleImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: fake.client });
 
@@ -165,8 +165,8 @@ test("successful release (submission origin): exact lifecycle + venue mutations,
   assert.equal(venue.claimed_by, null);
   assert.equal(venue.claimed_at, null);
   assert.equal(venue.created_by_operator_id, null);
-  assert.equal(venue.is_verified, true, "is_verified is preserved, never cleared");
-  assert.equal(venue.is_published, true, "is_published is preserved, never cleared");
+  assert.equal(venue.is_verified, false, "a released venue returns to unverified");
+  assert.equal(venue.is_published, true, "is_published is preserved — the public listing stays up");
 
   assert.equal(fake.operatorSubmissionNotes.length, 1);
   const note = fake.operatorSubmissionNotes[0];
@@ -223,6 +223,7 @@ test("multi-venue operator: a second venue owned by the same operator is complet
   const venue2 = fake.venues.find((v) => v.id === "venue-2")!;
   assert.equal(venue2.created_by_operator_id, "op-1", "venue-2 is never touched");
   assert.equal(venue2.claimed_by, "op-1");
+  assert.equal(venue2.is_verified, true, "venue-2's verification is never touched");
 });
 
 test("operator record is never mutated by Release — only the venue's ownership fields and the lifecycle's released_at change", async () => {
@@ -717,4 +718,51 @@ test("release never sends an operator-facing email — no email dependency exist
   // throw on any unexpected table/call, and none has ever needed an email
   // stub — there is nothing to send one.
   assert.ok(true);
+});
+
+// ── Post-expiry final follow-up interaction (migration 103) ─────────────────
+
+test("release is refused while a final follow-up is generating a setup link (claim still within its 6-minute lifetime) — nothing changes", async () => {
+  const fake = seedWorld({ lifecycle: { setup_link_claimed_at: new Date(NOW.getTime() - 10_000).toISOString() } });
+  const result = await releaseActivationLifecycleImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: fake.client });
+  assert.match(result.error ?? "", /setup email or link is being generated/);
+  assert.equal(fake.lifecycles[0].released_at, null);
+  assert.equal(fake.venues[0].created_by_operator_id, "op-1");
+  assert.equal(fake.venues[0].is_verified, true);
+});
+
+test("a stale setup-link claim (older than 6 minutes, e.g. a crashed request) does not block release; a 2-minute-old one still does", async () => {
+  const recent = seedWorld({ lifecycle: { setup_link_claimed_at: new Date(NOW.getTime() - 120_000).toISOString() } });
+  const blocked = await releaseActivationLifecycleImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: recent.client });
+  assert.match(blocked.error ?? "", /still finishing/);
+  const fake = seedWorld({ lifecycle: { setup_link_claimed_at: new Date(NOW.getTime() - 7 * 60_000).toISOString() } });
+  const result = await releaseActivationLifecycleImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: fake.client });
+  assert.equal(result.success, true);
+});
+
+test("after release, Operator Admin's venue resolution (getOperatorVenues → created_by_operator_id) no longer returns the released venue, but still returns the operator's other venue", async () => {
+  const { getOperatorVenues } = await import("../../../src/lib/getOperatorVenues");
+  const fake = seedWorld({
+    extraVenues: [{ id: "venue-2", created_by_operator_id: "op-1", claimed_by: "op-1", claimed_at: "2026-08-01T00:00:00.000Z", is_verified: true, is_published: true }],
+  });
+  const result = await releaseActivationLifecycleImpl("lc-1", { ...authDeps(FOUNDER, true), adminClient: fake.client });
+  assert.equal(result.success, true);
+
+  // Minimal stand-in for the operator's own (RLS-scoped) client: the same
+  // created_by_operator_id predicate getOperatorVenues and the venues RLS
+  // policies ("venues: read own" / "venues: update own") use.
+  const operatorClient = {
+    from: () => ({
+      select: () => ({
+        eq: (col: string, val: unknown) => ({
+          order: async () => ({ data: fake.venues.filter((v) => (v as Record<string, unknown>)[col] === val), error: null }),
+        }),
+      }),
+    }),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { venues } = await getOperatorVenues(operatorClient as any, "op-1");
+  assert.deepEqual(venues.map((v) => v.id), ["venue-2"]);
+  const released = fake.venues.find((v) => v.id === "venue-1")!;
+  assert.equal(released.is_published, true, "public listing untouched");
 });

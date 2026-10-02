@@ -42,6 +42,8 @@ export type ExtendActivationDeadlineDeps = {
   adminClient?: ReturnType<typeof createAdminClient>;
   checkAdmin?: (email: string | undefined) => Promise<boolean>;
   revalidate?: (path: string) => void;
+  /** Test-only clock. Real callers omit it and get the actual current time. */
+  now?: () => Date;
 };
 
 /**
@@ -162,7 +164,7 @@ export async function extendActivationDeadlineImpl(
   // One authoritative transaction-time snapshot, used consistently for both
   // the new deadline computation and the reminder-resolution walk — never
   // two separate clock reads for the same logical "now."
-  const now = new Date();
+  const now = deps.now ? deps.now() : new Date();
   const newDeadlineAt = computeExtendedDeadline(currentDeadlineAt, now);
   const { resolvedStage, nextAttemptAt } = computeExtensionResolution(
     currentReminderStage,

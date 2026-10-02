@@ -59,8 +59,14 @@ import {
   sendActivationExpiryFounderEmail,
   type ActivationExpiryOrigin,
 } from "@/lib/activation/activationExpiryNotifications";
+import { REMINDER_LEASE_STALE_MINUTES, isSetupLinkClaimActive } from "@/lib/activation/setupLinkLock";
+import {
+  loadExpiryFollowUpDetails,
+  type ExpiryFollowUpLifecycleRow,
+  type ExpiryFollowUpSkipReason,
+} from "@/lib/activation/activationExpiryFollowUp";
 
-const STALE_LEASE_MINUTES = 15;
+const STALE_LEASE_MINUTES = REMINDER_LEASE_STALE_MINUTES;
 const MAX_REMINDER_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 60 * 60 * 1000; // ~1 hour
 const REMINDER_BATCH_LIMIT = 25;
@@ -77,6 +83,7 @@ export type PlannedAction =
   | { type: "expiry_note"; lifecycleId: string }
   | { type: "expiry_slack"; lifecycleId: string }
   | { type: "expiry_founder_email"; lifecycleId: string }
+  | { type: "expiry_follow_up_skipped"; lifecycleId: string; reason: ExpiryFollowUpSkipReason }
   | { type: "reminder_send"; lifecycleId: string; stage: ActivationReminderStage; to: string };
 
 export type ActivationReminderProcessingResult = {
@@ -88,6 +95,10 @@ export type ActivationReminderProcessingResult = {
   expiryNotesWritten: number;
   expirySlackSent: number;
   expiryFounderEmailsSent: number;
+  /** Required follow-ups closed this pass because the row became permanently ineligible. */
+  expiryFollowUpSkipped: number;
+  /** Required follow-ups whose every side effect is now complete. */
+  expiryFollowUpCompleted: number;
   reminderAttempted: number;
   reminderSent: number;
   reminderFailedRetryable: number;
@@ -122,6 +133,8 @@ function zeroCounters(): Omit<ActivationReminderProcessingResult, "enabled" | "d
     expiryNotesWritten: 0,
     expirySlackSent: 0,
     expiryFounderEmailsSent: 0,
+    expiryFollowUpSkipped: 0,
+    expiryFollowUpCompleted: 0,
     reminderAttempted: 0,
     reminderSent: 0,
     reminderFailedRetryable: 0,
@@ -153,6 +166,7 @@ export type ProcessActivationRemindersDeps = {
   sendExpirySlack?: typeof sendActivationExpirySlackNotification;
   sendExpiryFounderEmail?: typeof sendActivationExpiryFounderEmail;
   writeNote?: typeof writeActivationNote;
+  loadExpiryFollowUpDetails?: typeof loadExpiryFollowUpDetails;
 };
 
 /**
@@ -192,6 +206,7 @@ async function runActivationReminderPass(
   const sendExpirySlack = deps.sendExpirySlack ?? sendActivationExpirySlackNotification;
   const sendExpiryFounderEmail = deps.sendExpiryFounderEmail ?? sendActivationExpiryFounderEmail;
   const writeNote = deps.writeNote ?? writeActivationNote;
+  const loadFollowUp = deps.loadExpiryFollowUpDetails ?? loadExpiryFollowUpDetails;
 
   // `enabled` here is purely informational — it reports the persistent kill
   // switch's real current value, but (for a planning pass) never gates
@@ -213,8 +228,8 @@ async function runActivationReminderPass(
   // ── 4. Due reminders SECOND ───────────────────────────────────────────────
   await processDueReminders(admin, now, dryRun, result, sendReminderEmail, writeNote);
 
-  // ── 5. Reconcile incomplete expiry side effects ──────────────────────────
-  await reconcileExpirySideEffects(admin, dryRun, result, sendExpirySlack, sendExpiryFounderEmail, writeNote);
+  // ── 5. Post-expiry personal follow-up (note, #customer-success, founder email)
+  await reconcileExpirySideEffects(admin, now, dryRun, result, { sendExpirySlack, sendExpiryFounderEmail, writeNote, loadFollowUp });
 
   return result;
 }
@@ -344,7 +359,12 @@ async function transitionDueExpiries(
 
       const { data: updated, error: casError } = await admin
         .from("operator_activation_lifecycles")
-        .update({ expired_at: now.toISOString() })
+        // expiry_follow_up_required (migration 103) is set in the SAME
+        // CAS as expired_at — this is what marks the row for the
+        // post-expiry personal follow-up notifications. Lifecycles that
+        // expired before this code shipped keep FALSE and are never
+        // backfilled (see migration 103's header).
+        .update({ expired_at: now.toISOString(), expiry_follow_up_required: true })
         .eq("id", row.id as string)
         .lte("deadline_at", nowIso)
         .is("expired_at", null)
@@ -550,7 +570,7 @@ async function processReminderCandidate(
   // ── Final pre-send validation — re-read and verify EVERY pinned field. ──
   const { data: freshRow, error: freshError } = await admin
     .from("operator_activation_lifecycles")
-    .select("deadline_at, reminder_stage, reminder_lease_stage, reminder_lease_started_at, expired_at, released_at")
+    .select("deadline_at, reminder_stage, reminder_lease_stage, reminder_lease_started_at, expired_at, released_at, setup_link_claimed_at")
     .eq("id", lifecycleId)
     .maybeSingle();
   const { data: freshOperator, error: freshOpError } = await admin
@@ -570,6 +590,12 @@ async function processReminderCandidate(
     freshRow.reminder_lease_started_at === claimedLeaseStartedAt &&
     freshRow.expired_at === null &&
     freshRow.released_at === null &&
+    // A founder final follow-up (Final resend / Copy setup link) holds a
+    // setup-link claim: sending a reminder now would generate a new
+    // recovery link and silently replace the one the founder just sent or
+    // copied. Checked after taking our lease — the follow-up action makes
+    // the mirror-image check after taking its claim (setupLinkLock.ts).
+    !isSetupLinkClaimActive((freshRow as { setup_link_claimed_at?: string | null }).setup_link_claimed_at, now) &&
     selectCatchUpStage(currentStage, deadlineAt, now.toISOString()) === selectedStage;
 
   if (!stillValid) {
@@ -811,137 +837,195 @@ async function handleReminderFailure(
   params.result.reminderFailedRetryable++;
 }
 
-// ── Expiry side-effect reconciliation ───────────────────────────────────────
+// ── Expiry side-effect reconciliation (post-expiry personal follow-up) ──────
 
+type ExpiryFollowUpDeps = {
+  sendExpirySlack: NonNullable<ProcessActivationRemindersDeps["sendExpirySlack"]>;
+  sendExpiryFounderEmail: NonNullable<ProcessActivationRemindersDeps["sendExpiryFounderEmail"]>;
+  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>;
+  loadFollowUp: NonNullable<ProcessActivationRemindersDeps["loadExpiryFollowUpDetails"]>;
+};
+
+/**
+ * Processes required post-expiry follow-ups (migration 103). Batch
+ * selection only ever includes rows with outstanding work —
+ * expiry_follow_up_required, not yet resolved, not released — and rotates
+ * them by expiry_follow_up_last_attempted_at (NULLS FIRST), so:
+ *   - completed rows (resolved) never occupy the batch,
+ *   - permanently ineligible rows (activated, ownership changed, origin
+ *     gone) are resolved with a skip reason the first time they're seen,
+ *   - a row whose Slack/email keeps failing rotates behind newer rows
+ *     instead of starving them.
+ *
+ * NEVER touches expired_at, deadline_at, released_at or any reminder_*
+ * column, and never touches the venue — a Slack/email failure here can
+ * neither restart reminders nor undo the expiry.
+ */
 async function reconcileExpirySideEffects(
   admin: AdminClient,
+  now: Date,
   dryRun: boolean,
   result: ActivationReminderProcessingResult,
-  sendExpirySlack: NonNullable<ProcessActivationRemindersDeps["sendExpirySlack"]>,
-  sendExpiryFounderEmail: NonNullable<ProcessActivationRemindersDeps["sendExpiryFounderEmail"]>,
-  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>
+  deps: ExpiryFollowUpDeps
 ): Promise<void> {
   const { data: rows, error } = await admin
     .from("operator_activation_lifecycles")
     .select(
-      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, started_at, deadline_at, expired_at, expiry_slack_notified_at, expiry_founder_email_sent_at"
+      "id, operator_id, origin_type, origin_claim_id, origin_submission_id, started_at, deadline_at, expired_at, expiry_slack_notified_at, expiry_founder_email_sent_at, expiry_follow_up_last_attempted_at"
     )
-    .not("expired_at", "is", null)
+    .eq("expiry_follow_up_required", true)
+    .is("expiry_follow_up_resolved_at", null)
     .is("released_at", null)
-    .order("expired_at", { ascending: true })
+    .not("expired_at", "is", null)
+    .order("expiry_follow_up_last_attempted_at", { ascending: true, nullsFirst: true })
     .limit(EXPIRY_BATCH_LIMIT);
 
   if (error) {
-    console.error("[processActivationReminders] Expiry reconciliation lookup failed:", error.message);
+    console.error("[processActivationReminders] Expiry follow-up lookup failed:", error.message);
     return;
   }
   if (!rows || rows.length === 0) return;
 
   for (const row of rows) {
     try {
-      await reconcileOneExpiredLifecycle(admin, row, dryRun, result, sendExpirySlack, sendExpiryFounderEmail, writeNote);
+      await reconcileOneExpiredLifecycle(admin, row as ExpiredRow, now, dryRun, result, deps);
     } catch (err) {
       result.errors.push({ lifecycleId: row.id as string, message: err instanceof Error ? err.message : String(err) });
     }
   }
 }
 
-type ExpiredRow = {
-  id: string;
-  operator_id: string;
-  origin_type: "claim" | "submission";
-  origin_claim_id: string | null;
-  origin_submission_id: string | null;
-  started_at: string;
-  deadline_at: string;
+type ExpiredRow = ExpiryFollowUpLifecycleRow & {
   expired_at: string;
   expiry_slack_notified_at: string | null;
   expiry_founder_email_sent_at: string | null;
 };
 
+/** Closes a required follow-up permanently. Guarded so it never overwrites an earlier resolution. */
+async function resolveFollowUp(admin: AdminClient, lifecycleId: string, now: Date, skipReason: ExpiryFollowUpSkipReason | null): Promise<void> {
+  await admin
+    .from("operator_activation_lifecycles")
+    .update({ expiry_follow_up_resolved_at: now.toISOString(), expiry_follow_up_skip_reason: skipReason })
+    .eq("id", lifecycleId)
+    .is("expiry_follow_up_resolved_at", null);
+}
+
+async function isOperatorActivated(admin: AdminClient, operatorId: string): Promise<boolean> {
+  const { data, error } = await admin.from("operators").select("account_activated_at").eq("id", operatorId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data?.account_activated_at;
+}
+
 async function reconcileOneExpiredLifecycle(
   admin: AdminClient,
   row: ExpiredRow,
+  now: Date,
   dryRun: boolean,
   result: ActivationReminderProcessingResult,
-  sendExpirySlack: NonNullable<ProcessActivationRemindersDeps["sendExpirySlack"]>,
-  sendExpiryFounderEmail: NonNullable<ProcessActivationRemindersDeps["sendExpiryFounderEmail"]>,
-  writeNote: NonNullable<ProcessActivationRemindersDeps["writeNote"]>
+  deps: ExpiryFollowUpDeps
 ): Promise<void> {
-  const resolved = await resolveLifecycleDetails(admin, row);
-  if (!resolved.ok) return; // nothing safe to notify with — leave for a future pass / manual review
+  // Rotate first, so even a pass that throws below moves this row behind
+  // rows that haven't been attempted yet.
+  if (!dryRun) {
+    await admin
+      .from("operator_activation_lifecycles")
+      .update({ expiry_follow_up_last_attempted_at: now.toISOString() })
+      .eq("id", row.id);
+  }
 
-  // Note — retried every pass until it exists, using event_key uniqueness.
-  // PLANNING MODE NEVER CALLS writeNote() AT ALL — not even with a
-  // discarded result. The live branch is the only caller of the real
-  // (mutating) note writer; dry-run only ever appends the already-decided
-  // plannedAction, structurally incapable of an INSERT regardless of what
-  // `writeNote` itself is bound to.
+  const loaded = await deps.loadFollowUp(admin, row);
+  if (loaded.kind === "error") {
+    result.errors.push({ lifecycleId: row.id, message: loaded.message });
+    return;
+  }
+  if (loaded.kind === "ineligible") {
+    if (dryRun) {
+      result.plannedActions.push({ type: "expiry_follow_up_skipped", lifecycleId: row.id, reason: loaded.reason });
+    } else {
+      await resolveFollowUp(admin, row.id, now, loaded.reason);
+    }
+    result.expiryFollowUpSkipped++;
+    return;
+  }
+  const details = loaded.details;
+  const noteOrigin =
+    details.origin === "claim" ? { type: "claim" as const, claimId: details.originId } : { type: "submission" as const, submissionId: details.originId };
+
+  // Internal Note first — retried every pass until it exists (event_key
+  // uniqueness makes a retry a no-op). Notifications wait for it so the
+  // timeline always explains why Wayne was notified. PLANNING MODE NEVER
+  // CALLS writeNote() AT ALL.
   if (dryRun) {
     result.plannedActions.push({ type: "expiry_note", lifecycleId: row.id });
   } else {
-    const noteResult = await writeNote(
+    const noteResult = await deps.writeNote(
       {
-        origin: resolved.origin === "claim" ? { type: "claim", claimId: resolved.originId } : { type: "submission", submissionId: resolved.originId },
+        origin: noteOrigin,
         eventType: "activation_expired",
-        note: `Activation expired — deadline was ${row.deadline_at}.`,
-        metadata: { lifecycleId: row.id, deadline: row.deadline_at, operatorEmail: resolved.email, flow: resolved.origin },
+        note: `Activation expired — deadline was ${row.deadline_at}. Automatic setup reminders have stopped.`,
+        metadata: { lifecycleId: row.id, deadline: row.deadline_at, operatorEmail: details.email, flow: details.origin },
         eventKey: expiryEventKey(row.id),
       },
       admin
     );
-    if (noteResult.ok && noteResult.alreadyExisted === false) {
-      result.expiryNotesWritten++;
+    if (!noteResult.ok) {
+      result.errors.push({ lifecycleId: row.id, message: `Expiry note write failed: ${noteResult.error ?? "unknown"}` });
+      return;
     }
+    if (noteResult.alreadyExisted === false) result.expiryNotesWritten++;
   }
 
-  // Slack — fresh activation check immediately before send, at-least-once.
-  if (!row.expiry_slack_notified_at) {
-    const { data: operatorRow } = await admin.from("operators").select("account_activated_at").eq("id", row.operator_id).maybeSingle();
-    if (!operatorRow?.account_activated_at) {
-      if (dryRun) {
-        result.plannedActions.push({ type: "expiry_slack", lifecycleId: row.id });
-      } else {
-        const slackResult = await sendExpirySlack({
-          venueName: resolved.venueName,
-          firstName: resolved.firstName,
-          lastName: resolved.lastName,
-          email: resolved.email,
-          origin: resolved.origin,
-          originId: resolved.originId,
-          startedAt: resolved.startedAt,
-          deadlineAt: row.deadline_at,
-        });
-        if (slackResult === "delivered") {
-          await admin.from("operator_activation_lifecycles").update({ expiry_slack_notified_at: new Date().toISOString() }).eq("id", row.id);
-          result.expirySlackSent++;
-        }
+  let slackDone = !!row.expiry_slack_notified_at;
+  let emailDone = !!row.expiry_founder_email_sent_at;
+
+  // #customer-success Slack — fresh activation check immediately before
+  // send, at-least-once (see activationExpiryNotifications.ts).
+  if (!slackDone) {
+    if (await isOperatorActivated(admin, row.operator_id)) {
+      if (!dryRun) await resolveFollowUp(admin, row.id, now, "activated");
+      result.expiryFollowUpSkipped++;
+      return;
+    }
+    if (dryRun) {
+      result.plannedActions.push({ type: "expiry_slack", lifecycleId: row.id });
+    } else {
+      const slackResult = await deps.sendExpirySlack(details);
+      if (slackResult === "delivered") {
+        await admin
+          .from("operator_activation_lifecycles")
+          .update({ expiry_slack_notified_at: new Date().toISOString() })
+          .eq("id", row.id);
+        result.expirySlackSent++;
+        slackDone = true;
       }
     }
   }
 
-  // Founder email — fresh activation check immediately before send, deterministic idempotency.
-  if (!row.expiry_founder_email_sent_at) {
-    const { data: operatorRow } = await admin.from("operators").select("account_activated_at").eq("id", row.operator_id).maybeSingle();
-    if (!operatorRow?.account_activated_at) {
-      if (dryRun) {
-        result.plannedActions.push({ type: "expiry_founder_email", lifecycleId: row.id });
-      } else {
-        const emailResult = await sendExpiryFounderEmail({
-          lifecycleId: row.id,
-          venueName: resolved.venueName,
-          firstName: resolved.firstName,
-          lastName: resolved.lastName,
-          email: resolved.email,
-          origin: resolved.origin,
-          originId: resolved.originId,
-          deadlineAt: row.deadline_at,
-        });
-        if (emailResult.ok) {
-          await admin.from("operator_activation_lifecycles").update({ expiry_founder_email_sent_at: new Date().toISOString() }).eq("id", row.id);
-          result.expiryFounderEmailsSent++;
-        }
+  // Founder email — fresh activation check immediately before send,
+  // deterministic idempotency key.
+  if (!emailDone) {
+    if (await isOperatorActivated(admin, row.operator_id)) {
+      if (!dryRun) await resolveFollowUp(admin, row.id, now, "activated");
+      result.expiryFollowUpSkipped++;
+      return;
+    }
+    if (dryRun) {
+      result.plannedActions.push({ type: "expiry_founder_email", lifecycleId: row.id });
+    } else {
+      const emailResult = await deps.sendExpiryFounderEmail(details);
+      if (emailResult.ok) {
+        await admin
+          .from("operator_activation_lifecycles")
+          .update({ expiry_founder_email_sent_at: new Date().toISOString() })
+          .eq("id", row.id);
+        result.expiryFounderEmailsSent++;
+        emailDone = true;
       }
     }
+  }
+
+  if (!dryRun && slackDone && emailDone) {
+    await resolveFollowUp(admin, row.id, now, null);
+    result.expiryFollowUpCompleted++;
   }
 }

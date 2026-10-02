@@ -31,6 +31,8 @@ function makeLifecycleSummary(overrides: Partial<ActivationLifecycleSummary> & {
     reminderLeaseStartedAt: null,
     expirySlackNotifiedAt: null,
     expiryFounderEmailSentAt: null,
+    expiryFollowUpRequired: false,
+    expiryFollowUpSkipReason: null,
     ...overrides,
   };
 }

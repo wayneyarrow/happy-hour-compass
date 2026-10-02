@@ -22,6 +22,7 @@ export type FakeLifecycleRow = {
   expired_at: string | null;
   released_at: string | null;
   reminder_lease_started_at: string | null;
+  setup_link_claimed_at?: string | null;
 };
 
 export function makeLifecycleRow(overrides: Partial<FakeLifecycleRow> & { id: string; operator_id: string }): FakeLifecycleRow {
@@ -35,6 +36,7 @@ export function makeLifecycleRow(overrides: Partial<FakeLifecycleRow> & { id: st
     expired_at: null,
     released_at: null,
     reminder_lease_started_at: null,
+    setup_link_claimed_at: null,
     ...overrides,
   };
 }

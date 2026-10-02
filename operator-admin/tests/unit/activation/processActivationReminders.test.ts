@@ -79,7 +79,7 @@ function stubFounderEmail(ok = true) {
 function seedWorld(lifecycle: FakeLifecycleRow, opts?: { activated?: boolean; noOrigin?: boolean }) {
   const operators = [{ id: lifecycle.operator_id, email: "kelly@example.com", first_name: "Kelly", last_name: "Terris", account_activated_at: opts?.activated ? "2026-01-01T00:00:00.000Z" : null }];
   const submissions = opts?.noOrigin ? [] : [{ id: lifecycle.origin_submission_id ?? "sub-1", venue_id: "venue-1" }];
-  const venues = opts?.noOrigin ? [] : [{ id: "venue-1", name: "Buffalo Rouge Brewing Co." }];
+  const venues = opts?.noOrigin ? [] : [{ id: "venue-1", name: "Buffalo Rouge Brewing Co.", created_by_operator_id: lifecycle.operator_id }];
   return createFakeActivationReminderClient({ lifecycles: [lifecycle], operators, submissions, venues });
 }
 
@@ -101,11 +101,13 @@ function seedExpiredWorld(origin: "claim" | "submission", opts?: { activated?: b
     reminder_stage: 3,
     deadline_at: "2026-10-10T00:00:00.000Z",
     expired_at: "2026-10-10T00:00:00.500Z",
+    // Expired by the post-rollout worker (migration 103), so follow-up is owed.
+    expiry_follow_up_required: true,
   });
   const operators = [{ id: operatorId, email: "kelly@example.com", first_name: "Kelly", last_name: "Terris", account_activated_at: opts?.activated ? "2026-01-01T00:00:00.000Z" : null }];
   const claims = origin === "claim" ? [{ id: "claim-1", venue_id: "venue-1" }] : [];
   const submissions = origin === "submission" ? [{ id: "sub-1", venue_id: "venue-1" }] : [];
-  const venues = [{ id: "venue-1", name: "Buffalo Rouge Brewing Co." }];
+  const venues = [{ id: "venue-1", name: "Buffalo Rouge Brewing Co.", created_by_operator_id: operatorId }];
   const fake = createFakeActivationReminderClient({ lifecycles: [lifecycle], operators, claims, submissions, venues });
   return { fake, lifecycle };
 }
@@ -609,7 +611,7 @@ test("expiry never sets released_at, never mutates venue/operator relationship s
 
 test("expiry Internal Note reconciliation: retried until it exists, using event_key uniqueness", async () => {
   const now = new Date("2026-10-10T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString() });
+  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString(), expiry_follow_up_required: true });
   const fake = seedWorld(lifecycle);
   const result = await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now }));
   assert.equal(result.expiryNotesWritten, 1);
@@ -671,7 +673,7 @@ test("expiry Internal Note reconciliation (claim origin): live mode writes the n
 
 test("expiry Slack and founder email are independently retried — one succeeding does not block the other from retrying", async () => {
   const now = new Date("2026-10-10T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString() });
+  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString(), expiry_follow_up_required: true });
   const fake = seedWorld(lifecycle);
   const slack = stubSlack("failed");
   const founderEmail = stubFounderEmail(true);
@@ -709,7 +711,7 @@ test("expiry Slack and founder email are independently retried — one succeedin
 
 test("founder email idempotency: a real send always uses the deterministic key (proven at the notification-builder level, see activationExpiryNotifications.test.ts) — never a random one", async () => {
   const now = new Date("2026-10-10T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-42", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString() });
+  const lifecycle = makeLifecycleRow({ id: "lc-42", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString(), expiry_follow_up_required: true });
   const fake = seedWorld(lifecycle);
   let capturedLifecycleId: string | undefined;
   const founderEmail = async (params: { lifecycleId: string }) => {
@@ -725,7 +727,7 @@ test("founder email idempotency: a real send always uses the deterministic key (
 
 test("possible Slack duplicate on ambiguous crash is documented and reflected in behavior: a successful Slack post with no marker recorded WILL be retried (at-least-once, not exactly-once)", async () => {
   const now = new Date("2026-10-10T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString() });
+  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString(), expiry_follow_up_required: true });
   const fake = seedWorld(lifecycle);
   // First pass: Slack "succeeds" but we simulate a crash before the marker
   // write by leaving expiry_slack_notified_at untouched ourselves (the
@@ -758,7 +760,7 @@ test("activation detected immediately before the expiry CAS cancels the expiry e
 
 test("activation detected immediately before Slack/founder-email cancels each notification independently", async () => {
   const now = new Date("2026-10-10T00:00:00.000Z");
-  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString() });
+  const lifecycle = makeLifecycleRow({ id: "lc-1", operator_id: "op-1", reminder_stage: 3, deadline_at: new Date(now.getTime() - 1000).toISOString(), expired_at: new Date(now.getTime() - 500).toISOString(), expiry_follow_up_required: true });
   const fake = seedWorld(lifecycle, { activated: true });
   const slack = stubSlack("delivered");
   const founderEmail = stubFounderEmail(true);
@@ -896,7 +898,7 @@ test("planning cannot mutate even if the underlying client would happily accept 
   const reminderDue = makeLifecycleRow({ id: "lc-reminder-due", operator_id: "op-1", reminder_stage: 0, deadline_at: deadlineMakingStageDue(now, 1), reminder_next_attempt_at: now.toISOString() });
   const expired = makeLifecycleRow({
     id: "lc-expired", operator_id: "op-2", origin_submission_id: "sub-2", reminder_stage: 3,
-    deadline_at: "2026-06-01T00:00:00.000Z", expired_at: "2026-06-01T00:00:00.500Z",
+    deadline_at: "2026-06-01T00:00:00.000Z", expired_at: "2026-06-01T00:00:00.500Z", expiry_follow_up_required: true,
   });
   const operators = [
     { id: "op-1", email: "kelly@example.com", first_name: "Kelly", last_name: "Terris", account_activated_at: null },
@@ -907,8 +909,8 @@ test("planning cannot mutate even if the underlying client would happily accept 
     { id: "sub-2", venue_id: "venue-2" },
   ];
   const venues = [
-    { id: "venue-1", name: "Buffalo Rouge Brewing Co." },
-    { id: "venue-2", name: "Second Venue" },
+    { id: "venue-1", name: "Buffalo Rouge Brewing Co.", created_by_operator_id: "op-1" },
+    { id: "venue-2", name: "Second Venue", created_by_operator_id: "op-2" },
   ];
   const fake = createFakeActivationReminderClient({ lifecycles: [reminderDue, expired], operators, submissions, venues });
 
@@ -961,4 +963,52 @@ test("planning cannot mutate even if the underlying client would happily accept 
   assert.ok(result.plannedActions.some((a) => a.type === "expiry_note" && a.lifecycleId === "lc-expired"));
   assert.ok(result.plannedActions.some((a) => a.type === "expiry_slack" && a.lifecycleId === "lc-expired"));
   assert.ok(result.plannedActions.some((a) => a.type === "expiry_founder_email" && a.lifecycleId === "lc-expired"));
+});
+
+// ── Coordination with the founder's final follow-up (setupLinkLock.ts) ──────
+
+test("a reminder whose lease was taken while a founder final-follow-up claim is active is abandoned — it never generates a link that would replace the founder's", async () => {
+  const now = new Date("2026-06-15T00:00:00.000Z");
+  const lifecycle = makeLifecycleRow({
+    id: "lc-1", operator_id: "op-1", reminder_stage: 2,
+    deadline_at: deadlineMakingStageDue(now, 3), reminder_next_attempt_at: now.toISOString(),
+    // Taken after this pass started — still counts as active.
+    setup_link_claimed_at: new Date(now.getTime() + 5_000).toISOString(),
+  });
+  const fake = seedWorld(lifecycle);
+  const email = stubEmail();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now, sendReminderEmail: email.fn as any }));
+  assert.equal(email.calls.length, 0, "no reminder (and so no new recovery link) while the founder holds the claim");
+  assert.equal(result.reminderSkippedRaced, 1);
+  assert.equal(fake.lifecycles[0].reminder_stage, 2, "stage is not marked delivered");
+  assert.equal(fake.lifecycles[0].reminder_lease_started_at, null, "our own lease is released");
+});
+
+test("a stale founder claim (older than the 6-minute claim lifetime) does not block reminders", async () => {
+  const now = new Date("2026-06-15T00:00:00.000Z");
+  const lifecycle = makeLifecycleRow({
+    id: "lc-1", operator_id: "op-1", reminder_stage: 2,
+    deadline_at: deadlineMakingStageDue(now, 3), reminder_next_attempt_at: now.toISOString(),
+    setup_link_claimed_at: new Date(now.getTime() - 7 * 60_000).toISOString(),
+  });
+  const fake = seedWorld(lifecycle);
+  const email = stubEmail();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now, sendReminderEmail: email.fn as any }));
+  assert.equal(email.calls.length, 1);
+  assert.equal(result.reminderSent, 1);
+});
+
+test("no reminder is selected once the deadline has passed — the worker never sends into the founder's final follow-up window", async () => {
+  const now = new Date("2026-10-03T00:00:00.000Z");
+  const lifecycle = makeLifecycleRow({
+    id: "lc-1", operator_id: "op-1", reminder_stage: 2,
+    deadline_at: now.toISOString(), reminder_next_attempt_at: new Date(now.getTime() - 3_600_000).toISOString(),
+  });
+  const fake = seedWorld(lifecycle);
+  const email = stubEmail();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await withEnv(VAR, "true", () => processActivationReminders({ adminClient: fake.client, now, sendReminderEmail: email.fn as any }));
+  assert.equal(email.calls.length, 0);
 });

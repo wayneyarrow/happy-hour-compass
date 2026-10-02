@@ -231,10 +231,22 @@ test("the page shows the limit (with when it frees up) instead of a code form", 
 
 // ── Password-recovery gate ───────────────────────────────────────────────────
 
-function gateWorld(lifecycle: null | { verification_required: boolean; verification_completed_at?: string | null; released_at?: string | null; origin_type?: "claim" | "submission" }, activatedAt: string | null = null) {
+function gateWorld(
+  lifecycle: null | {
+    verification_required: boolean;
+    verification_completed_at?: string | null;
+    released_at?: string | null;
+    origin_type?: "claim" | "submission";
+    deadline_at?: string;
+    expired_at?: string | null;
+  },
+  activatedAt: string | null = null
+) {
   const db = makeFakeEmailCodeDb({ now: () => T0 });
   db.seedOperator({ id: OPERATOR, email: "owner@venue.example", account_activated_at: activatedAt });
-  if (lifecycle) db.seedLifecycle({ id: LIFECYCLE, operator_id: OPERATOR, deadline_at: "2026-10-09T18:00:00.000Z", ...lifecycle });
+  // Far-future default deadline: the gate now treats a passed deadline as a
+  // closed window, so the "live window" cases must not depend on the real clock.
+  if (lifecycle) db.seedLifecycle({ id: LIFECYCLE, operator_id: OPERATOR, deadline_at: "2099-01-01T00:00:00.000Z", ...lifecycle });
   return db;
 }
 
@@ -273,6 +285,27 @@ test("gate: no operator row (pure consumer / team member), no lifecycle, or a re
   assert.deepEqual(await resolvePasswordRecoveryGate(gateWorld(null).client, { id: OPERATOR, accountActivatedAt: null }), { kind: "allow" });
   const released = gateWorld({ verification_required: true, released_at: "2026-09-24T00:00:00.000Z" });
   assert.deepEqual(await resolvePasswordRecoveryGate(released.client, { id: OPERATOR, accountActivatedAt: null }), { kind: "allow" });
+});
+
+test("gate E — closed setup window (deadline passed, expiry not yet stamped): the code screen is closed, so an inbox-verified recovery link is allowed — both origins", async () => {
+  for (const origin of ["claim", "submission"] as const) {
+    const db = gateWorld({ verification_required: true, origin_type: origin, deadline_at: "2026-09-01T00:00:00.000Z" });
+    assert.deepEqual(
+      await resolvePasswordRecoveryGate(db.client, { id: OPERATOR, accountActivatedAt: null }, new Date("2026-09-02T00:00:00.000Z")),
+      { kind: "allow" }
+    );
+  }
+});
+
+test("gate E — an expired (expired_at stamped) unverified email-code lifecycle allows recovery, so setup completed via the founder's final setup link activates", async () => {
+  const db = gateWorld({ verification_required: true, deadline_at: "2026-09-01T00:00:00.000Z", expired_at: "2026-09-01T01:00:00.000Z" });
+  assert.deepEqual(await resolvePasswordRecoveryGate(db.client, { id: OPERATOR, accountActivatedAt: null }), { kind: "allow" });
+});
+
+test("gate E — the window boundary is exact: one millisecond before the deadline the code step is still required", async () => {
+  const db = gateWorld({ verification_required: true, deadline_at: "2026-09-01T00:00:00.000Z" });
+  const gate = await resolvePasswordRecoveryGate(db.client, { id: OPERATOR, accountActivatedAt: null }, new Date("2026-08-31T23:59:59.999Z"));
+  assert.equal(gate.kind, "requires_email_code");
 });
 
 test("gate: read errors report 'error' so callers issue no recovery link", async () => {

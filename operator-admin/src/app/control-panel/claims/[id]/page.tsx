@@ -7,11 +7,13 @@ import {
   resolveLegacyClaimActivationOrigin,
   evaluateLegacyClaimActivationEligibility,
   shouldShowStandaloneResendPanel,
+  shouldShowFinalFollowUpPanel,
 } from "@/lib/activation/activationPresentation";
 import { isOperatorActivationReminderProcessingEnabled } from "@/lib/activation/activationReminderConfig";
 import ReviewActionsPanel from "./ReviewActionsPanel";
 import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
+import FinalSetupFollowUpPanel from "@/components/FinalSetupFollowUpPanel";
 import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
 
 export const dynamic = "force-dynamic";
@@ -412,8 +414,16 @@ export default async function ClaimDetailPage({
               for release_required / expired / released states so the
               founder can see why resend is currently blocked
               (evaluateClaimResendEligibility enforces the actual block). */}
-          {activationPresentation && shouldShowStandaloneResendPanel(activationPresentation) && (
-            <ResendSetupEmailPanel claimId={claim.id} />
+          {/* Post-expiry final follow-up replaces the normal resend once
+              the setup window has ended (Release Required or Expired). */}
+          {activationPresentation && shouldShowFinalFollowUpPanel(activationPresentation) ? (
+            <FinalSetupFollowUpPanel
+              origin={{ type: "claim", claimId: claim.id }}
+              recipientEmail={activationPresentation.operator?.email ?? null}
+            />
+          ) : (
+            activationPresentation &&
+            shouldShowStandaloneResendPanel(activationPresentation) && <ResendSetupEmailPanel claimId={claim.id} />
           )}
 
           {activationPresentation && (
