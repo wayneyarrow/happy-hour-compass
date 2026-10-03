@@ -62,7 +62,7 @@ function freshState() {
     // Controlled external outcomes
     turnstileOk: true,
     googleCandidate: null as Row | null,
-    emailSendFails: false,
+    emailSendFails: false as boolean | "rejected",
     failRpc: new Set<string>(),
     createUserFailsWith: null as string | null,
     /**

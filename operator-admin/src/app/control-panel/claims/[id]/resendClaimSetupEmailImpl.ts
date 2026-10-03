@@ -8,6 +8,7 @@ import {
 import { sendContinueSetupEmail } from "@/lib/activation/emailCodeVerificationEmails";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { createSetupContactCoordinator, type SetupContactCoordinator } from "@/lib/activation/setupContactStore";
+import { runHoldingContactClaim } from "@/lib/activation/setupContactClaimGuard";
 import {
   getActivationPresentationForClaim,
   evaluateClaimResendEligibility,
@@ -194,91 +195,96 @@ export async function resendClaimSetupEmailImpl(
   }
   const contactRecorded = await coordinator.recordSetupContact(contactOperatorId, "founder_resend", new Date());
 
+  const heldToken = contactToken;
+
   try {
-    // ── Email-code lifecycle? (Phase 2B) ──────────────────────────────────────
-    // A verification-required lifecycle gets the continue-setup email (link to
-    // the /operator/verify code screen) — never a Supabase recovery link, which
-    // would skip the required code step. Legacy lifecycles take the unchanged
-    // path below.
-    const lifecycleId = presentation.lifecycle?.id ?? null;
-    const mode = lifecycleId
-      ? await readLifecycleVerificationRequired(supabase, lifecycleId)
-      : ({ ok: true, verificationRequired: false } as const);
-    if (!mode.ok) {
-      console.error("[resendClaimSetupEmailImpl] Lifecycle verification-mode lookup failed:", mode.error);
-      return { error: "Could not load this operator's setup details. Please try again." };
-    }
-
-    let emailResult: { ok: boolean; error?: string };
-    if (mode.verificationRequired && lifecycleId) {
-      const continueUrl = (deps.buildContinueUrl ?? ((id: string) => buildVerificationContinueUrl(id)))(lifecycleId);
-      if (!continueUrl) {
-        console.error("[resendClaimSetupEmailImpl] Email-code verification link unavailable (HMAC secret not configured).", { lifecycleId });
-        return { error: "Email-code verification is not configured, so the setup email can't be sent. Please contact support." };
-      }
-      emailResult = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
-        to: email,
-        firstName,
-        origin: "claim",
-        continueUrl,
-        record: { venueId, claimId, lifecycleId, context: { trigger: "founder_resend" } },
-      });
-    } else {
-      // ── Generate fresh recovery link ──────────────────────────────────────────
-      const appUrl     = getSiteUrl();
-      const redirectTo = `${appUrl}/operator/create-password`;
-
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type:    "recovery",
-        email,
-        options: { redirectTo },
-      });
-
-      if (linkError || !linkData?.properties?.action_link) {
-        console.error("[resendClaimSetupEmailImpl] generateLink failed:", linkError?.message);
-        return { error: "Failed to generate a new setup link. Please try again." };
+    // Under the contact claim, the send is time-bounded (setupContactClaimGuard.ts).
+    return await runHoldingContactClaim(contactOperatorId, heldToken, async (): Promise<ResendSetupEmailState> => {
+      // ── Email-code lifecycle? (Phase 2B) ──────────────────────────────────────
+      // A verification-required lifecycle gets the continue-setup email (link to
+      // the /operator/verify code screen) — never a Supabase recovery link, which
+      // would skip the required code step. Legacy lifecycles take the unchanged
+      // path below.
+      const lifecycleId = presentation.lifecycle?.id ?? null;
+      const mode = lifecycleId
+        ? await readLifecycleVerificationRequired(supabase, lifecycleId)
+        : ({ ok: true, verificationRequired: false } as const);
+      if (!mode.ok) {
+        console.error("[resendClaimSetupEmailImpl] Lifecycle verification-mode lookup failed:", mode.error);
+        return { error: "Could not load this operator's setup details. Please try again." };
       }
 
-      // ── Send email (awaited — fail fast on error) ─────────────────────────────
-      emailResult = await sendPasswordSetupEmail({
-        to:        email,
-        firstName,
-        setupLink: linkData.properties.action_link,
-        record:    { venueId, claimId, lifecycleId, context: { trigger: "founder_resend" } },
+      let emailResult: { ok: boolean; error?: string };
+      if (mode.verificationRequired && lifecycleId) {
+        const continueUrl = (deps.buildContinueUrl ?? ((id: string) => buildVerificationContinueUrl(id)))(lifecycleId);
+        if (!continueUrl) {
+          console.error("[resendClaimSetupEmailImpl] Email-code verification link unavailable (HMAC secret not configured).", { lifecycleId });
+          return { error: "Email-code verification is not configured, so the setup email can't be sent. Please contact support." };
+        }
+        emailResult = await (deps.sendContinueEmail ?? sendContinueSetupEmail)({
+          to: email,
+          firstName,
+          origin: "claim",
+          continueUrl,
+          record: { venueId, claimId, lifecycleId, context: { trigger: "founder_resend" } },
+        });
+      } else {
+        // ── Generate fresh recovery link ──────────────────────────────────────────
+        const appUrl     = getSiteUrl();
+        const redirectTo = `${appUrl}/operator/create-password`;
+
+        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+          type:    "recovery",
+          email,
+          options: { redirectTo },
+        });
+
+        if (linkError || !linkData?.properties?.action_link) {
+          console.error("[resendClaimSetupEmailImpl] generateLink failed:", linkError?.message);
+          return { error: "Failed to generate a new setup link. Please try again." };
+        }
+
+        // ── Send email (awaited — fail fast on error) ─────────────────────────────
+        emailResult = await sendPasswordSetupEmail({
+          to:        email,
+          firstName,
+          setupLink: linkData.properties.action_link,
+          record:    { venueId, claimId, lifecycleId, context: { trigger: "founder_resend" } },
+        });
+      }
+
+      if (!emailResult.ok) {
+        console.error(
+          "[resendClaimSetupEmailImpl] Email send failed:",
+          { claimId, email, error: emailResult.error }
+        );
+        return {
+          error: `Email could not be sent to ${email} (${emailResult.error ?? "unknown error"}). Please try again.`,
+        };
+      }
+
+      // ── Append structured internal note ───────────────────────────────────────
+      // Founder-triggered, so attributed to the real signed-in founder — never
+      // the "Happy Hour Compass" system-author string. Never stores the
+      // generated link/token itself — only operational metadata.
+      await supabase.from("venue_claim_notes").insert({
+        claim_id:         claimId,
+        note:             `Setup email resent to ${email} by founder.`,
+        event_type:       "manual_resend",
+        metadata_json: {
+          recipient: email,
+          sentAt: new Date().toISOString(),
+          lifecycleId: presentation.lifecycle?.id ?? null,
+          currentDeadline: presentation.lifecycle?.deadlineAt ?? null,
+        },
+        created_by:       user.id,
+        created_by_email: user.email ?? null,
       });
-    }
 
-    if (!emailResult.ok) {
-      console.error(
-        "[resendClaimSetupEmailImpl] Email send failed:",
-        { claimId, email, error: emailResult.error }
-      );
-      return {
-        error: `Email could not be sent to ${email} (${emailResult.error ?? "unknown error"}). Please try again.`,
-      };
-    }
+      console.log("[resendClaimSetupEmailImpl] Complete.", { claimId, email });
 
-    // ── Append structured internal note ───────────────────────────────────────
-    // Founder-triggered, so attributed to the real signed-in founder — never
-    // the "Happy Hour Compass" system-author string. Never stores the
-    // generated link/token itself — only operational metadata.
-    await supabase.from("venue_claim_notes").insert({
-      claim_id:         claimId,
-      note:             `Setup email resent to ${email} by founder.`,
-      event_type:       "manual_resend",
-      metadata_json: {
-        recipient: email,
-        sentAt: new Date().toISOString(),
-        lifecycleId: presentation.lifecycle?.id ?? null,
-        currentDeadline: presentation.lifecycle?.deadlineAt ?? null,
-      },
-      created_by:       user.id,
-      created_by_email: user.email ?? null,
+      return { success: true, successAction: `Setup email resent to ${email}` };
     });
-
-    console.log("[resendClaimSetupEmailImpl] Complete.", { claimId, email });
-
-    return { success: true, successAction: `Setup email resent to ${email}` };
   } finally {
     if (contactRecorded) await coordinator.release(contactOperatorId, contactToken);
   }

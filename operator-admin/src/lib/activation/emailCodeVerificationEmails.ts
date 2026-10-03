@@ -160,7 +160,7 @@ export async function sendContinueSetupEmail(
     record?: EmailRecordContext;
   },
   sendEmail: SendEmailFn = sendTransactionalEmail
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; deliveryUncertain?: boolean }> {
   const { subject, html, text } = buildContinueSetupEmail(params);
   return sendEmail({
     // Same type/criticality as the legacy email each origin replaces, so

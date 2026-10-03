@@ -68,6 +68,8 @@ import {
   type ExpiryFollowUpLifecycleRow,
   type ExpiryFollowUpSkipReason,
 } from "@/lib/activation/activationExpiryFollowUp";
+import { runHoldingContactClaim } from "@/lib/activation/setupContactClaimGuard";
+import { DEFERRED_INITIAL_SETUP_START_BUDGET_MS, processDeferredInitialSetupEmails, type DeferredInitialSetupResult } from "@/lib/activation/deferredInitialSetup";
 
 const STALE_LEASE_MINUTES = REMINDER_LEASE_STALE_MINUTES;
 const MAX_REMINDER_ATTEMPTS = 3;
@@ -115,6 +117,8 @@ export type ActivationReminderProcessingResult = {
   reminderDeferredForMilestone: number;
   /** Reminders skipped because 48 h milestone spacing would reach the setup deadline. */
   reminderSkippedForSpacing: number;
+  /** Queued initial setup emails (migration 105) — live passes only. */
+  deferredInitialSetup?: DeferredInitialSetupResult;
   /** Only ever populated when dryRun is true. */
   plannedActions: PlannedAction[];
   errors: { lifecycleId: string; message: string }[];
@@ -181,6 +185,8 @@ export type ProcessActivationRemindersDeps = {
   /** Setup-contact coordination seams (migration 104) — tests only. */
   coordinator?: SetupContactCoordinator;
   coordinationEnabled?: boolean;
+  /** Queued initial setup delivery (deferredInitialSetup.ts) — tests only. */
+  processDeferredInitialSetup?: (admin: AdminClient, now: Date, opts: { stopStartingAtMs: number }) => Promise<DeferredInitialSetupResult>;
 };
 
 type ReminderCoordination = { enabled: boolean; coordinator: SetupContactCoordinator };
@@ -229,6 +235,8 @@ async function runActivationReminderPass(
   // whether this pass actually reads/plans. Only the LIVE wrapper above
   // uses this switch to decide whether to run at all.
   const result = freshResult(isOperatorActivationReminderProcessingEnabled(), dryRun);
+  // Wall-clock start of this invocation (the cron route's maxDuration is 60 s).
+  const passStartedMs = Date.now();
 
   // ── 1. Stale-lease recovery (dry-run never recovers/clears a lease) ──────
   if (!dryRun) {
@@ -250,6 +258,21 @@ async function runActivationReminderPass(
 
   // ── 5. Post-expiry personal follow-up (note, #customer-success, founder email)
   await reconcileExpirySideEffects(admin, now, dryRun, result, { sendExpirySlack, sendExpiryFounderEmail, writeNote, loadFollowUp });
+
+  // ── 6. Queued initial setup emails (migration 105) — sent under the
+  // operator's contact claim. Never in planning mode (it sends email). New
+  // sends start only in the first 30 s of the invocation, so the 60 s cron
+  // limit doesn't cut one off; an interrupted one is never resent blindly.
+  if (!dryRun) {
+    try {
+      const opts = { stopStartingAtMs: passStartedMs + DEFERRED_INITIAL_SETUP_START_BUDGET_MS };
+      result.deferredInitialSetup = await (
+        deps.processDeferredInitialSetup ?? ((a: AdminClient, n: Date, o: typeof opts) => processDeferredInitialSetupEmails(a as never, n, o))
+      )(admin, now, opts);
+    } catch (err) {
+      console.error("[processActivationReminders] Queued initial setup delivery failed:", err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return result;
 }
@@ -697,20 +720,24 @@ async function processReminderCandidate(
   }
 
   try {
-    await sendAndAcknowledgeReminder({
-      admin,
-      row,
-      now,
-      result,
-      sendReminderEmail,
-      writeNote,
-      lifecycleId,
-      currentStage,
-      selectedStage: selectedStage as ActivationReminderStage,
-      deadlineAt,
-      claimedLeaseStartedAt,
-      resolved,
-    });
+    const send = () =>
+      sendAndAcknowledgeReminder({
+        admin,
+        row,
+        now,
+        result,
+        sendReminderEmail,
+        writeNote,
+        lifecycleId,
+        currentStage,
+        selectedStage: selectedStage as ActivationReminderStage,
+        deadlineAt,
+        claimedLeaseStartedAt,
+        resolved,
+      });
+    // Under the claim, the send is time-bounded (setupContactClaimGuard.ts).
+    if (contactClaimToken) await runHoldingContactClaim(row.operator_id, contactClaimToken, send);
+    else await send();
   } finally {
     if (contactClaimToken && safeToRelease) await coordination.coordinator.release(row.operator_id, contactClaimToken);
   }

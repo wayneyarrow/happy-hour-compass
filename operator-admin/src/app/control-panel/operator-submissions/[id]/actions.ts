@@ -27,6 +27,7 @@ import {
   planActivationVerificationMode,
   deliverDeferredActivationStart,
 } from "@/lib/activation/emailCodeActivationStart";
+import { approvalBanner, describeSetupEmail, setupEmailOutcomeOfDelivery, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 import {
   resendSubmissionSetupEmailImpl,
   type ResendSetupEmailState,
@@ -656,7 +657,7 @@ export async function approveAndCreateVenueAction(
       channel:  "ops-critical",
       severity: "critical",
       title:    "CRITICAL: Submission Not Marked Approved — Operator Is Live",
-      message:  "Provisioning succeeded and activation email sent, but operator_submissions row could not be updated to 'approved'. Manual DB fix required.",
+      message:  `Provisioning succeeded (${provisionResult.setupEmailDeferred ? "setup continues through email-code verification" : describeSetupEmail(provisionResult.setupEmail ?? "sent", email)}), but operator_submissions row could not be updated to 'approved'. Manual DB fix required.`,
       metadata: {
         "Submission ID": submissionId,
         Email:           email,
@@ -704,7 +705,9 @@ export async function approveAndCreateVenueAction(
   // Email-code activation: the setup email was deferred out of provisioning
   // and is sent now that the lifecycle exists. A failure here never undoes
   // the approval — the founder can Resend.
-  let deferredEmailFailed = false;
+  // Setup email outcome: provisioning's own email (sent or queued), or the
+  // deferred email-code start's — recorded on the timeline either way.
+  let setupOutcome: SetupEmailOutcome | null = provisionResult.setupEmail ?? (provisionResult.setupEmailDeferred ? null : "sent");
   if (provisionResult.setupEmailDeferred) {
     const delivery = await deliverDeferredActivationStart({
       lifecycleResult,
@@ -715,7 +718,15 @@ export async function approveAndCreateVenueAction(
       sendLegacySetupEmail: (setupLink, record) =>
         sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink, record: { venueId, submissionId, ...record } }),
     });
-    deferredEmailFailed = delivery.kind === "failed";
+    setupOutcome = setupEmailOutcomeOfDelivery(delivery);
+  }
+  if (setupOutcome) {
+    await supabase.from("operator_submission_notes").insert({
+      submission_id:    submissionId,
+      note:             `Setup email: ${describeSetupEmail(setupOutcome, email)}.`,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
   }
 
   await logAuditEvent({
@@ -734,15 +745,9 @@ export async function approveAndCreateVenueAction(
 
   revalidatePath("/control-panel/operator-submissions");
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
-  if (deferredEmailFailed) {
-    return {
-      success:       true,
-      successAction: "Venue created — but the setup email could not be sent. Use Resend setup email.",
-    };
-  }
   return {
     success:       true,
-    successAction: "Venue created and operator account activated — activation email sent",
+    successAction: approvalBanner("Venue created and operator account provisioned", setupOutcome),
   };
 }
 
@@ -988,7 +993,7 @@ export async function resolveExistingVenueMatchAction(
       channel:  "ops-critical",
       severity: "critical",
       title:    "CRITICAL: Submission Not Marked Approved — Operator Is Live",
-      message:  "Provisioning succeeded and activation email sent, but operator_submissions row could not be updated to 'approved'. Manual DB fix required.",
+      message:  `Provisioning succeeded (${provisionResult.setupEmailDeferred ? "setup continues through email-code verification" : describeSetupEmail(provisionResult.setupEmail ?? "sent", email)}), but operator_submissions row could not be updated to 'approved'. Manual DB fix required.`,
       metadata: {
         "Submission ID": submissionId,
         Email:           email,
@@ -1036,7 +1041,9 @@ export async function resolveExistingVenueMatchAction(
   // Email-code activation: the setup email was deferred out of provisioning
   // and is sent now that the lifecycle exists. A failure here never undoes
   // the approval — the founder can Resend.
-  let deferredEmailFailed = false;
+  // Setup email outcome: provisioning's own email (sent or queued), or the
+  // deferred email-code start's — recorded on the timeline either way.
+  let setupOutcome: SetupEmailOutcome | null = provisionResult.setupEmail ?? (provisionResult.setupEmailDeferred ? null : "sent");
   if (provisionResult.setupEmailDeferred) {
     const delivery = await deliverDeferredActivationStart({
       lifecycleResult,
@@ -1047,7 +1054,15 @@ export async function resolveExistingVenueMatchAction(
       sendLegacySetupEmail: (setupLink, record) =>
         sendOperatorActivationEmail({ to: email, firstName: firstName || "there", setupLink, record: { venueId, submissionId, ...record } }),
     });
-    deferredEmailFailed = delivery.kind === "failed";
+    setupOutcome = setupEmailOutcomeOfDelivery(delivery);
+  }
+  if (setupOutcome) {
+    await supabase.from("operator_submission_notes").insert({
+      submission_id:    submissionId,
+      note:             `Setup email: ${describeSetupEmail(setupOutcome, email)}.`,
+      created_by:       user.id,
+      created_by_email: user.email ?? null,
+    });
   }
 
   await logAuditEvent({
@@ -1066,15 +1081,9 @@ export async function resolveExistingVenueMatchAction(
 
   revalidatePath("/control-panel/operator-submissions");
   revalidatePath(`/control-panel/operator-submissions/${submissionId}`);
-  if (deferredEmailFailed) {
-    return {
-      success:       true,
-      successAction: "Approved — linked to existing venue, but the setup email could not be sent. Use Resend setup email.",
-    };
-  }
   return {
     success:       true,
-    successAction: "Approved — linked to existing venue, activation email sent",
+    successAction: approvalBanner("Approved — linked to existing venue", setupOutcome),
   };
 }
 

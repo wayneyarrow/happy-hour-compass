@@ -29,7 +29,8 @@ import { planSendVariants, sendWithVariants, senderDomain, isDeliveryUncertain, 
 import { buildSendKey, computeSendRef, resolveEmailEnvironment, usesTrackedSender } from "@/lib/emailTracking/emailTrackingPolicy";
 import { getTrackedSenderDomain, isEmailOpenTrackingEnabled } from "@/lib/emailTracking/emailTrackingConfig";
 import { randomUUID } from "node:crypto";
-import { recordSetupContactBeforeSend } from "@/lib/activation/setupContactEvidence";
+import { recordSetupContactBeforeSend, recordSetupEmailAccepted } from "@/lib/activation/setupContactEvidence";
+import { contactClaimSendGuard } from "@/lib/activation/setupContactClaimGuard";
 
 export type { EmailRecordContext };
 
@@ -173,14 +174,26 @@ export async function sendTransactionalEmail({
   // unactivated operator — never affects what is sent.
   await recordSetupContactBeforeSend({ emailType: type, to, trigger: record?.context?.trigger ?? null });
 
-  const sent = await sendWithVariants({ attempt: sendViaResend, variants, hasIdempotencyKey: Boolean(idempotencyKey), logContext: { type } });
+  // Sent while holding an operator contact claim (setupContactClaimGuard.ts):
+  // the request must START inside the claim's send window. It is never cut
+  // short once started — an abandoned request can still be accepted.
+  const guard = contactClaimSendGuard(type);
+  const attemptStartedAt = new Date();
+  const sent: Awaited<ReturnType<typeof sendWithVariants>> =
+    guard && !guard.allowed
+      ? { ok: false, error: guard.error, errorName: CLAIM_WINDOW_ERROR_NAME, variant: variants[0], attempts: 0 }
+      : await sendWithVariants({ attempt: sendViaResend, variants, hasIdempotencyKey: Boolean(idempotencyKey), logContext: { type } });
 
   const result: TransactionalSendResult = sent.ok
     ? { ok: true, id: sent.id }
-    : { ok: false, error: sent.error, deliveryUncertain: isDeliveryUncertain(sent.errorName) };
+    : { ok: false, error: sent.error, deliveryUncertain: sent.errorName === CLAIM_WINDOW_ERROR_NAME ? false : isDeliveryUncertain(sent.errorName) };
 
   if (sent.ok) {
     console.log(`[EMAIL] SUCCESS type=${type} to=${to} id=${sent.id}`);
+    // Confirmed-delivery evidence (migration 105), written only after the
+    // provider accepted: bounded, never throws, no-op unless this is a setup
+    // email to an unactivated operator.
+    await recordSetupEmailAccepted({ emailType: type, to, trigger: record?.context?.trigger ?? null, attemptStartedAt });
   } else {
     console.error(`[EMAIL] FAILED type=${type} to=${to} error=${sent.error}`);
     await escalateEmailFailure({ type, to, error: sent.error, criticality });
@@ -203,6 +216,9 @@ export async function sendTransactionalEmail({
     }
   }
 }
+
+/** Nothing was sent: the contact claim's send window had passed (definite, never uncertain). */
+const CLAIM_WINDOW_ERROR_NAME = "setup_contact_claim_window_passed";
 
 async function escalateEmailFailure({
   type,
@@ -364,7 +380,7 @@ export async function sendPasswordSetupEmail({
   setupLink: string;
   /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
   record?: EmailRecordContext;
-}): Promise<{ ok: boolean; id?: string; error?: string }> {
+}): Promise<TransactionalSendResult> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue claim was approved</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1459,7 +1475,7 @@ export async function sendOperatorActivationEmail({
   setupLink: string;
   /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
   record?: EmailRecordContext;
-}): Promise<{ ok: boolean; id?: string; error?: string }> {
+}): Promise<TransactionalSendResult> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">Your venue is on Happy Hour Compass</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>
@@ -1525,7 +1541,7 @@ export async function sendVenueAddedToAccountEmail({
   accessLink: string;
   /** Venue/operator/lifecycle this email concerns — see sendTransactionalEmail's `record`. */
   record?: EmailRecordContext;
-}): Promise<{ ok: boolean; id?: string; error?: string }> {
+}): Promise<TransactionalSendResult> {
   const html = emailLayout(`
           <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0f172a;">${venueName} has been added to your account</h1>
           <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;">Hi ${firstName},</p>

@@ -10,6 +10,7 @@ import { provisionOperatorForVenue } from "@/lib/operatorActivation";
 import { claimOrReuseActivationLifecycle } from "@/lib/activation/activationLifecycle";
 import { writeActivationNote } from "@/lib/activation/activationNotes";
 import { planActivationVerificationMode, deliverDeferredActivationStart } from "@/lib/activation/emailCodeActivationStart";
+import { describeSetupEmail, setupEmailOutcomeOfDelivery, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 import { buildVerificationPath } from "@/lib/activation/emailCodeVerificationService";
 import { gatherClaimSignals, type ClaimSignalInput } from "./claimAutoApprovalSignals";
 import { evaluateClaimAutoApproval } from "./claimAutoApprovalPolicy";
@@ -288,8 +289,11 @@ async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowD
   mark("lifecycle");
 
   let verificationPath: string | undefined;
-  // Non-deferred provisioning only returns ok after its own setup email sent.
-  let approvedSetup: ApprovedClaimSetup = "emailed";
+  // Non-deferred provisioning only returns ok once its own setup email was
+  // sent or queued (queued = another email to this operator held the
+  // setup-contact claim; the hourly worker sends it).
+  let setupOutcome: SetupEmailOutcome | null = returningOperator ? null : (provision.setupEmail ?? null);
+  let approvedSetup: ApprovedClaimSetup = provision.setupEmail === "queued" ? "pending_email" : "emailed";
   let nextStep: "new_operator_in_flow" | "returning_operator" | "new_operator_email" = returningOperator
     ? "returning_operator"
     : "new_operator_email";
@@ -309,14 +313,21 @@ async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowD
           record: { venueId: input.venue.id, claimId, ...record },
         }),
     });
+    setupOutcome = setupEmailOutcomeOfDelivery(delivery);
     if (delivery.kind === "code_issued") {
       verificationPath = delivery.verificationPath;
       nextStep = "new_operator_in_flow";
     } else {
-      approvedSetup =
-        delivery.kind === "continue_email_sent" || delivery.kind === "legacy_fallback_sent" ? "emailed" : "pending_email";
+      approvedSetup = setupOutcome === "sent" ? "emailed" : "pending_email";
       console.warn(`${LOG} Approved claim continues by email, not in-flow.`, { claimId, delivery: delivery.kind });
     }
+  }
+  if (setupOutcome) {
+    await writeClaimSystemNote(admin, {
+      claimId,
+      note: `Setup email: ${describeSetupEmail(setupOutcome, input.claimant.email)}.`,
+      eventKey: `hhc-claim-setup-email:${claimId}`,
+    });
   }
   mark("firstCodeDelivery");
 
@@ -328,6 +339,7 @@ async function runClaimAutoApprovalTimed(input: ClaimFlowInput, deps: ClaimFlowD
     decision,
     nextStep,
     activationDeadline,
+    setupEmail: setupOutcome,
   });
   mark("founderNotifications");
 

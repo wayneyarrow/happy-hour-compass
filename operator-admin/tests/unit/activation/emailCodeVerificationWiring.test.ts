@@ -49,6 +49,7 @@ const ALLOWED_IMPORTERS = new Set([
   "lib/activation/activationReminderEmails.ts",
   "app/control-panel/claims/[id]/resendClaimSetupEmailImpl.ts",
   "app/control-panel/operator-submissions/[id]/resendSubmissionSetupEmailImpl.ts",
+  "lib/activation/deferredInitialSetup.ts", // queued initial setup email (continue-setup link)
   // password-recovery gate (hardening): both Forgot Password actions + the activation backstop
   "app/forgot-password/actions.ts",
   "app/(consumer-auth)/account/forgot-password/actions.ts",

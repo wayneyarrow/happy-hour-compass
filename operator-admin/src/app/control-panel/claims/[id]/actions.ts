@@ -15,6 +15,7 @@ import {
   planActivationVerificationMode,
   deliverDeferredActivationStart,
 } from "@/lib/activation/emailCodeActivationStart";
+import { approvalBanner, describeSetupEmail, setupEmailOutcomeOfDelivery, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 import {
   resendClaimSetupEmailImpl,
   type ResendSetupEmailState as ImplResendSetupEmailState,
@@ -38,7 +39,7 @@ export type ReviewState = {
 type ReviewAction = "approve" | "needs_more_info" | "reject";
 
 const ACTION_LABELS: Record<ReviewAction, string> = {
-  approve:         "Approved — password setup email sent",
+  approve:         "Approved", // the approve banner adds the setup email outcome (approvalBanner)
   needs_more_info: "Requested more info",
   reject:          "Rejected",
 };
@@ -312,6 +313,12 @@ export async function reviewClaimAction(
     return { error: provisionResult.error };
   }
   const setupEmailDeferred = provisionResult.setupEmailDeferred === true;
+  // Provisioning's own setup email (sent or queued); a deferred (email-code)
+  // start reports its outcome after delivery below.
+  let setupOutcome: SetupEmailOutcome | null = setupEmailDeferred ? null : (provisionResult.setupEmail ?? "sent");
+  const provisionedSummary = setupOutcome
+    ? describeSetupEmail(setupOutcome, claimEmail)
+    : "setup continues through email-code verification";
 
   // Mark claim approved — last step so full rollback was still possible above.
   // If this fails: operator is live and email was sent; log for manual recovery.
@@ -337,7 +344,7 @@ export async function reviewClaimAction(
       channel:  "ops-critical",
       severity: "critical",
       title:    "CRITICAL: Claim Not Marked Approved — Operator Is Live",
-      message:  "Provisioning succeeded and setup email sent, but venue_claims row could not be updated to 'approved'. Manual DB fix required.",
+      message:  `Provisioning succeeded (${provisionedSummary}), but venue_claims row could not be updated to 'approved'. Manual DB fix required.`,
       metadata: {
         "Claim ID":  claimId,
         Email:       claimEmail,
@@ -348,7 +355,7 @@ export async function reviewClaimAction(
     });
     return {
       error:
-        "Operator account created and setup email sent, but the claim record could not be " +
+        `Operator account created (${provisionedSummary}), but the claim record could not be ` +
         "marked approved. Please update the claim status manually in the database.",
     };
   }
@@ -357,8 +364,8 @@ export async function reviewClaimAction(
   await supabase.from("venue_claim_notes").insert({
     claim_id:         claimId,
     note:             setupEmailDeferred
-      ? `Claim approved — operator account provisioned for ${claimEmail}; setup continues through email-code verification.`
-      : `Claim approved — operator account provisioned and setup email sent to ${claimEmail}.`,
+      ? `Claim approved — operator account provisioned for ${claimEmail}; ${provisionedSummary}.`
+      : `Claim approved — operator account provisioned; ${provisionedSummary}.`,
     created_by:       user.id,
     created_by_email: user.email ?? null,
   });
@@ -392,7 +399,6 @@ export async function reviewClaimAction(
   // Email-code activation: the setup email was deferred out of provisioning
   // and is sent now that the lifecycle exists. A failure here never undoes
   // the approval — the founder can Resend.
-  let deferredEmailFailed = false;
   if (setupEmailDeferred) {
     const delivery = await deliverDeferredActivationStart({
       lifecycleResult,
@@ -403,7 +409,15 @@ export async function reviewClaimAction(
       sendLegacySetupEmail: (setupLink, record) =>
         sendPasswordSetupEmail({ to: claimEmail, firstName: firstName || "there", setupLink, record: { venueId, claimId, ...record } }),
     });
-    deferredEmailFailed = delivery.kind === "failed";
+    setupOutcome = setupEmailOutcomeOfDelivery(delivery);
+    if (setupOutcome) {
+      await supabase.from("venue_claim_notes").insert({
+        claim_id:         claimId,
+        note:             `Setup email: ${describeSetupEmail(setupOutcome, claimEmail)}.`,
+        created_by:       user.id,
+        created_by_email: user.email ?? null,
+      });
+    }
   }
 
   // Fetch venue name for audit log (best-effort — all critical work is done)
@@ -424,13 +438,7 @@ export async function reviewClaimAction(
   revalidatePath("/control-panel/claims");
   revalidatePath(`/control-panel/claims/${claimId}`);
 
-  if (deferredEmailFailed) {
-    return {
-      success: true,
-      successAction: "Approved — but the setup email could not be sent. Use Resend setup email.",
-    };
-  }
-  return { success: true, successAction: ACTION_LABELS.approve };
+  return { success: true, successAction: approvalBanner("Approved", setupOutcome) };
 }
 
 // ── Resend operator setup email ───────────────────────────────────────────────

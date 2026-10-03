@@ -146,3 +146,37 @@ test("Copy setup link records a precautionary pause (never email evidence); Fina
   assert.equal(contact2.rows[0].last_setup_pause_at, null);
   assert.equal(contact2.rows[0].setup_contact_claimed_at, null);
 });
+
+// ── Claim holders send only through the time-bounded guard ───────────────────
+
+test("every contact-claim holder sends inside runHoldingContactClaim, and the initial send has no 'send anyway' path", () => {
+  const holders = [
+    "src/lib/customerSuccess/processCustomerSuccessDeliveries.ts",
+    "src/lib/activation/processActivationReminders.ts",
+    "src/lib/activation/finalSetupFollowUpImpl.ts",
+    "src/app/control-panel/claims/[id]/resendClaimSetupEmailImpl.ts",
+    "src/app/control-panel/operator-submissions/[id]/resendSubmissionSetupEmailImpl.ts",
+    "src/lib/activation/setupContactAutomatic.ts",
+    "src/lib/activation/deferredInitialSetup.ts",
+  ];
+  for (const p of holders) assert.match(code(p), /runHoldingContactClaim\(/, `${p} must send under the claim guard`);
+  const automatic = code("src/lib/activation/setupContactAutomatic.ts");
+  assert.doesNotMatch(automatic, /anyway/);
+  assert.match(automatic, /return params\.onDeferred\(\)/);
+  assert.match(automatic, /return params\.onUnavailable\(/);
+  // The claim lifetime is never shortened to fit a request; holders never cut a started send short.
+  assert.match(code("src/lib/activation/setupContactPolicy.ts"), /SETUP_CONTACT_CLAIM_TTL_MS = 6 \* 60 \* 1000/);
+  assert.doesNotMatch(code("src/lib/email.ts"), /Promise\.race|setTimeout/);
+  const email = code("src/lib/email.ts");
+  const fn = email.slice(email.indexOf("export async function sendTransactionalEmail("));
+  assert.ok(fn.indexOf("contactClaimSendGuard(type)") > 0 && fn.indexOf("contactClaimSendGuard(type)") < fn.indexOf("sendWithVariants("), "guard checked before the provider call");
+});
+
+test("every automatic initial-send call site supplies a queued result and a not-sent result (nothing is ever sent without the claim)", () => {
+  for (const p of ["src/lib/operatorActivation.ts", "src/lib/activation/emailCodeActivationStart.ts", "src/lib/activation/legacyActivationResumeImpl.ts"]) {
+    const src = code(p);
+    const call = src.slice(src.search(/withAutomaticSetupContact(<[^(]*>)?\(/));
+    assert.match(call.slice(0, 700), /onDeferred:/, p);
+    assert.match(call.slice(0, 700), /onUnavailable:/, p);
+  }
+});

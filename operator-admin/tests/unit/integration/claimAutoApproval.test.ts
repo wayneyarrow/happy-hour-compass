@@ -601,7 +601,7 @@ test("RARE FALLBACK: a legacy lifecycle appears after approval → approved + 'c
   assert.equal(mail.length, 1, "one setup email");
   assert.ok(!mail.some((e) => /We received your claim/.test(e.subject)));
   assert.equal(founderEmails().length, 1);
-  assert.match(founderEmails()[0].text, /setup continues by email/);
+  assert.match(founderEmails()[0].text, /setup email sent to /, "the founder sees what actually happened to the setup email");
 });
 
 test("RARE FALLBACK: lifecycle claim fails AND the setup email can't go out → still 'approved', honest about the email", async () => {
@@ -621,6 +621,28 @@ test("RARE FALLBACK: lifecycle claim fails AND the setup email can't go out → 
   assert.equal(world.authUsers.length, 1);
   assert.equal(world.tables.operators.length, 1);
   assert.equal(world.tables.operator_activation_lifecycles.length, 0);
+  // An unclear provider error: the founder is told it's UNCONFIRMED, never "sent" or plainly "failed".
+  // (Every email fails here, so the founder sees it in #venue-claims.)
+  const founder = JSON.stringify(world.slack);
+  assert.match(founder, /setup email to casey\.claimant@gmail\.com unconfirmed — the email provider's response was unclear/);
+  assert.doesNotMatch(founder, /setup email sent/);
+  assert.ok(world.tables.venue_claim_notes.some((n) => /^Setup email: setup email to casey\.claimant@gmail\.com unconfirmed/.test(n.note as string)), "timeline says unconfirmed");
+});
+
+test("RARE FALLBACK: a DEFINITE provider rejection is reported as failed (not unconfirmed, not sent)", async () => {
+  world.beforeInsert = (table) =>
+    table === "operator_activation_lifecycles" ? { data: null, error: { message: "db unavailable", code: "08006" } } : null;
+  world.emailSendFails = "rejected";
+  const result = await submitClaim({ geo: "kelowna" });
+  world.beforeInsert = null;
+  world.emailSendFails = false;
+
+  assert.equal(claims()[0].status, "approved");
+  assert.equal(result.approvedSetup, "pending_email");
+  const founder = JSON.stringify(world.slack);
+  assert.match(founder, /setup email to casey\.claimant@gmail\.com could not be sent — use Resend setup email/);
+  assert.doesNotMatch(founder, /unconfirmed|setup email sent/);
+  assert.ok(world.tables.venue_claim_notes.some((n) => /^Setup email: setup email to casey\.claimant@gmail\.com could not be sent/.test(n.note as string)));
 });
 
 test("RARE FALLBACK copy never implies review; a genuinely pending claim keeps the existing wording", async () => {

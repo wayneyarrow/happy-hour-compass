@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createMemoryContactCoordinator } from "./support/memoryContactCoordinator";
 import {
   deliverDeferredActivationStart,
   planActivationVerificationMode,
@@ -137,6 +138,7 @@ function spies() {
     generateLinkCalls,
     deps: {
       adminClient: untouchableClient(),
+      contactCoordinator: createMemoryContactCoordinator().coordinator,
       secret: SECRET,
       siteUrl: "https://staging.example",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -242,6 +244,14 @@ test("deliver: a continue-setup email failure is reported, never masked by a leg
     { lifecycleResult: { decision: "started", lifecycle: lifecycle() }, delivery: "email_link", origin: "claim", recipient, logTag: "[t]", sendLegacySetupEmail: s.sendLegacySetupEmail },
     { ...s.deps, sendContinueEmail: (async () => ({ ok: false, error: "provider down" })) as never }
   );
-  assert.deepEqual(result, { kind: "failed", error: "provider down" });
+  // No explicit "definitely not delivered" ⇒ reported as possibly delivered (unconfirmed).
+  assert.deepEqual(result, { kind: "failed", error: "provider down", uncertain: true });
   assert.equal(s.generateLinkCalls.length, 0);
+
+  const s2 = spies();
+  const rejected = await deliverDeferredActivationStart(
+    { lifecycleResult: { decision: "started", lifecycle: lifecycle() }, delivery: "email_link", origin: "claim", recipient, logTag: "[t]", sendLegacySetupEmail: s2.sendLegacySetupEmail },
+    { ...s2.deps, sendContinueEmail: (async () => ({ ok: false, error: "invalid address", deliveryUncertain: false })) as never }
+  );
+  assert.deepEqual(rejected, { kind: "failed", error: "invalid address", uncertain: false }, "a definite rejection is a plain failure");
 });

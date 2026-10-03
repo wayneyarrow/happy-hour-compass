@@ -43,6 +43,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendTransactionalEmail } from "@/lib/email";
+import { runHoldingContactClaim } from "@/lib/activation/setupContactClaimGuard";
 import { runVenueViewMilestoneDetection, type VenueViewMilestoneDetectionResult } from "./detectVenueViewMilestones";
 import { isCustomerSuccessEmailDeliveryEnabled } from "./customerSuccessConfig";
 import { resolveVenueTimeZone, computeInitialSendTime, firstBusinessSlotAtOrAfter } from "./deliveryScheduling";
@@ -577,7 +578,9 @@ async function processDueEvent(
   // folded in later as an unconfirmed milestone — never silently lost.
   const evidence = { safeToRelease: true };
   try {
-    return await sendDueEvent(event, admin, now, sendEmail, coordination, hasSnapshot, variant, evidence);
+    const send = () => sendDueEvent(event, admin, now, sendEmail, coordination, hasSnapshot, variant, evidence);
+    // Under the claim, the send is time-bounded (setupContactClaimGuard.ts).
+    return contactClaimToken && event.operatorId ? await runHoldingContactClaim(event.operatorId, contactClaimToken, send) : await send();
   } finally {
     if (contactClaimToken && event.operatorId && evidence.safeToRelease) {
       await coordination.coordinator.release(event.operatorId, contactClaimToken);

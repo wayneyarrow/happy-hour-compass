@@ -43,10 +43,13 @@ const OWNER_ACTIONS_SOURCE = readFileSync(
 test("provisionOperatorForVenue's success return no longer carries an `activation` field", () => {
   assert.match(
     OPERATOR_ACTIVATION_SOURCE,
-    // Phase 2B added only the optional setupEmailDeferred flag, and claim
-    // auto-approval only the optional ownershipConflict failure flag — still no `activation` field.
-    /\| \{ ok: true; authUserId: string; setupEmailDeferred\?: true \}\s*\| \{ ok: false; error: string; hhcErrorId\?: string; ownershipConflict\?: true \}/
+    // Phase 2B added only the optional setupEmailDeferred flag, claim
+    // auto-approval only the optional ownershipConflict failure flag, and
+    // setup-contact coordination only the optional setupEmail outcome — still no `activation` field.
+    /\| \{\s*ok: true;\s*authUserId: string;\s*setupEmailDeferred\?: true;[\s\S]*?setupEmail\?: Extract<SetupEmailOutcome, "sent" \| "queued">;\s*\}\s*\| \{ ok: false; error: string; hhcErrorId\?: string; ownershipConflict\?: true \}/
   );
+  const success = OPERATOR_ACTIVATION_SOURCE.slice(OPERATOR_ACTIVATION_SOURCE.indexOf("| {\n      ok: true;"), OPERATOR_ACTIVATION_SOURCE.indexOf("| { ok: false; error: string;"));
+  assert.doesNotMatch(success.replace(/\/\*[\s\S]*?\*\//g, ""), /activation\??:/);
 });
 
 test("provisionOperatorForVenue never imports the removed check-then-act decision helpers", () => {

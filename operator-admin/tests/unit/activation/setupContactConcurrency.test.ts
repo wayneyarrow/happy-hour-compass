@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- injected test doubles */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { Resend } from "resend";
 import { processActivationReminders } from "../../../src/lib/activation/processActivationReminders";
 import { processCustomerSuccessDeliveries } from "../../../src/lib/customerSuccess/processCustomerSuccessDeliveries";
 import { sendFinalSetupEmailImpl, generateFinalSetupLinkImpl } from "../../../src/lib/activation/finalSetupFollowUpImpl";
@@ -285,12 +286,117 @@ test("Release refuses while an operator contact claim is active, and proceeds on
 });
 
 // ── Automatic initial setup emails (approval / deferred start / legacy start) ─
+// Only ever sent under the operator's contact claim; queued when it stays busy.
+
+const NOT_SENT = (error: string) => ({ ok: false, error });
+const QUEUED = () => ({ ok: true, queued: true });
+
+function silenced<T>(fn: () => Promise<T>): Promise<T> {
+  const w = console.warn;
+  const e = console.error;
+  console.warn = () => {};
+  console.error = () => {};
+  return fn().finally(() => {
+    console.warn = w;
+    console.error = e;
+  });
+}
+
+/** Real sendTransactionalEmail with only the Resend SDK call replaced (no database reached). */
+async function withControlledResend(fn: (p: { calls: string[]; acceptMilestone: () => void }) => Promise<void>) {
+  const proto = Object.getPrototypeOf(new Resend("re_test_only").emails);
+  const original = proto.send;
+  const keys = ["RESEND_API_KEY", "EMAIL_OPEN_TRACKING_ENABLED", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  process.env.RESEND_API_KEY = "re_test_only";
+  for (const k of keys.slice(1)) delete process.env[k];
+  const calls: string[] = [];
+  let acceptMilestone!: () => void;
+  proto.send = function (payload: { subject: string }) {
+    calls.push(payload.subject);
+    if (payload.subject === "milestone") return new Promise((r) => { acceptMilestone = () => r({ data: { id: "re_m" }, error: null }); });
+    return Promise.resolve({ data: { id: `re_${calls.length}` }, error: null });
+  };
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await fn({ calls, acceptMilestone: () => acceptMilestone() });
+  } finally {
+    console.log = log;
+    proto.send = original;
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test("REGRESSION — provider completes after the old 60 s takeover point: no other email to the operator starts while it's in flight; the initial setup email is queued and sent under the claim afterwards", async () => {
+  const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
+  const { runHoldingContactClaim } = await import("../../../src/lib/activation/setupContactClaimGuard");
+  const { sendTransactionalEmail } = await import("../../../src/lib/email");
+  const { processDeferredInitialSetupEmails } = await import("../../../src/lib/activation/deferredInitialSetup");
+  const { createMemoryDeferredSetupStore } = await import("./support/memoryDeferredSetupStore");
+  const { ops, coordinator } = contactStore();
+
+  await withControlledResend(async ({ calls, acceptMilestone }) => {
+    // A milestone holder takes the claim and starts its provider request…
+    const token = (await coordinator.claim("op-1", "milestone", NOW))!;
+    const milestone = runHoldingContactClaim("op-1", token, () =>
+      sendTransactionalEmail({ type: "customer_success_milestone", to: "gm@venue.example", subject: "milestone", html: "<p/>", text: "t", criticality: "standard" })
+    );
+    for (let i = 0; i < 200 && calls.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
+    assert.deepEqual(calls, ["milestone"], "the milestone's provider request has started");
+
+    // …which hasn't completed 61 s later (where the 60 s claim used to be taken over).
+    let initialSent = false;
+    const initial = await silenced(() =>
+      withAutomaticSetupContact(
+        { operatorId: "op-1", coordinator, now: () => new Date(NOW.getTime() + 61_000), waitMs: 1000, pollMs: 500, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT },
+        async () => {
+          initialSent = true;
+          return { ok: true };
+        }
+      )
+    );
+    assert.deepEqual(initial, { ok: true, queued: true }, "queued, not sent beside the in-flight milestone");
+    assert.equal(initialSent, false);
+    assert.equal(await coordinator.claim("op-1", "reminder", new Date(NOW.getTime() + 5 * 60_000)), null, "still not replaceable at 5 min");
+    assert.deepEqual(calls, ["milestone"], "nothing else reached the provider while the milestone was in flight");
+
+    // The provider finally accepts the milestone; the holder records it and releases.
+    acceptMilestone();
+    assert.equal((await milestone).ok, true);
+    await coordinator.recordMilestone("op-1", NOW, "accepted");
+    await coordinator.release("op-1", token);
+
+    // The hourly worker sends the queued email — under the claim, after the milestone.
+    const { store, lifecycles } = createMemoryDeferredSetupStore(ops.rows as never);
+    lifecycles.set("op-1", { id: "lc-1", originType: "claim", originClaimId: "claim-1", originSubmissionId: null, verificationRequired: true });
+    let claimDuringSend: string | null = null;
+    const r = await processDeferredInitialSetupEmails(null as never, new Date(NOW.getTime() + H), {
+      store,
+      coordinator,
+      sendEmail: async () => {
+        claimDuringSend = ops.rows[0].setup_contact_claim_kind;
+        return sendTransactionalEmail({ type: "operator_activation", to: "gm@venue.example", subject: "setup", html: "<p/>", text: "t", criticality: "standard" });
+      },
+      writeNote: (async () => ({ ok: true })) as any,
+      sendAlert: (async () => "delivered") as any,
+    });
+    assert.equal(r.sent, 1);
+    assert.equal(claimDuringSend, "initial_setup");
+    assert.deepEqual(calls, ["milestone", "setup"], "the setup email went out only after the milestone completed");
+    assert.equal((ops.rows[0] as any).initial_setup_deferred_at, null, "queue entry cleared");
+    assert.equal(ops.rows[0].setup_contact_claimed_at, null);
+  });
+});
 
 test("initial setup email with the claim free: evidence recorded under the claim, then released; a later milestone defers 48 h", async () => {
   const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
   const { ops, coordinator } = contactStore();
   let claimDuringSend: string | null = null;
-  const result = await withAutomaticSetupContact({ operatorId: "op-1", coordinator, now: () => NOW }, async () => {
+  const result = await withAutomaticSetupContact({ operatorId: "op-1", coordinator, now: () => NOW, onDeferred: QUEUED, onUnavailable: NOT_SENT }, async () => {
     claimDuringSend = ops.rows[0].setup_contact_claim_kind;
     return { ok: true };
   });
@@ -303,13 +409,14 @@ test("initial setup email with the claim free: evidence recorded under the claim
   assert.equal(r.deferredForSetupContact, 1);
 });
 
-test("initial setup email while a milestone is mid-send: it waits for the milestone to finish, then sends (never at the same moment)", async () => {
+test("initial setup email while a milestone is mid-send: it waits for the milestone to finish, then sends under its own claim (never at the same moment)", async () => {
   const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
-  const { coordinator } = contactStore();
+  const { ops, coordinator } = contactStore();
   const delivery = milestoneWorld();
   const order: string[] = [];
   let initial: Promise<unknown> | null = null;
   let sleeps = 0;
+  let claimAtInitialSend: string | null = null;
   await runMilestones(delivery, coordinator, NOW, async () => {
     order.push("milestone-start");
     initial = withAutomaticSetupContact(
@@ -317,6 +424,8 @@ test("initial setup email while a milestone is mid-send: it waits for the milest
         operatorId: "op-1",
         coordinator,
         now: () => NOW,
+        onDeferred: QUEUED,
+        onUnavailable: NOT_SENT,
         sleep: async () => {
           sleeps++;
           await new Promise((r) => setImmediate(r));
@@ -324,6 +433,7 @@ test("initial setup email while a milestone is mid-send: it waits for the milest
       },
       async () => {
         order.push("initial-send");
+        claimAtInitialSend = ops.rows[0].setup_contact_claim_kind;
         return { ok: true };
       }
     );
@@ -334,45 +444,135 @@ test("initial setup email while a milestone is mid-send: it waits for the milest
   await initial;
   assert.deepEqual(order, ["milestone-start", "milestone-end", "initial-send"]);
   assert.ok(sleeps >= 1, "it waited for the milestone's claim");
+  assert.equal(claimAtInitialSend, "initial_setup", "sent while holding its own claim");
 });
 
-test("initial setup email whose wait expires: never refused — it logs, records evidence and sends", async () => {
-  const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
+test("initial setup email behind a crashed holder's claim: queued within the short wait (never a 6-minute request); the worker sends it once the claim has gone stale", async () => {
+  const { withAutomaticSetupContact, INITIAL_SETUP_CLAIM_WAIT_MS } = await import("../../../src/lib/activation/setupContactAutomatic");
+  const { processDeferredInitialSetupEmails } = await import("../../../src/lib/activation/deferredInitialSetup");
+  const { createMemoryDeferredSetupStore } = await import("./support/memoryDeferredSetupStore");
   const { ops, coordinator } = contactStore();
   ops.rows[0].setup_contact_claimed_at = NOW.toISOString();
   ops.rows[0].setup_contact_claim_kind = "milestone";
-  const warnings: unknown[] = [];
-  const realWarn = console.warn;
-  console.warn = (...a: unknown[]) => { warnings.push(a); };
-  try {
-    let sent = false;
-    await withAutomaticSetupContact({ operatorId: "op-1", coordinator, now: () => NOW, waitMs: 1000, pollMs: 500, sleep: async () => {} }, async () => {
-      sent = true;
-      return { ok: true };
-    });
-    assert.equal(sent, true);
-  } finally {
-    console.warn = realWarn;
-  }
-  assert.ok(warnings.some((w) => /still in flight/.test(String((w as unknown[])[0]))), "explicit warning, never silent");
-  assert.equal(ops.rows[0].last_setup_contact_kind, "setup_email");
+  let waited = 0;
+  let sent = 0;
+  const r = await silenced(() =>
+    withAutomaticSetupContact(
+      { operatorId: "op-1", coordinator, now: () => new Date(NOW.getTime() + waited), sleep: async (ms: number) => { waited += ms; }, onDeferred: QUEUED, onUnavailable: NOT_SENT },
+      async () => {
+        sent++;
+        return { ok: true };
+      }
+    )
+  );
+  assert.deepEqual(r, { ok: true, queued: true });
+  assert.equal(sent, 0);
+  assert.ok(waited <= INITIAL_SETUP_CLAIM_WAIT_MS);
   assert.equal(ops.rows[0].setup_contact_claim_kind, "milestone", "the other holder's claim is untouched");
+  assert.equal(ops.rows[0].last_setup_contact_at, null, "no evidence for an email that wasn't sent");
+
+  const { store, lifecycles } = createMemoryDeferredSetupStore(ops.rows as never);
+  lifecycles.set("op-1", { id: "lc-1", originType: "claim", originClaimId: "claim-1", originSubmissionId: null, verificationRequired: false });
+  const sends: string[] = [];
+  const deps = { store, coordinator, sendEmail: async () => { sends.push(ops.rows[0].setup_contact_claim_kind!); return { ok: true }; }, writeNote: (async () => ({ ok: true })) as any, sendAlert: (async () => "delivered") as any };
+  const early = await processDeferredInitialSetupEmails(null as never, new Date(NOW.getTime() + SETUP_CONTACT_CLAIM_TTL_MS - 1000), deps);
+  assert.equal(early.busy, 1, "a claim younger than its lifetime is never replaced");
+  assert.equal(sends.length, 0);
+  const later = await processDeferredInitialSetupEmails(null as never, new Date(NOW.getTime() + SETUP_CONTACT_CLAIM_TTL_MS + 1000), deps);
+  assert.equal(later.sent, 1);
+  assert.deepEqual(sends, ["initial_setup"]);
+  assert.equal(ops.rows[0].last_milestone_contact_status, "unconfirmed", "the crashed milestone was folded in as a possible contact");
 });
 
-test("re-entrant: a nested automatic send for the same operator runs immediately instead of waiting on its own claim", async () => {
-  const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
+test("initial setup email: if it can be neither claimed nor queued, it is NOT sent — the caller's failure result and one #ops-critical alert", async () => {
+  const { withAutomaticSetupContact, INITIAL_SETUP_UNAVAILABLE_MESSAGE } = await import("../../../src/lib/activation/setupContactAutomatic");
   const { coordinator } = contactStore();
+  const down = { ...coordinator, claim: async () => { throw new Error("db down"); }, deferInitialSetup: async () => false } as any;
+  const alerts: any[] = [];
+  let sent = false;
+  const r = await silenced(() =>
+    withAutomaticSetupContact(
+      { operatorId: "op-1", coordinator: down, now: () => NOW, waitMs: 1000, pollMs: 500, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT, sendAlert: (async (a: any) => { alerts.push(a); return "delivered"; }) as any },
+      async () => {
+        sent = true;
+        return { ok: true };
+      }
+    )
+  );
+  assert.equal(sent, false);
+  assert.deepEqual(r, { ok: false, error: INITIAL_SETUP_UNAVAILABLE_MESSAGE });
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].channel, "ops-critical");
+});
+
+test("initial setup email: a claim error is retried, never treated as permission to send; a persistent one queues it", async () => {
+  const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
+  const { ops, coordinator } = contactStore();
+  let failures = 2;
+  const flaky = { ...coordinator, claim: async (...a: Parameters<typeof coordinator.claim>) => (failures-- > 0 ? Promise.reject(new Error("db blip")) : coordinator.claim(...a)) } as any;
+  let sends = 0;
+  const ok = await withAutomaticSetupContact({ operatorId: "op-1", coordinator: flaky, now: () => NOW, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT }, async () => {
+    sends++;
+    return { ok: true };
+  });
+  assert.deepEqual(ok, { ok: true });
+  assert.equal(sends, 1);
+
+  const down = { ...coordinator, claim: async () => { throw new Error("db down"); } } as any;
+  const queued = await silenced(() =>
+    withAutomaticSetupContact({ operatorId: "op-1", coordinator: down, now: () => NOW, waitMs: 1000, pollMs: 500, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT }, async () => {
+      sends++;
+      return { ok: true };
+    })
+  );
+  assert.deepEqual(queued, { ok: true, queued: true });
+  assert.equal(sends, 1, "not sent without the claim");
+  assert.ok((ops.rows[0] as any).initial_setup_deferred_at, "queued durably");
+});
+
+test("re-entrant: a nested automatic send for the same operator runs immediately inside the outer claim", async () => {
+  const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
+  const { ops, coordinator } = contactStore();
   let sleeps = 0;
-  const opts = { operatorId: "op-1", coordinator, now: () => NOW, sleep: async () => { sleeps++; } };
-  const inner = await withAutomaticSetupContact(opts, () => withAutomaticSetupContact(opts, async () => "inner-sent"));
+  const opts = { operatorId: "op-1", coordinator, now: () => NOW, onDeferred: () => "queued", onUnavailable: (e: string) => e, sleep: async () => { sleeps++; } };
+  let claimAtInner: string | null = null;
+  const inner = await withAutomaticSetupContact(opts, () =>
+    withAutomaticSetupContact(opts, async () => {
+      claimAtInner = ops.rows[0].setup_contact_claim_kind;
+      return "inner-sent";
+    })
+  );
   assert.equal(inner, "inner-sent");
   assert.equal(sleeps, 0);
+  assert.equal(claimAtInner, "initial_setup");
 });
 
-test("initial setup email: unknown/activated recipient or coordination failure never blocks the send", async () => {
+test("initial setup email: no unactivated operator for the recipient (unknown address, or activated/returning operator) → nothing to coordinate, sent directly", async () => {
   const { withAutomaticSetupContact } = await import("../../../src/lib/activation/setupContactAutomatic");
   const { coordinator } = contactStore();
-  assert.equal(await withAutomaticSetupContact({ email: "nobody@x.test", coordinator, admin: createFakeOperatorsContactClient([]).client }, async () => "sent"), "sent");
-  const broken = { ...coordinator, claim: async () => { throw new Error("db down"); }, recordSetupContact: async () => false } as any;
-  assert.equal(await withAutomaticSetupContact({ operatorId: "op-1", coordinator: broken }, async () => "sent"), "sent");
+  const p = { onDeferred: () => "queued", onUnavailable: (e: string) => e };
+  assert.equal(await withAutomaticSetupContact({ ...p, email: "nobody@x.test", coordinator, admin: createFakeOperatorsContactClient([]).client }, async () => "sent"), "sent");
+  const activated = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-a", email: "a@x.test", account_activated_at: "2026-10-01T00:00:00Z" })], { postgrestTimestamps: true });
+  const activatedCoordinator = createSetupContactCoordinator(activated.client);
+  activated.rows[0].setup_contact_claimed_at = NOW.toISOString(); // even a busy claim doesn't matter for an activated operator
+  assert.equal(await withAutomaticSetupContact({ ...p, email: "a@x.test", coordinator: activatedCoordinator }, async () => "sent"), "sent");
+  assert.equal(await withAutomaticSetupContact({ ...p, operatorId: "op-a", coordinator: activatedCoordinator, now: () => NOW }, async () => "sent"), "sent");
+});
+
+test("timing invariants: the claim outlives any request a holder can have in flight; the initial wait fits a request; queued delivery covers the rest", async () => {
+  const { INITIAL_SETUP_CLAIM_WAIT_MS } = await import("../../../src/lib/activation/setupContactAutomatic");
+  const { SETUP_CONTACT_SEND_START_WINDOW_MS } = await import("../../../src/lib/activation/setupContactPolicy");
+  const NODE_FETCH_HEADERS_TIMEOUT_MS = 300_000;
+  const VERCEL_FUNCTION_LIMIT_MS = 300_000; // project default (fluid compute), no route overrides it
+  assert.ok(SETUP_CONTACT_CLAIM_TTL_MS > SETUP_CONTACT_SEND_START_WINDOW_MS + NODE_FETCH_HEADERS_TIMEOUT_MS);
+  assert.ok(INITIAL_SETUP_CLAIM_WAIT_MS * 10 <= VERCEL_FUNCTION_LIMIT_MS, "a small fraction of the request budget");
+  assert.ok(INITIAL_SETUP_CLAIM_WAIT_MS < SETUP_CONTACT_CLAIM_TTL_MS, "the request never waits out a claim — it queues instead");
+});
+
+test("claims are stamped with the wall clock, never a worker's earlier pass time", async () => {
+  const ops = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1" })]);
+  const later = new Date(NOW.getTime() + 45_000);
+  const c = createSetupContactCoordinator(ops.client, { clock: () => later });
+  const token = await c.claim("op-1", "milestone", NOW);
+  assert.equal(token, later.toISOString(), "a pass that started 45 s ago must not make a fresh claim look 45 s old");
 });

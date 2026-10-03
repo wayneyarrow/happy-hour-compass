@@ -27,6 +27,12 @@ import {
  * "still finishing" (founder) or retries on a later pass (workers). Founder
  * actions are exempt from the 48 h spacing rule, never from the claim.
  *
+ * BOUNDED START: every holder sends inside runHoldingContactClaim()
+ * (setupContactClaimGuard.ts), so its provider request starts within 20 s of
+ * the claim. A started request is never abandoned (it can't be cancelled), so
+ * the claim lives SETUP_CONTACT_CLAIM_TTL_MS (6 min) before it is folded and
+ * replaced; initial setup emails queue rather than wait that long.
+ *
  * SAFE RELEASE: a holder releases its claim only after its evidence write
  * succeeded, and only by CAS on its own token (an old request can never
  * clear a newer claim). If the evidence write failed, the claim is left to
@@ -61,6 +67,8 @@ function isAfter(a: string, b: string | null): boolean {
 /** The coordination surface the two workers use (injectable for tests). */
 export type SetupContactCoordinator = {
   read(operatorId: string): Promise<OperatorContactState | null>;
+  /** The UNACTIVATED operator who owns `email`, or null (none, or already activated). Throws on read failure. */
+  findUnactivatedOperatorId(email: string): Promise<string | null>;
   /** Takes the operator's contact claim; returns the stored claim token, or null if another worker holds it. */
   claim(operatorId: string, kind: SetupContactClaimKind, now: Date): Promise<string | null>;
   /** Clears the claim only if it is still `token` (never someone else's). */
@@ -75,6 +83,16 @@ export type SetupContactCoordinator = {
   recordSetupContact(operatorId: string, kind: SetupContactKind, at: Date): Promise<boolean>;
   /** Records a Copy-setup-link pause. False only on write failure. */
   recordPause(operatorId: string, at: Date): Promise<boolean>;
+  /**
+   * Queues an initial setup email (migration 105) for the hourly worker to
+   * send under the claim (deferredInitialSetup.ts). The LATEST request wins:
+   * a newer request moves the timestamp forward (never back), so one that
+   * arrives while an older one is being sent is never swallowed by the
+   * worker clearing the older one. True once a request at or after `at` is
+   * queued; false only when the write failed (the email is then neither
+   * sent nor queued — the caller must report it).
+   */
+  deferInitialSetup(operatorId: string, at: Date): Promise<boolean>;
 };
 
 async function readState(admin: AdminClient, operatorId: string): Promise<OperatorContactState | null> {
@@ -91,7 +109,7 @@ async function readState(admin: AdminClient, operatorId: string): Promise<Operat
 async function setIfLater(
   admin: AdminClient,
   operatorId: string,
-  column: "last_setup_contact_at" | "last_setup_pause_at" | "last_milestone_contact_at",
+  column: "last_setup_contact_at" | "last_setup_pause_at" | "last_milestone_contact_at" | "last_setup_email_accepted_at" | "initial_setup_deferred_at",
   at: string,
   extra: Record<string, unknown> = {},
   filters: { unactivatedOnly?: boolean } = {}
@@ -112,9 +130,17 @@ async function setIfLater(
   return "not_newer";
 }
 
-export function createSetupContactCoordinator(admin: AdminClient): SetupContactCoordinator {
+export function createSetupContactCoordinator(admin: AdminClient, opts: { clock?: () => Date } = {}): SetupContactCoordinator {
+  const clock = opts.clock ?? (() => new Date());
   return {
     read: (operatorId) => readState(admin, operatorId),
+
+    async findUnactivatedOperatorId(email) {
+      const { data, error } = await admin.from("operators").select("id, account_activated_at").eq("email", email.trim().toLowerCase()).maybeSingle();
+      if (error) throw new Error(`operator lookup failed: ${error.message}`);
+      if (!data || (data as Row).account_activated_at) return null;
+      return (data as Row).id as string;
+    },
 
     async claim(operatorId, kind, now) {
       const state = await readState(admin, operatorId);
@@ -132,7 +158,10 @@ export function createSetupContactCoordinator(admin: AdminClient): SetupContactC
           await setIfLater(admin, operatorId, "last_setup_pause_at", state.claimedAt);
         }
       }
-      const claimedAt = now.toISOString();
+      // Stamped with the wall clock (never earlier): a worker's `now` is its
+      // pass start, and a claim stamped in the past would look stale to
+      // other claimers while its holder is still inside its send window.
+      const claimedAt = new Date(Math.max(now.getTime(), clock().getTime())).toISOString();
       const base = admin
         .from("operators")
         .update({ setup_contact_claimed_at: claimedAt, setup_contact_claim_kind: kind })
@@ -172,6 +201,20 @@ export function createSetupContactCoordinator(admin: AdminClient): SetupContactC
       );
     },
 
+    async deferInitialSetup(operatorId, at) {
+      try {
+        const result = await setIfLater(admin, operatorId, "initial_setup_deferred_at", at.toISOString(), {
+          initial_setup_deferred_attempts: 0,
+          initial_setup_deferred_last_error: null,
+        });
+        // "not_newer": an equal or newer request is already queued.
+        return result !== "no_match";
+      } catch (err) {
+        console.warn("[setupContactStore] Initial-setup queue write failed.", { operatorId, error: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+    },
+
     async recordPause(operatorId, at) {
       return guarded("Setup-pause", operatorId, () => setIfLater(admin, operatorId, "last_setup_pause_at", at.toISOString(), {}, { unactivatedOnly: true }));
     },
@@ -185,6 +228,29 @@ async function guarded(label: string, operatorId: string, write: () => Promise<u
   } catch (err) {
     console.warn(`[setupContactStore] ${label} evidence write failed.`, { operatorId, error: err instanceof Error ? err.message : String(err) });
     return false;
+  }
+}
+
+/**
+ * CONFIRMED delivery evidence (migration 105): stamps
+ * operators.last_setup_email_accepted_at with the ATTEMPT START time of a
+ * setup email the provider accepted, for whichever UNACTIVATED operator owns
+ * `recipientEmail`. Called by sendTransactionalEmail() only after
+ * acceptance. Never throws.
+ */
+export async function recordSetupEmailAcceptedForRecipient(
+  admin: AdminClient,
+  params: { recipientEmail: string; attemptStartedAt: Date }
+): Promise<"written" | "not_newer" | "no_match" | "error"> {
+  try {
+    const email = params.recipientEmail.trim().toLowerCase();
+    const { data, error } = await admin.from("operators").select("id, account_activated_at").eq("email", email).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data || (data as Row).account_activated_at) return "no_match";
+    return await setIfLater(admin, (data as Row).id as string, "last_setup_email_accepted_at", params.attemptStartedAt.toISOString(), {}, { unactivatedOnly: true });
+  } catch (err) {
+    console.warn("[setupContactStore] Setup-email acceptance evidence write failed.", { error: err instanceof Error ? err.message : String(err) });
+    return "error";
   }
 }
 

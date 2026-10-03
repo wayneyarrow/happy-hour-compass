@@ -13,6 +13,7 @@ import { sendContinueSetupEmail, type ContinueSetupOrigin } from "./emailCodeVer
 import type { ClaimActivationLifecycleResult } from "./activationLifecycle";
 import type { EmailRecordContext } from "@/lib/email";
 import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
+import type { SetupContactCoordinator } from "@/lib/activation/setupContactStore";
 
 /**
  * The ONE decision point for whether a newly approved operator uses the
@@ -101,13 +102,24 @@ export async function planActivationVerificationMode(
 export type DeferredActivationResult =
   /** Founder approval: continue-setup email (link to /operator/verify) sent. */
   | { kind: "continue_email_sent" }
-  /** In-flow submission: first code issued (or attempted); redirect the browser here. */
-  | { kind: "code_issued"; verificationPath: string }
+  /**
+   * In-flow submission: first code issued (or attempted); redirect the browser
+   * here. `codeStatus` is the issue result ("code_sent", "send_failed", …) —
+   * the screen shows it either way, so the founder-facing wording uses it.
+   */
+  | { kind: "code_issued"; verificationPath: string; codeStatus?: string }
   /** The lifecycle turned out to be legacy (reused) or couldn't be created — legacy setup email sent instead. */
   | { kind: "legacy_fallback_sent" }
   /** Operator activated in the meantime — nothing to send. */
   | { kind: "nothing_to_send" }
-  | { kind: "failed"; error: string };
+  /**
+   * Another email to this operator held the contact claim: the setup email
+   * was queued and the hourly operator-activation worker sends it under the
+   * claim (setupContactAutomatic.ts / deferredInitialSetup.ts).
+   */
+  | { kind: "setup_email_queued" }
+  /** Not sent. `uncertain`: the provider's response was unclear, so it may have arrived. */
+  | { kind: "failed"; error: string; uncertain?: boolean };
 
 export type DeliverDeferredActivationDeps = {
   adminClient?: SupabaseClient;
@@ -116,6 +128,8 @@ export type DeliverDeferredActivationDeps = {
   sendContinueEmail?: typeof sendContinueSetupEmail;
   issueCode?: typeof issueVerificationCodeForLifecycle;
   generateLink?: typeof generateLinkWithRetry;
+  /** Test seam: the per-operator contact coordinator (defaults to the real store over `adminClient`). */
+  contactCoordinator?: SetupContactCoordinator;
 };
 
 /**
@@ -150,7 +164,7 @@ export async function deliverDeferredActivationStart(
     requestIp?: string | null;
     logTag: string;
     /** The exact legacy email this call site would have sent from provisioning. */
-    sendLegacySetupEmail: (setupLink: string, record: EmailRecordContext) => Promise<{ ok: boolean; error?: string }>;
+    sendLegacySetupEmail: (setupLink: string, record: EmailRecordContext) => Promise<{ ok: boolean; error?: string; deliveryUncertain?: boolean }>;
   },
   deps: DeliverDeferredActivationDeps = {}
 ): Promise<DeferredActivationResult> {
@@ -166,12 +180,22 @@ export async function deliverDeferredActivationStart(
   const lifecycle =
     lifecycleResult.decision === "started" || lifecycleResult.decision === "reused" ? lifecycleResult.lifecycle : null;
 
-  // Coordinated with the per-operator contact claim (migration 104): waits
-  // briefly for any in-flight automated email to this operator, never
-  // refuses (setupContactAutomatic.ts). Covers the first code, the continue
+  // Sent only under the per-operator contact claim (migration 104): waits
+  // briefly for any in-flight automated email to this operator; if the claim
+  // stays busy the email is queued for the hourly worker
+  // ("setup_email_queued"), and only if it can't be queued is the result
+  // "failed" (setupContactAutomatic.ts). Covers the first code, the continue
   // email and the legacy fallback alike.
   return withAutomaticSetupContact(
-    { operatorId: lifecycle?.operatorId ?? null, email: recipient.email, admin, logTag },
+    {
+      operatorId: lifecycle?.operatorId ?? null,
+      email: recipient.email,
+      admin,
+      coordinator: deps.contactCoordinator,
+      logTag,
+      onDeferred: (): DeferredActivationResult => ({ kind: "setup_email_queued" }),
+      onUnavailable: (error): DeferredActivationResult => ({ kind: "failed", error, uncertain: false }),
+    },
     async (): Promise<DeferredActivationResult> => {
 
     if (lifecycle?.verificationRequired && secret) {
@@ -181,8 +205,8 @@ export async function deliverDeferredActivationStart(
           // The page reflects whatever happened here (sent, cooldown from a
           // concurrent request, or send_failed with a resend button) — the
           // redirect happens regardless, so the operator stays in the flow.
-          await (deps.issueCode ?? issueVerificationCodeForLifecycle)(lifecycle.id, { requestIp }, { adminClient: admin, secret });
-          return { kind: "code_issued", verificationPath };
+          const issued = await (deps.issueCode ?? issueVerificationCodeForLifecycle)(lifecycle.id, { requestIp }, { adminClient: admin, secret });
+          return { kind: "code_issued", verificationPath, codeStatus: (issued as { status?: string } | undefined)?.status };
         }
       } else {
         const continueUrl = buildVerificationContinueUrl(lifecycle.id, { secret, siteUrl });
@@ -196,7 +220,7 @@ export async function deliverDeferredActivationStart(
           });
           if (sent.ok) return { kind: "continue_email_sent" };
           console.error(`${logTag} Continue-setup email failed.`, { lifecycleId: lifecycle.id, error: sent.error });
-          return { kind: "failed", error: sent.error ?? "Continue-setup email failed." };
+          return { kind: "failed", error: sent.error ?? "Continue-setup email failed.", uncertain: sent.deliveryUncertain !== false };
         }
       }
     }
@@ -210,12 +234,12 @@ export async function deliverDeferredActivationStart(
     });
     if (error || !data?.properties?.action_link) {
       console.error(`${logTag} Legacy fallback setup link generation failed.`, { error: error?.message });
-      return { kind: "failed", error: error?.message ?? "Setup link generation failed." };
+      return { kind: "failed", error: error?.message ?? "Setup link generation failed.", uncertain: false };
     }
     const sent = await sendLegacySetupEmail(data.properties.action_link, lifecycle ? { lifecycleId: lifecycle.id } : {});
     if (!sent.ok) {
       console.error(`${logTag} Legacy fallback setup email failed.`, { error: sent.error });
-      return { kind: "failed", error: sent.error ?? "Setup email failed." };
+      return { kind: "failed", error: sent.error ?? "Setup email failed.", uncertain: sent.deliveryUncertain !== false };
     }
     return { kind: "legacy_fallback_sent" };
     }

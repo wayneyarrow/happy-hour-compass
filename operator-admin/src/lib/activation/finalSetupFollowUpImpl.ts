@@ -15,6 +15,7 @@ import {
   isSetupLinkClaimActive,
   isReminderLeaseActive,
 } from "@/lib/activation/setupLinkLock";
+import { runHoldingContactClaim } from "@/lib/activation/setupContactClaimGuard";
 
 /**
  * Founder post-expiry personal follow-up (migration 103): "Final resend
@@ -477,20 +478,23 @@ export async function sendFinalSetupEmailImpl(
   const contactRecorded = await coordinator.recordSetupContact(ctx.operatorId, "founder_final_resend", (deps.now ?? (() => new Date()))());
 
   try {
-    const sendPromise = (deps.sendEmail ?? sendFinalSetupEmail)({
-      to: ctx.email,
-      firstName: ctx.firstName,
-      venueName: ctx.venueName,
-      setupLink: link,
-      record: {
-        venueId: ctx.venueId,
-        operatorId: ctx.operatorId,
-        lifecycleId: ctx.lifecycleId,
-        claimId: origin.type === "claim" ? origin.claimId : null,
-        submissionId: origin.type === "submission" ? origin.submissionId : null,
-        context: { trigger: "final_follow_up" },
-      },
-    });
+    // Under the contact claim, the send is time-bounded (setupContactClaimGuard.ts).
+    const sendPromise = runHoldingContactClaim(ctx.operatorId, contactToken, () =>
+      (deps.sendEmail ?? sendFinalSetupEmail)({
+        to: ctx.email,
+        firstName: ctx.firstName,
+        venueName: ctx.venueName,
+        setupLink: link,
+        record: {
+          venueId: ctx.venueId,
+          operatorId: ctx.operatorId,
+          lifecycleId: ctx.lifecycleId,
+          claimId: origin.type === "claim" ? origin.claimId : null,
+          submissionId: origin.type === "submission" ? origin.submissionId : null,
+          context: { trigger: "final_follow_up" },
+        },
+      })
+    );
     const bounded = await withTimeout(sendPromise, deps.timeoutsMs?.send ?? FINAL_SEND_TIMEOUT_MS);
 
     if (bounded.timedOut) {
@@ -571,7 +575,9 @@ export async function sendFinalSetupEmailImpl(
   } finally {
     // Never clears a newer request's claim (CAS on our own claimedAt).
     if (!keepClaim) await releaseSetupLinkLock(admin, ctx.lifecycleId, claimedAt);
-    if (contactRecorded) await coordinator.release(ctx.operatorId, contactToken);
+    // A timed-out send may still be accepted: keep the contact claim too, so
+    // no other email to this operator starts until it goes stale.
+    if (contactRecorded && !keepClaim) await coordinator.release(ctx.operatorId, contactToken);
   }
 }
 

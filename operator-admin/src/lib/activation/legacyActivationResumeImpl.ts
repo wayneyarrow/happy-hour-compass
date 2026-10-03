@@ -12,6 +12,7 @@ import {
   type ResolvedLegacyActivationOrigin,
 } from "@/lib/activation/activationPresentation";
 import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
+import type { SetupContactCoordinator } from "@/lib/activation/setupContactStore";
 
 /**
  * Implementation for the Phase 1C controlled legacy-activation-resume
@@ -92,6 +93,8 @@ type SendSetupEmailFn = (args: {
  * forbids sending a real email during implementation or testing.
  */
 export type LegacyActivationResumeDeps = {
+  /** Test seam: the per-operator contact coordinator (defaults to the real store over the admin client). */
+  contactCoordinator?: SetupContactCoordinator;
   authClient?: Awaited<ReturnType<typeof createClient>>;
   adminClient?: ReturnType<typeof createAdminClient>;
   checkAdmin?: (email: string | undefined) => Promise<boolean>;
@@ -252,7 +255,17 @@ async function resumeLegacyActivation(
 
   const sendSetupEmail: SendSetupEmailFn =
     deps.sendSetupEmail ?? (origin.type === "claim" ? sendPasswordSetupEmail : sendOperatorActivationEmail);
-  const emailResult = await withAutomaticSetupContact({ operatorId, admin: supabase as never, logTag: "[legacyActivationResume]" }, () => sendSetupEmail({
+  const emailResult = await withAutomaticSetupContact<{ ok: boolean; error?: string; queued?: boolean }>({
+    operatorId,
+    admin: supabase as never,
+    coordinator: deps.contactCoordinator,
+    logTag: "[legacyActivationResume]",
+    // Queued for the hourly worker when another email holds the claim.
+    onDeferred: () => ({ ok: true, queued: true }),
+    // Nothing sent or queued: the failure path below alerts #ops-critical itself.
+    onUnavailable: (error) => ({ ok: false, error }),
+    alertOnUnavailable: false,
+  }, () => sendSetupEmail({
     to: email,
     firstName,
     setupLink: linkData.properties.action_link,
@@ -302,8 +315,11 @@ async function resumeLegacyActivation(
 
   // ── 9. Write exactly one structured, founder-attributed note — only after
   // successful delivery. Never the setup link/token/token hash. ────────────
+  // Queued = another email to this operator held the contact claim; the
+  // hourly operator-activation worker sends it under the claim.
+  const sentWording = emailResult.queued ? `setup email queued for ${email} (sent automatically within the hour)` : `setup email sent to ${email}`;
   const notePayload = {
-    note: `Activation tracking started (controlled legacy resume) — setup email sent to ${email} by founder.`,
+    note: `Activation tracking started (controlled legacy resume) — ${sentWording} by founder.`,
     event_type: "legacy_activation_resumed",
     metadata_json: {
       lifecycleId: lifecycle.id,
@@ -346,11 +362,11 @@ async function resumeLegacyActivation(
     });
     return {
       success: true,
-      successAction: `Activation tracking started — setup email sent to ${email} (Internal Note could not be recorded)`,
+      successAction: `Activation tracking started — ${sentWording} (Internal Note could not be recorded)`,
     };
   }
 
-  return { success: true, successAction: `Activation tracking started — setup email sent to ${email}` };
+  return { success: true, successAction: `Activation tracking started — ${sentWording}` };
 }
 
 /**

@@ -23,10 +23,23 @@
 export const SETUP_CONTACT_SPACING_MS = 48 * 60 * 60 * 1000;
 
 /**
- * Lifetime of an automated worker's per-operator claim. Longer than any
- * worker invocation (cron routes run with maxDuration = 60 s) and than
- * Node's default 5-minute fetch headers timeout, so a live send always
- * finishes or dies before its claim can be considered stale.
+ * A claim holder may START a provider request for a setup or milestone
+ * email only within this long after taking the claim; later, nothing is
+ * sent (enforced in sendTransactionalEmail via setupContactClaimGuard.ts).
+ */
+export const SETUP_CONTACT_SEND_START_WINDOW_MS = 20 * 1000;
+
+/**
+ * Lifetime of a per-operator contact claim. A holder never releases while
+ * its provider request is unresolved, and the request can't be cancelled
+ * (the Resend SDK takes no abort signal, and an aborted request may already
+ * have been accepted). So the claim must outlive any request a crashed or
+ * stuck holder could still have in flight: it starts within
+ * SETUP_CONTACT_SEND_START_WINDOW_MS, and Node's fetch gives up waiting for
+ * response headers after 5 minutes (functions are also capped at 300 s on
+ * this Vercel project, crons at 60 s). Never shorten this to fit a
+ * synchronous wait — initial setup emails defer instead
+ * (setupContactAutomatic.ts).
  */
 export const SETUP_CONTACT_CLAIM_TTL_MS = 6 * 60 * 1000;
 

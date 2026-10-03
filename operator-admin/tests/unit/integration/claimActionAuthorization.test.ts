@@ -126,7 +126,7 @@ for (const { label, user, expected } of DENIED) {
 test("reviewClaimAction: an authorized admin can still APPROVE — the existing approval behaviour runs unchanged", async () => {
   signInAs(ADMIN);
   const result = await reviewClaimAction(CLAIM_ID, {}, form({ action: "approve" }));
-  assert.deepEqual(result, { success: true, successAction: "Approved — password setup email sent" });
+  assert.deepEqual(result, { success: true, successAction: "Approved — setup email sent" });
   const claim = world.tables.venue_claims[0];
   assert.equal(claim.status, "approved");
   assert.equal(claim.reviewed_by, ADMIN.id);
@@ -139,6 +139,49 @@ test("reviewClaimAction: an authorized admin can still APPROVE — the existing 
   const toClaimant = world.emails.filter((e) => e.to === "claimant@fixture.example");
   assert.equal(toClaimant.length, 1);
   assert.match(toClaimant[0].subject, /claim was approved — set up your password/);
+  assert.ok(world.tables.venue_claim_notes.some((n) => n.note === "Claim approved — operator account provisioned; setup email sent to claimant@fixture.example."));
+});
+
+test("reviewClaimAction: setup email with an UNCLEAR provider error → approval rolled back, and the founder is told the email may still arrive with a dead link", async () => {
+  signInAs(ADMIN);
+  world.emailSendFails = true;
+  const result = await reviewClaimAction(CLAIM_ID, {}, form({ action: "approve" }));
+  world.emailSendFails = false;
+  assert.match(result.error ?? "", /setup email's delivery is unconfirmed — if it arrives, its link won't work because the approval was rolled back/);
+  assert.equal(world.tables.venue_claims[0].status, "pending");
+  assert.equal(world.tables.venues[0].claimed_by, null);
+});
+
+test("reviewClaimAction: setup email DEFINITELY rejected → approval rolled back with a plain failure (no 'unconfirmed')", async () => {
+  signInAs(ADMIN);
+  world.emailSendFails = "rejected";
+  const result = await reviewClaimAction(CLAIM_ID, {}, form({ action: "approve" }));
+  world.emailSendFails = false;
+  assert.ok(result.error);
+  assert.doesNotMatch(result.error!, /unconfirmed/);
+  assert.equal(world.tables.venue_claims[0].status, "pending");
+});
+
+test("reviewClaimAction: another email to the operator holds the setup-contact claim → approved, setup email QUEUED (not sent beside it), and the banner/timeline say so", async () => {
+  // A returning, not-yet-activated operator for the claimant's address, mid-send of a milestone.
+  world.authUsers.push({ id: "op-claimant", email: "claimant@fixture.example" });
+  world.tables.operators.push({
+    id: "op-claimant",
+    email: "claimant@fixture.example",
+    account_activated_at: null,
+    setup_contact_claimed_at: new Date().toISOString(),
+    setup_contact_claim_kind: "milestone",
+  });
+  signInAs(ADMIN);
+  const result = await reviewClaimAction(CLAIM_ID, {}, form({ action: "approve" })); // waits out the short (10 s) claim wait
+  assert.equal(result.success, true);
+  assert.match(result.successAction ?? "", /^Approved — setup email queued/);
+  assert.equal(world.tables.venue_claims[0].status, "approved");
+  assert.equal(world.emails.filter((e) => e.to === "claimant@fixture.example").length, 0, "nothing sent beside the in-flight email");
+  const op = world.tables.operators.find((o) => o.id === "op-claimant")!;
+  assert.ok(op.initial_setup_deferred_at, "queued for the hourly worker");
+  assert.equal(op.setup_contact_claim_kind, "milestone", "the other holder's claim is untouched");
+  assert.ok(world.tables.venue_claims.length && world.tables.venue_claim_notes.some((n) => /setup email to claimant@fixture\.example queued/.test(n.note as string)));
 });
 
 test("reviewClaimAction: an authorized admin can still REJECT", async () => {

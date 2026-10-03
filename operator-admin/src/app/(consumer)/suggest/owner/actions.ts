@@ -23,6 +23,7 @@ import {
   planActivationVerificationMode,
   deliverDeferredActivationStart,
 } from "@/lib/activation/emailCodeActivationStart";
+import { describeSetupEmail, setupEmailOutcomeOfDelivery, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 import { slugify } from "@/lib/slugify";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import {
@@ -203,12 +204,15 @@ function buildSubmissionReceivedNote({
   match,
   businessName,
   email,
+  setupSummary,
 }: {
   matchStatus: string;
   routedStatus: string;
   match: GoogleMatch | null;
   businessName: string;
   email: string;
+  /** confirmed_auto only: what happened to the setup email (see setupEmailOutcome.ts). */
+  setupSummary?: string;
 }): string {
   const matchedName = match?.name ?? businessName;
 
@@ -220,7 +224,7 @@ function buildSubmissionReceivedNote({
   }
   // matchStatus === "confirmed" from here — routedStatus determines the outcome.
   if (routedStatus === "confirmed_auto") {
-    return `Venue submission received. Google Business match confirmed by the operator (${matchedName}) — submission automatically confirmed. New venue created and linked; operator account provisioned and setup email sent to ${email}.`;
+    return `Venue submission received. Google Business match confirmed by the operator (${matchedName}) — submission automatically confirmed. New venue created and linked; operator account provisioned for ${email}; ${setupSummary ?? "setup continues through email-code verification"}.`;
   }
   if (routedStatus === "pending_review") {
     return `Venue submission received. Google Business match confirmed by the operator (${matchedName}), but the matched venue already exists and is unclaimed — routed for manual review before confirming ownership.`;
@@ -500,6 +504,8 @@ export async function saveOperatorSubmissionAction(
   // the setup email — the operator then continues straight onto the
   // in-app verification screen instead of waiting for a setup link.
   let setupEmailDeferred = false;
+  // Provisioning's own setup email outcome (sent or queued), when not deferred.
+  let provisionSetupEmail: SetupEmailOutcome | null = null;
   let verificationPath: string | undefined;
 
   if (routedStatus === "confirmed_auto" && venueId) {
@@ -551,6 +557,7 @@ export async function saveOperatorSubmissionAction(
 
     operatorId = provisionResult.authUserId;
     setupEmailDeferred = provisionResult.setupEmailDeferred === true;
+    provisionSetupEmail = provisionResult.setupEmail ?? null;
     console.log("[saveOperatorSubmissionAction] Operator provisioned.", {
       authUserId: operatorId,
       venueId,
@@ -686,6 +693,7 @@ export async function saveOperatorSubmissionAction(
         match,
         businessName: formValues.businessName,
         email: formValues.email,
+        setupSummary: provisionSetupEmail ? describeSetupEmail(provisionSetupEmail, formValues.email) : undefined,
       }),
       created_by: null,
       created_by_email: null,
@@ -738,6 +746,16 @@ export async function saveOperatorSubmissionAction(
             sendOperatorActivationEmail({ to: formValues.email, firstName: formValues.firstName, setupLink, record: { ...record, venueId } }),
         });
         if (delivery.kind === "code_issued") verificationPath = delivery.verificationPath;
+        const setupOutcome = setupEmailOutcomeOfDelivery(delivery);
+        if (setupOutcome) {
+          const { error: setupNoteError } = await supabase.from("operator_submission_notes").insert({
+            submission_id: insertedSubmission.id,
+            note: `Setup email: ${describeSetupEmail(setupOutcome, formValues.email)}.`,
+            created_by: null,
+            created_by_email: null,
+          });
+          if (setupNoteError) console.error("[saveOperatorSubmissionAction] Setup-email note failed:", setupNoteError.message);
+        }
       }
     }
   }

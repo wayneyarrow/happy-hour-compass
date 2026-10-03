@@ -5,6 +5,7 @@ import { escapeHtml } from "@/lib/activation/activationEmailEscape";
 import type { ClaimAutoApprovalDecision } from "./claimAutoApprovalPolicy";
 import { supportingWithoutRole } from "./claimAutoDecisionRecord";
 import { formatPhoneForDisplay } from "./phoneDisplay";
+import { describeSetupEmail, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 
 /**
  * Founder notification for an AUTO-APPROVED claim: email + #venue-claims
@@ -23,6 +24,8 @@ export type AutoApprovedClaimContext = {
   /** "new_operator_in_flow" = code sent, operator verifying now; "returning_operator" = existing account, signed in via /login. */
   nextStep: "new_operator_in_flow" | "returning_operator" | "new_operator_email";
   activationDeadline?: string | null;
+  /** What happened to the setup email / first code (setupEmailOutcome.ts); null when none was needed. */
+  setupEmail?: SetupEmailOutcome | null;
 };
 
 function nextStepText(ctx: AutoApprovedClaimContext): string {
@@ -33,7 +36,11 @@ function nextStepText(ctx: AutoApprovedClaimContext): string {
     ? ` Activation deadline: ${new Date(ctx.activationDeadline).toLocaleDateString("en-CA", { timeZone: "America/Vancouver", dateStyle: "medium" })}.`
     : "";
   if (ctx.nextStep === "new_operator_email") {
-    return `Operator account created; setup continues by email.${deadline} The venue becomes publicly verified when they finish activation.`;
+    const email = ctx.setupEmail ? `${describeSetupEmail(ctx.setupEmail, ctx.claimant.email)}.` : "setup continues by email.";
+    return `Operator account created; ${email}${deadline} The venue becomes publicly verified when they finish activation.`;
+  }
+  if (ctx.setupEmail === "failed" || ctx.setupEmail === "unconfirmed") {
+    return `Operator account created and they're on the verification screen in HHC, but the first code ${ctx.setupEmail === "failed" ? "could not be sent" : "may not have been delivered"} — they can request a new one there.${deadline} The venue becomes publicly verified when they finish activation.`;
   }
   return `Operator account created and a verification code was sent — they're verifying their email in HHC now.${deadline} The venue becomes publicly verified when they finish activation.`;
 }

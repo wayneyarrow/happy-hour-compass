@@ -11,6 +11,7 @@ import {
   claimVerifiedOnActivationEventKey,
 } from "@/lib/claims/claimAutoApprovalNotes";
 import { withAutomaticSetupContact } from "@/lib/activation/setupContactAutomatic";
+import { setupEmailOutcomeOf, type SetupEmailOutcome } from "@/lib/activation/setupEmailOutcome";
 
 // ── Observability ────────────────────────────────────────────────────────────
 //
@@ -144,7 +145,7 @@ export async function provisionOperatorForVenue({
      * (open tracking). Callers forward it as the email helper's `record`.
      */
     record: EmailRecordContext
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; error?: string; deliveryUncertain?: boolean }>;
   /**
    * Email-code activation (Phase 2B): for a genuinely NEW operator, skip
    * Steps 4-5 entirely — no Supabase recovery link is generated and no
@@ -175,7 +176,18 @@ export async function provisionOperatorForVenue({
    */
   markVenueVerified?: boolean;
 }): Promise<
-  | { ok: true; authUserId: string; setupEmailDeferred?: true }
+  | {
+      ok: true;
+      authUserId: string;
+      setupEmailDeferred?: true;
+      /**
+       * The provisioning setup email (absent when deferred to the email-code
+       * start): "sent", or "queued" when another email to this operator held
+       * the setup-contact claim (the hourly worker sends it). A failed or
+       * unconfirmed send rolls provisioning back instead.
+       */
+      setupEmail?: Extract<SetupEmailOutcome, "sent" | "queued">;
+    }
   | { ok: false; error: string; hhcErrorId?: string; ownershipConflict?: true }
 > {
   const supabase = createAdminClient();
@@ -548,11 +560,20 @@ export async function provisionOperatorForVenue({
 
   // ── Step 5: Send activation email ────────────────────────────────────────
 
-  // Coordinated with the per-operator contact claim (migration 104) so a
+  // Sent only under the per-operator contact claim (migration 104), so a
   // milestone already being sent to this operator can't land at the same
-  // moment; waits briefly, never refuses (setupContactAutomatic.ts).
-  const emailResult = await withAutomaticSetupContact(
-    { operatorId: authUserId, admin: supabase as never, logTag },
+  // moment. If the claim stays busy it is queued (ok: provisioning stands)
+  // and the hourly operator-activation worker sends it under the claim; only
+  // if it can't even be queued does the failure path below run
+  // (setupContactAutomatic.ts).
+  const emailResult = await withAutomaticSetupContact<{ ok: boolean; error?: string; queued?: boolean; deliveryUncertain?: boolean }>(
+    {
+      operatorId: authUserId,
+      admin: supabase as never,
+      logTag,
+      onDeferred: () => ({ ok: true, queued: true }),
+      onUnavailable: (error) => ({ ok: false, error, deliveryUncertain: false }),
+    },
     async () => await sendEmail(actionLink, isReturningOperator, { venueId, operatorId: authUserId })
   );
 
@@ -583,19 +604,32 @@ export async function provisionOperatorForVenue({
     await rbVenueLink(venueId, "email send failed");
     if (createdNewOperator) await rbOperator(authUserId, "email send failed");
     if (createdNewAuthUser) await rbAuthUser(authUserId, "email send failed");
-    return { ok: false, error: report.customerMessage, hhcErrorId: report.hhcErrorId };
+    // An unclear provider response may still have delivered the email: say so,
+    // because its link no longer works once everything above is rolled back.
+    const unconfirmed = setupEmailOutcomeOf(emailResult) === "unconfirmed";
+    return {
+      ok: false,
+      error: unconfirmed
+        ? `${report.customerMessage} The setup email's delivery is unconfirmed — if it arrives, its link won't work because the approval was rolled back.`
+        : report.customerMessage,
+      hhcErrorId: report.hhcErrorId,
+    };
   }
 
-  console.log(`${logTag} Operator provisioning complete.`, { authUserId, venueId });
+  const setupEmail = emailResult.queued ? "queued" : "sent";
+  console.log(`${logTag} Operator provisioning complete.`, { authUserId, venueId, setupEmail });
   await sendSlackAlert({
     channel:  "ops-alerts",
     severity: "success",
     title:    "Operator Provisioned",
-    message:  "Operator account created, venue linked, and activation email sent.",
+    message:
+      setupEmail === "queued"
+        ? "Operator account created and venue linked; the activation email is queued (another email to this operator was being sent) and goes out automatically within about an hour."
+        : "Operator account created, venue linked, and activation email sent.",
     metadata: { Email: email, "Venue ID": venueId, "Auth User": authUserId, Flow: logTag },
   });
 
-  return { ok: true, authUserId };
+  return { ok: true, authUserId, setupEmail };
 }
 
 /**

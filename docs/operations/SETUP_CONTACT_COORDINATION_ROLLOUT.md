@@ -29,6 +29,10 @@ Provider outcomes:
 - **Milestones**: accepted → `accepted`; uncertain → `unconfirmed` (protects
   the full 48 h, never shown as sent); definite rejection → nothing (so it
   never defers or skips a reminder).
+- **Holders never release mid-request**: a started provider request can't be
+  cancelled, so a holder keeps its claim until the request resolves, and must
+  start it within 20 s of the claim (`runHoldingContactClaim()`), or nothing
+  is sent.
 - **Crash / kill mid-send**: the holder never released its claim. When the
   claim's 6-minute lifetime passes, the next reader or claimer folds it into
   the evidence columns as a possible contact of its kind (milestone →
@@ -45,15 +49,55 @@ right now — wait a minute". Release refuses while either claim is active.
 
 Automatic initial setup emails (approval / auto-approval provisioning,
 deferred email-code start, legacy tracking start) take the claim too
-(`initial_setup`), but are never refused: they wait up to 8 s for an
-in-flight milestone, then — if still busy — log a warning, record evidence
-and send anyway. Operator-requested emails (codes, Forgot Password,
-finish-setup) stay immediate and only record evidence.
+(`initial_setup`) and are only ever sent under it. They wait up to 10 s; if
+the claim is still busy they are queued (migration 105) and the hourly
+operator-activation worker sends them under the claim. Only if queuing
+itself fails is nothing sent (caller's failure path + `#ops-critical`).
+Operator-requested emails (codes, Forgot Password, finish-setup) stay
+immediate and only record evidence. See CLAUDE.md for the queue's evidence
+and duplicate-protection rules.
+
+## The six-minute claim — practical limits
+
+The claim lifetime (`SETUP_CONTACT_CLAIM_TTL_MS`) is an engineering bound,
+not a proof. It is safe because, together:
+
+- a holder must **start** its provider request within 20 s of taking the
+  claim (`runHoldingContactClaim()`; otherwise nothing is sent);
+- a holder never releases while its request is unresolved;
+- Node's fetch (used by the Resend SDK) stops waiting for response headers
+  after 5 minutes, and Vercel functions on this project are capped at 300 s
+  (Pro, fluid compute, no route overrides; crons 60 s).
+
+What it does **not** cover:
+
+- **Resend accepting a request after our client gave up.** No client can
+  cancel a request already received; acceptance after a client-side timeout
+  or a killed function can't be ruled out, only made implausible by the
+  margin.
+- **Inbox arrival order.** The claim orders provider requests/acceptance;
+  two accepted emails can still arrive minutes apart, in either order.
+- **Senders outside the claim.** Operator-requested emails (codes, Forgot
+  Password, finish-setup) are deliberately immediate; they only record
+  evidence.
+- **Configuration drift.** Raising any holder's function `maxDuration` past
+  ~5 minutes, or adding waits between a claim and its send, breaks the
+  bound. Re-check this section if either changes.
+
+Operational effects of a held or stale claim: founder Resend / Final resend
+/ Copy answer "being sent right now" (up to 6 minutes after a crash); an
+initial setup email is queued (sent by the hourly cron, so up to about an
+hour later — never on staging, which runs no crons); an interrupted queued
+send whose delivery can't be confirmed is alerted to `#ops-critical` and
+never resent automatically.
 
 ## Rollout order
 
 Each step is a separate, explicitly authorized action.
 
+0. **Apply migration 105** (queued initial setup emails) before deploying
+   this code anywhere — the initial-send path writes its columns. Columns
+   only, nullable/defaulted; older code never reads them.
 1. **Apply migration 104** to the shared Supabase project
    (`supabase db push --linked`, after `--dry-run` shows only 104). Columns
    only, all nullable; code that predates it never reads them. Because

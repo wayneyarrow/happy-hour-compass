@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/server";
 import { setupContactKindForEmail } from "@/lib/activation/setupContactPolicy";
-import { recordSetupContactForRecipient } from "@/lib/activation/setupContactStore";
+import { recordSetupContactForRecipient, recordSetupEmailAcceptedForRecipient } from "@/lib/activation/setupContactStore";
 
 /**
  * Called by sendTransactionalEmail() immediately BEFORE the provider call
@@ -51,6 +51,40 @@ export async function recordSetupContactBeforeSend(
     return outcome === "written" ? "recorded" : "skipped";
   } catch (err) {
     console.warn("[setupContactEvidence] Evidence write failed; sending anyway.", { emailType: params.emailType, error: err instanceof Error ? err.message : String(err) });
+    return "skipped";
+  }
+}
+
+/**
+ * Called by sendTransactionalEmail() only AFTER the provider accepted an
+ * email. For a setup email to an unactivated operator, stamps
+ * operators.last_setup_email_accepted_at (migration 105) with the attempt's
+ * START time — confirmed delivery evidence, unlike the pre-send
+ * last_setup_contact_at. The queued initial-setup worker uses it to decide
+ * that a queued email is no longer needed. Same bounds as above: 2 s, never
+ * throws, no-op without Supabase credentials.
+ */
+export async function recordSetupEmailAccepted(
+  params: { emailType: string; to: string; trigger?: string | null; attemptStartedAt: Date },
+  deps: SetupContactEvidenceDeps = {}
+): Promise<"recorded" | "skipped"> {
+  if (!setupContactKindForEmail(params.emailType, params.trigger)) return "skipped";
+  if (!deps.admin && !(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY)) return "skipped";
+  try {
+    const admin = deps.admin ?? createAdminClient();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), deps.timeoutMs ?? EVIDENCE_TIMEOUT_MS);
+    });
+    const outcome = await Promise.race([
+      recordSetupEmailAcceptedForRecipient(admin, { recipientEmail: params.to, attemptStartedAt: params.attemptStartedAt }),
+      timeout,
+    ]);
+    if (timer) clearTimeout(timer);
+    if (outcome === "timeout") console.warn("[setupContactEvidence] Acceptance evidence write timed out.", { emailType: params.emailType });
+    return outcome === "written" ? "recorded" : "skipped";
+  } catch (err) {
+    console.warn("[setupContactEvidence] Acceptance evidence write failed.", { emailType: params.emailType, error: err instanceof Error ? err.message : String(err) });
     return "skipped";
   }
 }

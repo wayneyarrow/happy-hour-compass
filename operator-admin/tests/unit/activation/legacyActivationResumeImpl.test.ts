@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createMemoryContactCoordinator } from "./support/memoryContactCoordinator";
 import {
   resumeLegacyClaimActivationImpl,
   resumeLegacySubmissionActivationImpl,
@@ -182,6 +183,7 @@ function authDeps(user: { id: string; email: string } | null, isAdmin: boolean) 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     authClient: { auth: { getUser: async () => ({ data: { user } }) } } as any,
     checkAdmin: async () => isAdmin,
+    contactCoordinator: createMemoryContactCoordinator().coordinator,
   };
 }
 
