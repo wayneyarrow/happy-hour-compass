@@ -124,7 +124,7 @@ test("business slot: same-day 3 PM when still ahead, else next business day; wee
 for (const postgrestTimestamps of [false, true]) {
   test(`store (${postgrestTimestamps ? "PostgREST" : "ISO"} timestamps): only one of two concurrent claims wins; release clears only its own claim`, async () => {
     const fake = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1" })], { postgrestTimestamps });
-    const c = createSetupContactCoordinator(fake.client);
+    const c = createSetupContactCoordinator(fake.client, { clock: () => new Date(0) });
     const [a, b] = await Promise.all([c.claim("op-1", "milestone", NOW), c.claim("op-1", "reminder", NOW)]);
     assert.equal([a, b].filter(Boolean).length, 1);
     const winner = (a ?? b) as string;
@@ -141,7 +141,7 @@ test("store: a stale claim is folded into evidence (conservatively) before a new
     makeOperatorContactRow({ id: "op-m", setup_contact_claimed_at: stale, setup_contact_claim_kind: "milestone" }),
     makeOperatorContactRow({ id: "op-r", setup_contact_claimed_at: stale, setup_contact_claim_kind: "reminder" }),
   ]);
-  const c = createSetupContactCoordinator(fake.client);
+  const c = createSetupContactCoordinator(fake.client, { clock: () => new Date(0) });
   assert.ok(await c.claim("op-m", "reminder", NOW));
   assert.equal(fake.rows[0].last_milestone_contact_at, stale);
   assert.ok(await c.claim("op-r", "milestone", NOW));
@@ -160,17 +160,17 @@ test("store: evidence only moves forward and only for unactivated operators", as
   assert.equal(fake.rows[0].last_setup_contact_kind, "founder_resend");
   assert.equal(await recordSetupContactForRecipient(fake.client, { recipientEmail: "active@venue.example", kind: "operator_requested", at: NOW }), "no_match");
   assert.equal(await recordSetupContactForRecipient(fake.client, { recipientEmail: "consumer@example.com", kind: "operator_requested", at: NOW }), "no_match");
-  assert.equal(await createSetupContactCoordinator(fake.client).recordPause("op-1", NOW), true);
+  assert.equal(await createSetupContactCoordinator(fake.client, { clock: () => new Date(0) }).recordPause("op-1", NOW), true);
   assert.equal(fake.rows[0].last_setup_pause_at, NOW.toISOString());
   assert.equal(fake.rows[0].last_setup_contact_at, NOW.toISOString(), "a pause never overwrites email evidence");
-  await createSetupContactCoordinator(fake.client).recordMilestone("op-act", NOW, "accepted");
+  await createSetupContactCoordinator(fake.client, { clock: () => new Date(0) }).recordMilestone("op-act", NOW, "accepted");
   assert.equal(fake.rows[1].last_milestone_contact_at, null, "activated operators get no milestone evidence");
 });
 
 test("store: recorders never throw on database errors", async () => {
   const fake = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1" })], { failReads: true });
   assert.equal(await recordSetupContactForRecipient(fake.client, { recipientEmail: "x@y.z", kind: "reminder", at: NOW }), "error");
-  const c = createSetupContactCoordinator(fake.client);
+  const c = createSetupContactCoordinator(fake.client, { clock: () => new Date(0) });
   assert.equal(await c.recordPause("op-1", NOW), false, "write failure is reported so the caller keeps its claim");
   assert.equal(await c.recordMilestone("op-1", NOW, "accepted"), false);
   assert.equal(await c.recordSetupContact("op-1", "reminder", NOW), false);
@@ -208,7 +208,7 @@ test("store: founder claims fold by kind — a stale resend claim becomes an unc
     makeOperatorContactRow({ id: "op-r", setup_contact_claimed_at: stale, setup_contact_claim_kind: "founder_resend" }),
     makeOperatorContactRow({ id: "op-c", setup_contact_claimed_at: stale, setup_contact_claim_kind: "founder_copy" }),
   ]);
-  const c = createSetupContactCoordinator(fake.client);
+  const c = createSetupContactCoordinator(fake.client, { clock: () => new Date(0) });
   assert.ok(await c.claim("op-r", "milestone", NOW));
   assert.equal(fake.rows[0].last_setup_contact_kind, "unconfirmed_setup_contact");
   assert.ok(await c.claim("op-c", "milestone", NOW));
@@ -218,7 +218,7 @@ test("store: founder claims fold by kind — a stale resend claim becomes an unc
 
 test("store: an old request never clears a newer claim — after a stale takeover the old holder's release is a no-op", async () => {
   const fake = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1" })], { postgrestTimestamps: true });
-  const c = createSetupContactCoordinator(fake.client);
+  const c = createSetupContactCoordinator(fake.client, { clock: () => new Date(0) });
   const oldToken = await c.claim("op-1", "milestone", NOW);
   assert.ok(oldToken);
   const later = new Date(NOW.getTime() + SETUP_CONTACT_CLAIM_TTL_MS + 1000);

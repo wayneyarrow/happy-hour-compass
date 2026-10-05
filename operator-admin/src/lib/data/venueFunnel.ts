@@ -68,6 +68,7 @@ import {
 import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import type { OperatorPlan } from "@/lib/plans";
 import type { VenueSubscriptionStatus } from "@/lib/venueSubscriptions";
+import { loadSetupFollowUps, type SetupFollowUp } from "@/lib/data/venueFunnelSetupFollowUp";
 
 // ── Product-decision constants ────────────────────────────────────────────────
 
@@ -216,6 +217,14 @@ export type VenueFunnelCard = {
    * for "inactive operators"). Always false for every other lane.
    */
   possiblyInactive: boolean;
+
+  /**
+   * Setup Stalled / No Response only — automatic setup-reminder progress,
+   * next step and the claim/submission behind the setup
+   * (venueFunnelSetupFollowUp.ts). Null for every other lane, and when the
+   * follow-up data couldn't be read.
+   */
+  setupFollowUp: SetupFollowUp | null;
 };
 
 export type FunnelLane = {
@@ -457,6 +466,7 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         ageDays,
         ageLabel: ageDays !== null ? "Since claim submitted" : null,
         possiblyInactive: false,
+        setupFollowUp: null,
       };
     });
 
@@ -488,6 +498,7 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         ageDays,
         ageLabel: ageDays !== null ? "Since submitted" : null,
         possiblyInactive: false,
+        setupFollowUp: null,
       };
     });
 
@@ -544,8 +555,24 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
       ageDays,
       ageLabel,
       possiblyInactive,
+      setupFollowUp: null,
     };
   });
+
+  // Setup Stalled / No Response cards only: reminder progress + source
+  // record, in one fixed set of batched reads (never per card).
+  const operatorByVenue = new Map(activeVenues.map((v) => [v.id, v.created_by_operator_id]));
+  const stalled = venueCards
+    .filter((c) => c.laneKey === "setup_stalled")
+    .map((card) => ({ card, operatorId: operatorByVenue.get(card.id) ?? null }))
+    .filter((x): x is { card: VenueFunnelCard; operatorId: string } => !!x.operatorId);
+  if (stalled.length > 0) {
+    const followUps = await loadSetupFollowUps(
+      supabase as never,
+      stalled.map(({ card, operatorId }) => ({ venueId: card.id, operatorId, operatorEmail: card.operatorEmail, accountActivatedAt: card.accountActivatedAt }))
+    );
+    for (const { card } of stalled) card.setupFollowUp = followUps.get(card.id) ?? null;
+  }
 
   const allCards = [...claimCards, ...submissionCards, ...venueCards];
 

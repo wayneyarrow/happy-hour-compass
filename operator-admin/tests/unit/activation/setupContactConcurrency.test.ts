@@ -36,7 +36,7 @@ function withEnv<T>(vars: Record<string, string>, fn: () => Promise<T>): Promise
 
 function contactStore() {
   const ops = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1", email: "gm@venue.example" })], { postgrestTimestamps: true });
-  return { ops, coordinator: createSetupContactCoordinator(ops.client) };
+  return { ops, coordinator: createSetupContactCoordinator(ops.client, { clock: () => new Date(0) }) };
 }
 
 function milestoneWorld() {
@@ -338,10 +338,14 @@ test("REGRESSION — provider completes after the old 60 s takeover point: no ot
   const { processDeferredInitialSetupEmails } = await import("../../../src/lib/activation/deferredInitialSetup");
   const { createMemoryDeferredSetupStore } = await import("./support/memoryDeferredSetupStore");
   const { ops, coordinator } = contactStore();
+  // This test sends through the REAL sendTransactionalEmail, whose claim send
+  // window is measured on the wall clock — so its timeline starts at the real
+  // current time rather than the file's fixed T0.
+  const T0 = new Date();
 
   await withControlledResend(async ({ calls, acceptMilestone }) => {
     // A milestone holder takes the claim and starts its provider request…
-    const token = (await coordinator.claim("op-1", "milestone", NOW))!;
+    const token = (await coordinator.claim("op-1", "milestone", T0))!;
     const milestone = runHoldingContactClaim("op-1", token, () =>
       sendTransactionalEmail({ type: "customer_success_milestone", to: "gm@venue.example", subject: "milestone", html: "<p/>", text: "t", criticality: "standard" })
     );
@@ -352,7 +356,7 @@ test("REGRESSION — provider completes after the old 60 s takeover point: no ot
     let initialSent = false;
     const initial = await silenced(() =>
       withAutomaticSetupContact(
-        { operatorId: "op-1", coordinator, now: () => new Date(NOW.getTime() + 61_000), waitMs: 1000, pollMs: 500, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT },
+        { operatorId: "op-1", coordinator, now: () => new Date(T0.getTime() + 61_000), waitMs: 1000, pollMs: 500, sleep: async () => {}, onDeferred: QUEUED, onUnavailable: NOT_SENT },
         async () => {
           initialSent = true;
           return { ok: true };
@@ -361,20 +365,20 @@ test("REGRESSION — provider completes after the old 60 s takeover point: no ot
     );
     assert.deepEqual(initial, { ok: true, queued: true }, "queued, not sent beside the in-flight milestone");
     assert.equal(initialSent, false);
-    assert.equal(await coordinator.claim("op-1", "reminder", new Date(NOW.getTime() + 5 * 60_000)), null, "still not replaceable at 5 min");
+    assert.equal(await coordinator.claim("op-1", "reminder", new Date(T0.getTime() + 5 * 60_000)), null, "still not replaceable at 5 min");
     assert.deepEqual(calls, ["milestone"], "nothing else reached the provider while the milestone was in flight");
 
     // The provider finally accepts the milestone; the holder records it and releases.
     acceptMilestone();
     assert.equal((await milestone).ok, true);
-    await coordinator.recordMilestone("op-1", NOW, "accepted");
+    await coordinator.recordMilestone("op-1", T0, "accepted");
     await coordinator.release("op-1", token);
 
     // The hourly worker sends the queued email — under the claim, after the milestone.
     const { store, lifecycles } = createMemoryDeferredSetupStore(ops.rows as never);
     lifecycles.set("op-1", { id: "lc-1", originType: "claim", originClaimId: "claim-1", originSubmissionId: null, verificationRequired: true });
     let claimDuringSend: string | null = null;
-    const r = await processDeferredInitialSetupEmails(null as never, new Date(NOW.getTime() + H), {
+    const r = await processDeferredInitialSetupEmails(null as never, new Date(T0.getTime() + H), {
       store,
       coordinator,
       sendEmail: async () => {
@@ -553,7 +557,7 @@ test("initial setup email: no unactivated operator for the recipient (unknown ad
   const p = { onDeferred: () => "queued", onUnavailable: (e: string) => e };
   assert.equal(await withAutomaticSetupContact({ ...p, email: "nobody@x.test", coordinator, admin: createFakeOperatorsContactClient([]).client }, async () => "sent"), "sent");
   const activated = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-a", email: "a@x.test", account_activated_at: "2026-10-01T00:00:00Z" })], { postgrestTimestamps: true });
-  const activatedCoordinator = createSetupContactCoordinator(activated.client);
+  const activatedCoordinator = createSetupContactCoordinator(activated.client, { clock: () => new Date(0) });
   activated.rows[0].setup_contact_claimed_at = NOW.toISOString(); // even a busy claim doesn't matter for an activated operator
   assert.equal(await withAutomaticSetupContact({ ...p, email: "a@x.test", coordinator: activatedCoordinator }, async () => "sent"), "sent");
   assert.equal(await withAutomaticSetupContact({ ...p, operatorId: "op-a", coordinator: activatedCoordinator, now: () => NOW }, async () => "sent"), "sent");

@@ -5,6 +5,11 @@ import { createFakeOperatorsContactClient, makeOperatorContactRow, type FakeOper
  * The REAL setup-contact store over an in-memory operators table that
  * provisions an (unactivated) row for any operator id on first use — for
  * tests whose own fakes don't model public.operators contact columns.
+ *
+ * Claims are stamped with the later of the caller's `now` and the coordinator's
+ * clock (the wall clock in production). Tests pin that clock to the epoch so
+ * stamps follow the test's own fixed `now` — otherwise every fixed-date test
+ * silently changes behaviour once the real date passes it.
  */
 export function createMemoryContactCoordinator(): { coordinator: SetupContactCoordinator; rows: FakeOperatorContactRow[] } {
   const rows: FakeOperatorContactRow[] = [];
@@ -27,5 +32,5 @@ export function createMemoryContactCoordinator(): { coordinator: SetupContactCoo
       },
     };
   };
-  return { coordinator: createSetupContactCoordinator(fake.client), rows };
+  return { coordinator: createSetupContactCoordinator(fake.client, { clock: () => new Date(0) }), rows };
 }

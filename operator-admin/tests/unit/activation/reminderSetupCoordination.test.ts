@@ -42,7 +42,7 @@ function world(operator: Partial<FakeOperatorContactRow> = {}, deadlineAt = new 
     venues: [{ id: "v-1", name: "Venue", created_by_operator_id: "op-1" }],
   });
   const ops = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1", email: "gm@venue.example", ...operator })]);
-  return { reminders, ops, coordinator: createSetupContactCoordinator(ops.client) };
+  return { reminders, ops, coordinator: createSetupContactCoordinator(ops.client, { clock: () => new Date(0) }) };
 }
 
 function emailSpy() {

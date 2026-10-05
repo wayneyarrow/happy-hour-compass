@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { FunnelLane, VenueFunnelCard } from "@/lib/data/venueFunnel";
+import type { SetupFollowUp } from "@/lib/data/venueFunnelSetupFollowUp";
 import { formatDate } from "@/lib/controlPanelDateTime";
 
 /**
@@ -61,6 +62,38 @@ function CardLink({ card }: { card: VenueFunnelCard }) {
     >
       {card.kind === "venue" ? "View Venue →" : card.kind === "claim" ? "Review Claim →" : "Review Submission →"}
     </Link>
+  );
+}
+
+const FOLLOW_UP_TONE: Record<SetupFollowUp["tone"], string> = {
+  info:      "bg-slate-50 border-slate-200 text-slate-700",
+  attention: "bg-amber-50 border-amber-200 text-amber-800",
+  muted:     "bg-gray-50 border-gray-200 text-gray-500",
+};
+
+// Setup Stalled / No Response only: automatic setup-reminder progress, the
+// next step, and the claim/submission behind this setup. Server-derived
+// (src/lib/data/venueFunnelSetupFollowUp.ts) — nothing here infers state.
+function SetupFollowUpBlock({ followUp, venueName }: { followUp: SetupFollowUp; venueName: string }) {
+  const sourceLabel = followUp.source?.kind === "claim" ? "View Claim" : "View Submission";
+  return (
+    <div className={`rounded-md border px-2 py-1.5 space-y-0.5 ${FOLLOW_UP_TONE[followUp.tone]}`}>
+      <p className="text-xs font-medium">{followUp.headline}</p>
+      {followUp.lines.map((line) => (
+        <p key={line} className="text-[11px] leading-snug opacity-90">{line}</p>
+      ))}
+      {followUp.source && (
+        <div className="pt-0.5 text-right">
+          <Link
+            href={followUp.source.url}
+            aria-label={`${sourceLabel} for ${venueName}`}
+            className="text-[11px] font-medium text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-sm"
+          >
+            {sourceLabel} →
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -126,6 +159,8 @@ function FunnelCardView({ card }: { card: VenueFunnelCard }) {
       {card.operatorLastSeenAt && (
         <p className="text-[11px] text-gray-400">Operator last seen {formatDate(card.operatorLastSeenAt)}</p>
       )}
+
+      {card.setupFollowUp && <SetupFollowUpBlock followUp={card.setupFollowUp} venueName={card.name} />}
 
       <div className="flex items-center justify-between pt-1">
         <span className="text-[11px] text-gray-400">

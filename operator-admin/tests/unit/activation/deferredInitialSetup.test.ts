@@ -51,7 +51,7 @@ function world(overrides: Record<string, unknown>[] = [{}], lifecycle: QueuedSet
     ),
     { postgrestTimestamps: true }
   );
-  const coordinator = createSetupContactCoordinator(ops.client);
+  const coordinator = createSetupContactCoordinator(ops.client, { clock: () => new Date(0) });
   const { store, lifecycles } = createMemoryDeferredSetupStore(ops.rows as never);
   if (lifecycle) ops.rows.forEach((r) => lifecycles.set(r.id, { ...lifecycle }));
   const sends: any[] = [];

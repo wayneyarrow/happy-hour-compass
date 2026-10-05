@@ -36,7 +36,7 @@ function world(opts: { operator?: Partial<FakeOperatorContactRow>; venues?: Fake
     ),
   });
   const ops = createFakeOperatorsContactClient([makeOperatorContactRow({ id: "op-1", email: "gm@venue.example", ...opts.operator })]);
-  return { delivery, ops, coordinator: createSetupContactCoordinator(ops.client) };
+  return { delivery, ops, coordinator: createSetupContactCoordinator(ops.client, { clock: () => new Date(0) }) };
 }
 
 function spy(results: { ok: boolean; id?: string; error?: string }[] = [{ ok: true, id: "re-1" }]) {

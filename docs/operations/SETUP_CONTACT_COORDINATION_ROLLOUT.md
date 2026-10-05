@@ -167,7 +167,7 @@ milestones AS (
 )
 UPDATE public.operators o SET
   last_setup_contact_at = GREATEST(o.last_setup_contact_at, sc.at),
-  last_setup_contact_kind = CASE WHEN o.last_setup_contact_at IS NULL OR sc.at > o.last_setup_contact_at THEN 'setup_email' ELSE o.last_setup_contact_kind END,
+  last_setup_contact_kind = CASE WHEN sc.at IS NOT NULL AND (o.last_setup_contact_at IS NULL OR sc.at > o.last_setup_contact_at) THEN 'setup_email' ELSE o.last_setup_contact_kind END,
   last_setup_pause_at = GREATEST(o.last_setup_pause_at, p.at),
   last_milestone_contact_at = GREATEST(o.last_milestone_contact_at, ms.at),
   last_milestone_contact_status = CASE WHEN ms.at IS NOT NULL AND (o.last_milestone_contact_at IS NULL OR ms.at > o.last_milestone_contact_at) THEN 'accepted' ELSE o.last_milestone_contact_status END
@@ -180,7 +180,9 @@ WHERE o.id = u.id
 ```
 
 `GREATEST` ignores NULLs, so existing (newer) evidence is never moved back.
-`'setup_email'` is the generic kind for backfilled contacts; backfilled
+The kind is set only when a setup-contact signal exists (`sc.at IS NOT NULL`),
+so an operator with only a pause or milestone never gets a kind without a
+timestamp. `'setup_email'` is the generic kind for backfilled contacts; backfilled
 milestones are `'accepted'` (only `communication_status = 'sent'` rows are
 used). Milestone attempts whose outcome was uncertain before rollout are not
 reconstructed (no reliable signal) — this is why the flag stays off for at
