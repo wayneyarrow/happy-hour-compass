@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
 import { resolveCurrentUserAccess } from "@/lib/postAuthAccess";
 import { resolveLoginOutcome, type LoginOutcome } from "@/lib/accessOutcome";
+import { recordOperatorSignInAction } from "./actions";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,12 +43,20 @@ export default function LoginPage() {
 
     const access = await resolveCurrentUserAccess();
     const outcome = resolveLoginOutcome("business", access);
-    setLoading(false);
 
     if (outcome !== "granted") {
+      setLoading(false);
       setWrongContext(outcome);
       return;
     }
+
+    // Records "Operator logged in" (venue notes + daily CS Slack). Best
+    // effort and capped, so it can never fail or stall the sign-in.
+    await Promise.race([
+      recordOperatorSignInAction().catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]);
+    setLoading(false);
 
     router.push("/admin/home");
     router.refresh();
