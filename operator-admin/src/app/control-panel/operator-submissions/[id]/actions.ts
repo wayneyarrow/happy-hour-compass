@@ -16,6 +16,7 @@ import { logAuditEvent } from "@/lib/auditLog";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { resolveVenueGeography } from "@/lib/geo/venueGeographyResolver";
 import { geocodeStreetAddress } from "@/lib/geo/geocodeAddress";
+import { resolveAvailableVenueSlug } from "@/lib/venueSlug";
 import {
   reconcileVenueGoogleIdentity,
   type VenuesGoogleIdentityClient,
@@ -392,10 +393,6 @@ export async function approveAndCreateVenueAction(
   const venueName = (gm?.name as string | null) ?? (sub.venue_name as string);
   const placeId   = (sub.place_id as string | null) ?? (gm?.placeId as string | null);
 
-  const slugBase = placeId
-    ? `submission-${placeId.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
-    : `submission-${submissionId.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-
   // Phone: same formatting as saveOperatorSubmissionAction
   const rawPhone = gm?.phone as string | null | undefined;
   let phone: string | null = null;
@@ -493,12 +490,24 @@ export async function approveAndCreateVenueAction(
   const { google_rating: googleRating, google_review_count: googleReviewCount } =
     extractGoogleRatingFields(gm);
 
+  // ── Public slug ────────────────────────────────────────────────────────────
+  // From the venue's public name (never the submission id or Place ID — see
+  // src/lib/venueSlug.ts), checked against current + historical + reserved
+  // slugs. The venues.slug UNIQUE constraint (23505 below) stays the backstop.
+  let slug: string;
+  try {
+    slug = await resolveAvailableVenueSlug(supabase, { name: venueName, cityName: resolvedCity });
+  } catch (err) {
+    console.error("[approveAndCreateVenueAction] Slug generation failed:", err);
+    return { error: "Failed to create venue. Please try again." };
+  }
+
   // ── Create unpublished venue ───────────────────────────────────────────────
   const { data: newVenue, error: venueError } = await supabase
     .from("venues")
     .insert({
       name:                 venueName,
-      slug:                 slugBase,
+      slug,
       address_line1:        (gm?.streetAddress as string | null) ?? (sub.street_address as string | null) ?? null,
       city:                 resolvedCity,
       region:               resolvedProvince,
