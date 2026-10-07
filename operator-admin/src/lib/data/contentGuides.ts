@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAllMarkets, getCitiesByMarket, getNeighbourhoodsByCity } from "@/lib/geo/geography";
 import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/types";
+import type { HistoricalGuideTarget } from "@/lib/guideSlugHistory";
 
 /**
  * Data helpers for the Content Engine (content_guides table).
@@ -412,6 +413,61 @@ export async function getPublicGuideByMarketAndSlug(
   }
 
   return mapGuideDetailRow(row, marketSlug);
+}
+
+/**
+ * Resolves a retired guide URL (content_guide_slug_history, migration 108)
+ * to that guide's CURRENT market/slug, for the public guide route's 308
+ * fallback. Mirrors getVenueByHistoricalSlug: history resolves to guide_id
+ * only, and the guide is read live, so redirects never chain. isPublic uses
+ * the same published + publish-window rule as getPublicGuideByMarketAndSlug —
+ * the route never redirects to a draft. Any error (including the table not
+ * existing yet) returns null, i.e. today's plain 404.
+ */
+export async function getGuideByHistoricalSlug(
+  marketSlug: string,
+  oldSlug: string
+): Promise<HistoricalGuideTarget | null> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data: market, error: marketError } = await supabase
+      .from("markets")
+      .select("id")
+      .eq("slug", marketSlug)
+      .maybeSingle();
+    if (marketError || !market) return null;
+
+    const { data: history, error: historyError } = await supabase
+      .from("content_guide_slug_history")
+      .select("guide_id")
+      .eq("market_id", (market as { id: string }).id)
+      .eq("old_slug", oldSlug)
+      .maybeSingle();
+    if (historyError) {
+      console.error("[getGuideByHistoricalSlug] history lookup:", historyError.message);
+      return null;
+    }
+    if (!history) return null;
+
+    const { data: guide, error: guideError } = await supabase
+      .from("content_guides")
+      .select("slug, status, publish_at, expire_at, markets!inner(slug)")
+      .eq("id", (history as { guide_id: string }).guide_id)
+      .maybeSingle();
+    if (guideError || !guide) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = guide as Record<string, any>;
+    return {
+      marketSlug: (row.markets as { slug: string }).slug,
+      slug: row.slug as string,
+      isPublic: isGuidePublicNow(row.status as string, row.publish_at ?? null, row.expire_at ?? null),
+    };
+  } catch (err) {
+    console.error("[getGuideByHistoricalSlug] Unexpected error:", err);
+    return null;
+  }
 }
 
 /** Minimal shape needed to list every publicly-reachable guide URL — used by the sitemap. */

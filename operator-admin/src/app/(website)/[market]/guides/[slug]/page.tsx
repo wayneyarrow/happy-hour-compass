@@ -1,9 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import {
   getPublicGuideByMarketAndSlug,
+  getGuideByHistoricalSlug,
   getRelatedGuides,
 } from "@/lib/data/contentGuides";
+import { buildGuidePublicPath, resolveHistoricalGuideRedirect } from "@/lib/guideSlugHistory";
 import {
   getGuideVenueAttachments,
   getGuideEventAttachments,
@@ -133,7 +135,17 @@ export default async function GuideDetailPage({ params }: PageProps) {
   const { market, slug } = await params;
 
   const guide = await getPublicGuideByMarketAndSlug(market, slug);
-  if (!guide) notFound();
+  if (!guide) {
+    // No current guide — only now check whether this is a retired guide URL
+    // (content_guide_slug_history, migration 108). 308 to the guide's
+    // CURRENT path if it's public; otherwise 404 exactly as before.
+    const target = resolveHistoricalGuideRedirect(
+      buildGuidePublicPath(market, slug),
+      await getGuideByHistoricalSlug(market, slug)
+    );
+    if (target) permanentRedirect(target);
+    notFound();
+  }
 
   // Launch config: a market that isn't active shows the shared branded
   // Coming Soon experience instead of real content.

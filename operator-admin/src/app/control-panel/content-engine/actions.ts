@@ -14,6 +14,7 @@ import {
 } from "@/lib/data/contentGuideAttachments";
 import { saveGuideChannels } from "@/lib/data/contentGuideDistribution";
 import { saveGuideFaqs } from "@/lib/data/faqLibrary";
+import { describeGuideSlugWriteError, reconcileGuideCanonicalUrl } from "@/lib/guideSlugHistory";
 
 /**
  * Create/update server actions for the Content Engine guide form (Card 2 +
@@ -283,11 +284,13 @@ export async function createGuideAction(
     .single();
 
   if (error || !inserted) {
-    if (error?.code === "23505") {
-      return {
-        error: "Please fix the errors below.",
-        fieldErrors: { slug: "This slug is already used by another guide in this market." },
-      };
+    // 23505 = current-slug conflict, or (trigger, migration 108) a slug that
+    // is another guide's retired URL in this market.
+    const slugError = describeGuideSlugWriteError(error);
+    if (slugError) {
+      return slugError.kind === "field"
+        ? { error: "Please fix the errors below.", fieldErrors: { slug: slugError.message } }
+        : { error: slugError.message };
     }
     console.error("[createGuideAction] Insert error:", error?.message);
     return { error: "Failed to create guide. Please try again." };
@@ -333,6 +336,43 @@ export async function updateGuideAction(
   }
 
   const supabase = createAdminClient();
+
+  // Previous URL identity. The slug-history row itself is written by the
+  // content_guides_slug_history trigger (migration 108), atomically with this
+  // UPDATE; here we only keep canonical_url from pointing at the old URL.
+  const { data: previous, error: previousError } = await supabase
+    .from("content_guides")
+    .select("slug, market_id, canonical_url")
+    .eq("id", guideId)
+    .maybeSingle();
+  if (previousError || !previous) {
+    console.error("[updateGuideAction] Previous guide lookup failed:", previousError?.message);
+    return { error: "Failed to save changes. Please try again." };
+  }
+  const prev = previous as { slug: string; market_id: string; canonical_url: string | null };
+
+  let canonicalUrl = parsed.canonical_url;
+  if (prev.slug !== parsed.slug || prev.market_id !== parsed.market_id) {
+    const { data: marketRows, error: marketError } = await supabase
+      .from("markets")
+      .select("id, slug")
+      .in("id", [prev.market_id, parsed.market_id]);
+    const marketSlugById = new Map(
+      ((marketRows ?? []) as { id: string; slug: string }[]).map((m) => [m.id, m.slug])
+    );
+    const prevMarketSlug = marketSlugById.get(prev.market_id);
+    const nextMarketSlug = marketSlugById.get(parsed.market_id);
+    if (marketError || !prevMarketSlug || !nextMarketSlug) {
+      console.error("[updateGuideAction] Market lookup failed:", marketError?.message);
+      return { error: "Failed to save changes. Please try again." };
+    }
+    canonicalUrl = reconcileGuideCanonicalUrl({
+      submitted: parsed.canonical_url,
+      previous: { marketSlug: prevMarketSlug, slug: prev.slug },
+      next: { marketSlug: nextMarketSlug, slug: parsed.slug },
+    });
+  }
+
   const { error } = await supabase
     .from("content_guides")
     .update({
@@ -359,16 +399,16 @@ export async function updateGuideAction(
       meta_description:     parsed.meta_description,
       og_title:             parsed.og_title,
       og_description:       parsed.og_description,
-      canonical_url:        parsed.canonical_url,
+      canonical_url:        canonicalUrl,
     })
     .eq("id", guideId);
 
   if (error) {
-    if (error.code === "23505") {
-      return {
-        error: "Please fix the errors below.",
-        fieldErrors: { slug: "This slug is already used by another guide in this market." },
-      };
+    const slugError = describeGuideSlugWriteError(error);
+    if (slugError) {
+      return slugError.kind === "field"
+        ? { error: "Please fix the errors below.", fieldErrors: { slug: slugError.message } }
+        : { error: slugError.message };
     }
     console.error("[updateGuideAction] Update error:", error.message);
     return { error: "Failed to save changes. Please try again." };

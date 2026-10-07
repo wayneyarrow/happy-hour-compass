@@ -589,6 +589,12 @@ export default function GuideForm({
               <p className={hintCls}>
                 /{selectedMarket?.slug ?? "{market}"}/guides/{slug || "{guide-slug}"}
               </p>
+              {mode === "edit" && initialGuide?.status === "published" && (
+                <p className={hintCls}>
+                  This guide is published. Changing its slug changes its public URL — the
+                  previous URL will redirect to the new one automatically.
+                </p>
+              )}
               {err.slug && <p className={errorCls}>{err.slug}</p>}
             </div>
           </section>
