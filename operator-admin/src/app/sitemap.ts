@@ -5,6 +5,7 @@ import { getAllMarkets } from "@/lib/geo/geography";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
 import { getCollections } from "@/lib/data/collections";
+import { hasPublicCollectionLandingPage } from "@/lib/data/collectionsShared";
 import { getAllPublicGuidesForSitemap } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
@@ -186,7 +187,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // ── Collection landing pages ────────────────────────────────────────────
+  // Some published Collections are internal data sources with no public
+  // Landing Page (e.g. daily_special → Homepage Today's Specials, whose
+  // destination is /website-daily-specials) — same shared rule the route
+  // itself 404s on. TODO: a public-type Collection resolving to zero items
+  // also 404s; not checked here (would need the full model per Collection).
   const collectionPages: MetadataRoute.Sitemap = collections.flatMap((collection) => {
+    if (!hasPublicCollectionLandingPage(collection.collectionType)) return [];
     const marketSlug = marketSlugByDbId.get(collection.marketId);
     if (!marketSlug || !activeMarketSlugSet.has(marketSlug)) return [];
     return [

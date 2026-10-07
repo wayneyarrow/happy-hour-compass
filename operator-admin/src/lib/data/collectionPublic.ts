@@ -37,6 +37,7 @@
 import { getMarketBySlug } from "@/lib/geo/geography";
 import { getPublishedCollectionBySlug } from "@/lib/data/collections";
 import { resolveCollectionPreview } from "@/lib/data/collectionsPreview";
+import { hasPublicCollectionLandingPage } from "@/lib/data/collectionsShared";
 import { getPublishedVenuesByUuids, type ConsumerVenue } from "@/lib/data/venues";
 import { getPublishedEventsByIds, type WebsiteEventListItem } from "@/lib/data/events";
 import { getSavedGuideCardsByIds, type SavedGuideCard } from "@/lib/data/contentGuides";
@@ -85,12 +86,12 @@ export async function getPublicCollectionModel(
   const collection = await getPublishedCollectionBySlug(market.id, collectionSlug);
   if (!collection) return null;
 
-  // No public Collection Landing Page for Daily Special collections yet —
-  // out of scope for the Today's Specials CPanel-integration task (only
-  // Homepage Section rendering, via homepagesRendering.ts, was required).
-  // Explicit early return so this never falls through into the "guide"
-  // branch's fallthrough logic below with the wrong id set.
-  if (collection.collectionType === "daily_special") return null;
+  // Types with no public Landing Page (today: daily_special — Today's
+  // Specials uses /website-daily-specials instead) 404 here. Shared with
+  // sitemap.ts via hasPublicCollectionLandingPage() so the sitemap never
+  // lists a Collection this route won't render. Also keeps daily_special
+  // from falling through into the "guide" branch below with the wrong id set.
+  if (!hasPublicCollectionLandingPage(collection.collectionType)) return null;
 
   const preview = await resolveCollectionPreview({
     collectionType: collection.collectionType,

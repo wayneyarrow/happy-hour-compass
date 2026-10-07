@@ -45,6 +45,27 @@ export function buildCollectionLandingHref(marketSlug: string, collectionSlug: s
   return `/${marketSlug}/collections/${collectionSlug}`;
 }
 
+/**
+ * Whether a Collection type has a generic public Landing Page at
+ * buildCollectionLandingHref(). The single rule shared by public rendering
+ * (collectionPublic.ts, which 404s otherwise) and sitemap.ts, so the two
+ * can't drift apart. daily_special is excluded: Today's Specials uses the
+ * dedicated Daily Specials discovery page (/website-daily-specials) rather
+ * than a generic Collection Landing Page — its Collection is only the data
+ * source for the Homepage section. Exhaustive Record so a new type must
+ * decide explicitly.
+ */
+const HAS_PUBLIC_LANDING_PAGE: Record<CollectionType, boolean> = {
+  venue: true,
+  event: true,
+  guide: true,
+  daily_special: false,
+};
+
+export function hasPublicCollectionLandingPage(collectionType: CollectionType): boolean {
+  return HAS_PUBLIC_LANDING_PAGE[collectionType];
+}
+
 // ── Algorithm key registry ───────────────────────────────────────────────────
 //
 // algorithm_key is intentionally an application-dispatched named key (see
