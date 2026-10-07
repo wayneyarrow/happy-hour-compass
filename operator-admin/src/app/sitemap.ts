@@ -8,6 +8,12 @@ import { getCollections } from "@/lib/data/collections";
 import { getAllPublicGuidesForSitemap } from "@/lib/data/contentGuides";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
+import { getGuideLibraryForMarket } from "@/lib/data/contentGuideDistribution";
+import {
+  buildGuideLibrarySitemapPaths,
+  getGuidesLibraryState,
+  type GuidesLibraryState,
+} from "@/lib/guidesLibraryState";
 
 // Content changes constantly (venues, events, collections, guides) — always
 // read fresh, same as the public pages the sitemap links to.
@@ -112,9 +118,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // ── Per-market guide library index pages ────────────────────────────────
-  const guideLibraryPages: MetadataRoute.Sitemap = activeMarketSlugs.map((marketSlug) => ({
-    url: absoluteUrl(`/${marketSlug}/guides`),
-  }));
+  // Not redundant: a library with zero active guides_library placements is
+  // intentionally dormant (noindex/follow, see src/lib/guidesLibraryState.ts)
+  // and must not be submitted here. It's listed automatically, per market,
+  // as soon as getGuideLibraryForMarket() returns a guide. A failed lookup
+  // counts as dormant — omitting the URL for one run is the safe direction.
+  const libraryResults = await Promise.allSettled(
+    activeMarketSlugs.map(async (marketSlug) => {
+      const guides = await getGuideLibraryForMarket(marketSlug);
+      return [marketSlug, getGuidesLibraryState(guides.length)] as const;
+    })
+  );
+  const libraryStateByMarket = new Map<string, GuidesLibraryState>(
+    libraryResults.flatMap((result) => {
+      if (result.status === "fulfilled") return [result.value];
+      console.error("[sitemap] getGuideLibraryForMarket failed — omitting:", result.reason);
+      return [];
+    })
+  );
+  const guideLibraryPages: MetadataRoute.Sitemap = buildGuideLibrarySitemapPaths(
+    activeMarketSlugs,
+    libraryStateByMarket
+  ).map((path) => ({ url: absoluteUrl(path) }));
 
   // ── Published venue pages ───────────────────────────────────────────────
   // Venues in a non-active (coming-soon) market are still published in the

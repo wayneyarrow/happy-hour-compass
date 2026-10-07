@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getMarketById } from "@/lib/markets";
 import { getGuideLibraryForMarket } from "@/lib/data/contentGuideDistribution";
 import { GuideCard } from "@/app/(website)/GuideCard";
@@ -7,6 +8,13 @@ import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
+import { getPublicCollectionModel } from "@/lib/data/collectionPublic";
+import {
+  applyGuidesLibraryRobots,
+  getGuidesLibraryState,
+  resolveDormantGuidesCta,
+  FEATURED_GUIDES_COLLECTION_SLUG,
+} from "@/lib/guidesLibraryState";
 
 /**
  * Public Guides Library (Card 6B Part 4). Canonical URL: /{market}/guides —
@@ -19,6 +27,12 @@ import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
  * getGuideLibraryForMarket enforces all four via isGuidePublicNow() and the
  * content_guide_channels → content_guide_placements FK chain. No publish
  * logic is duplicated here.
+ *
+ * Zero library guides = DORMANT: still 200 + self-canonical, but
+ * noindex/follow, out of sitemap.xml, and shows a pointer to the Featured
+ * Guides collection instead of the card grid. One active guides_library
+ * placement makes it ACTIVE automatically. See src/lib/guidesLibraryState.ts
+ * (incl. its TODO(multi-market)) for why.
  */
 
 export const dynamic = "force-dynamic";
@@ -42,11 +56,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return buildComingSoonMetadata(marketConfig.name);
   }
 
-  return buildPageMetadata({
-    title: `Guides | ${marketConfig.name}`,
-    description: `Editorial guides to the best happy hours and events in ${marketConfig.name}, curated by Happy Hour Compass.`,
-    path: `/${market}/guides`,
-  });
+  const guides = await getGuideLibraryForMarket(market);
+
+  return applyGuidesLibraryRobots(
+    buildPageMetadata({
+      title: `Guides | ${marketConfig.name}`,
+      description: `Editorial guides to the best happy hours and events in ${marketConfig.name}, curated by Happy Hour Compass.`,
+      path: `/${market}/guides`,
+    }),
+    getGuidesLibraryState(guides.length)
+  );
 }
 
 export default async function GuidesLibraryPage({ params }: PageProps) {
@@ -61,6 +80,18 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
   }
 
   const guides = await getGuideLibraryForMarket(market);
+  const libraryState = getGuidesLibraryState(guides.length);
+
+  // Dormant only: link to the market's Featured Guides collection, but only
+  // if it actually resolves (same rule its own page uses to 404) — otherwise
+  // fall back to the homepage rather than linking to a dead URL.
+  const dormantCta =
+    libraryState === "dormant"
+      ? resolveDormantGuidesCta(
+          market,
+          (await getPublicCollectionModel(market, FEATURED_GUIDES_COLLECTION_SLUG)) !== null
+        )
+      : null;
 
   // Home → Guides. This page IS the "Guides" destination guide detail
   // pages' own breadcrumb links to, so its own breadcrumb ends with
@@ -90,10 +121,22 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
         by Happy Hour Compass.
       </p>
 
-      {guides.length === 0 ? (
-        <p className="text-sm text-gray-400">
-          No guides have been published for {marketConfig.name} yet. Check back soon.
-        </p>
+      {dormantCta ? (
+        <div className="max-w-2xl rounded-2xl border border-gray-200 bg-gray-50 px-6 py-10 md:px-10">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight mb-3">
+            Explore our {marketConfig.name} guides
+          </h2>
+          <p className="text-base text-gray-600 leading-relaxed mb-6">
+            Browse our featured guides for the best happy hours, food deals, patios, events,
+            and local recommendations across {marketConfig.name}.
+          </p>
+          <Link
+            href={dormantCta.href}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+          >
+            {dormantCta.label}
+          </Link>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {guides.map((g) => (

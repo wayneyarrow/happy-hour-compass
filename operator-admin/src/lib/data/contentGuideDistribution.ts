@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getMarketBySlug } from "@/lib/geo/geography";
 import { isGuidePublicNow, type GuideType, type GuideStatus } from "@/lib/data/contentGuides";
@@ -237,10 +238,16 @@ async function getMerchandisedPublicGuides(
     }));
 }
 
-/** Powers the public /{market}/guides library — the canonical destination (Part 4). */
-export async function getGuideLibraryForMarket(marketSlug: string): Promise<PublicGuideCardData[]> {
-  return getMerchandisedPublicGuides("guides_library", marketSlug);
-}
+/**
+ * Powers the public /{market}/guides library — the canonical destination (Part 4).
+ * Also the sole source of the library's dormant/active state (see
+ * src/lib/guidesLibraryState.ts). Wrapped in React cache() so the page's
+ * generateMetadata() and render share one query per request.
+ */
+export const getGuideLibraryForMarket = cache(
+  async (marketSlug: string): Promise<PublicGuideCardData[]> =>
+    getMerchandisedPublicGuides("guides_library", marketSlug)
+);
 
 /**
  * Powers the website homepage's Featured Guides rail — a curated subset of
