@@ -10,6 +10,7 @@ import DailySpecialsManager from "./DailySpecialsManager";
 import { DAILY_SPECIAL_COLUMNS } from "./columns";
 import EmptyState from "@/components/EmptyState";
 import type { DailySpecialRow } from "./formState";
+import { policyFromAccess } from "@/lib/planGrants/publicPlanState";
 
 export default async function AdminDailySpecialsPage() {
   const supabase = await createClient();
@@ -121,6 +122,7 @@ export default async function AdminDailySpecialsPage() {
           initialSpecials={initialSpecials}
           venueId={venue!.id}
           operatorPlan={ctx.activeVenuePlan}
+          publicPolicy={policyFromAccess(ctx.activeVenueAccess)}
           isOwner={isOwner}
           isUnclaimedVenueSupportMode={isUnclaimedVenueSupportMode}
         />

@@ -55,8 +55,10 @@ test("normal (non-impersonating) operators must own the target venue — checked
   );
 });
 
-test("venue plan is resolved via getVenuePlanCode(targetVenueId) — never a bare operator-level plan", () => {
-  assert.match(ACTIONS_SOURCE, /getVenuePlanCode\(targetVenueId\)/);
+test("venue plan is resolved via getVenueEffectivePlan(targetVenueId) — never a bare operator-level plan", () => {
+  // Comp/Trial Part 1: the target venue's EFFECTIVE plan (billing lifted by
+  // an active grant) — still venue-scoped, never the operator's.
+  assert.match(ACTIONS_SOURCE, /getVenueEffectivePlan\(targetVenueId\)/);
   assert.doesNotMatch(ACTIONS_SOURCE, /ctx\.operator\?\.plan/);
 });
 
@@ -165,7 +167,7 @@ test("delete is scoped by both id AND venue_id, verifies nonzero row count, and 
   assert.match(deleteBlock, /\.eq\("id", specialId\)/);
   assert.match(deleteBlock, /\.eq\("venue_id", targetVenueId\)/);
   assert.match(deleteBlock, /if \(!count\) \{/);
-  assert.doesNotMatch(deleteBlock, /getVenuePlanCode/);
+  assert.doesNotMatch(deleteBlock, /getVenueEffectivePlan|getVenuePlanCode/);
   assert.doesNotMatch(deleteBlock, /authorizeDailySpecialSave/);
 });
 

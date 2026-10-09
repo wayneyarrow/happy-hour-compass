@@ -7,6 +7,8 @@ import AdminSideNav from "./AdminSideNav";
 import AdminMobileNav from "./AdminMobileNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
 import ImpersonationBanner from "./ImpersonationBanner";
+import PlanAccessNotice from "./PlanAccessNotice";
+import { getVenuePausedContent } from "@/lib/planGrants/server";
 import VenueSwitcher from "./VenueSwitcher";
 import {
   IMP_COOKIE_NAME,
@@ -93,6 +95,14 @@ export default async function AdminLayout({
       .maybeSingle();
     isVenueCancelled = !!(venueRow as { cancelled_at: string | null } | null)?.cancelled_at;
   }
+
+  // Comp/Trial (Part 1): active/scheduled grant + paused-content notice for
+  // the active venue, shown once above every Operator Admin page. Queries
+  // nothing extra unless the venue is a grant recipient (see
+  // getVenuePausedContent), and renders nothing for venues with no grants.
+  const pausedContent = ctx.activeVenueId
+    ? await getVenuePausedContent(ctx.activeVenueId, ctx.activeVenueAccess)
+    : null;
 
   // Cancelled venue: show farewell screen instead of normal shell.
   if (isVenueCancelled) {
@@ -185,7 +195,14 @@ export default async function AdminLayout({
       {/* ── Sidebar + content ──────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         <AdminSideNav />
-        <main className="flex-1 overflow-y-auto bg-gray-100 p-6 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-gray-100 p-6 md:p-8">
+          {pausedContent && (
+            <div className="max-w-5xl">
+              <PlanAccessNotice access={ctx.activeVenueAccess} paused={pausedContent} />
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

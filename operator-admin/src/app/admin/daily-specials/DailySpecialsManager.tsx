@@ -8,6 +8,7 @@ import { deleteDailySpecialAction, getDailySpecialsForActiveVenueAction } from "
 import type { OperatorPlan } from "@/lib/plans";
 import { OFFER_TYPE_LABELS, coerceDailySpecialRow } from "@/lib/dailySpecialTypes";
 import { scheduleSummary, timeSummary, validitySummary } from "./summaryLabels";
+import { isDailySpecialPubliclyActive, UNRESTRICTED_POLICY, type PublicContentPolicy } from "@/lib/planGrants/contentPolicy";
 
 // ── Filter & Sort ─────────────────────────────────────────────────────────────
 
@@ -130,6 +131,12 @@ type Props = {
   isOwner: boolean;
   /** True only for founder impersonation of an unclaimed venue (Case B). */
   isUnclaimedVenueSupportMode: boolean;
+  /**
+   * Comp/Trial (Part 1): the venue's public content policy. Published weekly
+   * Daily Specials it pauses are badged "Paused" so the operator can see
+   * exactly which ones guests don't see.
+   */
+  publicPolicy?: PublicContentPolicy;
 };
 
 export default function DailySpecialsManager({
@@ -138,9 +145,14 @@ export default function DailySpecialsManager({
   operatorPlan,
   isOwner,
   isUnclaimedVenueSupportMode,
+  publicPolicy = UNRESTRICTED_POLICY,
 }: Props) {
   const router = useRouter();
   const [specials, setSpecials] = useState<DailySpecialRow[]>(initialSpecials);
+  const isSpecialPaused = (sp: DailySpecialRow) =>
+    sp.is_published === true &&
+    !isDailySpecialPubliclyActive(publicPolicy, { scheduleType: sp.schedule_type, isSeededSpecial: sp.is_seeded_special === true });
+  const pausedSpecialCount = specials.filter(isSpecialPaused).length;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -312,6 +324,15 @@ export default function DailySpecialsManager({
           </div>
         )}
 
+        {pausedSpecialCount > 0 && (
+          <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-700">
+            {pausedSpecialCount} weekly Daily Special{pausedSpecialCount === 1 ? " is" : "s are"} <strong>Paused</strong> —
+            saved, but weekly specials aren&rsquo;t included in your current plan, so guests don&rsquo;t see{" "}
+            {pausedSpecialCount === 1 ? "it" : "them"}. To show one now, open it and switch it to &ldquo;One time&rdquo;;
+            or upgrade to bring {pausedSpecialCount === 1 ? "it" : "them"} back.
+          </div>
+        )}
+
         {visibleSpecials.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-10 text-center">
             <p className="text-sm font-medium text-gray-600">{EMPTY_MESSAGES[activeFilter]}</p>
@@ -364,6 +385,14 @@ export default function DailySpecialsManager({
                         >
                           {special.is_published ? "Published" : "Draft"}
                         </span>
+                        {isSpecialPaused(special) && (
+                          <span
+                          title="Saved but not shown to guests on your current plan"
+                          className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300"
+                        >
+                          Paused
+                        </span>
+                        )}
                       </div>
                     </button>
                   </li>

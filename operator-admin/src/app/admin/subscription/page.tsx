@@ -16,7 +16,7 @@ import {
   type OperatorPlan,
 } from "@/lib/plans";
 import type { SubscriptionStatus } from "@/lib/subscriptions";
-import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
+import { getOperatorHighestEffectivePlan } from "@/lib/planGrants/server";
 import { parseSpecialItemCount } from "@/lib/venueReadiness";
 import { countOperatorMembers, getMembershipRole } from "@/lib/memberships";
 import ChangePlanModal from "./ChangePlanModal";
@@ -220,7 +220,16 @@ export default async function AdminSubscriptionPage({
   // page's plan/usage/billing/portal/checkout target automatically, since
   // it all flows from ctx.activeVenueId.
   const subscription = ctx.activeVenueSubscription;
+  // Comp/Trial (Part 1): `plan` is the EFFECTIVE plan (what the venue can
+  // use — drives usage limits below). `billingPlan` is what the venue
+  // actually pays for and is the ONLY plan the Change Plan modal, Stripe
+  // Checkout routing and the cancellation save-path see, so a comped
+  // Premium venue still shows Free as its billing plan and can buy Premium
+  // (or Pro) through the existing Checkout flow unchanged.
   const plan: OperatorPlan = ctx.activeVenuePlan;
+  const billingPlan: OperatorPlan = ctx.activeVenueBillingPlan;
+  const access = ctx.activeVenueAccess;
+  const isGrantAccess = access.source === "grant";
   const status: SubscriptionStatus = subscription?.status ?? "active";
   const billingProvider   = subscription?.billing_provider ?? null;
   const stripeCustomerId  = subscription?.billing_provider_customer_id ?? null;
@@ -236,8 +245,8 @@ export default async function AdminSubscriptionPage({
   // therefore reflect the SAME highest-plan-wins seat cap used everywhere
   // else the team limit is enforced (admin/users), not this one venue's own
   // plan, or switching venues would show a conflicting seat limit for the
-  // exact same shared team. See getOperatorHighestVenuePlan()'s doc comment.
-  const teamPlan = operator ? await getOperatorHighestVenuePlan(operator.id) : plan;
+  // exact same shared team. See getOperatorHighestEffectivePlan()'s doc comment.
+  const teamPlan = operator ? await getOperatorHighestEffectivePlan(operator.id) : plan;
 
   // ── Venue usage data ──────────────────────────────────────────────────────
 
@@ -391,7 +400,13 @@ export default async function AdminSubscriptionPage({
               {PLAN_LABELS[plan]} Plan
             </h3>
             <div className="mb-3">
-              <StatusBadge status={status} />
+              {isGrantAccess ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-300">
+                  Complimentary · Billing plan: {PLAN_LABELS[billingPlan]}
+                </span>
+              ) : (
+                <StatusBadge status={status} />
+              )}
             </div>
             <p className="text-sm text-gray-600 leading-relaxed">
               {PLAN_DESCRIPTIONS[plan]}
@@ -400,7 +415,7 @@ export default async function AdminSubscriptionPage({
           <div className="shrink-0 flex flex-col items-end gap-2">
             {isStripeBilled && <ManageBillingButton isOwner={isOwner} />}
             <ChangePlanModal
-              currentPlan={plan}
+              currentPlan={billingPlan}
               operatorId={operator?.id ?? null}
               imageCount={imageCount}
               foodCount={foodCount}
@@ -503,7 +518,7 @@ export default async function AdminSubscriptionPage({
         <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 pb-6">
           <CancelVenueSection
             venueId={venue.id}
-            currentPlan={plan}
+            currentPlan={billingPlan}
             isOwner={isOwner}
           />
         </div>

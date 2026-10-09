@@ -2,7 +2,7 @@
 
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { maxImages } from "@/lib/plans";
-import { getVenuePlanCode } from "@/lib/venueSubscriptions";
+import { getVenueEffectivePlan } from "@/lib/planGrants/server";
 
 const BUCKET = "venue-images";
 
@@ -50,7 +50,7 @@ export async function uploadVenueImageAction(
   // operator's — targetVenueId is the actual venue being written to, which
   // may differ from ctx.activeVenueId in theory, so it is resolved directly
   // rather than reused from ctx.activeVenuePlan.
-  const plan = await getVenuePlanCode(targetVenueId);
+  const plan = await getVenueEffectivePlan(targetVenueId);
   const imageLimit = maxImages(plan);
 
   if (existingCount >= imageLimit) {

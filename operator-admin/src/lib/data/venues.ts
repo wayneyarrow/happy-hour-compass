@@ -12,6 +12,20 @@ import {
   getEventsForConsumerVenues,
 } from "@/lib/data/events";
 import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
+import { higherPlan } from "@/lib/planGrants/grantState";
+import {
+  resolveVenuePlanContext,
+  VENUE_PLAN_CONTEXT_EMBED,
+} from "@/lib/planGrants/publicPlanState";
+import {
+  UNRESTRICTED_POLICY,
+  publicDrinkSpecialLimit,
+  publicFoodSpecialLimit,
+  publicImageLimit,
+  publicSearchTagLimit,
+  takeFirst,
+  truncateRawSpecials,
+} from "@/lib/planGrants/contentPolicy";
 import { getPublishedDailySpecialsForVenue } from "@/lib/data/dailySpecials";
 import type { DailySpecial } from "@/lib/dailySpecialTypes";
 
@@ -548,9 +562,29 @@ function parseSpecials(raw: string | null): string[] {
   }
 }
 
-/** Maps a raw Supabase venue row to ConsumerVenue. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
+/**
+ * Maps a raw Supabase venue row to ConsumerVenue.
+ *
+ * Comp/Trial (Part 1): the row must embed VENUE_PLAN_CONTEXT_EMBED. For
+ * grant recipients only, food/drink specials and search tags are cut to the
+ * effective plan's limits HERE, before anything downstream parses, counts,
+ * searches or ranks them; operatorPlan (Discover ranking) is lifted by an
+ * active grant. Venues with no grants are mapped exactly as before. A row
+ * missing the embed throws (see resolveVenuePlanContext) — callers' try/catch
+ * treats that as a failed read, never as "no grants".
+ *
+ * `enforce: false` (operator preview) shows stored content as-is.
+ */
+function rowToConsumerVenue(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row: Record<string, any>,
+  options: { nowMs: number; enforce: boolean }
+): ConsumerVenue {
+  const planContext = resolveVenuePlanContext(row, options.nowMs);
+  const policy = options.enforce ? planContext.policy : UNRESTRICTED_POLICY;
+  const foodRaw = truncateRawSpecials(row.hh_food_details as string | null, publicFoodSpecialLimit(policy));
+  const drinkRaw = truncateRawSpecials(row.hh_drink_details as string | null, publicDrinkSpecialLimit(policy));
+
   let paymentMethods = "";
   if (row.payment_types) {
     try {
@@ -587,11 +621,9 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     hoursWeekly: mapBusinessHours(
       row.business_hours as Record<string, DbDayHours> | null
     ),
-    specialsFood: parseSpecials(row.hh_food_details as string | null),
-    specialsDrinks: parseSpecials(row.hh_drink_details as string | null),
-    hasUnderTenItem:
-      rawSpecialsHaveUnderTen(row.hh_food_details as string | null) ||
-      rawSpecialsHaveUnderTen(row.hh_drink_details as string | null),
+    specialsFood: parseSpecials(foodRaw),
+    specialsDrinks: parseSpecials(drinkRaw),
+    hasUnderTenItem: rawSpecialsHaveUnderTen(foodRaw) || rawSpecialsHaveUnderTen(drinkRaw),
     events: [],  // populated by callers after event fetch
     images: [],  // populated by getVenueWithEventsForConsumerById after image fetch
     dailySpecials: [],  // populated by getVenueWithEventsForConsumerById after Daily Specials fetch
@@ -602,7 +634,10 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     isVerified: row.is_verified === true,
     marketSlug: (row.market_geo as { slug?: string } | null)?.slug ?? null,
     citySlug: (row.city_geo as { slug?: string } | null)?.slug ?? null,
-    searchTags: Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
+    searchTags: takeFirst(
+      Array.isArray(row.search_tags) ? (row.search_tags as string[]) : [],
+      publicSearchTagLimit(policy)
+    ),
     seededTags: Array.isArray(row.seeded_tags) ? (row.seeded_tags as string[]) : [],
     aboutYourVenue: typeof row.about_your_venue === "string" && row.about_your_venue.trim()
       ? row.about_your_venue
@@ -616,8 +651,11 @@ function rowToConsumerVenue(row: Record<string, any>): ConsumerVenue {
     // Phase 2B: venue_subscriptions is a nested object from the joined
     // venue_subscriptions table — null when the venue has no row (Free, or
     // never on a paid plan, including every seeded/unclaimed venue).
-    operatorPlan: resolvePlanCodeFromJoinedField(
-      row.venue_subscriptions as { plan_code?: unknown } | null
+    // Comp/Trial: lifted by an active grant — the joined billing plan
+    // itself is unchanged.
+    operatorPlan: higherPlan(
+      resolvePlanCodeFromJoinedField(row.venue_subscriptions as { plan_code?: unknown } | null),
+      planContext.rankingPlan
     ),
   };
 }
@@ -653,6 +691,9 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
           // here, same as the operators join it replaces — a venue with no
           // row is never excluded from the result set).
           `${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ` +
+          // Comp/Trial: grants + billing + ownership in the SAME query, so
+          // a grant recipient's limits can't be lost to a separate failed read.
+          `${VENUE_PLAN_CONTEXT_EMBED}, ` +
           // Canonical market/city slugs for the public /{market}/{city}/{slug}
           // venue URL. Aliased (market_geo/city_geo) to avoid colliding with
           // the plain `city` text column already selected above.
@@ -667,11 +708,12 @@ export async function getPublishedVenuesForConsumer(): Promise<ConsumerVenue[]> 
     }
 
     const rows = data ?? [];
+    const nowMs = Date.now();
 
     // Map venue rows to ConsumerVenue (events: [] and images: [] initially)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const venues = rows.map((row: Record<string, any>) =>
-      rowToConsumerVenue(row)
+      rowToConsumerVenue(row, { nowMs, enforce: true })
     );
 
     // Collect DB UUIDs (venues.id) — distinct from the consumer-facing slug
@@ -748,6 +790,8 @@ const VENUE_DETAIL_SELECT =
   "payment_types, hh_times, hh_tagline, hh_food_details, hh_drink_details, business_hours, " +
   "establishment_type, placeholder_image_path, claimed_at, google_rating, google_review_count, place_id, is_verified, " +
   "search_tags, about_your_venue, updated_at, " +
+  // Comp/Trial: grants + billing + ownership for the content policy.
+  `${VENUE_PLAN_CONTEXT_EMBED}, ` +
   // Canonical market/city slugs for the public /{market}/{city}/{slug} venue
   // URL — see ConsumerVenue.marketSlug/citySlug.
   "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)";
@@ -799,27 +843,35 @@ export async function getVenueWithEventsForConsumerById(
 
     if (!row) return null;
 
-    const venue = rowToConsumerVenue(row);
+    // Preview (operator authoring) shows stored content as-is; the public
+    // page applies the venue's content policy (Comp/Trial grant recipients).
+    const enforce = !options?.includeUnpublished;
+    const venue = rowToConsumerVenue(row, { nowMs: Date.now(), enforce });
+    const policy = enforce ? resolveVenuePlanContext(row, Date.now()).policy : UNRESTRICTED_POLICY;
 
     // Fetch events and images using the DB UUID (row.id), not the slug
     const venueUuid = row.id as string;
 
+    const includePaused = options?.includeUnpublished === true;
     const [events, imageData, dailySpecials] = await Promise.all([
-      getEventsForConsumerVenues([venueUuid]),
+      getEventsForConsumerVenues([venueUuid], { includePaused }),
       supabase
         .from("media")
         .select("url")
         .eq("venue_id", venueUuid)
         .eq("type", "venue_image")
         .order("sort_order", { ascending: true }),
-      getPublishedDailySpecialsForVenue(venueUuid),
+      getPublishedDailySpecialsForVenue(venueUuid, { includePaused }),
     ]);
 
     venue.events = events;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    venue.images = (imageData.data ?? []).map((r: Record<string, any>) => ({
-      url: r.url as string,
-    }));
+    // Images in sort_order; a grant recipient shows only the first N its
+    // effective plan allows (hero first).
+    venue.images = takeFirst(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (imageData.data ?? []).map((r: Record<string, any>) => ({ url: r.url as string })),
+      publicImageLimit(policy)
+    );
     venue.dailySpecials = dailySpecials;
 
     return venue;
@@ -993,6 +1045,7 @@ export async function getPublishedVenuesByUuids(
           // Phase 2B: this venue's OWN plan (venue_subscriptions), not the
           // operator's — see the other query in this file for full rationale.
           `${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ` +
+          `${VENUE_PLAN_CONTEXT_EMBED}, ` +
           "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug)"
       )
       .eq("is_published", true)
@@ -1000,8 +1053,9 @@ export async function getPublishedVenuesByUuids(
 
     if (error || !data || data.length === 0) return [];
 
+    const nowMs = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const venues = (data as Record<string, any>[]).map(rowToConsumerVenue);
+    const venues = (data as Record<string, any>[]).map((row) => rowToConsumerVenue(row, { nowMs, enforce: true }));
 
     // Fetch primary image per venue (first by sort_order).
     const { data: mediaRows } = await supabase

@@ -13,6 +13,7 @@ import HhTimesSection from "./HhTimesSection";
 import TaglineForm from "./TaglineForm";
 import HhTimesForm from "./HhTimesForm";
 import SpecialsForm from "./SpecialsForm";
+import { policyFromAccess } from "@/lib/planGrants/publicPlanState";
 import type { HhItem } from "./types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -193,6 +194,9 @@ export default async function AdminHappyHoursPage({
   // Phase 2B: the active venue's own plan, never operator.plan.
   const operatorPlan = ctx.activeVenuePlan;
   const foodLimit  = maxFoodSpecials(operatorPlan);
+  // Comp/Trial: grant recipients' public specials are limited to the
+  // effective plan — mark which saved items are paused (see SpecialsForm).
+  const publicPolicy = policyFromAccess(ctx.activeVenueAccess);
   const drinkLimit = maxDrinkSpecials(operatorPlan);
 
   return (
@@ -273,6 +277,7 @@ export default async function AdminHappyHoursPage({
               itemLimit={foodLimit}
               plan={operatorPlan}
               isOwner={isOwner}
+              pausedFromIndex={publicPolicy.enforced ? foodLimit : null}
             />
           </AccordionSection>
 
@@ -289,6 +294,7 @@ export default async function AdminHappyHoursPage({
               itemLimit={drinkLimit}
               plan={operatorPlan}
               isOwner={isOwner}
+              pausedFromIndex={publicPolicy.enforced ? drinkLimit : null}
             />
           </AccordionSection>
 

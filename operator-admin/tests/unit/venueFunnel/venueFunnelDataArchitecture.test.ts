@@ -84,7 +84,12 @@ test("lanes are always rendered from the full LANE_ORDER, never filtered out whe
 
 test("19. venue/media/subscription/operator queries are batched via .in(...), never issued inside a per-card loop", () => {
   assert.match(DATA_SOURCE, /\.from\("media"\)\.select\("venue_id, url"\)\.in\("venue_id", activeVenueIds\)/);
-  assert.match(DATA_SOURCE, /\.from\("venue_subscriptions"\)\.select\("venue_id, plan_code, status"\)\.in\("venue_id", activeVenueIds\)/);
+  // Comp/Trial Part 1 widened the select (billing_provider + subscription id,
+  // for the separate paid/manual badge) — still one batched .in() read.
+  assert.match(
+    DATA_SOURCE,
+    /\.from\("venue_subscriptions"\)\s*\.select\("venue_id, plan_code, status, billing_provider, billing_provider_subscription_id"\)\s*\.in\("venue_id", activeVenueIds\)/
+  );
   assert.match(DATA_SOURCE, /\.from\("operators"\)[\s\S]*?\.in\("id", opIds\)/);
 });
 

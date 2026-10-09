@@ -13,6 +13,47 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { haversineKm } from "@/lib/discover/discoverEngine";
 import { toMarketConfig, type Market } from "@/lib/markets";
 import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
+import { resolveVenuePlanContext, VENUE_PLAN_CONTEXT_EMBED } from "@/lib/planGrants/publicPlanState";
+import { higherPlan } from "@/lib/planGrants/grantState";
+import {
+  type PublicContentPolicy,
+  isEventPubliclyActive,
+  publicDrinkSpecialLimit,
+  publicFoodSpecialLimit,
+  publicImageLimit,
+  takeFirst,
+} from "@/lib/planGrants/contentPolicy";
+
+/**
+ * Comp/Trial (Part 1): every event query embeds its venue's plan context
+ * (`venues!venue_id(${VENUE_PLAN_CONTEXT_EMBED})`, or the fields appended
+ * to an existing venues embed), so the policy comes from the SAME query as
+ * the event — a failed grant read is a failed event read, never "show
+ * everything". A row missing the embed throws PlanContextUnavailableError,
+ * which each reader's try/catch turns into its normal error result.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function eventVenuePolicy(row: Record<string, any>, nowMs: number): PublicContentPolicy {
+  const venue = Array.isArray(row.venues) ? row.venues[0] : row.venues;
+  return resolveVenuePlanContext(venue ?? null, nowMs).policy;
+}
+
+/**
+ * Whether a published event row is publicly active under a content policy.
+ * Only grant recipients are ever restricted (paused non-seeded recurring
+ * events). Applied immediately after each query, before any occurrence
+ * expansion, sorting, counting or pagination.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isRowPubliclyActive(row: Record<string, any>, policy: PublicContentPolicy): boolean {
+  return isEventPubliclyActive(policy, {
+    recurrence: (row.recurrence as string | null) ?? null,
+    isSeededEvent: row.is_seeded_event === true,
+  });
+}
+
+/** Venue embed fragment carrying only the plan context (for queries with no venues embed yet). */
+const VENUE_PLAN_ONLY_EMBED = `venues!venue_id(${VENUE_PLAN_CONTEXT_EMBED})`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -401,7 +442,8 @@ export async function getEventForConsumerById(
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
           "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
-          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
+          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes, " +
+          VENUE_PLAN_ONLY_EMBED
       )
       .eq("id", id);
 
@@ -422,6 +464,12 @@ export async function getEventForConsumerById(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const row = data as Record<string, any>;
     const venueId = row.venue_id as string;
+
+    // A paused recurring event (Comp/Trial grant recipient) is not publicly
+    // visible — same outcome as unpublished. Preview still shows it.
+    if (!options?.includeUnpublished && !isRowPubliclyActive(row, eventVenuePolicy(row, Date.now()))) {
+      return null;
+    }
 
     // Fetch venue context for detail page rendering (action buttons + info rows).
     const { data: venueRow } = await supabase
@@ -484,7 +532,8 @@ export async function getEventForConsumerById(
  * Returns an empty array on any error so the caller never hard-crashes.
  */
 export async function getEventsForConsumerVenues(
-  venueIds: string[]
+  venueIds: string[],
+  options?: { includePaused?: boolean }
 ): Promise<ConsumerEvent[]> {
   if (venueIds.length === 0) return [];
 
@@ -495,7 +544,8 @@ export async function getEventsForConsumerVenues(
       .select(
         "id, venue_id, title, description, event_type, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency"
+          "event_time, event_frequency, is_seeded_event, " +
+          VENUE_PLAN_ONLY_EMBED
       )
       .in("venue_id", venueIds)
       .eq("is_published", true)
@@ -508,9 +558,11 @@ export async function getEventsForConsumerVenues(
     }
 
     const today = new Date().toISOString().slice(0, 10);
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).filter((row: Record<string, any>) => {
+      if (!options?.includePaused && !isRowPubliclyActive(row, eventVenuePolicy(row, nowMs))) return false;
       const isRecurring = row.recurrence && row.recurrence !== "none";
       return isRecurring || !row.first_date || (row.first_date as string) >= today;
     }).map((row: Record<string, any>) => ({
@@ -605,8 +657,8 @@ export async function getPublishedEventsForConsumer(): Promise<
       .select(
         "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, updated_at, " +
-          "venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
+          "event_time, event_frequency, updated_at, is_seeded_event, " +
+          `venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .eq("is_published", true)
       .order("title", { ascending: true });
@@ -618,12 +670,16 @@ export async function getPublishedEventsForConsumer(): Promise<
 
     const today = new Date().toISOString().slice(0, 10);
 
+    const nowMs = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRows = (data ?? []) as Record<string, any>[];
 
-    // Exclude past one-off events (bucket 1). Recurring events always show.
+    // Exclude paused events (Comp/Trial grant recipients), then past one-off
+    // events (bucket 1). Recurring events otherwise always show.
     const rows = allRows.filter(
-      (row) => upcomingBucket(row.first_date, row.recurrence, today) !== 1
+      (row) =>
+        isRowPubliclyActive(row, eventVenuePolicy(row, nowMs)) &&
+        upcomingBucket(row.first_date, row.recurrence, today) !== 1
     );
 
     rows.sort((a, b) => {
@@ -740,10 +796,10 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
       .select(
         "id, venue_id, title, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, " +
+          "event_time, event_frequency, is_seeded_event, " +
           "internal_boost, exclude_from_discover, " +
           "venues!venue_id(" +
-            `id, slug, name, lat, lng, exclude_from_discover, ${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}` +
+            `id, slug, name, lat, lng, exclude_from_discover, ${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ${VENUE_PLAN_CONTEXT_EMBED}` +
           ")"
       )
       .eq("is_published", true)
@@ -755,11 +811,21 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
     }
 
     const today = new Date().toISOString().slice(0, 10);
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
       const firstDate  = (row.first_date as string | null) ?? null;
       const recurrence = (row.recurrence as string | null) ?? null;
+
+      // Paused events (Comp/Trial grant recipients) are never candidates —
+      // these feed the public Featured Events rail and algorithmic event
+      // Collections, so they must be excluded before ranking/limits.
+      const planContext = resolveVenuePlanContext(
+        (Array.isArray(row.venues) ? row.venues[0] : row.venues) ?? null,
+        nowMs
+      );
+      if (!isRowPubliclyActive(row, planContext.policy)) return [];
 
       // Filter out past one-off events (same logic as upcomingBucket)
       if (upcomingBucket(firstDate, recurrence, today) === 1) return [];
@@ -768,8 +834,10 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
       const venue = (row.venues as Record<string, any> | null) ?? {};
       // Phase 2B: this event's own venue's plan — never the operator's, and
       // never a sibling venue's.
-      const plan: CPFeaturedEventItem["operatorPlan"] = resolvePlanCodeFromJoinedField(
-        venue.venue_subscriptions as { plan_code?: unknown } | null
+      // Comp/Trial: lifted by an active grant (ranking only — billing unchanged).
+      const plan: CPFeaturedEventItem["operatorPlan"] = higherPlan(
+        resolvePlanCodeFromJoinedField(venue.venue_subscriptions as { plan_code?: unknown } | null),
+        planContext.rankingPlan
       );
 
       return [{
@@ -858,8 +926,8 @@ export async function getPublishedEventsForWebsite(
       .select(
         "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, " +
-          "venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
+          "event_time, event_frequency, is_seeded_event, " +
+          `venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .eq("is_published", true)
       .order("first_date", { ascending: true, nullsFirst: false })
@@ -872,9 +940,14 @@ export async function getPublishedEventsForWebsite(
 
     const today = new Date().toISOString().slice(0, 10);
     const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
+      // Paused events (Comp/Trial grant recipients) never reach search
+      // results, counts or pagination.
+      if (!isRowPubliclyActive(row, eventVenuePolicy(row, nowMs))) return [];
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};
       const vLat = typeof venue.lat === "number" ? venue.lat : null;
@@ -1039,7 +1112,8 @@ async function getEventForWebsiteByField(
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, " +
           "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
-          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes"
+          "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes, " +
+          VENUE_PLAN_ONLY_EMBED
       )
       .eq(field, value);
     if (!options?.includeUnpublished) {
@@ -1059,6 +1133,13 @@ async function getEventForWebsiteByField(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const row = eventData as Record<string, any>;
     const venueId = row.venue_id as string;
+
+    // Comp/Trial: a paused recurring event's direct page 404s exactly like
+    // an unpublished one (no page, so no metadata/structured data either).
+    // Preview (operator authoring) still renders the stored event.
+    const isPreview = options?.includeUnpublished === true;
+    const venuePolicy = isPreview ? null : eventVenuePolicy(row, Date.now());
+    if (venuePolicy && !isRowPubliclyActive(row, venuePolicy)) return null;
 
     const firstDate = (row.first_date as string | null) ?? null;
     const recurrence = (row.recurrence as string | null) ?? null;
@@ -1084,7 +1165,7 @@ async function getEventForWebsiteByField(
         .select(
           "id, slug, title, event_type, " +
             "first_date, start_time, end_time, recurrence, " +
-            "event_time, event_frequency"
+            "event_time, event_frequency, is_seeded_event"
         )
         .eq("venue_id", venueId)
         .eq("is_published", true)
@@ -1108,6 +1189,8 @@ async function getEventForWebsiteByField(
     // Filter other events to upcoming only, limit for display.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawOther = ((otherEventsResult.data ?? []) as Record<string, any>[])
+      // Same venue as the main event → same policy (preview shows all).
+      .filter((e) => !venuePolicy || isRowPubliclyActive(e, venuePolicy))
       .filter((e) => {
         const rec = e.recurrence as string | null;
         const fd = e.first_date as string | null;
@@ -1166,12 +1249,21 @@ async function getEventForWebsiteByField(
         typeof vr.google_review_count === "number" ? vr.google_review_count : null,
       venueHhTagline: (vr.hh_tagline as string) ?? "",
       venueHhWeekly: parseHhTimesForWebsite(vr.hh_times as string | null),
-      venueSpecialsFoodCount: countSpecialsItems(vr.hh_food_details as string | null),
-      venueSpecialsDrinksCount: countSpecialsItems(vr.hh_drink_details as string | null),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      venueImages: (imagesResult.data ?? []).map((r: Record<string, any>) => ({
-        url: r.url as string,
-      })),
+      // Comp/Trial grant recipients: counts/images capped to the effective
+      // plan, matching the venue page (no-op for every other venue).
+      venueSpecialsFoodCount: Math.min(
+        countSpecialsItems(vr.hh_food_details as string | null),
+        venuePolicy ? publicFoodSpecialLimit(venuePolicy) : Infinity
+      ),
+      venueSpecialsDrinksCount: Math.min(
+        countSpecialsItems(vr.hh_drink_details as string | null),
+        venuePolicy ? publicDrinkSpecialLimit(venuePolicy) : Infinity
+      ),
+      venueImages: takeFirst(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (imagesResult.data ?? []).map((r: Record<string, any>) => ({ url: r.url as string })),
+        venuePolicy ? publicImageLimit(venuePolicy) : Infinity
+      ),
       otherEvents: rawOther.map((e) => ({
         id: e.id as string,
         slug: (e.slug as string) ?? "",
@@ -1295,16 +1387,19 @@ export async function getEventPreviewsByIds(
     const { data: rows, error } = await supabase
       .from("events")
       .select(
-        "id, slug, title, image_url, first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
+        "id, slug, venue_id, title, image_url, first_date, start_time, end_time, recurrence, is_seeded_event, " +
+          `event_time, event_frequency, venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .in("id", eventIds)
       .eq("is_published", true);
 
     if (error || !rows || rows.length === 0) return [];
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((r: Record<string, any>): EventPreview => {
+    return (rows as Record<string, any>[])
+      .filter((r) => isRowPubliclyActive(r, eventVenuePolicy(r, nowMs)))
+      .map((r): EventPreview => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (r.venues as Record<string, any> | null) ?? {};
 
@@ -1350,18 +1445,21 @@ export async function getPublishedEventsByIds(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, slug, title, description, event_type, image_url, teaser, " +
+        "id, slug, venue_id, title, description, event_type, image_url, teaser, " +
           "first_date, start_time, end_time, recurrence, " +
-          "event_time, event_frequency, " +
-          "venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
+          "event_time, event_frequency, is_seeded_event, " +
+          `venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .in("id", ids)
       .eq("is_published", true);
 
     if (error || !data || data.length === 0) return [];
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (data as Record<string, any>[]).map((row): WebsiteEventListItem => {
+    return (data as Record<string, any>[])
+      .filter((row) => isRowPubliclyActive(row, eventVenuePolicy(row, nowMs)))
+      .map((row): WebsiteEventListItem => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};
       const vLat = typeof venue.lat === "number" ? venue.lat : null;

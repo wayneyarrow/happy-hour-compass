@@ -31,6 +31,31 @@ import { haversineKm } from "@/lib/discover/discoverEngine";
 import { toMarketConfig, type Market } from "@/lib/markets";
 import { hasCurrentOrUpcomingOccurrence } from "@/lib/dailySpecialSchedule";
 import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
+import { resolveVenuePlanContext, VENUE_PLAN_CONTEXT_EMBED } from "@/lib/planGrants/publicPlanState";
+import { isDailySpecialPubliclyActive } from "@/lib/planGrants/contentPolicy";
+
+/**
+ * Comp/Trial (Part 1): every public Daily Special query embeds its venue's
+ * plan context in the SAME query (a failed grant read is a failed specials
+ * read, never "show everything"). Only grant recipients are ever restricted
+ * (paused non-seeded weekly specials); every other venue's specials pass.
+ * A row missing the embed throws, which the reader's try/catch turns into
+ * its normal error result.
+ */
+function isSpecialPubliclyActive(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row: Record<string, any>,
+  nowMs: number
+): boolean {
+  const venue = Array.isArray(row.venues) ? row.venues[0] : row.venues;
+  return isDailySpecialPubliclyActive(resolveVenuePlanContext(venue ?? null, nowMs).policy, {
+    scheduleType: row.schedule_type as string | null,
+    isSeededSpecial: row.is_seeded_special === true,
+  });
+}
+
+/** Plan-context embed for queries that read daily_specials without a venues embed. */
+const VENUE_PLAN_ONLY_EMBED = `venues(${VENUE_PLAN_CONTEXT_EMBED})`;
 
 const DAILY_SPECIAL_COLUMNS =
   "id, venue_id, created_by_operator_id, updated_by_operator_id, created_at, updated_at, " +
@@ -62,14 +87,15 @@ function coerceRows(rows: DailySpecialDbRow[]): DailySpecial[] {
  */
 export async function getDailySpecialsForVenue(
   venueId: string,
-  options?: { includeUnpublished?: boolean }
+  options?: { includeUnpublished?: boolean; includePaused?: boolean }
 ): Promise<DailySpecial[]> {
   try {
     const supabase = createAdminClient();
 
+    const enforce = !options?.includeUnpublished && !options?.includePaused;
     let query = supabase
       .from("daily_specials")
-      .select(DAILY_SPECIAL_COLUMNS)
+      .select(enforce ? `${DAILY_SPECIAL_COLUMNS}, ${VENUE_PLAN_ONLY_EMBED}` : DAILY_SPECIAL_COLUMNS)
       .eq("venue_id", venueId)
       .order("created_at", { ascending: true });
 
@@ -84,7 +110,15 @@ export async function getDailySpecialsForVenue(
       return [];
     }
 
-    return coerceRows((data ?? []) as unknown as DailySpecialDbRow[]);
+    // Public reads apply the venue's content policy (Comp/Trial grant
+    // recipients) before coercion; preview/authoring reads see everything.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let rows = (data ?? []) as unknown as Record<string, any>[];
+    if (enforce) {
+      const nowMs = Date.now();
+      rows = rows.filter((row) => isSpecialPubliclyActive(row, nowMs));
+    }
+    return coerceRows(rows as unknown as DailySpecialDbRow[]);
   } catch (err) {
     console.error("[getDailySpecialsForVenue] Unexpected error:", err);
     return [];
@@ -97,8 +131,11 @@ export async function getDailySpecialsForVenue(
  * surface) that only ever wants published content and shouldn't need to
  * know about getDailySpecialsForVenue()'s preview option at all.
  */
-export async function getPublishedDailySpecialsForVenue(venueId: string): Promise<DailySpecial[]> {
-  return getDailySpecialsForVenue(venueId, { includeUnpublished: false });
+export async function getPublishedDailySpecialsForVenue(
+  venueId: string,
+  options?: { includePaused?: boolean }
+): Promise<DailySpecial[]> {
+  return getDailySpecialsForVenue(venueId, { includeUnpublished: false, includePaused: options?.includePaused });
 }
 
 /**
@@ -120,9 +157,10 @@ export async function getDailySpecialById(
   try {
     const supabase = createAdminClient();
 
+    const enforce = !options?.includeUnpublished;
     let query = supabase
       .from("daily_specials")
-      .select(DAILY_SPECIAL_COLUMNS)
+      .select(enforce ? `${DAILY_SPECIAL_COLUMNS}, ${VENUE_PLAN_ONLY_EMBED}` : DAILY_SPECIAL_COLUMNS)
       .eq("id", id);
 
     if (!options?.includeUnpublished) {
@@ -137,6 +175,8 @@ export async function getDailySpecialById(
     }
     if (!data) return null;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (enforce && !isSpecialPubliclyActive(data as unknown as Record<string, any>, Date.now())) return null;
     return coerceDailySpecialRow(data as unknown as DailySpecialDbRow);
   } catch (err) {
     console.error("[getDailySpecialById] Unexpected error:", err);
@@ -230,9 +270,9 @@ export async function getPublishedDailySpecialsForWebsite(
         "id, title, offer_type, short_summary, description, conditions, image_url, " +
           "schedule_type, one_time_date, days_of_week, recurrence_start_date, recurrence_end_date, " +
           "time_mode, start_time, end_mode, end_time, " +
-          "venue_id, " +
+          "venue_id, is_seeded_special, " +
           "venues!inner(name, slug, lat, lng, establishment_type, placeholder_image_path, is_published, is_verified, " +
-          "market_geo:markets!market_id(slug), city_geo:cities!city_id(slug))"
+          `market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .eq("is_published", true)
       .eq("venues.is_published", true)
@@ -245,10 +285,14 @@ export async function getPublishedDailySpecialsForWebsite(
 
     const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
     const marketToday = getMarketLocalIsoDate(market.id, new Date());
+    const nowMs = Date.now();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
       if (!isOfferType(row.offer_type)) return [];
+      // Paused weekly specials (Comp/Trial grant recipients) never reach
+      // search results, Today's Specials, homepage totals or Collections.
+      if (!isSpecialPubliclyActive(row, nowMs)) return [];
 
       const schedule = coerceDailySpecialSchedule({
         schedule_type: row.schedule_type,

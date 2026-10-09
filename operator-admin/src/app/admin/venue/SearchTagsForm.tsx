@@ -17,6 +17,11 @@ type Props = {
   plan: OperatorPlan;
   tagLimit: number;
   isOwner: boolean;
+  /**
+   * Comp/Trial (Part 1): saved tags beyond the effective plan's limit — kept,
+   * but not used in search. Empty when nothing is enforced.
+   */
+  pausedTags?: string[];
 };
 
 const initialState: SearchTagsState = {};
@@ -27,6 +32,7 @@ export default function SearchTagsForm({
   plan,
   tagLimit,
   isOwner,
+  pausedTags = [],
 }: Props) {
   const router = useRouter();
   const boundAction = updateSearchTagsAction.bind(null, venueId);
@@ -56,11 +62,24 @@ export default function SearchTagsForm({
     }
   }, [state, router]);
 
+  const pausedNotice = pausedTags.length > 0 && (
+    <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700">
+      <p>
+        <strong>Paused:</strong> {pausedTags.join(", ")}. {pausedTags.length === 1 ? "This tag is" : "These tags are"} saved
+        but not used in search on your current plan
+        {plan === "free"
+          ? " — they come back automatically if you upgrade."
+          : " — only your first tags count. Remove tags you need less to bring paused ones back."}
+      </p>
+    </div>
+  );
+
   // ── Free plan upsell ────────────────────────────────────────────────────────
 
   if (plan === "free") {
     return (
       <div>
+        {pausedNotice}
         <p className="text-sm text-gray-600 mb-4">
           Help customers discover your venue based on what makes it special.
         </p>
@@ -125,6 +144,7 @@ export default function SearchTagsForm({
 
   return (
     <form action={formAction} className="space-y-4">
+      {pausedNotice}
       {/* Hidden field carries the serialised tag array to the server action */}
       <input
         type="hidden"

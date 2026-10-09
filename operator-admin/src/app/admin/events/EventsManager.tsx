@@ -9,6 +9,7 @@ import { deleteEventAction } from "./actions";
 import type { OperatorPlan } from "@/lib/plans";
 import { isRecurring } from "./recurrenceUtils";
 import { getEventTypeLabel } from "@/lib/eventTypes";
+import { isEventPubliclyActive, UNRESTRICTED_POLICY, type PublicContentPolicy } from "@/lib/planGrants/contentPolicy";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,12 @@ type Props = {
   isOwner: boolean;
   /** True only for founder impersonation of an unclaimed venue (Case B). */
   isUnclaimedVenueSupportMode: boolean;
+  /**
+   * Comp/Trial (Part 1): the venue's public content policy. Published events
+   * it pauses (non-seeded recurring events on a plan without recurring) are
+   * badged "Paused" so the operator can see exactly which ones guests don't see.
+   */
+  publicPolicy?: PublicContentPolicy;
 };
 
 export default function EventsManager({
@@ -122,9 +129,14 @@ export default function EventsManager({
   operatorPlan,
   isOwner,
   isUnclaimedVenueSupportMode,
+  publicPolicy = UNRESTRICTED_POLICY,
 }: Props) {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
+  const isEventPaused = (e: EventRow) =>
+    e.is_published === true &&
+    !isEventPubliclyActive(publicPolicy, { recurrence: e.recurrence ?? "none", isSeededEvent: e.is_seeded_event === true });
+  const pausedEventCount = events.filter(isEventPaused).length;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -282,6 +294,15 @@ export default function EventsManager({
           </div>
         )}
 
+        {pausedEventCount > 0 && (
+          <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-700">
+            {pausedEventCount} recurring event{pausedEventCount === 1 ? " is" : "s are"} <strong>Paused</strong> — saved,
+            but recurring events aren&rsquo;t included in your current plan, so guests don&rsquo;t see{" "}
+            {pausedEventCount === 1 ? "it" : "them"}. To show one now, open it and change it to a one-time event; or
+            upgrade to bring {pausedEventCount === 1 ? "it" : "them"} back as {pausedEventCount === 1 ? "it was" : "they were"}.
+          </div>
+        )}
+
         {visibleEvents.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-resting px-6 py-10 text-center">
             <p className="text-sm font-medium text-gray-600">
@@ -350,6 +371,14 @@ export default function EventsManager({
                         >
                           {event.is_published ? "Published" : "Draft"}
                         </span>
+                        {isEventPaused(event) && (
+                          <span
+                          title="Saved but not shown to guests on your current plan"
+                          className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300"
+                        >
+                          Paused
+                        </span>
+                        )}
                       </div>
                     </button>
                   </li>

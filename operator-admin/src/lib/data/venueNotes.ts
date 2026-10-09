@@ -7,6 +7,13 @@ import {
 import type { VenueNote } from "@/lib/data/venueNoteDisplay";
 import { formatEmailOpenNote, EMAIL_OPEN_ACTIVITY_AUTHOR_LABEL } from "@/lib/emailTracking/emailOpenNotes";
 import { createSupabaseEmailTrackingStore, isStoreError, type EmailTrackingStore } from "@/lib/emailTracking/emailTrackingStore";
+import { getVenuePlanGrants } from "@/lib/planGrants/server";
+import {
+  formatPlanGrantEvent,
+  formatPlanGrantExpiry,
+  PLAN_GRANT_ACTIVITY_AUTHOR_LABEL,
+  type PlanGrantEventRow,
+} from "@/lib/planGrants/grantTimeline";
 
 // VenueNote's canonical definition (and resolveNoteAuthor(), the pure
 // author-resolution helper) now live in ./venueNoteDisplay — a module with
@@ -336,6 +343,53 @@ export async function getEmailOpenNotesForVenue(
       author_label:     EMAIL_OPEN_ACTIVITY_AUTHOR_LABEL,
       created_at:       n.created_at,
     }));
+
+  return { notes };
+}
+
+/**
+ * Comp / Trial grant lifecycle for this venue (migration 109): founder
+ * grant/extend/revoke actions, ownership/cancellation endings, plus one
+ * synthetic "expired" entry per time-expired grant. Projected on read like
+ * Customer Success activity — never copied into venue_notes. Founder actions
+ * keep the real founder as author; system endings use the HHC label.
+ */
+export async function getPlanGrantNotesForVenue(
+  venueId: string,
+  admin: ReturnType<typeof createAdminClient> = createAdminClient(),
+  nowMs: number = Date.now()
+): Promise<{ notes: VenueNote[] }> {
+  const [grants, eventsResult] = await Promise.all([
+    getVenuePlanGrants(venueId, admin),
+    admin
+      .from("venue_plan_grant_events")
+      .select("id, grant_id, event_type, actor_email, previous_ends_at, new_ends_at, note, metadata_json, created_at")
+      .eq("venue_id", venueId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (eventsResult.error) {
+    // Includes "table does not exist" before migration 109 is applied.
+    console.error("[getPlanGrantNotesForVenue]", eventsResult.error.message);
+    return { notes: [] };
+  }
+
+  const grantList = grants ?? [];
+  const grantById = new Map(grantList.map((g) => [g.id, g]));
+  const entries = [
+    ...((eventsResult.data ?? []) as PlanGrantEventRow[]).map((e) => formatPlanGrantEvent(e, grantById.get(e.grant_id))),
+    ...grantList.map((g) => formatPlanGrantExpiry(g, nowMs)),
+  ].filter((n): n is NonNullable<typeof n> => n !== null);
+
+  const notes: VenueNote[] = entries.map((n) => ({
+    id:               n.id,
+    venue_id:         venueId,
+    note:             n.note,
+    created_by:       null,
+    created_by_email: n.actorEmail,
+    author_label:     n.actorEmail ? null : PLAN_GRANT_ACTIVITY_AUTHOR_LABEL,
+    created_at:       n.createdAt,
+  }));
 
   return { notes };
 }

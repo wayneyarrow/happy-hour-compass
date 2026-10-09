@@ -18,6 +18,7 @@ import {
 } from "@/lib/plans";
 import { getMarketById } from "@/lib/markets";
 import { getVenueViewCounts, getEventViewCounts } from "@/lib/data/viewCounts";
+import { getEffectiveAccessForVenues } from "@/lib/planGrants/server";
 import { getOperatorActivationReviewSummary, type ActivationReviewSummary } from "@/lib/activation/activationReviews";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
@@ -833,6 +834,14 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
   // operator-wide plan.
   const planMap       = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
   const opById        = new Map(operators.map((o) => [o.id, o]));
+  // Comp/Trial (Part 1): a venue with an ACTIVE grant already has paid-tier
+  // access — it's tracked in the Comp & Trial Access report instead, never
+  // pitched an upgrade here. Once the grant ends it qualifies again on its
+  // billing plan (a natural conversion signal).
+  // If the grant lookup fails, no venue is excluded (logged in
+  // getPlanGrantsForVenues) — a comped venue may briefly appear here, but
+  // nothing is hidden or wrongly granted.
+  const { byVenue: grantAccess } = await getEffectiveAccessForVenues(planMap, allVenueIds);
 
   // Team member count per operator
   const memberCountByOp = new Map<string, number>();
@@ -853,6 +862,7 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
     const plan = planMap.get(v.id) ?? "free";
 
     if (plan !== "free" && plan !== "pro") continue;
+    if (grantAccess.get(v.id)?.activeGrant) continue;
 
     const { setupHealthScorePct } = computeSetupHealth(v, mediaByVenue);
     if (setupHealthScorePct < 90) continue;

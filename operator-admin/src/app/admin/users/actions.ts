@@ -14,7 +14,7 @@
  *
  * Phase 2B seat-limit note: plan is now venue-level, so "this operator's
  * plan" has no single correct answer any more. inviteUserAction() uses
- * getOperatorHighestVenuePlan() — a TEMPORARY highest-plan-wins rule across
+ * getOperatorHighestEffectivePlan() — a TEMPORARY highest-plan-wins rule across
  * the operator's currently-manageable (non-cancelled) venues, documented in
  * full on that function. This affects only the numeric seat limit, not
  * membership scope/access, which is unchanged from Phase 1.
@@ -25,7 +25,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { getMembershipRole, countOperatorMembers } from "@/lib/memberships";
 import { maxUsers } from "@/lib/plans";
-import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
+import { getOperatorHighestEffectivePlan } from "@/lib/planGrants/server";
 import { sendMemberInviteEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 import { addSystemVenueNote } from "@/lib/data/venueNotes";
@@ -78,8 +78,8 @@ export async function inviteUserAction(
   // operator's currently-manageable (non-cancelled) venues. Team membership
   // remains operator-level (see this file's header note); this is the seat
   // LIMIT computation only, not a change to who a member can access. See
-  // getOperatorHighestVenuePlan()'s own doc comment for the full rationale.
-  const plan = await getOperatorHighestVenuePlan(operatorId);
+  // getOperatorHighestEffectivePlan()'s own doc comment for the full rationale.
+  const plan = await getOperatorHighestEffectivePlan(operatorId);
   const userLimit = maxUsers(plan);
   const currentCount = await countOperatorMembers(operatorId);
   if (userLimit !== Infinity && currentCount >= userLimit) {

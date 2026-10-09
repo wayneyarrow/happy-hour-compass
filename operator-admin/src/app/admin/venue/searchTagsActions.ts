@@ -2,7 +2,7 @@
 
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
-import { getVenuePlanCode } from "@/lib/venueSubscriptions";
+import { getVenueEffectivePlan } from "@/lib/planGrants/server";
 import {
   isValidSearchTag,
   getSearchTagLimitForPlan,
@@ -26,7 +26,7 @@ export async function updateSearchTagsAction(
 
   // Phase 2B: entitlement resolves from the TARGET venue's own plan, not
   // the operator's.
-  const plan = await getVenuePlanCode(venueId);
+  const plan = await getVenueEffectivePlan(venueId);
 
   if (!canUseSearchTags(plan)) {
     return {

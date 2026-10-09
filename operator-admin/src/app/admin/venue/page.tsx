@@ -13,6 +13,7 @@ import SearchTagsForm from "./SearchTagsForm";
 import CreateVenueAdminForm from "./CreateVenueAdminForm";
 import AccordionSection from "./AccordionSection";
 import VenueImagesSection from "./VenueImagesSection";
+import { policyFromAccess } from "@/lib/planGrants/publicPlanState";
 import VenuePublishSection from "./VenuePublishSection";
 import CancelVenueSection from "./CancelVenueSection";
 
@@ -150,6 +151,8 @@ export default async function AdminVenuePage({
   const operatorPlan = ctx.activeVenuePlan;
   const tagLimit   = maxSearchTags(operatorPlan);
   const imageLimit = maxImages(operatorPlan);
+  // Comp/Trial: which saved photos/tags are paused publicly (grant recipients only).
+  const publicPolicy = policyFromAccess(ctx.activeVenueAccess);
 
   return (
     <div className="max-w-2xl">
@@ -321,6 +324,7 @@ export default async function AdminVenuePage({
               plan={operatorPlan}
               tagLimit={tagLimit}
               isOwner={isOwner}
+              pausedTags={publicPolicy.enforced ? currentSearchTags.slice(tagLimit) : []}
             />
           </AccordionSection>
 
@@ -339,6 +343,7 @@ export default async function AdminVenuePage({
               plan={operatorPlan}
               isOwner={isOwner}
               isPublished={venue.is_published ?? false}
+              pausedFromIndex={publicPolicy.enforced ? imageLimit : null}
             />
           </AccordionSection>
 

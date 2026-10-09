@@ -36,6 +36,12 @@ type Props = {
   plan: OperatorPlan;
   /** Whether the current user is the account owner (controls CTA wording). */
   isOwner: boolean;
+  /**
+   * Comp/Trial (Part 1): when the venue's public content is limited to its
+   * effective plan, items at this index and beyond are saved but paused —
+   * not shown to guests. Null when nothing is enforced (every other venue).
+   */
+  pausedFromIndex?: number | null;
 };
 
 const initialState: SpecialsState = {};
@@ -86,7 +92,7 @@ function TrashIcon() {
 
 // ── SpecialsForm ──────────────────────────────────────────────────────────────
 
-export default function SpecialsForm({ venueId, type, initialItems, itemLimit, plan, isOwner }: Props) {
+export default function SpecialsForm({ venueId, type, initialItems, itemLimit, plan, isOwner, pausedFromIndex = null }: Props) {
   const router = useRouter();
 
   // Select the correct server action based on type
@@ -281,6 +287,14 @@ export default function SpecialsForm({ venueId, type, initialItems, itemLimit, p
 
       <p className="text-xs text-gray-400">{helperText}</p>
 
+      {pausedFromIndex !== null && items.length > pausedFromIndex && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700">
+          Guests see only your first {pausedFromIndex} {type} special{pausedFromIndex === 1 ? "" : "s"} on your
+          current plan. The ones marked <strong>Paused</strong> are saved but hidden — use the move arrows to put
+          your favourites at the top, or remove items you no longer need.
+        </div>
+      )}
+
       {/* Column headers — desktop only. On mobile each field carries its own
           visible label instead (see per-field spans below), since fields no
           longer align under these columns once the row layout stacks. */}
@@ -306,6 +320,11 @@ export default function SpecialsForm({ venueId, type, initialItems, itemLimit, p
               key={i}
               className="rounded-lg border border-gray-100 p-3 sm:border-0 sm:p-0"
             >
+              {pausedFromIndex !== null && i >= pausedFromIndex && (
+                <span className="mb-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-300">
+                  Paused — not shown to guests
+                </span>
+              )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_80px_1fr_auto] sm:items-start">
                 {/* Name — its own row on mobile, its own column on desktop */}
                 <div>

@@ -8,7 +8,7 @@ import {
   canManageGrandfatheredRecurringEvent,
   canUseRecurringEvents,
 } from "@/lib/plans";
-import { getVenuePlanCode } from "@/lib/venueSubscriptions";
+import { getVenueEffectivePlan } from "@/lib/planGrants/server";
 import { isRecurring } from "./recurrenceUtils";
 import { genuineOperatorFieldPatch, recordFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 import {
@@ -208,7 +208,7 @@ export async function saveEventAction(
   // the operator's — preserves every existing grandfathering/support-mode
   // exception exactly (isUnclaimedVenueSupportMode below is unrelated to
   // this change).
-  const plan = await getVenuePlanCode(targetVenueId);
+  const plan = await getVenueEffectivePlan(targetVenueId);
 
   // Support-mode exception (Case B only — founder impersonating an unclaimed
   // venue). Never true for Case A (claimed-venue impersonation) or a normal

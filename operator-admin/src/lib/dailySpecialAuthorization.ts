@@ -45,7 +45,7 @@ export type DailySpecialCurrentRow = {
 };
 
 export type DailySpecialSaveAuthorizationInput = {
-  /** The TARGET VENUE's plan (getVenuePlanCode(targetVenueId)) — never the operator's own plan, never a sibling venue's. */
+  /** The TARGET VENUE's effective plan (getVenueEffectivePlan(targetVenueId)) — never the operator's own plan, never a sibling venue's. */
   plan: OperatorPlan;
   /** True only for founder impersonation of an UNCLAIMED venue (Case B) — see saveEventAction's identical flag. */
   isUnclaimedVenueSupportMode: boolean;

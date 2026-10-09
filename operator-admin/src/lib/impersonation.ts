@@ -27,6 +27,7 @@ import {
 import { getOperatorVenues, type VenueRow as VenueSummary } from "@/lib/getOperatorVenues";
 import { getActiveVenueIdFromCookie } from "@/lib/activeVenueCookie";
 import { getActiveVenuePlan } from "@/lib/activeVenuePlan";
+import type { EffectiveAccess } from "@/lib/planGrants/grantState";
 import type { VenueSubscriptionRow } from "@/lib/venueSubscriptions";
 import type { OperatorPlan } from "@/lib/plans";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -110,8 +111,23 @@ export type OperatorContext = {
    * single centralized resolution point every Operator Admin page/action
    * should read instead of independently querying venue_subscriptions or
    * reading operator.plan.
+   *
+   * Comp/Trial (Part 1): this is the EFFECTIVE plan — the higher of that
+   * billing plan and an active grant (src/lib/planGrants/) — because it is
+   * what every feature gate checks. Billing decisions use
+   * activeVenueBillingPlan instead.
    */
   activeVenuePlan: OperatorPlan;
+  /**
+   * The active venue's BILLING plan — venue_subscriptions only, never lifted
+   * by a Comp/Trial grant. activeVenuePlan above is the EFFECTIVE plan
+   * (billing lifted by an active grant — src/lib/planGrants/). Use this one
+   * only for billing decisions: the subscription page's current plan,
+   * Change Plan modal routing, and Stripe Checkout.
+   */
+  activeVenueBillingPlan: OperatorPlan;
+  /** Full effective-access resolution for the active venue (grant, enforcement). */
+  activeVenueAccess: EffectiveAccess;
   /** The active venue's raw subscription row, or null for a Free venue with no row. */
   activeVenueSubscription: VenueSubscriptionRow | null;
 };
@@ -119,7 +135,7 @@ export type OperatorContext = {
 /** OperatorContext before venues/activeVenueId/activeVenuePlan are resolved — internal only. */
 type OperatorContextBase = Omit<
   OperatorContext,
-  "venues" | "activeVenueId" | "activeVenuePlan" | "activeVenueSubscription"
+  "venues" | "activeVenueId" | "activeVenuePlan" | "activeVenueBillingPlan" | "activeVenueAccess" | "activeVenueSubscription"
 >;
 
 /**
@@ -192,6 +208,8 @@ async function resolveVenuesAndActiveVenue(
   venues: VenueSummary[];
   activeVenueId: string | null;
   activeVenuePlan: OperatorPlan;
+  activeVenueBillingPlan: OperatorPlan;
+  activeVenueAccess: EffectiveAccess;
   activeVenueSubscription: VenueSubscriptionRow | null;
 }> {
   const venues = base.operator
@@ -216,10 +234,14 @@ async function resolveVenuesAndActiveVenue(
   // to validate against) still resolves correctly — activeVenueId there is
   // already the founder-selected orphan venue id directly, validated by the
   // impersonation session itself (see computeActiveVenueId), not by `venues`.
-  const { plan: activeVenuePlan, subscription: activeVenueSubscription } =
-    await getActiveVenuePlan(activeVenueId);
+  const {
+    plan: activeVenuePlan,
+    billingPlan: activeVenueBillingPlan,
+    access: activeVenueAccess,
+    subscription: activeVenueSubscription,
+  } = await getActiveVenuePlan(activeVenueId);
 
-  return { venues, activeVenueId, activeVenuePlan, activeVenueSubscription };
+  return { venues, activeVenueId, activeVenuePlan, activeVenueBillingPlan, activeVenueAccess, activeVenueSubscription };
 }
 
 // ── Session creation ──────────────────────────────────────────────────────────
@@ -325,9 +347,8 @@ export async function endImpersonationSession(sessionId: string): Promise<void> 
 
 export async function resolveOperatorContext(): Promise<OperatorContext> {
   const base = await resolveOperatorContextBase();
-  const { venues, activeVenueId, activeVenuePlan, activeVenueSubscription } =
-    await resolveVenuesAndActiveVenue(base);
-  return { ...base, venues, activeVenueId, activeVenuePlan, activeVenueSubscription };
+  const venueContext = await resolveVenuesAndActiveVenue(base);
+  return { ...base, ...venueContext };
 }
 
 async function resolveOperatorContextBase(): Promise<OperatorContextBase> {

@@ -126,9 +126,20 @@ function FunnelCardView({ card }: { card: VenueFunnelCard }) {
         {card.isPublished === false && (
           <Badge label="Unpublished" classes="bg-gray-100 text-gray-600 border border-gray-300" />
         )}
-        {card.plan && (
-          <Badge label={PLAN_LABEL[card.plan] ?? card.plan} classes={PLAN_BADGE[card.plan] ?? PLAN_BADGE.free} />
-        )}
+        {/* Billing and Comp/Trial grant status are separate badges — a
+            grant is never shown as paid (src/lib/planGrants/planBadges.ts).
+            Entry cards (no venue yet) have neither. */}
+        {card.planBadges.length > 0
+          ? card.planBadges.map((b) => (
+              <Badge
+                key={b.label}
+                label={b.detail ? `${b.label} · ${b.detail}` : b.label}
+                classes={b.tone ? (PLAN_BADGE[b.tone] ?? PLAN_BADGE.free) : "bg-white text-gray-600 border border-gray-300"}
+              />
+            ))
+          : card.plan && (
+              <Badge label={PLAN_LABEL[card.plan] ?? card.plan} classes={PLAN_BADGE[card.plan] ?? PLAN_BADGE.free} />
+            )}
         {card.subscriptionStatus === "past_due" && (
           <Badge label="Past Due" classes="bg-red-100 text-red-700 border border-red-300" />
         )}
@@ -192,6 +203,15 @@ function LaneColumn({ lane }: { lane: FunnelLane }) {
           {lane.cards.length}
         </span>
       </div>
+      {lane.key === "paid_plan" && lane.cards.length > 0 && (
+        <p className="px-3 py-1 text-[11px] text-slate-500 border-x border-slate-200 bg-white">
+          {lane.cards.filter((c) => c.paidStatus === "paying").length} paying ·{" "}
+          {lane.cards.filter((c) => c.paidStatus === "non_paying_grant").length} non-paying grant
+          {lane.cards.some((c) => c.paidStatus === "manual") && (
+            <> · {lane.cards.filter((c) => c.paidStatus === "manual").length} manual</>
+          )}
+        </p>
+      )}
       <div className="flex-1 border border-t-0 border-slate-200 rounded-b-lg bg-slate-50 p-2 space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto">
         {lane.cards.length === 0 ? (
           <p className="text-xs text-gray-400 italic text-center py-6">No venues</p>

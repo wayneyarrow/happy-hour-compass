@@ -4,6 +4,7 @@ export const metadata = { title: "Action Center" };
 import Link from "next/link";
 import { getActionCenterSummary } from "@/lib/data/actionCenter";
 import { getSpecialsAdoptionSummary } from "@/lib/data/specialsAdoption";
+import { getPlanGrantReport, summarizePlanGrantReport, GRANT_ENDING_SOON_DAYS } from "@/lib/data/planGrantsReport";
 
 // ── Report definitions ────────────────────────────────────────────────────────
 
@@ -85,6 +86,13 @@ const REPORTS = [
     description: "Verified venues with at least one operator-created Daily Special. The report lists every verified venue, including Customer Success candidates with none.",
     priority:    "low",
   },
+  {
+    key:         "planGrants" as const,
+    href:        "/control-panel/action-center/reports/plan-grants",
+    name:        "Comp & Trial Access",
+    description: "Venues with active or scheduled founder-granted Pro/Premium access (non-paying), and upcoming expiries.",
+    priority:    "medium",
+  },
 ] as const;
 
 type ReportKey = (typeof REPORTS)[number]["key"];
@@ -98,14 +106,18 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; pill: string
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ActionCenterPage() {
-  const [baseSummary, specialsAdoption] = await Promise.all([
+  const [baseSummary, specialsAdoption, planGrantRows] = await Promise.all([
     getActionCenterSummary(),
     getSpecialsAdoptionSummary(),
+    getPlanGrantReport(),
   ]);
+  // null = lookup failed → card shows "—", never a false 0.
+  const planGrants = summarizePlanGrantReport(planGrantRows ?? []);
   // specialsAdoption is null when its summary failed — rendered as "—", never a false 0.
   const summary = {
     ...baseSummary,
     specialsAdoption: specialsAdoption?.adoptedVenues ?? null,
+    planGrants: planGrantRows === null ? null : planGrants.open,
   };
 
   return (
@@ -176,6 +188,17 @@ export default async function ActionCenterPage() {
                     "Adoption count unavailable — open the report to retry."
                   )}
                 </p>
+              )}
+              {report.key === "planGrants" && (count ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[11px] text-gray-500">
+                  <span>Active: <strong className="text-slate-700">{planGrants.active}</strong></span>
+                  {planGrants.scheduled > 0 && (
+                    <span>Scheduled: <strong className="text-slate-700">{planGrants.scheduled}</strong></span>
+                  )}
+                  {planGrants.endingSoon > 0 && (
+                    <span>Ending within {GRANT_ENDING_SOON_DAYS}d: <strong className="text-slate-700">{planGrants.endingSoon}</strong></span>
+                  )}
+                </div>
               )}
               <div className="flex-1" />
 

@@ -10,9 +10,10 @@
  *      wins over any client-supplied venueId.
  *   3. Normal (non-impersonating) operators must own the target venue —
  *      checked against ctx.venues, never trusted from the payload alone.
- *   4. Venue-level plan via getVenuePlanCode(targetVenueId) — never the
+ *   4. Venue-level plan via getVenueEffectivePlan(targetVenueId) — never the
  *      operator's own plan, never a sibling venue's (Phase 2B venue-level
- *      entitlement model).
+ *      entitlement model). Effective = billing plan lifted by an active
+ *      Comp/Trial grant (src/lib/planGrants/).
  *   5. On edit, the CURRENT row is re-read from the database (is_seeded_special,
  *      schedule_type) — grandfathering is derived from THAT read, never
  *      from the incoming payload. currentSpecialId is null for an insert,
@@ -29,7 +30,7 @@
 
 import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
-import { getVenuePlanCode } from "@/lib/venueSubscriptions";
+import { getVenueEffectivePlan } from "@/lib/planGrants/server";
 import {
   authorizeDailySpecialSave,
   shouldStampSeededOnCreate,
@@ -167,7 +168,7 @@ export async function saveDailySpecialAction(
   }
 
   // ── 4. Resolve the VENUE's plan ─────────────────────────────────────────
-  const plan = await getVenuePlanCode(targetVenueId);
+  const plan = await getVenueEffectivePlan(targetVenueId);
 
   // Support-mode exception (Case B only — founder impersonating an
   // unclaimed venue). Never true for Case A (claimed-venue impersonation)

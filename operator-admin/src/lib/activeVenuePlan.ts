@@ -37,12 +37,30 @@
  * instead of a fresh lookup.
  */
 
-import { getVenuePlanCode, getVenueSubscription, type VenueSubscriptionRow } from "@/lib/venueSubscriptions";
+import { getVenueSubscription, resolvePlanCodeFromVenueSubscription, type VenueSubscriptionRow } from "@/lib/venueSubscriptions";
+import { getVenueEffectiveAccess, getVenueEffectivePlan } from "@/lib/planGrants/server";
+import { noGrantAccess, type EffectiveAccess } from "@/lib/planGrants/grantState";
 import type { OperatorPlan } from "@/lib/plans";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Comp / Trial grants (Part 1)
+//
+// `plan` is the active venue's EFFECTIVE plan — the higher of its billing
+// plan (venue_subscriptions, resolved exactly as before) and an active
+// Comp/Trial grant — because it is the entitlement every Operator Admin page
+// gates on. `billingPlan` is the unchanged billing resolution, and is what
+// the subscription page / Change Plan modal must use: Stripe Checkout and
+// plan-change routing are decided from what the venue actually pays for, so
+// a comped venue can still buy the same tier through the existing checkout.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type ActiveVenuePlanResult = {
-  /** Resolved plan for the active venue — 'free' when no subscription row exists. */
+  /** Effective plan for the active venue — 'free' when there is no venue. */
   plan: OperatorPlan;
+  /** Billing plan (venue_subscriptions only) — 'free' when no row exists. */
+  billingPlan: OperatorPlan;
+  /** Full effective-access resolution (active grant, enforcement, ...). */
+  access: EffectiveAccess;
   /** The raw subscription row, or null for a Free venue with no row. */
   subscription: VenueSubscriptionRow | null;
 };
@@ -62,18 +80,17 @@ export async function getActiveVenuePlan(
   activeVenueId: string | null
 ): Promise<ActiveVenuePlanResult> {
   if (!activeVenueId) {
-    return { plan: "free", subscription: null };
+    return { plan: "free", billingPlan: "free", access: noGrantAccess("free"), subscription: null };
   }
 
   const subscription = await getVenueSubscription(activeVenueId);
-  return {
-    plan: subscription?.plan_code ?? "free",
-    subscription,
-  };
+  const billingPlan = resolvePlanCodeFromVenueSubscription(subscription);
+  const access = await getVenueEffectiveAccess(activeVenueId, { billingPlan });
+  return { plan: access.effectivePlan, billingPlan, access, subscription };
 }
 
-/** Convenience wrapper when only the plan code is needed, not the full row. */
+/** Convenience wrapper when only the effective plan code is needed. */
 export async function getActiveVenuePlanCode(activeVenueId: string | null): Promise<OperatorPlan> {
   if (!activeVenueId) return "free";
-  return getVenuePlanCode(activeVenueId);
+  return getVenueEffectivePlan(activeVenueId);
 }

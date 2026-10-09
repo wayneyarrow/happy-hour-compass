@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { resolveOperatorContext } from "@/lib/impersonation";
 import { buildVenueUpdate } from "@/lib/venueActions";
 import { maxFoodSpecials, maxDrinkSpecials } from "@/lib/plans";
-import { getVenuePlanCode } from "@/lib/venueSubscriptions";
+import { getVenueEffectivePlan } from "@/lib/planGrants/server";
 import { hasQualifyingHappyHour } from "@/lib/venueReadiness";
 import type { TaglineState, HhTimesState, HhItem, SpecialsState } from "./types";
 
@@ -219,7 +219,7 @@ export async function updateFoodSpecialsAction(
   }
 
   // Phase 2B: entitlement resolves from the TARGET venue's own plan.
-  const plan = await getVenuePlanCode(venueId);
+  const plan = await getVenueEffectivePlan(venueId);
   const maxItems = maxFoodSpecials(plan);
 
   if (items.length > maxItems) {
@@ -292,7 +292,7 @@ export async function updateDrinkSpecialsAction(
   }
 
   // Phase 2B: entitlement resolves from the TARGET venue's own plan.
-  const plan = await getVenuePlanCode(venueId);
+  const plan = await getVenueEffectivePlan(venueId);
   const maxItems = maxDrinkSpecials(plan);
 
   if (items.length > maxItems) {

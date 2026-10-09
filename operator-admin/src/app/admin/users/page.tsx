@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { resolveOperatorContext, assertActiveVenueSelected } from "@/lib/impersonation";
 import { getOperatorMemberships, getMembershipRole, countOperatorMembers } from "@/lib/memberships";
 import { maxUsers, type OperatorPlan } from "@/lib/plans";
-import { getOperatorHighestVenuePlan } from "@/lib/venueSubscriptions";
+import { getOperatorHighestEffectivePlan } from "@/lib/planGrants/server";
 import UsersClient from "./UsersClient";
 
 export default async function AdminUsersPage() {
@@ -34,8 +34,8 @@ export default async function AdminUsersPage() {
 
   if (operator) {
     // Phase 2B temporary rule: highest-plan-wins across the operator's
-    // currently-manageable venues (see getOperatorHighestVenuePlan()).
-    plan      = await getOperatorHighestVenuePlan(operator.id);
+    // currently-manageable venues (see getOperatorHighestEffectivePlan()).
+    plan      = await getOperatorHighestEffectivePlan(operator.id);
     userLimit = maxUsers(plan);
 
     [memberships, currentRole, totalCount] = await Promise.all([

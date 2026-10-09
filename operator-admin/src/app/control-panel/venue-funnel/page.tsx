@@ -18,6 +18,13 @@ export default async function VenueFunnelPage() {
         </p>
       </div>
 
+      {data.grantDataUnavailable && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Comp/Trial grant data couldn&rsquo;t be loaded. Venues are placed by billing plan only, so comped or
+          trial venues may be missing from Paid Plan. Refresh to try again.
+        </div>
+      )}
+
       <VenueFunnelBoard lanes={data.lanes} />
     </div>
   );

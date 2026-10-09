@@ -7,7 +7,12 @@ import {
   getRelatedClaimNotesForVenue,
   getCustomerSuccessNotesForVenue,
   getEmailOpenNotesForVenue,
+  getPlanGrantNotesForVenue,
 } from "@/lib/data/venueNotes";
+import { getVenueSubscription, resolvePlanCodeFromVenueSubscription } from "@/lib/venueSubscriptions";
+import { getVenuePlanGrants } from "@/lib/planGrants/server";
+import { getGrantStatus, resolveEffectiveAccess } from "@/lib/planGrants/grantState";
+import PlanGrantPanel from "./PlanGrantPanel";
 import { getVenueHealthData } from "@/lib/data/venueHealth";
 import { getVenueFeatureAdoption } from "@/lib/customerSuccess/featureAdoption";
 import { getVenueFeaturedContent } from "@/lib/data/contentGuideAttachments";
@@ -59,8 +64,7 @@ type VenueDetail = {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   cancelled_by_operator_id: string | null;
-  // Operator plan / activity (via FK — may be null for unclaimed venues)
-  operator_plan: string | null;
+  // Operator activity (via FK — may be null for unclaimed venues)
   operator_name: string | null;
   operator_email: string | null;
   operator_last_seen_at: string | null;
@@ -132,6 +136,9 @@ export default async function ControlPanelVenueDetailPage({
     { notes: claimNotes },
     { notes: customerSuccessNotes },
     { notes: emailOpenNotes },
+    { notes: planGrantNotes },
+    billingSubscription,
+    planGrants,
   ] = await Promise.all([
     supabase
       .from("venues")
@@ -146,7 +153,7 @@ export default async function ControlPanelVenueDetailPage({
          source, hh_times, business_hours, hh_food_details, hh_drink_details,
          onboarding_completed_override_at, onboarding_completed_override_by_email,
          onboarding_completed_override_reason,
-         operators!created_by_operator_id(plan, name, email, last_seen_at)`
+         operators!created_by_operator_id(name, email, last_seen_at)`
       )
       .eq("id", id)
       .maybeSingle(),
@@ -156,6 +163,9 @@ export default async function ControlPanelVenueDetailPage({
     getRelatedClaimNotesForVenue(id),
     getCustomerSuccessNotesForVenue(id),
     getEmailOpenNotesForVenue(id),
+    getPlanGrantNotesForVenue(id, supabase),
+    getVenueSubscription(id),
+    getVenuePlanGrants(id, supabase),
   ]);
 
   // Merge the venue's own notes with lifecycle notes from any linked Add Your
@@ -165,7 +175,7 @@ export default async function ControlPanelVenueDetailPage({
   // newest first — one merged, chronologically ordered feed through the
   // existing VenueNotesSection UI, with no duplicate storage. "Email opened"
   // entries come from the email send registry the same way (read-time).
-  const mergedNotes = [...notes, ...submissionNotes, ...claimNotes, ...customerSuccessNotes, ...emailOpenNotes].sort((a, b) =>
+  const mergedNotes = [...notes, ...submissionNotes, ...claimNotes, ...customerSuccessNotes, ...emailOpenNotes, ...planGrantNotes].sort((a, b) =>
     a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0
   );
 
@@ -197,7 +207,6 @@ export default async function ControlPanelVenueDetailPage({
   const operatorEmbed: Record<string, unknown> | null = Array.isArray(operatorRaw)
     ? (operatorRaw[0] ?? null)
     : (operatorRaw ?? null);
-  const operatorPlan: string | null = (operatorEmbed?.plan as string | null) ?? null;
   const operatorName: string | null = (operatorEmbed?.name as string | null) ?? null;
   const operatorEmail: string | null = (operatorEmbed?.email as string | null) ?? null;
   const operatorLastSeenAt: string | null = (operatorEmbed?.last_seen_at as string | null) ?? null;
@@ -231,7 +240,6 @@ export default async function ControlPanelVenueDetailPage({
     cancelled_at:             v.cancelled_at as string | null,
     cancellation_reason:      v.cancellation_reason as string | null,
     cancelled_by_operator_id: v.cancelled_by_operator_id as string | null,
-    operator_plan:          operatorPlan,
     operator_name:          operatorName,
     operator_email:         operatorEmail,
     operator_last_seen_at:  operatorLastSeenAt,
@@ -272,6 +280,25 @@ export default async function ControlPanelVenueDetailPage({
   ]);
 
   const isClaimed = venue.claimed_by != null || venue.created_by_operator_id != null;
+
+  // Plan & Access — billing (venue_subscriptions, unchanged resolution) vs.
+  // effective (billing lifted by an active Comp/Trial grant). Replaces the
+  // legacy operators.plan display, which stopped being the venue's plan at
+  // the Phase 2B venue-level cutover.
+  const nowMs = Date.now();
+  const billingPlan = resolvePlanCodeFromVenueSubscription(billingSubscription);
+  const ownership = { createdByOperatorId: venue.created_by_operator_id, claimedAt: venue.claimed_at };
+  // planGrants === null means the grant lookup FAILED — shown as an error in
+  // the panel, never as "no grants" (which would offer a create form).
+  const grantDataUnavailable = planGrants === null;
+  const access = resolveEffectiveAccess({ billingPlan, grants: planGrants ?? [], venue: ownership, nowMs });
+  const billingDescription = !billingSubscription
+    ? "No subscription"
+    : billingSubscription.billing_provider === "stripe" && billingSubscription.billing_provider_subscription_id
+    ? `Stripe · ${billingSubscription.status}${billingSubscription.cancel_at_period_end ? " · cancels at period end" : ""}`
+    : billingSubscription.plan_code === "free"
+    ? `No paid subscription (${billingSubscription.status})`
+    : `Manual · not Stripe-billed (${billingSubscription.status})`;
   const discoverStatus = venue.exclude_from_discover ? "Excluded" : "Active";
 
   return (
@@ -406,6 +433,20 @@ export default async function ControlPanelVenueDetailPage({
           overrideReason={venue.onboarding_completed_override_reason}
         />
 
+        {/* A3. Plan & Access — billing vs. effective plan, Comp/Trial grants */}
+        <PlanGrantPanel
+          venueId={venue.id}
+          isClaimed={venue.created_by_operator_id != null}
+          isCancelled={venue.cancelled_at != null}
+          billingPlan={billingPlan}
+          billingDescription={billingDescription}
+          effectivePlan={access.effectivePlan}
+          source={access.source}
+          contentEnforced={access.contentEnforced}
+          grantDataUnavailable={grantDataUnavailable}
+          grants={(planGrants ?? []).map((g) => ({ ...g, status: getGrantStatus(g, ownership, nowMs) }))}
+        />
+
         {/* B. Location / contact */}
         <Section title="Location & Contact">
           <dl className="space-y-2.5">
@@ -479,17 +520,16 @@ export default async function ControlPanelVenueDetailPage({
         {/* D. Discovery snapshot */}
         <Section title="Discovery">
           <dl className="space-y-2.5 mb-5">
-            <MetaRow label="Operator plan">
-              {venue.operator_plan ? (
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                    PLAN_BADGE[venue.operator_plan] ?? PLAN_BADGE.free
-                  }`}
-                >
-                  {venue.operator_plan}
-                </span>
-              ) : (
-                <span className="text-gray-400 italic">Unclaimed / no plan</span>
+            <MetaRow label="Effective plan">
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                  PLAN_BADGE[access.effectivePlan] ?? PLAN_BADGE.free
+                }`}
+              >
+                {access.effectivePlan}
+              </span>
+              {access.source === "grant" && (
+                <span className="ml-1.5 text-xs text-gray-500">via grant (non-paying)</span>
               )}
             </MetaRow>
             <MetaRow label="Internal boost">

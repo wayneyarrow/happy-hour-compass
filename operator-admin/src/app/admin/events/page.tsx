@@ -9,6 +9,7 @@ import { getMembershipRole } from "@/lib/memberships";
 import EventsManager from "./EventsManager";
 import EmptyState from "@/components/EmptyState";
 import type { EventRow } from "./EventForm";
+import { policyFromAccess } from "@/lib/planGrants/publicPlanState";
 
 export default async function AdminEventsPage() {
   const supabase = await createClient();
@@ -127,6 +128,7 @@ export default async function AdminEventsPage() {
           initialEvents={initialEvents}
           venueId={venue!.id}
           operatorPlan={ctx.activeVenuePlan}
+          publicPolicy={policyFromAccess(ctx.activeVenueAccess)}
           isOwner={isOwner}
           isUnclaimedVenueSupportMode={isUnclaimedVenueSupportMode}
         />

@@ -69,6 +69,9 @@ import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import type { OperatorPlan } from "@/lib/plans";
 import type { VenueSubscriptionStatus } from "@/lib/venueSubscriptions";
 import { loadSetupFollowUps, type SetupFollowUp } from "@/lib/data/venueFunnelSetupFollowUp";
+import { getEffectiveAccessForVenues } from "@/lib/planGrants/server";
+import { noGrantAccess } from "@/lib/planGrants/grantState";
+import { describePlanBadges, type PaidStatus, type PlanBadge } from "@/lib/planGrants/planBadges";
 
 // ── Product-decision constants ────────────────────────────────────────────────
 
@@ -179,8 +182,20 @@ export type VenueFunnelCard = {
 
   isPublished: boolean | null;
 
+  /**
+   * EFFECTIVE plan (billing lifted by an active Comp/Trial grant) — drives
+   * lane placement: an active grant puts a venue in Paid Plan, and when the
+   * grant ends the venue is re-classified by the normal rules on next load.
+   */
   plan: OperatorPlan | null;
   subscriptionStatus: VenueSubscriptionStatus | null;
+  /**
+   * Billing vs. grant badges, kept separate (src/lib/planGrants/planBadges.ts).
+   * Empty for Entry cards.
+   */
+  planBadges: PlanBadge[];
+  /** Paid reporting bucket — non-paying grants never count as paying. Null for Free/Entry. */
+  paidStatus: PaidStatus;
 
   onboardingCompletionMode: OnboardingCompletionMode | null;
   setupHealthScorePct: number | null;
@@ -236,6 +251,12 @@ export type FunnelLane = {
 export type VenueFunnelData = {
   lanes: FunnelLane[];
   generatedAt: string;
+  /**
+   * True when the Comp/Trial grant lookup FAILED — grant venues are then
+   * placed by billing plan only, and the board shows a warning instead of
+   * presenting that as accurate.
+   */
+  grantDataUnavailable: boolean;
 };
 
 // ── Row types ──────────────────────────────────────────────────────────────────
@@ -407,7 +428,10 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
       ? supabase.from("media").select("venue_id, url").in("venue_id", activeVenueIds).eq("type", "venue_image")
       : Promise.resolve({ data: [] as { venue_id: string; url: string }[] }),
     activeVenueIds.length > 0
-      ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", activeVenueIds)
+      ? supabase
+          .from("venue_subscriptions")
+          .select("venue_id, plan_code, status, billing_provider, billing_provider_subscription_id")
+          .in("venue_id", activeVenueIds)
       : Promise.resolve({ data: [] as VenueSubRow[] }),
     opIds.length > 0
       ? supabase
@@ -425,6 +449,15 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
   }
 
   const planMap = buildVenuePlanMap((r_subs.data ?? []) as VenueSubRow[]);
+  // Billing kind for the paid badge: real Stripe subscription vs. a manual
+  // (non-Stripe) billing row. Read-only — billing is never written here.
+  const isStripeBilledByVenue = new Map(
+    ((r_subs.data ?? []) as Array<VenueSubRow & { billing_provider?: string | null; billing_provider_subscription_id?: string | null }>)
+      .map((r) => [r.venue_id, r.billing_provider === "stripe" && !!r.billing_provider_subscription_id])
+  );
+  // Comp/Trial: effective access (billing lifted by an active grant). One
+  // batched read; venues without grants are absent → their billing plan.
+  const { ok: grantDataOk, byVenue: accessByVenue } = await getEffectiveAccessForVenues(planMap, activeVenueIds);
   const subStatusByVenue = new Map(
     ((r_subs.data ?? []) as VenueSubRow[]).map((r) => [r.venue_id, r.status as VenueSubscriptionStatus | null])
   );
@@ -453,6 +486,8 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         reviewUrl: `/control-panel/claims/${c.id}`,
         isPublished: null,
         plan: null,
+        planBadges: [],
+        paidStatus: null,
         subscriptionStatus: null,
         onboardingCompletionMode: null,
         setupHealthScorePct: null,
@@ -485,6 +520,8 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         reviewUrl: `/control-panel/operator-submissions/${s.id}`,
         isPublished: null,
         plan: null,
+        planBadges: [],
+        paidStatus: null,
         subscriptionStatus: null,
         onboardingCompletionMode: null,
         setupHealthScorePct: null,
@@ -506,7 +543,14 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
   const venueCards: VenueFunnelCard[] = activeVenues.map((v) => {
     const opId = v.created_by_operator_id;
     const op = opId ? opById.get(opId) : undefined;
-    const plan = planMap.get(v.id) ?? "free";
+    const billingPlan = planMap.get(v.id) ?? "free";
+    const access = accessByVenue.get(v.id) ?? noGrantAccess(billingPlan);
+    const plan = access.effectivePlan;
+    const { badges: planBadges, paidStatus } = describePlanBadges({
+      billingPlan,
+      billingKind: isStripeBilledByVenue.get(v.id) ? "stripe" : "manual",
+      access,
+    });
     const isUpgradeOpportunity = upgradeOpportunityVenueIds.has(v.id);
     const { setupHealthScorePct, missingItems, onboardingComplete, onboardingCompletionMode } =
       computeSetupHealth(v, mediaByVenue);
@@ -534,6 +578,8 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
       isPublished: v.is_published,
       plan,
       subscriptionStatus: subStatusByVenue.get(v.id) ?? null,
+      planBadges,
+      paidStatus,
       // onboardingCompletionMode is deliberately assigned here unconditionally
       // — NOT gated on laneKey in any way. A manual override is venue
       // metadata (Phase 1B), independent of which lane the venue's plan/
@@ -582,5 +628,5 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
     cards: allCards.filter((c) => c.laneKey === key),
   }));
 
-  return { lanes, generatedAt: new Date().toISOString() };
+  return { lanes, generatedAt: new Date().toISOString(), grantDataUnavailable: !grantDataOk };
 }
