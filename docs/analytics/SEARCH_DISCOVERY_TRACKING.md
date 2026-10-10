@@ -48,6 +48,7 @@ Reporting guidance:
   - Consecutive repeats are collapsed, so Enter + pause + selection is one row. A → B → A is three rows.
   - Filter changes after a term is captured add no row. The row keeps the count and `other_filters_active` from capture time; filters already set before typing are reflected in that count.
   - A new page instance starts fresh, so Back to a listing page records an `origin = 'history'` row.
+- **Hero Enter while results are loading:** the hero needs its result count before it can record a row, so an Enter pressed while "Searching…" is shown is held until results arrive. If the visitor changes the text or the mode first, the held Enter is dropped: those results are discarded and never arrive. The new text or mode is then captured on its own pause or Enter. Hero results usually take about 1.3s; a cold start took about 2.6s in staging QA.
 - **`session_id`** is one browser tab (sessionStorage), not a person.
 - **Legacy rows** (`mode IS NULL`) include partial words from the old 200ms capture. Treat them separately.
 
@@ -89,10 +90,14 @@ Join key for one placement in one page view: `page_view_id` + placement (`sectio
 
 #### Clicks made before the one-second threshold
 
-An impression needs the card ≥50% on screen for 1 continuous second. A click that happens earlier, such as a fast tap on a card that just scrolled in, records an `item_click` straight away. The card then navigates away and unmounts, which cancels its pending impression, so **no impression is recorded for it**. That click is an *unmatched click*:
+An impression needs the card ≥50% on screen for 1 continuous second. **A click does not stop that clock.** The impression is only abandoned if the page actually changes, which unmounts the card, before the second is up. So:
 
-- It still counts as a click: for venue click totals, and in the Operator Admin Discover Clicks figure.
-- It is excluded from Item CTR, which only counts combinations that have an impression. Its card was never counted as "seen", so CTR stays ≤100% and keeps the strict "seen" definition. It still appears in raw clicks.
+- **Unmatched click:** the visitor clicked and the next page replaced the homepage within 1 second. That click has no impression.
+  - It still counts as a click: for venue click totals, and in the Operator Admin Discover Clicks figure.
+  - It is excluded from Item CTR, which only counts combinations that have an impression. Its card was never counted as "seen", so CTR stays ≤100% and keeps the strict "seen" definition. It still appears in raw clicks.
+- **Matched click with a late impression:** the visitor clicked early, but the card stayed on screen for a full second before the page changed. Next.js keeps the current page mounted while it loads the next one, which took over 1s on staging during QA (an impression landed 2.4s after its click). The card genuinely was on screen ≥1s, so the impression is truthful and the click is matched.
+
+Expect the unmatched share to depend on how fast the next page loads, not only on how fast the visitor clicks.
 
 The opposite order is also fine. If a click opens a new tab while the card stays on screen, the impression is recorded afterwards in the same page view and the click *is* matched. Matching uses the join key, not timestamps.
 
