@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { resolveAnalyticsEnvironment } from "@/lib/analyticsEnvironment";
+import { insertTrackingRow } from "@/lib/trackingInsert";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -59,7 +61,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createAdminClient();
-    await supabase.from("venue_discover_events").insert(rows);
+    // Since migration 110 only the consumer app writes here (the website
+    // records discovery in website_discovery_events). environment is
+    // server-resolved; retried without it only if migration 110 isn't
+    // applied yet — any other error is logged, never retried.
+    const environment = resolveAnalyticsEnvironment();
+    await insertTrackingRow(
+      supabase,
+      "venue_discover_events",
+      rows.map((r) => ({ ...r, environment })),
+      ["environment"]
+    );
   } catch {
     // Intentionally swallowed — tracking failures must not affect the consumer.
   }

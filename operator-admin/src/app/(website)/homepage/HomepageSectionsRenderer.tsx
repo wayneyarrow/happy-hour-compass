@@ -2,6 +2,7 @@ import { CollectionRail } from "./CollectionRail";
 import { FeatureSection } from "./FeatureSection";
 import { TodaysSpecialsSection } from "./TodaysSpecialsSection";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
+import { DiscoveryPlacement } from "../tracking/DiscoveryTrackingProvider";
 
 /**
  * Renders the Dynamic Editorial Homepage sections beneath the Discovery
@@ -18,28 +19,34 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 
 type Props = {
   sections: HomepagePreviewSection[];
-  /**
-   * Phase 4A — opt-in venue discovery attribution (see discoveryTracking.tsx).
-   * Omitted (undefined) by the Control Panel's homepage preview route
-   * (control-panel/homepages/[id]/preview) so a founder/admin previewing a
-   * draft Homepage never generates real venue_discover_events rows; set to
-   * true only by the live public homepage ((website)/page.tsx).
-   */
-  enableDiscoveryTracking?: boolean;
 };
 
-export function HomepageSectionsRenderer({ sections, enableDiscoveryTracking }: Props) {
+/**
+ * Each Section is its own discovery-tracking placement (website_discovery_events,
+ * migration 110). Tracking only actually records when an ancestor
+ * <DiscoveryPageTracking> exists — the live public homepage ((website)/page.tsx)
+ * provides one; the Control Panel's homepage preview route
+ * (control-panel/homepages/[id]/preview) does not, so previewing a draft
+ * Homepage never generates real events.
+ */
+export function HomepageSectionsRenderer({ sections }: Props) {
   return (
     <>
-      {sections.map((section) => {
-        if (section.kind === "venue_collection" || section.kind === "event_collection" || section.kind === "guide_collection") {
-          return <CollectionRail key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
-        }
-        if (section.kind === "daily_special_collection") {
-          return <TodaysSpecialsSection key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
-        }
-        return <FeatureSection key={section.id} section={section} enableDiscoveryTracking={enableDiscoveryTracking} />;
-      })}
+      {sections.map((section) => (
+        <DiscoveryPlacement key={section.id} surface="homepage_section" sectionId={section.id} sectionKind={section.kind}>
+          {renderSection(section)}
+        </DiscoveryPlacement>
+      ))}
     </>
   );
+}
+
+function renderSection(section: HomepagePreviewSection) {
+  if (section.kind === "venue_collection" || section.kind === "event_collection" || section.kind === "guide_collection") {
+    return <CollectionRail section={section} />;
+  }
+  if (section.kind === "daily_special_collection") {
+    return <TodaysSpecialsSection section={section} />;
+  }
+  return <FeatureSection section={section} />;
 }

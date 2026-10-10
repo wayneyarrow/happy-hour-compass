@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { SearchResultCard } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { EventSearchCard } from "@/app/(website)/website-events/EventSearchCard";
 import { GuideCard } from "@/app/(website)/GuideCard";
-import { DiscoveryImpressionTracker } from "@/app/(website)/discoveryTracking";
+import { SectionExposureMarker, TrackedDiscoveryItem, TrackedViewAllLink } from "@/app/(website)/tracking/TrackedDiscovery";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 
 /**
@@ -20,65 +19,50 @@ import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
  * Collection rails never show a Teaser (that's a Feature-only concept — see
  * FeatureSection.tsx) — these card components simply don't accept one.
  *
- * Phase 4A: venue_collection rails opt into discovery attribution (see
- * discoveryTracking.tsx) when enableDiscoveryTracking is set — event_collection
- * and guide_collection rails are unaffected (out of scope: this phase is
- * venue discovery attribution only). Stays a Server Component; the actual
- * click/impression side effects live in the Client Components it renders
- * (SearchResultCard, DiscoveryImpressionTracker).
+ * Discovery tracking (migration 110, all three rail kinds): the heading row
+ * is the section-exposure marker, each card is a TrackedDiscoveryItem
+ * (visible impression + click) and "View all" is a TrackedViewAllLink. The
+ * placement (this Section) comes from HomepageSectionsRenderer; outside a
+ * tracked page these render exactly as plain wrappers. Stays a Server
+ * Component — the tracking side effects live in those Client Components.
  */
 
 type Props = {
   section: Extract<HomepagePreviewSection, { kind: "venue_collection" | "event_collection" | "guide_collection" }>;
-  enableDiscoveryTracking?: boolean;
 };
 
-export function CollectionRail({ section, enableDiscoveryTracking }: Props) {
-  const discoveryContextName =
-    section.kind === "venue_collection" && enableDiscoveryTracking
-      ? `homepage_rail:${section.id}`
-      : null;
-
+export function CollectionRail({ section }: Props) {
   return (
     <section className="py-10 md:py-12 border-t border-gray-100">
-      {discoveryContextName && section.kind === "venue_collection" && (
-        <DiscoveryImpressionTracker
-          context={discoveryContextName}
-          items={section.items.map((v, i) => ({ venueId: v.venueUuid, position: i }))}
-        />
-      )}
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 flex items-end justify-between gap-4 mb-6">
+      <SectionExposureMarker className="max-w-7xl mx-auto px-6 lg:px-10 flex items-end justify-between gap-4 mb-6">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{section.title}</h2>
-        <Link
+        <TrackedViewAllLink
           href={section.viewAllHref}
           className="shrink-0 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors whitespace-nowrap"
         >
           View all →
-        </Link>
-      </div>
+        </TrackedViewAllLink>
+      </SectionExposureMarker>
 
       <div className="max-w-7xl mx-auto px-6 lg:px-10 overflow-x-auto">
         <div className="flex gap-5 pb-2">
           {section.kind === "venue_collection" &&
             section.items.map((v, i) => (
-              <div key={v.venueUuid} className="w-[300px] shrink-0">
-                <SearchResultCard
-                  data={v}
-                  discovery={discoveryContextName ? { context: discoveryContextName, position: i } : undefined}
-                />
-              </div>
+              <TrackedDiscoveryItem key={v.venueUuid} itemType="venue" itemId={v.venueUuid} position={i} className="w-[300px] shrink-0">
+                <SearchResultCard data={v} />
+              </TrackedDiscoveryItem>
             ))}
           {section.kind === "event_collection" &&
-            section.items.map((e) => (
-              <div key={e.id} className="w-[300px] shrink-0">
+            section.items.map((e, i) => (
+              <TrackedDiscoveryItem key={e.id} itemType="event" itemId={e.id} position={i} className="w-[300px] shrink-0">
                 <EventSearchCard event={e} />
-              </div>
+              </TrackedDiscoveryItem>
             ))}
           {section.kind === "guide_collection" &&
-            section.items.map((g) => (
-              <div key={g.id} className="w-[220px] shrink-0">
+            section.items.map((g, i) => (
+              <TrackedDiscoveryItem key={g.id} itemType="guide" itemId={g.id} position={i} className="w-[220px] shrink-0">
                 <GuideCard guideId={g.id} title={g.title} href={g.href} heroImageUrl={g.heroImageUrl} />
-              </div>
+              </TrackedDiscoveryItem>
             ))}
         </div>
       </div>

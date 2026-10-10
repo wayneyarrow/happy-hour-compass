@@ -8,12 +8,15 @@ import { findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
 import { HeroDiscoverySearch } from "./HeroDiscoverySearch";
 import { trackGA4Event } from "@/lib/ga4";
+import { useDiscoveryTracker, type PlacementContextValue } from "./tracking/DiscoveryTrackingProvider";
 import {
   DISCOVERY_MODE_ORDER,
   DISCOVERY_MODES,
   DEFAULT_DISCOVERY_MODE,
   type DiscoveryMode,
 } from "@/lib/homepageDiscoveryModes";
+
+const HERO_PLACEMENT: PlacementContextValue = { surface: "homepage_hero" };
 
 type Props = {
   market: Market;
@@ -72,12 +75,22 @@ export default function HeroSection({ market, isPersisted, dailySpecialsNewBadge
     setDiscoveryMode(mode);
   }
 
+  // First-party copy of the Browse click (website_discovery_events, mode +
+  // destination) alongside the unchanged GA4 event.
+  const discoveryTracker = useDiscoveryTracker(HERO_PLACEMENT);
+
   function trackBrowseClick() {
     trackGA4Event("homepage_discovery_browse_clicked", {
       surface: "homepage_hero",
       mode: discoveryMode,
       market: market.id,
     });
+    if (discoveryTracker && discoveryTracker.allowClick(`browse|${discoveryMode}`)) {
+      discoveryTracker.send(
+        { eventType: "browse_click", mode: discoveryMode, targetPath: activeConfig.destination },
+        { immediate: true }
+      );
+    }
   }
 
   return (

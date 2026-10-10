@@ -413,6 +413,22 @@ On successful consumer account creation (`createConsumerAccount()`, `operator-ad
 
 ---
 
+## Search & discovery analytics (migration 110 — 2026-10, staging only)
+
+Migration `110_search_discovery_tracking_foundation.sql` was **applied to the shared project on 2026-10-10**, as one transaction via `supabase db query --linked`. It's not recorded in `supabase_migrations.schema_migrations`. Leave the file byte-for-byte unchanged. Code is on `website`/staging only; Production promotion is not yet authorized. If a route ever writes before the migration exists, it falls back to the pre-110 row shape. Definitions and denominators for reporting: `docs/analytics/SEARCH_DISCOVERY_TRACKING.md`.
+
+- **Environment:** every `/api/track/*` row gets a server-side `environment` (`src/lib/analyticsEnvironment.ts`): `production` (VERCEL_ENV), `staging` (Preview from the `website` branch, via `VERCEL_GIT_COMMIT_REF`), `preview`, or `development`. NULL = legacy, never backfilled. Never accept an environment from the client.
+- **Search** (`website_search_events`): captured only through `useSearchCapture()` (`(website)/tracking/useSearchCapture.ts`). It applies a 1s pause, with Enter, selection and See all captured immediately, and records mode, origin (typed/url/history/hero_see_all) and full totals. Hero and all three listing pages use it. Don't call `fireWebsiteSearch()` directly.
+- **Discovery** (`website_discovery_events`):
+  - **Pages:** the live homepage and live guide pages are wrapped in `<DiscoveryPageTracking>`, with a `<DiscoveryPlacement>` per section or guide block. Control Panel previews render the same components without it, so they record nothing.
+  - **Cards and headings:** wrap cards in `TrackedDiscoveryItem`, section headings in `SectionExposureMarker`, and "View all" in `TrackedViewAllLink`.
+  - **Impressions:** ≥50% visible for ≥1 continuous second in a visible tab, once per page view.
+- **The website no longer writes `venue_discover_events`.** Its impressions are load-based (the consumer app still writes it). Never sum it with `website_discovery_events`.
+- **Operator Admin Discover Impressions/Clicks** count on-screen, production-only impressions (`venueDiscoveryMetrics.ts`).
+- **e2e:** `E2E_INTERCEPT_TRACKING=1` answers `/api/track/*` locally so runs never write to the shared DB. `discovery-tracking.spec.ts` always intercepts.
+
+---
+
 ## Plans, billing & Comp / Trial grants (Part 1 — 2026-10)
 
 Migration `109_venue_plan_grants.sql` (**not yet applied** — apply only with explicit authorization). Founder-granted Pro/Premium access with no card and no Stripe subscription: **Comp** (optional end date) or **Trial** (end date required). Code: `src/lib/planGrants/`.

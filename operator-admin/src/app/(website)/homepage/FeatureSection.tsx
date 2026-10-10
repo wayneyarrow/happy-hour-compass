@@ -1,8 +1,6 @@
-"use client";
-
 import Link from "next/link";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
-import { DiscoveryImpressionTracker, fireDiscoveryClick } from "@/app/(website)/discoveryTracking";
+import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 
 /**
  * Renders a Venue/Event/Guide Feature Section as a full-width editorial
@@ -27,46 +25,31 @@ import { DiscoveryImpressionTracker, fireDiscoveryClick } from "@/app/(website)/
  * flip (`lg:pl-12` instead of `lg:pr-12`) so the outer breathing room stays
  * on the card's true outer edge rather than ending up against the grid gap.
  *
- * Phase 4A: "use client" added (previously a Server Component) so the CTA
- * Link can carry a discovery-tracking onClick for Venue Features — see
- * discoveryTracking.tsx. Purely presentational otherwise; no server-only
- * work was ever done in this component, so this has no other effect.
+ * Discovery tracking (migration 110, all three feature kinds): the feature
+ * card is one TrackedDiscoveryItem at position 0 (visible impression + CTA
+ * click) and its eyebrow/title block is the section-exposure marker. The
+ * placement (this Section) comes from HomepageSectionsRenderer; outside a
+ * tracked page these render as plain wrappers. A Server Component again —
+ * the tracking side effects live in those Client Components.
  */
 
 type Props = {
   section: Extract<HomepagePreviewSection, { kind: "venue_feature" | "event_feature" | "guide_feature" }>;
-  /**
-   * Opt-in only — omitted by the Control Panel's homepage preview route
-   * (control-panel/homepages/[id]/preview) so a founder/admin previewing a
-   * draft Homepage never generates real discovery-attribution rows; set by
-   * the live public homepage ((website)/page.tsx) only.
-   */
-  enableDiscoveryTracking?: boolean;
 };
 
-export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
+export function FeatureSection({ section }: Props) {
   const { feature } = section;
   const isVenueFeature = section.kind === "venue_feature";
 
-  // Discovery attribution only applies to Featured Venue cards (this
-  // phase's scope is venue discovery attribution) and only when the
-  // resolved feature actually carries a venueId (see homepagesRendering.ts
-  // — always true for venue_feature, never set for event/guide features).
-  const discoveryContext =
-    enableDiscoveryTracking && isVenueFeature && feature.venueId
-      ? { context: `homepage_feature:${section.id}`, position: 0 }
-      : null;
-
   return (
     <section className="py-10 md:py-12 border-t border-gray-100">
-      {discoveryContext && feature.venueId && (
-        <DiscoveryImpressionTracker
-          context={discoveryContext.context}
-          items={[{ venueId: feature.venueId, position: 0 }]}
-        />
-      )}
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center rounded-3xl overflow-hidden border border-gray-100 bg-gray-50">
+        <TrackedDiscoveryItem
+          itemType={feature.trackingItem.itemType}
+          itemId={feature.trackingItem.itemId}
+          position={0}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center rounded-3xl overflow-hidden border border-gray-100 bg-gray-50"
+        >
           <div
             className={`relative h-[220px] sm:h-[300px] lg:h-[420px] bg-gray-100 ${
               isVenueFeature ? "lg:order-2" : ""
@@ -83,12 +66,14 @@ export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
               isVenueFeature ? "lg:order-1 lg:pl-12" : "lg:pr-12"
             }`}
           >
-            <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-3">
-              {feature.eyebrow}
-            </p>
-            <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight leading-snug">
-              {feature.title}
-            </h2>
+            <SectionExposureMarker>
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest mb-3">
+                {feature.eyebrow}
+              </p>
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight leading-snug">
+                {feature.title}
+              </h2>
+            </SectionExposureMarker>
             {feature.secondaryLabel && (
               <p className="mt-2 text-sm text-gray-500">{feature.secondaryLabel}</p>
             )}
@@ -106,11 +91,6 @@ export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
               <Link
                 href={feature.ctaHref}
                 className="inline-flex items-center px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full text-sm transition-colors"
-                onClick={
-                  discoveryContext && feature.venueId
-                    ? () => fireDiscoveryClick(feature.venueId as string, discoveryContext)
-                    : undefined
-                }
               >
                 {feature.ctaLabel}
                 <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -119,7 +99,7 @@ export function FeatureSection({ section, enableDiscoveryTracking }: Props) {
               </Link>
             </div>
           </div>
-        </div>
+        </TrackedDiscoveryItem>
       </div>
     </section>
   );

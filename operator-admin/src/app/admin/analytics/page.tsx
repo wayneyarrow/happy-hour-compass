@@ -17,6 +17,7 @@ import {
   getOperatorAnalyticsV2,
   type MostViewedEvent,
 } from "@/lib/data/operatorAnalyticsV2";
+import { discoverImpressionsNote } from "@/lib/discoveryTracking/venueDiscoveryMetrics";
 
 // ── Venue row ─────────────────────────────────────────────────────────────────
 
@@ -299,13 +300,18 @@ export default async function AdminAnalyticsPage() {
 
               {isPremium ? (
                 <>
+                  {/* Visible impressions only (≥50% on screen for ≥1s) since
+                      migration 110 — never load-based. See
+                      src/lib/discoveryTracking/venueDiscoveryMetrics.ts. */}
                   <StatCard
                     label="Discover Impressions"
                     value={data.discoverImpressions}
+                    note={discoverImpressionsNote(data.discoverImpressionsCountingSince)}
                   />
                   <StatCard
                     label="Discover Clicks"
                     value={data.discoverClicks}
+                    note="Clicks on your venue from homepage picks and guides"
                   />
                 </>
               ) : (

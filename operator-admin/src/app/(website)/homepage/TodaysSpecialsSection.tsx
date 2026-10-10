@@ -1,14 +1,9 @@
-import Link from "next/link";
 import type { HomepagePreviewSection } from "@/lib/data/homepagePreview";
 import { TodaysSpecialCard } from "./TodaysSpecialCard";
-import { DiscoveryImpressionTracker } from "@/app/(website)/discoveryTracking";
-
-const TODAYS_SPECIALS_RAIL_NAME = "homepage_rail:todays-specials";
+import { SectionExposureMarker, TrackedDiscoveryItem, TrackedViewAllLink } from "@/app/(website)/tracking/TrackedDiscovery";
 
 type Props = {
   section: Extract<HomepagePreviewSection, { kind: "daily_special_collection" }>;
-  /** See CollectionRail.tsx/FeatureSection.tsx — omitted by the Control Panel homepage preview route, set only by the live public homepage. */
-  enableDiscoveryTracking?: boolean;
 };
 
 /**
@@ -31,31 +26,27 @@ type Props = {
  * rhythm as every rail (see CollectionRail.tsx), a plain responsive grid
  * (1 column mobile, 2 tablet, 3 desktop), no rail/swipe behavior, no large
  * tinted outer panel.
+ *
+ * Discovery tracking (migration 110): placement = this Section's real id
+ * (the pre-110 fixed "homepage_rail:todays-specials" name is gone); each card
+ * is tracked as a daily_special item by the Special's own id, so two
+ * Specials from one venue are distinguishable. Heading row = exposure marker.
  */
-export function TodaysSpecialsSection({ section, enableDiscoveryTracking }: Props) {
-  const discoveryContext = enableDiscoveryTracking ? { context: TODAYS_SPECIALS_RAIL_NAME } : null;
-
+export function TodaysSpecialsSection({ section }: Props) {
   return (
     <section className="py-10 md:py-12 border-t border-gray-100">
-      {discoveryContext && (
-        <DiscoveryImpressionTracker
-          context={discoveryContext.context}
-          items={section.items.map((s, i) => ({ venueId: s.venueId, position: i }))}
-        />
-      )}
-
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 flex items-end justify-between gap-4 mb-6">
+      <SectionExposureMarker className="max-w-7xl mx-auto px-6 lg:px-10 flex items-end justify-between gap-4 mb-6">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{section.title}</h2>
           <p className="mt-1.5 text-sm text-gray-500">{section.subtitle}</p>
         </div>
-        <Link
+        <TrackedViewAllLink
           href={section.viewAllHref}
           className="shrink-0 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors whitespace-nowrap"
         >
           View all →
-        </Link>
-      </div>
+        </TrackedViewAllLink>
+      </SectionExposureMarker>
 
       {/* Grid, not a rail: 1 column (mobile) -> 2 (tablet, sm:) -> 3
           (desktop, lg:) — no overflow-x-auto, no fixed card widths, no
@@ -64,11 +55,9 @@ export function TodaysSpecialsSection({ section, enableDiscoveryTracking }: Prop
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {section.items.map((special, i) => (
-            <TodaysSpecialCard
-              key={special.id}
-              special={special}
-              discovery={discoveryContext ? { context: discoveryContext.context, position: i } : undefined}
-            />
+            <TrackedDiscoveryItem key={special.id} itemType="daily_special" itemId={special.id} position={i} className="grid">
+              <TodaysSpecialCard special={special} />
+            </TrackedDiscoveryItem>
           ))}
         </div>
       </div>

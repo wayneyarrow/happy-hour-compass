@@ -12,6 +12,7 @@ import { EventSearchCard } from "./EventSearchCard";
 import EventSearchContextHeader from "./EventSearchContextHeader";
 import { trackGA4Event } from "@/lib/ga4";
 import { DiscoverySearchInput } from "../DiscoverySearchInput";
+import { useSearchCapture } from "../tracking/useSearchCapture";
 import { buildEventFilterSearchParams, parseEventFilterSearchParams } from "./eventFilterUrl";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
@@ -722,6 +723,20 @@ export function EventSearchResults({
 
   const hasFilters = !!(dateFilter || hasAppliedRange || activeType || query.trim());
 
+  // Search analytics (website_search_events): one row per meaningful search
+  // on this page — 1s pause or Enter — with mode "events", the origin of the
+  // query (typed / ?q= url / Back-Forward history / hero "See all" handoff),
+  // and the count after all active filters (flagged by otherFiltersActive).
+  const { markTyped: markSearchTyped, captureNow: captureSearchNow } = useSearchCapture({
+    surface: "listing_page",
+    mode: "events",
+    marketId: market.id,
+    query,
+    results: { count: filtered.length, capped: false, otherFiltersActive: !!(dateFilter || hasAppliedRange || activeType) },
+    detectInitialOrigin: true,
+    enabled: !!enableFilterSync,
+  });
+
   // ── Card hover → marker highlight ─────────────────────────────────────────
   // Hover ID for events is the venue's lat,lng key (same as marker ID).
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
@@ -792,7 +807,11 @@ export function EventSearchResults({
           <div className="px-4 pt-3 md:w-1/2 md:px-5">
             <DiscoverySearchInput
               value={query}
-              onChange={setQuery}
+              onChange={(value) => {
+                markSearchTyped();
+                setQuery(value);
+              }}
+              onEnter={() => captureSearchNow("enter")}
               onClear={() => setQuery("")}
               placeholder="Search trivia, live music, events..."
               ariaLabel="Search events"

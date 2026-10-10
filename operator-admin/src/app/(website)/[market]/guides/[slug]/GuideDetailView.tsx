@@ -10,7 +10,8 @@ import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
 import { ShareButton } from "@/app/(website)/ShareButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
-import { DiscoveryImpressionTracker } from "@/app/(website)/discoveryTracking";
+import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
+import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 
 /**
  * Guide Experience V2 — the guide-detail presentation, extracted (Card 2A)
@@ -92,11 +93,12 @@ type Props = {
    */
   canonicalUrl?: string;
   /**
-   * Phase 4A — opt-in venue discovery attribution (see discoveryTracking.tsx),
+   * Opt-in discovery tracking (website_discovery_events, migration 110),
    * same pattern as canonicalUrl above: omitted by the Control Panel's admin
    * preview route so a founder/admin previewing a draft guide never
-   * generates real venue_discover_events rows; set to true only by the live
-   * public guide route ((website)/[market]/guides/[slug]/page.tsx).
+   * generates real events; set to true only by the live public guide route
+   * ((website)/[market]/guides/[slug]/page.tsx). Blocks: venues | events |
+   * related_guides, keyed by the guide's id (stable across slug changes).
    */
   enableDiscoveryTracking?: boolean;
 };
@@ -118,11 +120,7 @@ export function GuideDetailView({
   const editorialSections = getEditorialSections(guide);
   const hasEditorialContent = editorialSections.length > 0;
 
-  // Phase 4A: guide.slug, not guide.id — see discoveryTracking.tsx's naming
-  // convention doc comment for why guides use their slug specifically.
-  const discoveryContextName = enableDiscoveryTracking ? `guide:${guide.slug}` : null;
-
-  return (
+  const view = (
     <div className="bg-white pb-16">
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
         {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
@@ -213,10 +211,13 @@ export function GuideDetailView({
         )}
 
         {/* ── Featured venues / events ─────────────────────────────────────── */}
+        <DiscoveryPlacement surface="guide" guideBlock={isVenueGuide ? "venues" : "events"}>
         <section className="mt-14 md:mt-16 pt-10 md:pt-12 border-t border-gray-100 mb-12">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight leading-snug">
-            {isVenueGuide ? "Featured Happy Hours" : "Featured Events"}
-          </h2>
+          <SectionExposureMarker>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight leading-snug">
+              {isVenueGuide ? "Featured Happy Hours" : "Featured Events"}
+            </h2>
+          </SectionExposureMarker>
           <p className="mt-2 text-sm text-gray-500 max-w-xl">
             {isVenueGuide
               ? "Hand-picked spots from this guide, worth the trip."
@@ -226,18 +227,10 @@ export function GuideDetailView({
             {isVenueGuide ? (
               venueCards.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {discoveryContextName && (
-                    <DiscoveryImpressionTracker
-                      context={discoveryContextName}
-                      items={venueCards.map((v, i) => ({ venueId: v.venueUuid, position: i }))}
-                    />
-                  )}
                   {venueCards.map((v, i) => (
-                    <SearchResultCard
-                      key={v.venueUuid}
-                      data={v}
-                      discovery={discoveryContextName ? { context: discoveryContextName, position: i } : undefined}
-                    />
+                    <TrackedDiscoveryItem key={v.venueUuid} itemType="venue" itemId={v.venueUuid} position={i} className="grid">
+                      <SearchResultCard data={v} />
+                    </TrackedDiscoveryItem>
                   ))}
                 </div>
               ) : (
@@ -247,8 +240,10 @@ export function GuideDetailView({
               )
             ) : eventItems.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {eventItems.map((e) => (
-                  <EventSearchCard key={e.id} event={e} />
+                {eventItems.map((e, i) => (
+                  <TrackedDiscoveryItem key={e.id} itemType="event" itemId={e.id} position={i} className="grid">
+                    <EventSearchCard event={e} />
+                  </TrackedDiscoveryItem>
                 ))}
               </div>
             ) : (
@@ -258,6 +253,7 @@ export function GuideDetailView({
             )}
           </div>
         </section>
+        </DiscoveryPlacement>
 
         {/* ── CTA back into discovery ──────────────────────────────────────── */}
         <div className="mb-12 p-6 rounded-2xl bg-amber-50 border border-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -279,24 +275,37 @@ export function GuideDetailView({
 
         {/* ── More guides ──────────────────────────────────────────────────── */}
         {relatedGuides.length > 0 && (
+          <DiscoveryPlacement surface="guide" guideBlock="related_guides">
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 tracking-tight leading-snug">
-              More Guides in {guide.marketName}
-            </h2>
+            <SectionExposureMarker>
+              <h2 className="text-xl font-bold text-gray-900 mb-4 tracking-tight leading-snug">
+                More Guides in {guide.marketName}
+              </h2>
+            </SectionExposureMarker>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              {relatedGuides.map((g) => (
-                <GuideCard
-                  key={g.slug}
-                  guideId={g.id}
-                  title={g.title}
-                  href={`/${guide.marketSlug}/guides/${g.slug}`}
-                  heroImageUrl={g.hero_image_url}
-                />
+              {relatedGuides.map((g, i) => (
+                <TrackedDiscoveryItem key={g.slug} itemType="guide" itemId={g.id} position={i} className="grid">
+                  <GuideCard
+                    guideId={g.id}
+                    title={g.title}
+                    href={`/${guide.marketSlug}/guides/${g.slug}`}
+                    heroImageUrl={g.hero_image_url}
+                  />
+                </TrackedDiscoveryItem>
               ))}
             </div>
           </section>
+          </DiscoveryPlacement>
         )}
       </div>
     </div>
+  );
+
+  return enableDiscoveryTracking ? (
+    <DiscoveryPageTracking marketId={guide.marketSlug} guideId={guide.id}>
+      {view}
+    </DiscoveryPageTracking>
+  ) : (
+    view
   );
 }

@@ -77,6 +77,15 @@ export const test = base.extend<{ diagnostics: Diagnostics }>({
       const diagnostics: Diagnostics = { pageErrors: [], consoleErrors: [], firstPartyFailures: [] };
       const siteHost = baseURL ? new URL(baseURL).host : "";
 
+      // E2E_INTERCEPT_TRACKING=1: answer every first-party /api/track/*
+      // request locally (204) so a run never writes analytics rows to the
+      // shared Supabase project — local dev and staging both write to it.
+      // Registered on the context, so a spec's own later context.route()
+      // for the same URLs (e.g. discovery-tracking.spec.ts) still wins.
+      if (process.env.E2E_INTERCEPT_TRACKING === "1") {
+        await page.context().route("**/api/track/**", (route) => route.fulfill({ status: 204, body: "" }));
+      }
+
       page.on("pageerror", (err) => {
         if (isThirdPartyPageError(err)) return;
         diagnostics.pageErrors.push(err.message);

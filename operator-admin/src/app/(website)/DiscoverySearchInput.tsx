@@ -23,12 +23,15 @@ export function DiscoverySearchInput({
   onClear,
   placeholder,
   ariaLabel,
+  onEnter,
 }: {
   value: string;
   onChange: (value: string) => void;
   onClear: () => void;
   placeholder: string;
   ariaLabel: string;
+  /** Enter pressed in the field (search analytics capture). Filtering itself stays live as you type. */
+  onEnter?: () => void;
 }) {
   return (
     <div
@@ -58,6 +61,7 @@ export function DiscoverySearchInput({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onEnter ? (e) => { if (e.key === "Enter") onEnter(); } : undefined}
         placeholder={placeholder}
         aria-label={ariaLabel}
         autoComplete="off"

@@ -69,7 +69,16 @@ export async function searchEventSuggestions(
   rawQuery: string,
   limit: number = DEFAULT_SUGGESTION_LIMIT
 ): Promise<EventSuggestion[]> {
-  if (!rawQuery.trim()) return [];
+  return (await searchEventSuggestionsWithTotal(market, rawQuery, limit)).suggestions;
+}
+
+/** Same search, plus `total`: every match before the `limit` display cap (website_search_events, migration 110). */
+export async function searchEventSuggestionsWithTotal(
+  market: Market,
+  rawQuery: string,
+  limit: number = DEFAULT_SUGGESTION_LIMIT
+): Promise<{ suggestions: EventSuggestion[]; total: number }> {
+  if (!rawQuery.trim()) return { suggestions: [], total: 0 };
 
   const events = await getPublishedEventsForWebsite(market);
   const matched = events.filter((e) =>
@@ -79,5 +88,5 @@ export async function searchEventSuggestions(
     )
   );
 
-  return matched.slice(0, limit).map(toEventSuggestion);
+  return { suggestions: matched.slice(0, limit).map(toEventSuggestion), total: matched.length };
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { resolveAnalyticsEnvironment } from "@/lib/analyticsEnvironment";
+import { insertTrackingRow } from "@/lib/trackingInsert";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,10 +24,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createAdminClient();
-    await supabase.from("event_view_events").insert({
-      event_id:   eventId,
-      session_id: sessionId,
-    });
+    await insertTrackingRow(
+      supabase,
+      "event_view_events",
+      { event_id: eventId, session_id: sessionId, environment: resolveAnalyticsEnvironment() },
+      ["environment"]
+    );
   } catch {
     // Intentionally swallowed — tracking failures must not affect the consumer.
   }

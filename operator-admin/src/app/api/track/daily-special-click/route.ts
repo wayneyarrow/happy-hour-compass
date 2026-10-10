@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { resolveAnalyticsEnvironment } from "@/lib/analyticsEnvironment";
+import { insertTrackingRow } from "@/lib/trackingInsert";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -45,12 +47,18 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (special?.venue_id) {
-      await supabase.from("daily_special_click_events").insert({
-        daily_special_id: dailySpecialId,
-        venue_id:         special.venue_id,
-        source,
-        session_id:       sessionId,
-      });
+      await insertTrackingRow(
+        supabase,
+        "daily_special_click_events",
+        {
+          daily_special_id: dailySpecialId,
+          venue_id:         special.venue_id,
+          source,
+          session_id:       sessionId,
+          environment:      resolveAnalyticsEnvironment(),
+        },
+        ["environment"]
+      );
     }
   } catch {
     // Intentionally swallowed — tracking failures must not affect the consumer.

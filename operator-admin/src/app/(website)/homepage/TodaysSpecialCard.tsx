@@ -5,20 +5,9 @@ import type { WebsiteDailySpecialListItem } from "@/lib/data/dailySpecials";
 import { OFFER_TYPE_LABELS, type OfferType } from "@/lib/dailySpecialTypes";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { formatDailySpecialSchedule, formatDailySpecialTime } from "../dailySpecialConsumerLabels";
-import { fireDiscoveryClick, type DiscoveryContext } from "@/app/(website)/discoveryTracking";
 
 type Props = {
   special: WebsiteDailySpecialListItem;
-  /**
-   * Opt-in venue discovery attribution (see discoveryTracking.tsx) —
-   * attributes the click to this Special's VENUE, using the exact same
-   * venue_id-keyed venue_discover_events infrastructure every other
-   * homepage rail/feature already uses. This cannot distinguish which
-   * Special on that venue was clicked (the schema has no Special id
-   * column) — see this feature's CPanel-integration report for what a
-   * real per-Special attribution column would require.
-   */
-  discovery?: DiscoveryContext;
 };
 
 /**
@@ -45,7 +34,7 @@ type Props = {
  * the venue's canonical public path + #daily-special-<uuid> anchor — no
  * new destination invented for the homepage.
  */
-export function TodaysSpecialCard({ special, discovery }: Props) {
+export function TodaysSpecialCard({ special }: Props) {
   const venuePath = buildVenuePublicPath({
     marketSlug: special.marketSlug,
     citySlug: special.citySlug,
@@ -111,7 +100,6 @@ export function TodaysSpecialCard({ special, discovery }: Props) {
     <Link
       href={href}
       className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl"
-      onClick={discovery ? () => fireDiscoveryClick(special.venueId, discovery) : undefined}
     >
       {cardBody}
     </Link>

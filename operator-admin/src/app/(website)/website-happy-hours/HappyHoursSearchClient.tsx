@@ -13,7 +13,7 @@ import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
 import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
 import { trackGA4Event } from "@/lib/ga4";
-import { fireWebsiteSearch } from "../searchTracking";
+import { useSearchCapture } from "../tracking/useSearchCapture";
 import { DiscoverySearchInput } from "../DiscoverySearchInput";
 import {
   saveDesktopMapBounds,
@@ -591,12 +591,6 @@ export function HappyHoursSearchClient({
   // filter/search changes are counted. See the effect below.
   const isFirstFilterSyncRef = useRef(true);
 
-  // Phase 4B search tracking: the last trimmed search query we've already
-  // fired a website_search_events row for — see the dedicated debounced
-  // tracking effect further down (kept separate from the URL-sync effect
-  // above, which fires for every filter/sort change, not just search).
-  const lastTrackedSearchRef = useRef("");
-
   // ── dropdown open state ──
   const [typeOpen, setTypeOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -1005,37 +999,24 @@ export function HappyHoursSearchClient({
     selectedType,
   ]);
 
-  // Phase 4B: one website_search_events row per settled, meaningful
-  // free-text search on this surface. Deliberately its own debounced effect
-  // (same SEARCH_URL_SYNC_DEBOUNCE_MS delay as the URL-sync effect above,
-  // for consistency) rather than folded into that effect, since that one
-  // fires for every filter/sort change — this must fire only when the
-  // search text itself settles on a new, non-empty value.
-  //
-  // resultCount is filteredCards.length — the already-computed result of
-  // applying this search (plus any other active filters) to `cards`, before
-  // the map viewport further narrows what's visibly rendered. Map bounds are
-  // a pan/zoom interaction, not part of what the visitor searched for, so
-  // desktopVisibleCards/mobileVisibleCards would conflate the two signals.
-  useEffect(() => {
-    if (!enableSearch) return;
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery) {
-      lastTrackedSearchRef.current = "";
-      return;
-    }
-    const timer = setTimeout(() => {
-      if (trimmedQuery === lastTrackedSearchRef.current) return;
-      lastTrackedSearchRef.current = trimmedQuery;
-      fireWebsiteSearch({
-        searchTerm: trimmedQuery,
-        surface: "listing_page",
-        resultCount: filteredCards.length,
-        marketId: market.id,
-      });
-    }, SEARCH_URL_SYNC_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [enableSearch, searchQuery, filteredCards, market.id]);
+  // Search analytics (website_search_events): one row per meaningful search
+  // — 1s pause, or immediately on Enter — with mode, origin (typed / ?q= url /
+  // Back-Forward history / hero "See all" handoff) and the result count.
+  // resultCount is filteredCards.length — this search plus any other active
+  // filters (flagged by otherFiltersActive), before the map viewport further
+  // narrows what's visibly rendered: map bounds are a pan/zoom interaction,
+  // not part of what the visitor searched for.
+  const otherFiltersActive =
+    nearMeActive || onNowActive || topRatedActive || !!selectedType || selectedDay !== "all" || !!(filterTimeFrom && filterTimeTo);
+  const { markTyped: markSearchTyped, captureNow: captureSearchNow } = useSearchCapture({
+    surface: "listing_page",
+    mode: "happy_hours",
+    marketId: market.id,
+    query: searchQuery,
+    results: { count: filteredCards.length, capped: false, otherFiltersActive },
+    detectInitialOrigin: true,
+    enabled: enableSearch,
+  });
 
   // ── sort + enrich with real distances ──
   // sortBy is used directly. "distance" without location returns 0 (stable: preserves
@@ -1268,7 +1249,11 @@ export function HappyHoursSearchClient({
           <div className="px-4 pt-3 md:w-1/2 md:px-5">
             <DiscoverySearchInput
               value={searchQuery}
-              onChange={setSearchQuery}
+              onChange={(value) => {
+                markSearchTyped();
+                setSearchQuery(value);
+              }}
+              onEnter={() => captureSearchNow("enter")}
               onClear={() => setSearchQuery("")}
               placeholder="Search by name, type, or specials…"
               ariaLabel="Search happy hours"

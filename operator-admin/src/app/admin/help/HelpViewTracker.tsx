@@ -15,9 +15,9 @@ import { recordHelpCenterView } from "@/lib/helpCenter/trackHelpCenterView";
  * hydration in the browser, not during prerendering, so article pages keep
  * their existing static build/render path untouched.
  *
- * The empty effect-dependency array + initialRef one-time snapshot mirrors
- * DiscoveryImpressionTracker's mount-tracking pattern
- * ((website)/discoveryTracking.tsx) — a parent rerender can never re-fire
+ * The empty effect-dependency array + initialRef one-time snapshot (the
+ * mount-tracking pattern the website's former DiscoveryImpressionTracker
+ * used) means a parent rerender can never re-fire
  * this; only an actual remount (a fresh page load) does, which is exactly
  * the "one settled page load" view semantics this is meant to capture.
  * React StrictMode's double-invoke-in-dev is guarded separately by

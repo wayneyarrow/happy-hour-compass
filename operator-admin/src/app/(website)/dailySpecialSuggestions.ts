@@ -76,7 +76,16 @@ export async function searchDailySpecialSuggestions(
   rawQuery: string,
   limit: number = DEFAULT_SUGGESTION_LIMIT
 ): Promise<DailySpecialSuggestion[]> {
-  if (!rawQuery.trim()) return [];
+  return (await searchDailySpecialSuggestionsWithTotal(market, rawQuery, limit)).suggestions;
+}
+
+/** Same search, plus `total`: every linkable match before the `limit` display cap (website_search_events, migration 110). */
+export async function searchDailySpecialSuggestionsWithTotal(
+  market: Market,
+  rawQuery: string,
+  limit: number = DEFAULT_SUGGESTION_LIMIT
+): Promise<{ suggestions: DailySpecialSuggestion[]; total: number }> {
+  if (!rawQuery.trim()) return { suggestions: [], total: 0 };
 
   const specials = await getPublishedDailySpecialsForWebsite(market);
   const matched = specials.filter((s) =>
@@ -86,8 +95,12 @@ export async function searchDailySpecialSuggestions(
     )
   );
 
-  return matched.slice(0, limit).flatMap((s) => {
+  const toSuggestions = (s: WebsiteDailySpecialListItem): DailySpecialSuggestion[] => {
     const suggestion = toDailySpecialSuggestion(s);
     return suggestion ? [suggestion] : [];
-  });
+  };
+  return {
+    suggestions: matched.slice(0, limit).flatMap(toSuggestions),
+    total: matched.filter((s) => toSuggestions(s).length > 0).length,
+  };
 }

@@ -786,11 +786,11 @@ export const HOW_TO_ARTICLES: HowToArticle[] = [
           },
           {
             heading: "Discover Impressions",
-            text: "How often your venue appeared in the curated rails on the Happy Hour Compass home screen.",
+            text: "How often your venue was actually seen in the curated picks on the Happy Hour Compass homepage and in our guides. We only count it when at least half of your venue's card is on screen for at least one second, so a section the visitor never scrolled to doesn't count. We switched to this stricter count in 2026. Earlier numbers counted every time a section loaded, so they were higher, and they aren't included. Your total restarted when the new counting began and builds up to a full 30 days from there; the card shows the start date until it does.",
           },
           {
             heading: "Discover Clicks",
-            text: "How many times consumers selected your venue from one of those home-screen rails.",
+            text: "How many times consumers selected your venue (or one of its Daily Specials) from those homepage picks and guides. Clicks didn't change when impressions did, so your click history carries on uninterrupted.",
           },
         ],
         note: {

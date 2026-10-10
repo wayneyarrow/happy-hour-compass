@@ -12,6 +12,7 @@ import {
 } from "@/lib/dailySpecialSchedule";
 import { DailySpecialSearchCard } from "./DailySpecialSearchCard";
 import { MarketModal } from "@/app/(consumer)/MarketModal";
+import { useSearchCapture } from "../tracking/useSearchCapture";
 
 // ── WHEN options ─────────────────────────────────────────────────────────────
 // Weekday values are the URL-param spelling; WhenFilter's internal 0-6
@@ -127,6 +128,20 @@ export function DailySpecialSearchResults({ dailySpecials, market, enableFilterS
 
   const hasFilters = !!whenFilter || !!typeFilter || !!query.trim();
 
+  // Search analytics (website_search_events): one row per meaningful search
+  // on this page — 1s pause or Enter — with mode "daily_specials", the origin
+  // of the query (typed / ?q= url / Back-Forward history / hero "See all"
+  // handoff), and the count after all active filters (otherFiltersActive).
+  const { markTyped: markSearchTyped, captureNow: captureSearchNow } = useSearchCapture({
+    surface: "listing_page",
+    mode: "daily_specials",
+    marketId: market.id,
+    query,
+    results: { count: filtered.length, capped: false, otherFiltersActive: !!whenFilter || !!typeFilter },
+    detectInitialOrigin: true,
+    enabled: enableFilterSync,
+  });
+
   const emptyMessage = (() => {
     const typeLabel = typeFilter ? OFFER_TYPE_LABELS[typeFilter] : null;
     const whenLabel = whenFilter?.value === "today" ? "today" : whenFilter ? whenFilter.param[0].toUpperCase() + whenFilter.param.slice(1) : null;
@@ -167,7 +182,13 @@ export function DailySpecialSearchResults({ dailySpecials, market, enableFilterS
           id="daily-specials-search"
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            markSearchTyped();
+            setQuery(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") captureSearchNow("enter");
+          }}
           placeholder="Search wings, tacos, wine…"
           className="w-full sm:max-w-sm px-4 py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
         />

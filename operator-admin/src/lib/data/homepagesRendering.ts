@@ -87,14 +87,11 @@ export type HomepagePreviewFeatureCard = {
   ctaLabel: "View Venue" | "View Event" | "Read Guide";
   ctaHref: string;
   /**
-   * Phase 4A — the venue's UUID, set only for a "Featured Venue" card
-   * (eyebrow === "Featured Venue"). ctaHref uses the venue's slug, not its
-   * id, so this is the only way FeatureSection.tsx can attribute a click
-   * to venue_discover_events without an extra lookup. Left undefined for
-   * event/guide features — those aren't in scope for venue discovery
-   * attribution.
+   * The featured content's stable identity for discovery tracking
+   * (website_discovery_events, migration 110): the venue's UUID (ctaHref
+   * uses its slug), the event's id, or the guide's id.
    */
-  venueId?: string;
+  trackingItem: { itemType: "venue" | "event" | "guide"; itemId: string };
 };
 
 export type HomepagePreviewSection =
@@ -236,11 +233,10 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         ctaLabel: "View Venue",
         ctaHref,
         // venue.id here is the SLUG (ConsumerVenue's convention — see
-        // src/lib/data/venues.ts's doc comment on that field); venueUuid is
-        // the real UUID venue_discover_events.venue_id needs. Caught live
-        // during Phase 4A staging validation: a real browser click had sent
-        // the slug as venueId, which fails the table's UUID FK constraint.
-        venueId: venue.venueUuid,
+        // src/lib/data/venues.ts's doc comment on that field); tracking needs
+        // the real UUID. Caught live during Phase 4A staging validation: a
+        // real browser click had sent the slug, which no tracking table accepts.
+        trackingItem: { itemType: "venue", itemId: venue.venueUuid },
       },
     };
   }
@@ -270,6 +266,7 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
         teaser: event.teaser,
         ctaLabel: "View Event",
         ctaHref,
+        trackingItem: { itemType: "event", itemId: event.id },
       },
     };
   }
@@ -290,6 +287,7 @@ async function resolveFeatureSection(section: HomepageSection): Promise<Homepage
       teaser: guide.teaser,
       ctaLabel: "Read Guide",
       ctaHref: `/${guide.marketSlug}/guides/${guide.slug}`,
+      trackingItem: { itemType: "guide", itemId: guide.id },
     },
   };
 }

@@ -11,8 +11,11 @@ import {
   suggestHomepageDailySpecialsAction,
   suggestHomepageEventsAction,
 } from "./suggestActions";
-import { fireWebsiteSearch } from "./searchTracking";
 import { DISCOVERY_MODES, type DiscoveryMode } from "@/lib/homepageDiscoveryModes";
+import { useSearchCapture } from "./tracking/useSearchCapture";
+import { useDiscoveryTracker, type PlacementContextValue } from "./tracking/DiscoveryTrackingProvider";
+import { writeSearchHandoff } from "@/lib/discoveryTracking/searchOrigin";
+import type { DiscoveryItemType } from "@/lib/discoveryTracking/discoveryEvents";
 
 type Props = {
   market: Market;
@@ -20,6 +23,8 @@ type Props = {
 };
 
 const DEBOUNCE_MS = 200;
+
+const HERO_PLACEMENT: PlacementContextValue = { surface: "homepage_hero" };
 
 /**
  * A discovery-mode result, still a distinct, honestly-named entity per
@@ -44,21 +49,27 @@ async function fetchDiscoveryResults(
   mode: DiscoveryMode,
   marketId: string,
   query: string
-): Promise<DiscoveryResult[]> {
+): Promise<{ results: DiscoveryResult[]; total: number }> {
   switch (mode) {
     case "happy_hours": {
-      const venues = await suggestHomepageVenuesAction(marketId, query);
-      return venues.map((v) => ({ kind: "venue" as const, ...v }));
+      const { suggestions, total } = await suggestHomepageVenuesAction(marketId, query);
+      return { results: suggestions.map((v) => ({ kind: "venue" as const, ...v })), total };
     }
     case "daily_specials": {
-      const specials = await suggestHomepageDailySpecialsAction(marketId, query);
-      return specials.map((s) => ({ kind: "daily_special" as const, ...s }));
+      const { suggestions, total } = await suggestHomepageDailySpecialsAction(marketId, query);
+      return { results: suggestions.map((s) => ({ kind: "daily_special" as const, ...s })), total };
     }
     case "events": {
-      const events = await suggestHomepageEventsAction(marketId, query);
-      return events.map((e) => ({ kind: "event" as const, ...e }));
+      const { suggestions, total } = await suggestHomepageEventsAction(marketId, query);
+      return { results: suggestions.map((e) => ({ kind: "event" as const, ...e })), total };
     }
   }
+}
+
+/** Discovery-tracking identity of a suggestion: venues by their UUID (VenueSuggestion.id is the slug). */
+function trackingItemOf(result: DiscoveryResult): { itemType: DiscoveryItemType; itemId: string } {
+  if (result.kind === "venue") return { itemType: "venue", itemId: result.venueUuid };
+  return { itemType: result.kind, itemId: result.id };
 }
 
 /** Empty-state copy — Happy Hours keeps its exact pre-existing "No venues found." wording; the two new modes get their own equivalents. */
@@ -104,18 +115,13 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
   const modeRef = useRef(mode);
-  // Phase 4B search tracking: the last trimmed query we've already fired a
-  // website_search_events row for. Prevents firing a duplicate event for the
-  // exact same settled query across rerenders (e.g. the click-outside effect
-  // or an unrelated parent rerender) — reset to "" whenever the query is
-  // cleared, so retyping the same term later still counts as a fresh search.
-  // Also reset on a genuine mode change (see below): the same typed text
-  // searched under a different entity type is a distinct search, not a
-  // repeat of the one already logged for the previous mode.
-  const lastTrackedQueryRef = useRef("");
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DiscoveryResult[]>([]);
+  // Full match total behind `results` (which is capped at 8) — search tracking only.
+  const [resultsTotal, setResultsTotal] = useState(0);
+  // The trimmed query + mode `results`/`resultsTotal` belong to.
+  const [resultsFor, setResultsFor] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -133,7 +139,6 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
     if (modeRef.current === mode) return;
     modeRef.current = mode;
     requestIdRef.current++;
-    lastTrackedQueryRef.current = "";
     setResults([]);
     setHasSearched(false);
     setActiveIndex(-1);
@@ -149,34 +154,20 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
       setIsLoading(false);
       setHasSearched(false);
       setActiveIndex(-1);
-      lastTrackedQueryRef.current = "";
       return;
     }
 
     setIsLoading(true);
     const requestId = ++requestIdRef.current;
     const timer = setTimeout(() => {
-      fetchDiscoveryResults(mode, market.id, trimmed).then((discoveryResults) => {
+      fetchDiscoveryResults(mode, market.id, trimmed).then(({ results: discoveryResults, total }) => {
         if (requestIdRef.current !== requestId) return;
         setResults(discoveryResults);
+        setResultsTotal(total);
+        setResultsFor(`${mode}|${trimmed}`);
         setIsLoading(false);
         setHasSearched(true);
         setActiveIndex(-1);
-
-        // Phase 4B: one website_search_events row per settled, meaningful
-        // query — resultCount is exactly the suggestion set the visitor
-        // sees, for whichever entity type this mode actually searched
-        // (venues / Daily Specials / Events), each already capped to a
-        // useful top-N by its own search module.
-        if (trimmed !== lastTrackedQueryRef.current) {
-          lastTrackedQueryRef.current = trimmed;
-          fireWebsiteSearch({
-            searchTerm: trimmed,
-            surface: "homepage_hero",
-            resultCount: discoveryResults.length,
-            marketId: market.id,
-          });
-        }
       });
     }, DEBOUNCE_MS);
 
@@ -194,7 +185,28 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  // Search analytics (website_search_events): one row per meaningful search
+  // — 1s pause once results are known, or immediately on Enter / selection —
+  // recording this mode and the FULL match total (not the 8 shown). Results
+  // only count as known once the fetch for the current query has settled.
+  const resultsKnown = !isLoading && query.trim().length > 0 && resultsFor === `${mode}|${query.trim()}`;
+  const { markTyped, captureNow } = useSearchCapture({
+    surface: "homepage_hero",
+    mode,
+    marketId: market.id,
+    query,
+    results: resultsKnown ? { count: resultsTotal, capped: false, otherFiltersActive: null } : null,
+  });
+  const tracker = useDiscoveryTracker(HERO_PLACEMENT);
+
   function selectResult(result: DiscoveryResult) {
+    const searchId = captureNow("selection");
+    if (tracker) {
+      tracker.send(
+        { eventType: "suggestion_select", ...trackingItemOf(result), position: results.indexOf(result), mode, searchId },
+        { immediate: true }
+      );
+    }
     setIsOpen(false);
     router.push(result.href);
   }
@@ -202,6 +214,13 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
   function selectDiscovery() {
     const trimmed = query.trim();
     if (!discoveryHref || !trimmed) return;
+    const searchId = captureNow("see_all");
+    // Lets the listing page record its arriving ?q= as origin hero_see_all
+    // (already counted here) rather than as an external url search.
+    writeSearchHandoff(trimmed, mode);
+    if (tracker) {
+      tracker.send({ eventType: "view_all_click", mode, searchId, targetPath: discoveryHref }, { immediate: true });
+    }
     setIsOpen(false);
     router.push(`${discoveryHref}?q=${encodeURIComponent(trimmed)}`);
   }
@@ -231,6 +250,12 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
       setIsOpen(true);
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
+      if (!(isOpen && activeIndex >= 0)) {
+        // Enter with no option highlighted doesn't navigate — but it does
+        // mark the query as a deliberate search (captured now, or as soon as
+        // its results arrive).
+        captureNow("enter");
+      }
       if (isOpen && activeIndex >= 0) {
         if (showDiscoveryAction && activeIndex === discoveryIndex) {
           e.preventDefault();
@@ -289,6 +314,7 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
           aria-label={config.searchAriaLabel}
           value={query}
           onChange={(e) => {
+            markTyped();
             setQuery(e.target.value);
             setIsOpen(true);
           }}

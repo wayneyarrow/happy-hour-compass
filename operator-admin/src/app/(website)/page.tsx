@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import HeroSection from "./HeroSection";
 import { HomepageSectionsRenderer } from "./homepage/HomepageSectionsRenderer";
+import { DiscoveryPageTracking } from "./tracking/DiscoveryTrackingProvider";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
@@ -105,16 +106,18 @@ export default async function WebsiteHomePage() {
   const { citySlug } = await getHeroCityContext(market);
   const homepage = await getPublicHomepageForLocation(market.id, citySlug);
 
+  // DiscoveryPageTracking: one discovery-tracking page view per mounted
+  // homepage (website_discovery_events, migration 110). Only the live public
+  // homepage is wrapped — the Control Panel preview renders the same
+  // components without it and records nothing.
   return (
-    <>
+    <DiscoveryPageTracking marketId={market.id} homepageId={homepage?.id ?? null}>
       <HeroSection
         market={market}
         isPersisted={isPersisted}
         dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
       />
-      {homepage && (
-        <HomepageSectionsRenderer sections={homepage.sections} enableDiscoveryTracking />
-      )}
-    </>
+      {homepage && <HomepageSectionsRenderer sections={homepage.sections} />}
+    </DiscoveryPageTracking>
   );
 }

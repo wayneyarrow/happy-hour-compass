@@ -4,9 +4,17 @@
  * Fetches all metrics for a venue over the last 30 days.
  * Uses createAdminClient() — all analytics tables are service-role only.
  * Individual query failures return null; the UI renders "—" for null values.
+ *
+ * Discover Impressions / Discover Clicks: see venueDiscoveryMetrics.ts —
+ * visible (on-screen) production impressions only since migration 110; the
+ * old load-based impressions are deliberately never counted.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import {
+  buildVenueDiscoveryItemFilter,
+  LEGACY_DISCOVER_CLICK_ENVIRONMENT_FILTER,
+} from "@/lib/discoveryTracking/venueDiscoveryMetrics";
 
 export type MostViewedEvent = {
   title: string;
@@ -17,8 +25,16 @@ export type OperatorAnalyticsV2Data = {
   // Visibility
   venueViews: number | null;
   eventViews: number | null;
+  /** On-screen impressions of this venue's cards (venue + Daily Special) in production — never load-based. */
   discoverImpressions: number | null;
+  /** Clicks on those cards (new tracking + legacy/production venue_discover_events clicks). */
   discoverClicks: number | null;
+  /**
+   * When on-screen impression counting began in production (earliest
+   * production item_impression, platform-wide) — the impression total only
+   * covers time since then. null = not started yet / unavailable.
+   */
+  discoverImpressionsCountingSince: string | null;
   // Engagement
   saves: number | null;
   mostViewedEvent: MostViewedEvent | null;
@@ -35,6 +51,7 @@ const NULL_DATA: OperatorAnalyticsV2Data = {
   eventViews: null,
   discoverImpressions: null,
   discoverClicks: null,
+  discoverImpressionsCountingSince: null,
   saves: null,
   mostViewedEvent: null,
   topSearchTag: null,
@@ -66,8 +83,8 @@ export async function getOperatorAnalyticsV2(
     // Phase 1: all independent queries in parallel
     const [
       venueViewsRes,
-      discoverImpRes,
-      discoverClickRes,
+      dailySpecialRowsRes,
+      legacyDiscoverClickRes,
       savesRes,
       websiteClicksRes,
       menuClicksRes,
@@ -80,17 +97,17 @@ export async function getOperatorAnalyticsV2(
         .select("id", { count: "exact", head: true })
         .eq("venue_id", venueId)
         .gte("viewed_at", since),
-      admin
-        .from("venue_discover_events")
-        .select("id", { count: "exact", head: true })
-        .eq("venue_id", venueId)
-        .eq("event_type", "impression")
-        .gte("occurred_at", since),
+      // This venue's Daily Specials — their homepage cards count toward its
+      // discovery metrics (they open the venue page), same as before 110.
+      admin.from("daily_specials").select("id").eq("venue_id", venueId),
+      // Legacy clicks only (the website stopped writing this table in 110).
+      // Load-based "impression" rows here are never counted.
       admin
         .from("venue_discover_events")
         .select("id", { count: "exact", head: true })
         .eq("venue_id", venueId)
         .eq("event_type", "click")
+        .or(LEGACY_DISCOVER_CLICK_ENVIRONMENT_FILTER)
         .gte("occurred_at", since),
       admin
         .from("venue_save_events")
@@ -125,6 +142,39 @@ export async function getOperatorAnalyticsV2(
       // All events for this venue — needed to scope event_view_events queries below
       admin.from("events").select("id, title").eq("venue_id", venueId),
     ]);
+
+    // Discover metrics from website_discovery_events (depend on Daily Special ids).
+    const discoveryItemFilter = buildVenueDiscoveryItemFilter(
+      venueId,
+      ((dailySpecialRowsRes.data ?? []) as Array<{ id: string }>).map((r) => r.id)
+    );
+    const [[discoverImpRes, newDiscoverClickRes], countingSinceRes] = await Promise.all([
+      dailySpecialRowsRes.error
+        ? Promise.resolve([{ count: null }, { count: null }] as const)
+        : Promise.all(
+            (["item_impression", "item_click"] as const).map((eventType) =>
+              admin
+                .from("website_discovery_events")
+                .select("id", { count: "exact", head: true })
+                .eq("event_type", eventType)
+                .eq("environment", "production")
+                .or(discoveryItemFilter)
+                .gte("occurred_at", since)
+            )
+          ),
+      admin
+        .from("website_discovery_events")
+        .select("occurred_at")
+        .eq("event_type", "item_impression")
+        .eq("environment", "production")
+        .order("occurred_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const discoverClicks =
+      legacyDiscoverClickRes.count === null || newDiscoverClickRes.count === null
+        ? null
+        : legacyDiscoverClickRes.count + newDiscoverClickRes.count;
 
     // Phase 2: event-scoped queries (depend on event IDs from Phase 1)
     const eventRows = (eventRowsRes.data ?? []) as Array<{
@@ -202,7 +252,8 @@ export async function getOperatorAnalyticsV2(
       venueViews: venueViewsRes.count,
       eventViews,
       discoverImpressions: discoverImpRes.count,
-      discoverClicks: discoverClickRes.count,
+      discoverClicks,
+      discoverImpressionsCountingSince: (countingSinceRes.data?.occurred_at as string | undefined) ?? null,
       saves: savesRes.count,
       mostViewedEvent,
       topSearchTag,
