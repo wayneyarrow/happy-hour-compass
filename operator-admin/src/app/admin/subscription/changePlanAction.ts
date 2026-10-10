@@ -11,6 +11,11 @@ import { logAuditEvent } from "@/lib/auditLog";
 import { logPlanChangeEvent } from "@/lib/planChangeEvents";
 import { createAdminClient } from "@/lib/supabase/server";
 import { reportCriticalFailure } from "@/lib/observability/reportCriticalFailure";
+import {
+  decidePlanChange,
+  verifyImpersonatingFounder,
+  IMPERSONATION_NOT_VERIFIED_ERROR,
+} from "@/lib/planChangeAuthorization";
 
 // Finalize-review fix: this action previously wrote plan_code directly for
 // EVERY transition, including a downgrade (or founder-manual change) away
@@ -72,6 +77,14 @@ export async function changePlanAction(
 
   const operatorId = ctx.operator?.id ?? null;
 
+  // Impersonation grants founder authority below (owner check skipped,
+  // manual plan writes allowed) — so re-verify it server-side first: the
+  // live login must be the founder who started this session and still be a
+  // Control Panel admin (see verifyImpersonatingFounder()).
+  if (ctx.isImpersonating && !(await verifyImpersonatingFounder(ctx.founderEmail))) {
+    return { ok: false, error: IMPERSONATION_NOT_VERIFIED_ERROR };
+  }
+
   // Plan changes are owner-only. Members may view the subscription page but
   // cannot change the plan. Impersonation sessions bypass this check.
   if (!ctx.isImpersonating) {
@@ -102,6 +115,20 @@ export async function changePlanAction(
 
   const isCurrentlyStripeBacked =
     subscription?.billing_provider === "stripe" && !!subscription.billing_provider_subscription_id;
+
+  // Manual-upgrade bypass fix — decided before any Stripe call or billing,
+  // plan-history, audit, note or notification write. A normal operator may
+  // never set a paid plan without a Stripe-backed subscription (paid plans
+  // are bought through Checkout), and never Enterprise; founder
+  // impersonation is unchanged. See src/lib/planChangeAuthorization.ts.
+  const decision = decidePlanChange({
+    targetPlan,
+    isCurrentlyStripeBacked,
+    isImpersonating: ctx.isImpersonating,
+  });
+  if (!decision.allowed) {
+    return { ok: false, error: decision.error };
+  }
 
   if (isCurrentlyStripeBacked) {
     let stripe: ReturnType<typeof getStripeClient>;
@@ -204,9 +231,9 @@ export async function changePlanAction(
     return { ok: true };
   }
 
-  // Not currently Stripe-backed (a founder manually granting/adjusting a
-  // plan with no real payment involved, or the venue is already Free with
-  // no subscription row) — direct DB write, unchanged from before.
+  // Not currently Stripe-backed — direct DB write, unchanged from before.
+  // Only two callers can reach here (decidePlanChange above): verified
+  // founder impersonation (any plan), or a normal owner moving to Free.
   const result = await updateVenuePlan(activeVenueId, targetPlan);
 
   if (result.ok) {
