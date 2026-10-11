@@ -17,6 +17,7 @@ import SearchTab from "./SearchTab";
 import PlacementsTab from "./PlacementsTab";
 import GuidesTab from "./GuidesTab";
 import VenuesTab from "./VenuesTab";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 /**
  * Founder Control Panel → Analytics → Search & Discovery.
@@ -34,6 +35,9 @@ const SOURCE_LABELS: Record<ReportParams["source"], string> = {
 };
 
 export default async function SearchDiscoveryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const p = parseParams(await searchParams);
   const now = new Date();
 
