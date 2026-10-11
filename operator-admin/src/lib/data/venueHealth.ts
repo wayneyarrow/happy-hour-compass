@@ -5,6 +5,7 @@ import type { OnboardingCompletionMode } from "@/lib/homepagePhase";
 import { getVenuePlanCode } from "@/lib/venueSubscriptions";
 import type { OperatorPlan } from "@/lib/plans";
 import { getEventViewCounts, sumViews } from "@/lib/data/viewCounts";
+import { COUNTED_VIEW_ENVIRONMENT_FILTER } from "@/lib/analyticsEnvironment";
 
 /**
  * Data helper for the Control Panel Venue Detail "Health Panel" (right column
@@ -139,16 +140,18 @@ export async function getVenueHealthData(input: VenueHealthInput): Promise<Venue
 
   const [r_media, r_venueViews30d, r_venueViews7d, r_venueViewsAllTime, r_events, r_membershipCount, plan] = await Promise.all([
     supabase.from("media").select("url").eq("venue_id", input.venueId).eq("type", "venue_image"),
+    // Legacy (NULL) + production views only — same rule as the
+    // venue_view_counts() RPC (migration 111); staging/preview/dev excluded.
     supabase.from("venue_view_events").select("*", { count: "exact", head: true })
-      .eq("venue_id", input.venueId).gte("viewed_at", t30),
+      .eq("venue_id", input.venueId).or(COUNTED_VIEW_ENVIRONMENT_FILTER).gte("viewed_at", t30),
     supabase.from("venue_view_events").select("*", { count: "exact", head: true })
-      .eq("venue_id", input.venueId).gte("viewed_at", t7),
+      .eq("venue_id", input.venueId).or(COUNTED_VIEW_ENVIRONMENT_FILTER).gte("viewed_at", t7),
     // All-time — a genuine COUNT(*) with no date lower bound. Like the 30d/7d
     // counts above, count:"exact"+head:true is a real SQL COUNT(*), never
     // subject to PostgREST's default row-return cap (see migration 088's
     // header) — this was already safe, all-time just wasn't computed before.
     supabase.from("venue_view_events").select("*", { count: "exact", head: true })
-      .eq("venue_id", input.venueId),
+      .eq("venue_id", input.venueId).or(COUNTED_VIEW_ENVIRONMENT_FILTER),
     supabase.from("events").select("id, title").eq("venue_id", input.venueId),
     isActive
       ? supabase.from("operator_memberships").select("*", { count: "exact", head: true })

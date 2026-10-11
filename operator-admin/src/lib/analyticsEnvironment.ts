@@ -35,3 +35,12 @@ export function resolveAnalyticsEnvironment(env: NodeJS.ProcessEnv = process.env
   }
   return "development";
 }
+
+/**
+ * PostgREST `.or()` filter for rows that count toward view/click metrics:
+ * legacy rows (environment NULL — written before migration 110, never
+ * backfilled) and production rows. Rows explicitly labelled staging,
+ * preview or development are excluded. The venue_view_counts() /
+ * event_view_counts() RPCs apply the same rule in SQL (migration 111).
+ */
+export const COUNTED_VIEW_ENVIRONMENT_FILTER = "environment.is.null,environment.eq.production";

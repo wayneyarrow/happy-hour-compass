@@ -17,6 +17,10 @@
  *
  * `since = null` means all-time (no lower bound) — the same RPC serves both
  * the existing 30-day figures and the newly added all-time figures.
+ *
+ * Since migration 111 both RPCs count only legacy (environment NULL) and
+ * production rows — staging/preview/development views are excluded. Direct
+ * counts elsewhere use COUNTED_VIEW_ENVIRONMENT_FILTER for the same rule.
  */
 
 import { createAdminClient } from "@/lib/supabase/server";

@@ -11,6 +11,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { COUNTED_VIEW_ENVIRONMENT_FILTER } from "@/lib/analyticsEnvironment";
 import {
   buildVenueDiscoveryItemFilter,
   LEGACY_DISCOVER_CLICK_ENVIRONMENT_FILTER,
@@ -92,10 +93,13 @@ export async function getOperatorAnalyticsV2(
       hoursExpandsRes,
       eventRowsRes,
     ] = await Promise.all([
+      // Legacy (NULL) + production views only — staging/preview/dev rows
+      // are excluded, same rule as the venue_view_counts() RPC (migration 111).
       admin
         .from("venue_view_events")
         .select("id", { count: "exact", head: true })
         .eq("venue_id", venueId)
+        .or(COUNTED_VIEW_ENVIRONMENT_FILTER)
         .gte("viewed_at", since),
       // This venue's Daily Specials — their homepage cards count toward its
       // discovery metrics (they open the venue page), same as before 110.
@@ -192,6 +196,7 @@ export async function getOperatorAnalyticsV2(
         .from("event_view_events")
         .select("event_id")
         .in("event_id", eventIds)
+        .or(COUNTED_VIEW_ENVIRONMENT_FILTER)
         .gte("viewed_at", since)
         .limit(10000);
 

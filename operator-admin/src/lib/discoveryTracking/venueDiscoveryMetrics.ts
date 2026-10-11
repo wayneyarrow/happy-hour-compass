@@ -17,6 +17,8 @@
  * Staging/preview/development rows are excluded from both.
  */
 
+import { COUNTED_VIEW_ENVIRONMENT_FILTER } from "../analyticsEnvironment";
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -33,8 +35,8 @@ export function buildVenueDiscoveryItemFilter(venueId: string, dailySpecialIds: 
   return clauses.length > 0 ? clauses.join(",") : "and(item_type.eq.venue,item_id.is.null)";
 }
 
-/** venue_discover_events clicks that count toward the operator metric. */
-export const LEGACY_DISCOVER_CLICK_ENVIRONMENT_FILTER = "environment.is.null,environment.eq.production";
+/** venue_discover_events clicks that count toward the operator metric — the same legacy-or-production rule as view counts. */
+export const LEGACY_DISCOVER_CLICK_ENVIRONMENT_FILTER = COUNTED_VIEW_ENVIRONMENT_FILTER;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

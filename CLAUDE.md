@@ -425,6 +425,7 @@ Migration `110_search_discovery_tracking_foundation.sql` was **applied to the sh
   - **Impressions:** ≥50% visible for ≥1 continuous second in a visible tab, once per page view.
 - **The website no longer writes `venue_discover_events`.** Its impressions are load-based (the consumer app still writes it). Never sum it with `website_discovery_events`.
 - **Operator Admin Discover Impressions/Clicks** count on-screen, production-only impressions (`venueDiscoveryMetrics.ts`).
+- **View counts exclude non-production rows** once migration `111_view_counts_exclude_non_production.sql` is applied (prepared, **not yet applied**). It covers `venue_view_counts()`/`event_view_counts()` and every direct `venue_view_events`/`event_view_events` read, via `COUNTED_VIEW_ENVIRONMENT_FILTER`. Counted rows are legacy NULL or `production`. Any new direct read must apply the same filter (pinned by `viewCountEnvironment.test.ts`).
 - **e2e:** `E2E_INTERCEPT_TRACKING=1` answers `/api/track/*` locally so runs never write to the shared DB. `discovery-tracking.spec.ts` always intercepts.
 
 ---
