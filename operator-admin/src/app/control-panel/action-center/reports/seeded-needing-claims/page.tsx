@@ -4,8 +4,12 @@ export const metadata = { title: "Seeded Venues Needing Claims — Action Center
 import Link from "next/link";
 import { getSeededNeedingClaims } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function SeededNeedingClaimsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getSeededNeedingClaims();
 
   return (

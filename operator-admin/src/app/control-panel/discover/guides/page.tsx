@@ -9,6 +9,7 @@ import {
   type DistributionChannelKey,
 } from "@/lib/data/contentGuideDistributionShared";
 import { GuidePlacementRow } from "./GuidePlacementRow";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const metadata: Metadata = { title: "Guides — Discover Management" };
 export const dynamic = "force-dynamic";
@@ -36,6 +37,9 @@ type Props = {
 };
 
 export default async function DiscoverGuidesPage({ searchParams }: Props) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { market: marketSlugParam, channel: channelParam } = await searchParams;
 
   const markets = await getAllMarkets();

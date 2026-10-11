@@ -13,6 +13,7 @@ import { GRANT_STATUS_LABELS } from "@/lib/planGrants/grantState";
 import { lastAccessDateLabel } from "@/lib/planGrants/grantDates";
 import { PLAN_LABELS } from "@/lib/plans";
 import { formatDate } from "@/lib/controlPanelDateTime";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 const STATUS_PILL: Record<string, string> = {
   active:    "bg-green-100 text-green-700",
@@ -33,6 +34,9 @@ function endCell(row: PlanGrantReportRow) {
 }
 
 export default async function PlanGrantsReportPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const result = await getPlanGrantReport();
   const rows = result ?? [];
   const summary = summarizePlanGrantReport(rows);

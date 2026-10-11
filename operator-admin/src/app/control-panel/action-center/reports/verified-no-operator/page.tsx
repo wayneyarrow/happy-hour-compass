@@ -4,8 +4,12 @@ export const metadata = { title: "Verified Venues Without Operators — Action C
 import Link from "next/link";
 import { getVerifiedWithoutOperators } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function VerifiedNoOperatorPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getVerifiedWithoutOperators();
 
   return (

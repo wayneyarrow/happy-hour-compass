@@ -3,8 +3,12 @@ export const metadata = { title: "Venue Funnel" };
 
 import { getVenueFunnelData } from "@/lib/data/venueFunnel";
 import VenueFunnelBoard from "./VenueFunnelBoard";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function VenueFunnelPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const data = await getVenueFunnelData();
 
   return (

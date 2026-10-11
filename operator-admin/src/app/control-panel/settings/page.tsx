@@ -3,8 +3,12 @@ export const metadata = { title: "Venue QA" };
 
 import { QaPublishPanel } from "./QaPublishPanel";
 import { QaHhReviewPanel } from "./QaHhReviewPanel";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
-export default function ControlPanelSettingsPage() {
+export default async function ControlPanelSettingsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   return (
     <div className="max-w-5xl">
       <div className="mb-8">

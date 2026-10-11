@@ -4,8 +4,12 @@ export const metadata = { title: "Active Venues Still Onboarding — Action Cent
 import Link from "next/link";
 import { getActiveStillOnboarding } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function ActiveStillOnboardingPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getActiveStillOnboarding();
 
   return (

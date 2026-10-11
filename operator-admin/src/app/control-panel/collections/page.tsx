@@ -8,12 +8,16 @@ import {
   getCollectionUsageCounts,
 } from "@/lib/data/collections";
 import CollectionsTable from "./CollectionsTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function CollectionsPage({
   searchParams,
 }: {
   searchParams: Promise<{ success?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   // lifecycle: "all" — the client table (CollectionsTable.tsx) filters
   // Active/Archived/All itself, the same way it already filters status/type/
   // market/city entirely client-side. The server must hand over the full

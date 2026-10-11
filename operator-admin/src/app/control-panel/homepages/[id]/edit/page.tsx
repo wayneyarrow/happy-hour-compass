@@ -11,6 +11,7 @@ import {
   getAssignableGuidesForFeatureSection,
 } from "@/lib/data/homepages";
 import HomepageForm from "../../HomepageForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function EditHomepagePage({
   params,
@@ -19,6 +20,9 @@ export default async function EditHomepagePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ success?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
   const [
     homepage,

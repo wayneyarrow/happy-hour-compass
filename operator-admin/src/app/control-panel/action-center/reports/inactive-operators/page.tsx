@@ -4,8 +4,12 @@ export const metadata = { title: "Inactive Operators — Action Center" };
 import Link from "next/link";
 import { getInactiveOperators } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function InactiveOperatorsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getInactiveOperators();
 
   return (

@@ -1,11 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { getPlatformAdmins } from "@/lib/platformAdmins";
 import PlatformAdminsClient from "./PlatformAdminsClient";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const metadata = { title: "Platform Admins" };
 export const dynamic = "force-dynamic";
 
 export default async function PlatformAdminsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [supabase, admins] = await Promise.all([
     createClient(),
     getPlatformAdmins(),

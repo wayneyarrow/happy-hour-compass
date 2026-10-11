@@ -13,6 +13,7 @@ import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "@/app/(website)/[market]/guides/[slug]/GuideDetailView";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 /**
  * Admin-safe guide preview (Guide Experience V2 Card 2A).
@@ -51,6 +52,9 @@ export default async function GuidePreviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
 
   const guide = await getGuideForPreview(id);

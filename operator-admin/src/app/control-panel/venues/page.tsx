@@ -3,10 +3,14 @@ export const metadata = { title: "Venues" };
 
 import { createAdminClient } from "@/lib/supabase/server";
 import VenuesTable, { type VenueRow } from "./VenuesTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default async function ControlPanelVenuesPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const supabase = createAdminClient();
 
   // Fetch venues ordered by most-recently-updated first

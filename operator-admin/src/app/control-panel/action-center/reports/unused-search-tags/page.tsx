@@ -4,8 +4,12 @@ export const metadata = { title: "Unused Search Tag Capacity — Action Center" 
 import Link from "next/link";
 import { getUnusedSearchTagsOpportunities } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function UnusedSearchTagsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getUnusedSearchTagsOpportunities();
 
   return (

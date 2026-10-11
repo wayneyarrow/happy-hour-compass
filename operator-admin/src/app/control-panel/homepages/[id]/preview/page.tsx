@@ -5,6 +5,7 @@ import { HomepageDiscoveryShell } from "@/app/(website)/homepage/HomepageDiscove
 import { HomepageSectionsRenderer } from "@/app/(website)/homepage/HomepageSectionsRenderer";
 import { WebsiteFooter } from "@/app/(website)/WebsiteFooter";
 import { HomepagePreviewBanner } from "./HomepagePreviewBanner";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 /**
  * Admin-safe Homepage preview (Build Homepage Preview task).
@@ -37,6 +38,9 @@ export default async function HomepagePreviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
 
   const data = await getHomepagePreviewData(id);

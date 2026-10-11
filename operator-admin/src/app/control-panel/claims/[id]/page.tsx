@@ -15,6 +15,7 @@ import ClaimNotesSection from "./ClaimNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
 import FinalSetupFollowUpPanel from "@/components/FinalSetupFollowUpPanel";
 import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claim Review" };
@@ -143,6 +144,9 @@ export default async function ClaimDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
   const [{ claim, error }, { notes }] = await Promise.all([
     getClaimById(id),

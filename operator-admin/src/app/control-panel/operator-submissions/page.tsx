@@ -3,6 +3,7 @@ import { getOperatorSubmissions } from "@/lib/data/operatorSubmissions";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
 import { getActivationPresentationsForSubmissions } from "@/lib/activation/activationPresentation";
 import SubmissionsTable from "./SubmissionsTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Operator Submissions" };
@@ -28,6 +29,9 @@ export default async function OperatorSubmissionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const params = await searchParams;
   const rawTab = typeof params.tab === "string" ? params.tab : undefined;
   const activeTab: TabKey = isValidTab(rawTab) ? rawTab : "needs_review";

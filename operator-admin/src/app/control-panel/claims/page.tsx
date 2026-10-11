@@ -2,11 +2,15 @@ import { getClaimsForReview } from "@/lib/data/claims";
 import { formatDate } from "@/lib/controlPanelDateTime";
 import { getActivationPresentationsForClaims } from "@/lib/activation/activationPresentation";
 import ClaimsTable from "./ClaimsTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Claims" };
 
 export default async function ClaimsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { claims, error } = await getClaimsForReview();
 
   // Only approved claims can ever have a lifecycle (claimOrReuseActivationLifecycle
