@@ -79,7 +79,7 @@ test("every direct read of venue_view_events / event_view_events applies the cou
       assert.match(chain, /\.or\(COUNTED_VIEW_ENVIRONMENT_FILTER\)/, `${relative(SRC, f)}: ${m[1]} read without the environment filter`);
     }
   }
-  assert.equal(reads, 5, "expected the 5 known direct reads (operatorAnalyticsV2 ×2, venueHealth ×3)");
+  assert.equal(reads, 6, "expected the 6 known direct reads (operatorAnalyticsV2 ×2, venueHealth ×3, searchDiscoveryReport countVenueViews ×1)");
 });
 
 test("every other view count goes through the filtered RPCs", () => {

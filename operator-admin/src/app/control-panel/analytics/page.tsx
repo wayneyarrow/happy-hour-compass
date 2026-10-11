@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Platform Analytics" };
 
+import { AnalyticsTabs } from "./search-discovery/ui";
 import {
   getFounderDashboardData,
   type TopItem,
@@ -225,6 +226,7 @@ export default async function PlatformAnalyticsPage() {
 
   return (
     <div className="max-w-5xl">
+      <AnalyticsTabs active="platform" />
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="mb-8 flex items-start justify-between">

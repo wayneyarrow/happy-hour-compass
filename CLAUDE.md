@@ -426,6 +426,10 @@ Migration `110_search_discovery_tracking_foundation.sql` was **applied to the sh
 - **The website no longer writes `venue_discover_events`.** Its impressions are load-based (the consumer app still writes it). Never sum it with `website_discovery_events`.
 - **Operator Admin Discover Impressions/Clicks** count on-screen, production-only impressions (`venueDiscoveryMetrics.ts`).
 - **View counts exclude non-production rows** once migration `111_view_counts_exclude_non_production.sql` is applied (prepared, **not yet applied**). It covers `venue_view_counts()`/`event_view_counts()` and every direct `venue_view_events`/`event_view_events` read, via `COUNTED_VIEW_ENVIRONMENT_FILTER`. Counted rows are legacy NULL or `production`. Any new direct read must apply the same filter (pinned by `viewCountEnvironment.test.ts`).
+- **Founder reporting:** Control Panel → Analytics → Search & Discovery (`app/control-panel/analytics/search-discovery/`, data in `src/lib/data/searchDiscoveryReport.ts`, pure metrics in `src/lib/searchDiscoveryReporting/`).
+  - Release-QA sessions are excluded via the single exact-id list `RELEASE_QA_SESSION_IDS`.
+  - Reads paginate past PostgREST's 1,000-row cap and refuse (never truncate) beyond 150k rows.
+  - Definitions: the "Reporting" section of `docs/analytics/SEARCH_DISCOVERY_TRACKING.md`.
 - **e2e:** `E2E_INTERCEPT_TRACKING=1` answers `/api/track/*` locally so runs never write to the shared DB. `discovery-tracking.spec.ts` always intercepts.
 
 ---
