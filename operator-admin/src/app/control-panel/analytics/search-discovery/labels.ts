@@ -31,7 +31,12 @@ export function sectionKindLabel(kind: string | null): string {
 
 export function sectionTitle(names: NameMaps, id: string): { title: string; flags: string[] } {
   const s = names.sections.get(id);
-  if (!s) return { title: `Deleted section · ${short(id)}`, flags: ["deleted"] };
+  if (!s) {
+    const removed = names.removedSections.get(id);
+    return removed
+      ? { title: removed.title, flags: ["removed section"] }
+      : { title: `Deleted section · ${short(id)}`, flags: ["deleted"] };
+  }
   const flags: string[] = [];
   if (!s.enabled) flags.push("disabled");
   if (!s.homepagePublished) flags.push("homepage not published");

@@ -19,7 +19,12 @@ export type ReportParams = {
   section: string | null;
   guide: string | null;
   venue: string | null;
+  /** Legacy rail_name to drill into (legacy source only). */
+  rail: string | null;
 };
+
+/** Legacy rail_name shapes: homepage_rail:<id>, homepage_feature:<id>, guide:<slug>, or a bare consumer-app rail. */
+export const LEGACY_RAIL_RE = /^[a-z_]{1,40}(:[a-z0-9-]{1,160})?$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuidOrNull = (v: string | undefined) => (v && UUID_RE.test(v) ? v.toLowerCase() : null);
@@ -37,6 +42,7 @@ export function parseParams(sp: Record<string, string | string[] | undefined>): 
     section: uuidOrNull(s("section")),
     guide: uuidOrNull(s("guide")),
     venue: uuidOrNull(s("venue")),
+    rail: s("rail") && LEGACY_RAIL_RE.test(s("rail")!) ? s("rail")! : null,
   };
 }
 

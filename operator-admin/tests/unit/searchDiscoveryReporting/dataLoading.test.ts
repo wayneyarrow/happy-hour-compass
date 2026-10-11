@@ -89,14 +89,26 @@ test("every report read of an event table applies the release-QA exclusion", () 
   assert.match(views, /COUNTED_VIEW_ENVIRONMENT_FILTER/);
 });
 
-test("new-tracking reads filter on one explicit environment; legacy load rows are only ever COUNTED, never read into visible metrics", () => {
+test("new-tracking reads filter on one explicit environment; legacy load rows never reach visible-impression metrics", () => {
   const disc = loader.slice(loader.indexOf("export async function loadDiscoveryRows"), loader.indexOf("// ── Name resolution"));
   assert.match(disc, /\.eq\("environment", source\)/);
   assert.match(disc, /"website_discovery_events"/);
   assert.doesNotMatch(disc, /venue_discover_events/);
-  const legacy = loader.slice(loader.indexOf("export async function loadLegacyDiscovery"));
+  // Rail overview: load rows are only COUNTED (head counts), never read row by row.
+  const legacy = loader.slice(loader.indexOf("export async function loadLegacyDiscovery"), loader.indexOf("/** Human label for a legacy rail_name. */"));
   assert.match(legacy, /count: "exact", head: true \}\)\.eq\("event_type", "impression"\)/);
   assert.doesNotMatch(legacy, /fetchAllRows[^;]*"impression"/);
+  // One rail's load rows may be read for the legacy drill-down only — they are
+  // shown as load rows, never fed to the visible-impression aggregations.
+  const users = ["SearchTab", "PlacementsTab", "GuidesTab", "VenuesTab"].filter((t) =>
+    readFileSync(join(SRC, `app/control-panel/analytics/search-discovery/${t}.tsx`), "utf8").includes("loadLegacyRailLoads")
+  );
+  assert.deepEqual(users, ["PlacementsTab"]);
+  const placements = readFileSync(join(SRC, "app/control-panel/analytics/search-discovery/PlacementsTab.tsx"), "utf8");
+  const legacyFn = placements.slice(placements.indexOf("async function LegacyPlacements"));
+  assert.match(legacyFn, /loadLegacyRailLoads\(/);
+  assert.match(legacyFn, /aggregateLegacyRailDetail\(railLoads/);
+  assert.doesNotMatch(placements.slice(0, placements.indexOf("async function LegacyPlacements")), /loadLegacyRailLoads\(/);
 });
 
 test("the report lives under the Control Panel (admin-gated layout) and its tabs never import legacy loaders into production paths", () => {

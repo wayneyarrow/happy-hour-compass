@@ -97,7 +97,7 @@ export default async function SearchDiscoveryPage({ searchParams }: { searchPara
         {REPORT_TABS.map((t) => (
           <Link
             key={t.value}
-            href={hrefFor(p, { tab: t.value, section: null, guide: null })}
+            href={hrefFor(p, { tab: t.value, section: null, guide: null, rail: null })}
             aria-current={p.tab === t.value ? "page" : undefined}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium ${p.tab === t.value ? "bg-slate-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"}`}
           >
@@ -109,7 +109,7 @@ export default async function SearchDiscoveryPage({ searchParams }: { searchPara
       <div className="mb-4 flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-3">
         <Pills
           label="Data"
-          options={(["production", "staging", "legacy"] as const).map((s) => ({ label: SOURCE_LABELS[s], href: hrefFor(p, { source: s, section: null, guide: null }), active: p.source === s }))}
+          options={(["production", "staging", "legacy"] as const).map((s) => ({ label: SOURCE_LABELS[s], href: hrefFor(p, { source: s, section: null, guide: null, rail: null }), active: p.source === s }))}
         />
         <Pills label="Range" options={RANGE_PRESETS.map((r) => ({ label: r.label, href: hrefFor(p, { range: r.value }), active: p.range === r.value }))} />
       </div>

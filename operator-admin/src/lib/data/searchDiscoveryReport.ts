@@ -27,7 +27,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { COUNTED_VIEW_ENVIRONMENT_FILTER } from "@/lib/analyticsEnvironment";
 import { qaSessionNotInFilter, type ReportSource } from "@/lib/searchDiscoveryReporting/config";
 import type { SearchRow } from "@/lib/searchDiscoveryReporting/searchMetrics";
-import type { DiscoveryRow, ItemVenueMap, LegacyClickRow } from "@/lib/searchDiscoveryReporting/placementMetrics";
+import type { DiscoveryRow, ItemVenueMap, LegacyClickRow, LegacyLoadRow } from "@/lib/searchDiscoveryReporting/placementMetrics";
 
 type Admin = ReturnType<typeof createAdminClient>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,6 +192,8 @@ export async function loadDiscoveryRows(source: Exclude<ReportSource, "legacy">,
 export type SectionInfo = { title: string; kind: string; homepage: string | null; enabled: boolean; homepagePublished: boolean };
 export type NameMaps = {
   sections: Map<string, SectionInfo>;
+  /** Sections no longer in homepage_sections, with the last title the audit log recorded for them. */
+  removedSections: Map<string, { title: string; at: string }>;
   guides: Map<string, { title: string; slug: string }>;
   venues: Map<string, string>;
   events: Map<string, { title: string; venueId: string | null }>;
@@ -274,7 +276,27 @@ export async function resolveNames(ids: {
     }),
   ]);
 
+  // Deleted sections: the last title the audit log recorded (create/update/remove all log it).
+  const foundSections = new Set((sections as { id: string }[]).map((x) => x.id));
+  const missingSectionIds = sectionIds.filter((id) => !foundSections.has(id));
+  const removedRows = await inChunks(missingSectionIds, async (c) => {
+    const r = await admin
+      .from("audit_logs")
+      .select("entity_id, entity_name, created_at")
+      .eq("entity_type", "homepage_section")
+      .in("entity_id", c)
+      .not("entity_name", "is", null)
+      .order("created_at", { ascending: false });
+    if (r.error) throw new Error(`audit_logs: ${r.error.message}`);
+    return r.data ?? [];
+  });
+  const removedSections = new Map<string, { title: string; at: string }>();
+  for (const r of removedRows as { entity_id: string; entity_name: string; created_at: string }[]) {
+    if (!removedSections.has(r.entity_id)) removedSections.set(r.entity_id, { title: r.entity_name, at: r.created_at });
+  }
+
   return {
+    removedSections,
     sections: new Map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sections as any[]).map((s) => [
@@ -395,7 +417,9 @@ export function legacyRailLabel(rail: string, names: NameMaps): string {
   if (prefix === "homepage_rail" || prefix === "homepage_feature") {
     const s = names.sections.get(rest);
     const kind = prefix === "homepage_feature" ? "Feature" : "Rail";
-    return s ? `${s.title} (${kind})` : `Deleted or unknown section · ${rest.slice(0, 8)} (${kind})`;
+    if (s) return `${s.title} (${kind})`;
+    const removed = names.removedSections.get(rest);
+    return removed ? `${removed.title} (${kind}, removed section)` : `Deleted or unknown section · ${rest.slice(0, 8)} (${kind})`;
   }
   if (prefix === "guide") {
     const id = names.guideBySlug.get(rest);
@@ -409,4 +433,16 @@ export function legacyRailLabel(rail: string, names: NameMaps): string {
 export async function listPublishedVenues(): Promise<{ id: string; name: string }[]> {
   const admin = createAdminClient();
   return fetchAllRows<{ id: string; name: string }>(admin, "venues", "id, name", (q) => q.eq("is_published", true), ["name", "id"]);
+}
+
+/** Every LOAD row (impression row written when the rail rendered) for one legacy rail — complete via fetchAllRows. */
+export async function loadLegacyRailLoads(rail: string, since: string | null, until: string): Promise<LegacyLoadRow[]> {
+  const admin = createAdminClient();
+  return fetchAllRows<LegacyLoadRow & { id: string }>(
+    admin,
+    "venue_discover_events",
+    "id, venue_id, position, session_id",
+    (q) => notQa(withinRange("occurred_at", since, until)(q.eq("event_type", "impression").eq("rail_name", rail))),
+    ["occurred_at", "id"]
+  );
 }

@@ -19,7 +19,8 @@ import {
 } from "@/lib/searchDiscoveryReporting/placementMetrics";
 import { hrefFor, type ReportParams } from "./context";
 import { ITEM_TYPE_LABELS, placementLabel, venueName } from "./labels";
-import { Empty, Kpi, Note, SectionHeader, Table, fmt, formatRate, type Col } from "./ui";
+import { Empty, Kpi, Note, PositionHelp, SectionHeader, Table, fmt, formatRate, type Col } from "./ui";
+import VenueCombobox from "./VenueCombobox";
 
 export default async function VenuesTab({ p, since, until }: { p: ReportParams; since: string | null; until: string }) {
   const [venues, venueViews] = await Promise.all([listPublishedVenues(), p.venue ? countVenueViews(p.venue, since, until) : Promise.resolve(null)]);
@@ -92,6 +93,9 @@ export default async function VenuesTab({ p, since, until }: { p: ReportParams; 
               can&apos;t be separated). They are shown for context only: this report does not attribute views to placements or claim any
               lift.
             </Note>
+            <div className="mt-2">
+              <PositionHelp />
+            </div>
           </div>
           {breakdown.length === 0 ? (
             <Empty title="No discovery activity for this venue in this range">It may not be placed on the homepage or in a guide yet.</Empty>
@@ -115,34 +119,15 @@ export default async function VenuesTab({ p, since, until }: { p: ReportParams; 
 
 function VenuePicker({ p, venues, activeIds }: { p: ReportParams; venues: { id: string; name: string }[]; activeIds: string[] }) {
   const active = new Set(activeIds);
-  const withActivity = venues.filter((v) => active.has(v.id));
-  const others = venues.filter((v) => !active.has(v.id));
-  const keep = Object.entries({ tab: p.tab, range: p.range, source: p.source });
+  const selected = p.venue ? venues.find((v) => v.id === p.venue) ?? { id: p.venue, name: "Selected venue" } : null;
+  const baseHref = hrefFor(p, { venue: null });
   return (
-    <form method="get" action="/control-panel/analytics/search-discovery" className="mb-6 flex flex-wrap items-end gap-2">
-      {keep.map(([k, v]) => (
-        <input key={k} type="hidden" name={k} value={v} />
-      ))}
-      <label className="flex w-full flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-gray-400 sm:w-auto">
-        Venue
-        <select name="venue" defaultValue={p.venue ?? ""} className="w-full sm:w-auto sm:min-w-[16rem] max-w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-800">
-          <option value="">All venues (overview)</option>
-          {withActivity.length > 0 && (
-            <optgroup label="With discovery activity in this range">
-              {withActivity.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label="Other published venues">
-            {others.map((v) => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </optgroup>
-        </select>
-      </label>
-      <button type="submit" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Show</button>
-    </form>
+    <VenueCombobox
+      venues={venues.map((v) => ({ id: v.id, name: v.name, active: active.has(v.id) }))}
+      selected={selected}
+      baseHref={baseHref}
+      clearHref={baseHref}
+    />
   );
 }
 

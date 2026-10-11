@@ -1,23 +1,26 @@
 import Link from "next/link";
-import { loadDiscoveryRows, loadLegacyDiscovery, legacyRailLabel, resolveNames } from "@/lib/data/searchDiscoveryReport";
+import { loadDiscoveryRows, loadLegacyDiscovery, loadLegacyRailLoads, legacyRailLabel, resolveNames } from "@/lib/data/searchDiscoveryReport";
 import {
   aggregateHero,
+  aggregateLegacyRailDetail,
   aggregateLegacyRails,
   aggregatePlacementItems,
   aggregatePlacementPositions,
   aggregateSections,
   type HeroStat,
   type ItemRow,
+  type LegacyRailPositionRow,
   type LegacyRailStat,
+  type LegacyRailVenueRow,
   type PositionRow,
   type SectionStat,
 } from "@/lib/searchDiscoveryReporting/placementMetrics";
 import { hrefFor, type ReportParams } from "./context";
-import { ITEM_TYPE_LABELS, SECTION_KIND_ORDER, itemName, sectionKindLabel, sectionTitle } from "./labels";
-import { Badge, Empty, Kpi, Note, SectionHeader, Table, fmt, formatRate, type Col } from "./ui";
+import { ITEM_TYPE_LABELS, SECTION_KIND_ORDER, itemName, sectionKindLabel, sectionTitle, venueName } from "./labels";
+import { Badge, Empty, Kpi, Note, PositionHelp, SectionHeader, Table, fmt, formatRate, type Col } from "./ui";
 
 export default async function PlacementsTab({ p, since, until }: { p: ReportParams; since: string | null; until: string }) {
-  if (p.source === "legacy") return LegacyPlacements({ since, until });
+  if (p.source === "legacy") return LegacyPlacements({ p, since, until });
   const rows = await loadDiscoveryRows(p.source, since, until);
   const sections = aggregateSections(rows);
   const homeRows = rows.filter((r) => r.surface === "homepage_section");
@@ -85,6 +88,9 @@ export default async function PlacementsTab({ p, since, until }: { p: ReportPara
           impression qualified after the click). Clicks on cards that were never counted as seen are shown as unmatched, never folded into
           CTR. Page views with no tracked section event (visitors who never scrolled) aren&apos;t counted — there is no page-view event.
         </Note>
+        <div className="mt-2">
+          <PositionHelp />
+        </div>
       </div>
 
       {sections.length === 0 ? (
@@ -183,15 +189,26 @@ function HeroTable({ stats }: { stats: HeroStat[] }) {
   return <Table cols={cols} rows={stats} rowKey={(s) => `${s.eventType}|${s.mode}`} caption="Homepage hero" />;
 }
 
-async function LegacyPlacements({ since, until }: { since: string | null; until: string }) {
+async function LegacyPlacements({ p, since, until }: { p: ReportParams; since: string | null; until: string }) {
   const legacy = await loadLegacyDiscovery(since, until);
   const rails = aggregateLegacyRails(legacy.loadCounts, legacy.clicks);
+  const railLoads = p.rail ? await loadLegacyRailLoads(p.rail, since, until) : [];
+  const detail = p.rail ? aggregateLegacyRailDetail(railLoads, legacy.clicks.filter((c) => c.rail_name === p.rail)) : null;
   const names = await resolveNames({
+    venueIds: detail?.byVenue.map((v) => v.venueId) ?? [],
     sectionIds: rails.flatMap((r) => (r.railName.startsWith("homepage_") ? [r.railName.slice(r.railName.indexOf(":") + 1)] : [])).filter((id) => /^[0-9a-f-]{36}$/.test(id)),
     guideSlugs: rails.flatMap((r) => (r.railName.startsWith("guide:") ? [r.railName.slice(6)] : [])),
   });
   const cols: Col<LegacyRailStat>[] = [
-    { key: "rail", label: "Legacy rail", render: (r) => <span className="font-medium text-gray-900">{legacyRailLabel(r.railName, names)}</span> },
+    {
+      key: "rail",
+      label: "Legacy rail",
+      render: (r) => (
+        <Link href={hrefFor(p, { rail: r.railName })} className="font-medium text-slate-900 underline-offset-2 hover:underline">
+          {legacyRailLabel(r.railName, names)}
+        </Link>
+      ),
+    },
     { key: "loads", label: "Load rows", align: "right", title: "Impression rows written when the rail rendered — not seen", render: (r) => fmt(r.loadRows) },
     { key: "clicks", label: "Clicks", align: "right", render: (r) => fmt(r.clicks) },
     { key: "cs", label: "Click sessions", align: "right", render: (r) => fmt(r.clickSessions) },
@@ -212,7 +229,73 @@ async function LegacyPlacements({ since, until }: { since: string | null; until:
         <Kpi label="Click sessions" value={fmt(new Set(legacy.clicks.map((c) => c.session_id)).size)} />
         <Kpi label="Rails" value={fmt(rails.length)} />
       </div>
-      {rails.length === 0 ? <Empty title="No legacy discovery rows in this range" /> : <Table cols={cols} rows={rails} rowKey={(r) => r.railName} caption="Legacy rails" />}
+      {rails.length === 0 ? (
+        <Empty title="No legacy discovery rows in this range" />
+      ) : (
+        <>
+          <p className="mb-2 text-xs text-gray-500">Select a rail to see its venues and clicks by recorded card position.</p>
+          <Table cols={cols} rows={rails} rowKey={(r) => r.railName} caption="Legacy rails" />
+        </>
+      )}
+      {p.rail && detail && <LegacyRailDetail p={p} rail={p.rail} detail={detail} names={names} />}
+    </div>
+  );
+}
+
+function LegacyRailDetail({
+  p,
+  rail,
+  detail,
+  names,
+}: {
+  p: ReportParams;
+  rail: string;
+  detail: ReturnType<typeof aggregateLegacyRailDetail>;
+  names: Awaited<ReturnType<typeof resolveNames>>;
+}) {
+  const isSpecials = rail === "homepage_rail:todays-specials";
+  const venueCols: Col<LegacyRailVenueRow>[] = [
+    { key: "v", label: isSpecials ? "Venue (special not recorded)" : "Venue", render: (v) => <span className="font-medium text-gray-900">{venueName(names, v.venueId)}</span> },
+    { key: "pos", label: "Positions recorded", render: (v) => (v.positions.length ? v.positions.map((x) => `#${x + 1}`).join(", ") : "—") },
+    { key: "loads", label: "Load rows", align: "right", title: "Written when the rail rendered — not seen", render: (v) => fmt(v.loadRows) },
+    { key: "clicks", label: "Clicks", align: "right", render: (v) => fmt(v.clicks) },
+    { key: "cs", label: "Click sessions", align: "right", render: (v) => fmt(v.clickSessions) },
+  ];
+  const posCols: Col<LegacyRailPositionRow>[] = [
+    { key: "p", label: "Card position", render: (r) => `#${r.position + 1}` },
+    { key: "loads", label: "Load rows", align: "right", render: (r) => fmt(r.loadRows) },
+    { key: "clicks", label: "Clicks", align: "right", render: (r) => fmt(r.clicks) },
+  ];
+  return (
+    <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h2 className="text-base font-semibold text-slate-900">Legacy rail detail: {legacyRailLabel(rail, names)}</h2>
+        <Link href={hrefFor(p, { rail: null })} className="text-xs text-gray-500 hover:text-gray-700">
+          Close ✕
+        </Link>
+      </div>
+      <div className="mb-4 space-y-2">
+        <Note tone="warn">
+          Load rows count every time this rail rendered on a page, whether or not the card was scrolled into view, and they include
+          staging and production traffic. Use them only to see how often a venue was <em>placed</em> here — never
+          as impressions or as a click-through denominator.
+          {isSpecials && " Today’s Specials used one fixed rail name and recorded only the venue, so the special that was clicked can’t be recovered."}
+          {rail.startsWith("guide:") && " Guide rails were recorded by the guide’s web address (slug); a renamed guide is matched through its slug history where possible."}
+        </Note>
+        <PositionHelp legacy />
+      </div>
+      {detail.byVenue.length === 0 ? (
+        <Empty title="No legacy rows for this rail in this range" />
+      ) : (
+        <>
+          <p className="text-xs text-gray-500 mb-2">By venue — sorted by clicks.</p>
+          <div className="mb-5">
+            <Table cols={venueCols} rows={detail.byVenue} rowKey={(v) => v.venueId} caption="Legacy rail venues" />
+          </div>
+          <p className="text-xs text-gray-500 mb-2">By recorded card position within the rail.</p>
+          <Table cols={posCols} rows={detail.byPosition} rowKey={(r) => String(r.position)} caption="Legacy rail positions" />
+        </>
+      )}
     </div>
   );
 }

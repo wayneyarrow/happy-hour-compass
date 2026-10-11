@@ -160,3 +160,42 @@ export function AnalyticsTabs({ active }: { active: "platform" | "search-discove
     </nav>
   );
 }
+
+/**
+ * Plain-language help on what recorded positions mean. `legacy` adds what
+ * the pre-October-2026 data did and didn't keep.
+ */
+export function PositionHelp({ legacy = false }: { legacy?: boolean }) {
+  return (
+    <details className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-700">
+      <summary className="cursor-pointer font-semibold text-slate-800">What the positions mean</summary>
+      <ul className="mt-2 list-disc space-y-1 pl-4">
+        <li>
+          <strong>Position #1, #2, …</strong> is the card&apos;s place <em>inside its row</em>, counted from the first (left-most)
+          card. Rows scroll sideways, so later positions need a swipe or scroll to be seen. Today&apos;s Specials is a grid: positions run
+          left to right, then down.
+        </li>
+        <li>
+          Positions are recorded <strong>as the card was shown at the time</strong>. If a collection&apos;s order changes, the same venue
+          appears at different positions over time — each row of the item table lists every position it was seen at.
+        </li>
+        <li>
+          The report <strong>does not record where a row sat on the homepage</strong> (for example 2nd row vs 5th row). Moving a
+          row up or down keeps its history under the same section, but the move itself isn&apos;t visible here, so compare periods
+          before and after a move by date range.
+        </li>
+        <li>
+          Section names are today&apos;s names. Renaming a section relabels its history; a removed section shows the last name it had;
+          a section that was deleted and re-created starts a new history.
+        </li>
+        {legacy && (
+          <li>
+            <strong>Before Oct 10, 2026</strong> the same within-row position was recorded for venue cards, but loads were counted when
+            a row rendered (not when it was seen), staging and production traffic were mixed, and Today&apos;s Specials recorded only
+            the venue — not which special.
+          </li>
+        )}
+      </ul>
+    </details>
+  );
+}

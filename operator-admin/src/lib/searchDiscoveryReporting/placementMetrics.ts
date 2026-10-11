@@ -354,3 +354,53 @@ export function aggregateLegacyRails(loadCounts: Map<string, number>, clicks: Le
     .map((railName) => ({ railName, loadRows: loadCounts.get(railName) ?? 0, clicks: by.get(railName)?.n ?? 0, clickSessions: by.get(railName)?.s.size ?? 0 }))
     .sort((a, b) => b.clicks - a.clicks || b.loadRows - a.loadRows);
 }
+
+export type LegacyLoadRow = { venue_id: string; position: number; session_id?: string };
+
+export type LegacyRailVenueRow = { venueId: string; loadRows: number; clicks: number; clickSessions: number; positions: number[] };
+export type LegacyRailPositionRow = { position: number; loadRows: number; clicks: number };
+
+/**
+ * One legacy rail's detail: per venue and per recorded card position.
+ * Load rows are LOAD-based (written when the rail rendered, whether or not
+ * anyone saw the card) — shown beside clicks, never divided into them.
+ * Positions are the card's 0-based place within the rail as rendered.
+ */
+export function aggregateLegacyRailDetail(
+  loads: LegacyLoadRow[],
+  clicks: LegacyClickRow[]
+): { byVenue: LegacyRailVenueRow[]; byPosition: LegacyRailPositionRow[] } {
+  const keptLoads = loads.filter((l) => !isReleaseQaSession(l.session_id));
+  const keptClicks = clicks.filter((c) => !isReleaseQaSession(c.session_id));
+  const venues = new Map<string, { loads: number; clicks: number; sessions: Set<string>; positions: Set<number> }>();
+  const positions = new Map<number, { loads: number; clicks: number }>();
+  const v = (id: string) => {
+    let x = venues.get(id);
+    if (!x) venues.set(id, (x = { loads: 0, clicks: 0, sessions: new Set(), positions: new Set() }));
+    return x;
+  };
+  const p = (pos: number) => {
+    let x = positions.get(pos);
+    if (!x) positions.set(pos, (x = { loads: 0, clicks: 0 }));
+    return x;
+  };
+  for (const l of keptLoads) {
+    const x = v(l.venue_id);
+    x.loads++;
+    x.positions.add(l.position);
+    p(l.position).loads++;
+  }
+  for (const c of keptClicks) {
+    const x = v(c.venue_id);
+    x.clicks++;
+    x.sessions.add(c.session_id);
+    x.positions.add(c.position);
+    p(c.position).clicks++;
+  }
+  return {
+    byVenue: [...venues.entries()]
+      .map(([venueId, x]) => ({ venueId, loadRows: x.loads, clicks: x.clicks, clickSessions: x.sessions.size, positions: [...x.positions].sort((a, b) => a - b) }))
+      .sort((a, b) => b.clicks - a.clicks || b.loadRows - a.loadRows),
+    byPosition: [...positions.entries()].map(([position, x]) => ({ position, loadRows: x.loads, clicks: x.clicks })).sort((a, b) => a.position - b.position),
+  };
+}
