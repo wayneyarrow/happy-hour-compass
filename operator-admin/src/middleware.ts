@@ -10,8 +10,9 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * Route protection boundaries:
  *   /admin/*         — Operator Admin. Middleware enforces authentication here.
- *   /control-panel/* — Admin Control Panel. NOT guarded by middleware; its own
- *                      layout.tsx handles both authentication and CP-admin allowlist.
+ *   /control-panel/* — Admin Control Panel. Middleware redirects logged-out
+ *                      requests; requireControlPanelAdmin() in the layout and in
+ *                      every page enforces the CP-admin allowlist.
  *   /activate-account — Public. No auth required.
  */
 export async function middleware(request: NextRequest) {
@@ -51,8 +52,18 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Guard: unauthenticated users never reach a Control Panel render. Defense
+  // in depth only — admin eligibility is checked by requireControlPanelAdmin()
+  // in the layout and in every page. Exact prefix so /control-panel-login
+  // (the login page itself) is never matched.
+  if (!user && (pathname === "/control-panel" || pathname.startsWith("/control-panel/"))) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/control-panel-login";
+    loginUrl.search = "";
+    return NextResponse.redirect(loginUrl);
+  }
+
   // Guard: unauthenticated users cannot access /dashboard or /admin.
-  // /control-panel is intentionally excluded — it manages its own auth in layout.tsx.
   if (
     !user &&
     (pathname.startsWith("/dashboard") ||

@@ -25,6 +25,7 @@ import FeaturedInContentSection from "./FeaturedInContentSection";
 import GoogleIdentityPanel from "./GoogleIdentityPanel";
 import OnboardingOverrideControl from "./OnboardingOverrideControl";
 import { formatDate as fmt } from "@/lib/controlPanelDateTime";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Venue Detail" };
@@ -125,6 +126,9 @@ export default async function ControlPanelVenueDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
   const supabase = createAdminClient();
 

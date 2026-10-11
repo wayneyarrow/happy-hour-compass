@@ -23,6 +23,7 @@ import { AddVenuePanel } from "./AddVenuePanel";
 import { AddEventPanel } from "./AddEventPanel";
 import { RemovedVenueRow } from "./RemovedVenueRow";
 import { RemovedEventRow } from "./RemovedEventRow";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const metadata: Metadata = { title: "Discover Management" };
 export const dynamic = "force-dynamic";
@@ -32,6 +33,9 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<Record<string, string>> };
 
 export default async function DiscoverPage({ searchParams }: Props) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { rail: rawRail } = await searchParams;
   const rail: RailKey = RAIL_KEYS.includes(rawRail as RailKey)
     ? (rawRail as RailKey)

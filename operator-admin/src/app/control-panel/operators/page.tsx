@@ -5,10 +5,14 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { highestPlan } from "@/lib/venueSubscriptions";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import OperatorsTable, { type OperatorRow } from "./OperatorsTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default async function ControlPanelOperatorsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const supabase = createAdminClient();
 
   // Fetch all operators ordered by most recently created.

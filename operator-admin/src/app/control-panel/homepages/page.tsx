@@ -4,12 +4,16 @@ export const metadata = { title: "Homepages" };
 import Link from "next/link";
 import { getHomepages, getHomepageFormGeography } from "@/lib/data/homepages";
 import HomepagesTable from "./HomepagesTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function HomepagesPage({
   searchParams,
 }: {
   searchParams: Promise<{ success?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [homepages, { markets, cities }, { success }] = await Promise.all([
     getHomepages(),
     getHomepageFormGeography(),

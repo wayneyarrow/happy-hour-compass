@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getContentGuides, type GuideStatus, type GuideType } from "@/lib/data/contentGuides";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
 import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Display maps ─────────────────────────────────────────────────────────────
 
@@ -33,6 +34,9 @@ export default async function ContentEnginePage({
 }: {
   searchParams: Promise<{ success?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [guides, { success }] = await Promise.all([getContentGuides(), searchParams]);
 
   const thCls =

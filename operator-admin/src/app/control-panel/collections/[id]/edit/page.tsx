@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/collections";
 import { resolveCollectionPreviewById } from "@/lib/data/collectionsPreview";
 import CollectionForm from "../../CollectionForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function EditCollectionPage({
   params,
@@ -18,6 +19,9 @@ export default async function EditCollectionPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ success?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
   const [collection, { markets, cities }, { success }] = await Promise.all([
     getCollectionById(id),

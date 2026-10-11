@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // Kept in the same order as ControlPanelSideNav.tsx's NAV_ITEMS (source of
 // truth for what's implemented), minus "Dashboard" itself. Industry Reads is
@@ -108,7 +109,10 @@ const SECTIONS: Array<{
   },
 ];
 
-export default function ControlPanelDashboard() {
+export default async function ControlPanelDashboard() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   return (
     <div className="max-w-4xl">
       <div className="mb-8">

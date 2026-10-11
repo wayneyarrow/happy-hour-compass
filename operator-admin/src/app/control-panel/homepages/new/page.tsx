@@ -4,8 +4,12 @@ export const metadata = { title: "New Homepage — Homepages" };
 import Link from "next/link";
 import { getHomepageFormGeography, getHomepages } from "@/lib/data/homepages";
 import HomepageForm from "../HomepageForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function NewHomepagePage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [{ markets, cities }, existingHomepages] = await Promise.all([
     getHomepageFormGeography(),
     // Unfiltered — both Draft and Published Homepages reserve their

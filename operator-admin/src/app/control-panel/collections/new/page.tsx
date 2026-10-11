@@ -4,8 +4,12 @@ export const metadata = { title: "New Collection — Collections" };
 import Link from "next/link";
 import { getCollectionFormGeography } from "@/lib/data/collections";
 import CollectionForm from "../CollectionForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function NewCollectionPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { markets, cities } = await getCollectionFormGeography();
 
   return (

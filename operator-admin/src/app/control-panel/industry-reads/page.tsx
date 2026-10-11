@@ -4,6 +4,7 @@ export const metadata = { title: "Industry Reads" };
 import { getIndustryReads, IndustryArticle } from "@/lib/industryReads";
 import { createAdminClient } from "@/lib/supabase/server";
 import ArticleReviewCard from "./ArticleReviewCard";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,9 @@ function buildFeedbackMap(rows: FeedbackRow[]): Map<string, FeedbackSummary> {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function IndustryReadsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   // Fetch articles and feedback history in parallel.
   // Uses service-role (createAdminClient) — RLS policies on this table were
   // dropped in migration 039; access is internal-only via the CP admin gate.

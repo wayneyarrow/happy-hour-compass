@@ -5,10 +5,14 @@ import Link from "next/link";
 import { getSpecialsAdoptionReport } from "@/lib/data/specialsAdoption";
 import { CAMPAIGN_MIN_DAYS_SINCE_ACTIVATION } from "@/lib/customerSuccess/specialsAdoptionPolicy";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 type PageProps = { searchParams: Promise<{ view?: string }> };
 
 export default async function SpecialsAdoptionPage({ searchParams }: PageProps) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { view } = await searchParams;
   const campaignView = view === "campaign";
 

@@ -4,8 +4,12 @@ export const metadata = { title: "Upcoming High Demand Events — Action Center"
 import Link from "next/link";
 import { getHighDemandEvents } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function HighDemandEventsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getHighDemandEvents();
 
   return (

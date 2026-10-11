@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { getFaqLibrary } from "@/lib/data/faqLibrary";
 import FaqLibraryClient from "./FaqLibraryClient";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "FAQ Library — Content Engine" };
 
 export default async function FaqLibraryPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const faqs = await getFaqLibrary();
 
   return (

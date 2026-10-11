@@ -7,6 +7,7 @@ import {
   type SetupItemCount,
   type ConversionRate,
 } from "@/lib/data/founderDashboard";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Status level ───────────────────────────────────────────────────────────────
 
@@ -215,6 +216,9 @@ function formatTimestamp(iso: string): string {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default async function PlatformAnalyticsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const d = await getFounderDashboardData();
   const { acquisition: acq, activation: act, monetization: mon, consumerDemand: cd } = d;
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/controlPanelDateTime";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Audit Logs" };
@@ -58,6 +59,9 @@ type AuditLogRow = {
 export default async function AuditLogsPage(props: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const searchParams = await props.searchParams;
   const q      = (searchParams.q ?? "").trim();
   const page   = Math.max(1, parseInt(searchParams.page ?? "1", 10));

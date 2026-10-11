@@ -2,8 +2,12 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Integrations" };
 
 import { SlackTestPanel } from "@/app/control-panel/settings/SlackTestPanel";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
-export default function ControlPanelIntegrationsPage() {
+export default async function ControlPanelIntegrationsPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   return (
     <div className="max-w-3xl">
       <div className="mb-8">

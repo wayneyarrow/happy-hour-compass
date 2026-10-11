@@ -16,6 +16,7 @@ import InternalNotesSection from "./InternalNotesSection";
 import ResendSetupEmailPanel from "./ResendSetupEmailPanel";
 import FinalSetupFollowUpPanel from "@/components/FinalSetupFollowUpPanel";
 import ActivationCard, { type LegacyResumeCandidate } from "@/components/ActivationCard";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submission Review" };
@@ -147,6 +148,9 @@ export default async function OperatorSubmissionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
   const [{ submission, error }, { notes }] = await Promise.all([
     getOperatorSubmissionById(id),

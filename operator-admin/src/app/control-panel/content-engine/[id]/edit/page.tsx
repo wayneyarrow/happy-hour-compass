@@ -11,12 +11,16 @@ import {
 import { getGuideChannels } from "@/lib/data/contentGuideDistribution";
 import { getActiveFaqLibrary, getGuideFaqs } from "@/lib/data/faqLibrary";
 import GuideForm from "../../GuideForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function EditContentGuidePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const { id } = await params;
 
   const [guide, { markets, cities, neighbourhoods }] = await Promise.all([

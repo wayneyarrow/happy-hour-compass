@@ -5,8 +5,12 @@ import Link from "next/link";
 import { getContentGuides, getGuideFormGeography } from "@/lib/data/contentGuides";
 import { getActiveFaqLibrary } from "@/lib/data/faqLibrary";
 import GuideForm from "../GuideForm";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function NewContentGuidePage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [{ markets, cities, neighbourhoods }, faqLibrary, allGuides] = await Promise.all([
     getGuideFormGeography(),
     getActiveFaqLibrary(),

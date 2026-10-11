@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
-import { isControlPanelAdmin } from "@/lib/controlPanelAuth";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const metadata: Metadata = {
   title: {
@@ -9,7 +8,6 @@ export const metadata: Metadata = {
   },
   icons: { icon: "/hhc-icon.png" },
 };
-import { redirect } from "next/navigation";
 import Image from "next/image";
 import ControlPanelSideNav from "./ControlPanelSideNav";
 import SignOutButton from "@/app/dashboard/SignOutButton";
@@ -17,10 +15,14 @@ import SignOutButton from "@/app/dashboard/SignOutButton";
 /**
  * Admin Control Panel shell layout — wraps every page under /control-panel/*.
  *
- * Access gate (single layer — middleware does NOT guard /control-panel):
- *   1. No session       → redirect /control-panel-login  (outside protected tree)
- *   2. Not allowlisted  → redirect /       (consumer home; no information leak)
- *   3. Allowlisted      → render layout
+ * Access gate — three layers, the page-level check being authoritative:
+ *   - middleware.ts: no session → /control-panel-login before anything renders
+ *     (defense in depth; it can't check admin eligibility).
+ *   - this layout and EVERY page: requireControlPanelAdmin() first —
+ *       1. No session       → redirect /control-panel-login  (outside protected tree)
+ *       2. Not allowlisted  → redirect /       (consumer home; no information leak)
+ *       3. Allowlisted      → render
+ *   - server actions: their own per-action admin check (independently callable).
  *
  * Allowlist: CONTROL_PANEL_ADMIN_EMAILS env var (comma or newline separated).
  * Ensure it is enabled for the Production environment in the Vercel dashboard.
@@ -30,24 +32,15 @@ export default async function ControlPanelLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Unauthenticated — send to the dedicated Control Panel login page.
+  // Logged out → /control-panel-login; not an admin (or any error) → /.
   // Note: /control-panel-login lives OUTSIDE /control-panel/* to avoid the
   // layout wrapping the login page and creating a redirect loop.
-  if (!user) {
-    console.error("[ControlPanel] Unauthenticated access — redirecting to /control-panel-login.");
-    redirect("/control-panel-login");
-  }
-
-  // Authenticated but not in the CP-admin allowlist — bounce to consumer home.
-  if (!await isControlPanelAdmin(user.email)) {
-    console.error("[ControlPanel] Authenticated user is not a CP admin — redirecting to /.");
-    redirect("/");
-  }
+  //
+  // This layout gate is NOT sufficient on its own: Next.js renders the page
+  // concurrently with the layout, so every page also calls
+  // requireControlPanelAdmin() first (shared, cached per request) — see
+  // src/lib/requireControlPanelAdmin.ts.
+  const admin = await requireControlPanelAdmin();
 
   return (
     // h-screen (not min-h-screen) is required for the internal scroll model
@@ -78,7 +71,7 @@ export default async function ControlPanelLayout({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600 hidden sm:block">{user.email}</span>
+          <span className="text-sm text-gray-600 hidden sm:block">{admin.email}</span>
           <SignOutButton redirectTo="/control-panel-login" />
         </div>
       </header>

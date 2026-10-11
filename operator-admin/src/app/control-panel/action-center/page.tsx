@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getActionCenterSummary } from "@/lib/data/actionCenter";
 import { getSpecialsAdoptionSummary } from "@/lib/data/specialsAdoption";
 import { getPlanGrantReport, summarizePlanGrantReport, GRANT_ENDING_SOON_DAYS } from "@/lib/data/planGrantsReport";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 // ── Report definitions ────────────────────────────────────────────────────────
 
@@ -106,6 +107,9 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; pill: string
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ActionCenterPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const [baseSummary, specialsAdoption, planGrantRows] = await Promise.all([
     getActionCenterSummary(),
     getSpecialsAdoptionSummary(),

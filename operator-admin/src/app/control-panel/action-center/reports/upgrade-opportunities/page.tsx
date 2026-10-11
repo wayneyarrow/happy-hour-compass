@@ -4,8 +4,12 @@ export const metadata = { title: "Upgrade Opportunities — Action Center" };
 import Link from "next/link";
 import { getUpgradeOpportunities } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
+import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function UpgradeOpportunitiesPage() {
+  // Authorize before any data read or render — see requireControlPanelAdmin.ts.
+  await requireControlPanelAdmin();
+
   const rows = await getUpgradeOpportunities();
 
   return (

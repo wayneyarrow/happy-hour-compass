@@ -444,6 +444,29 @@ Migration `109_venue_plan_grants.sql` (**not yet applied** — apply only with e
 
 ---
 
+## Founder Control Panel authorization
+
+**Every `/control-panel` page must call `await requireControlPanelAdmin()` as its first statement** (`src/lib/requireControlPanelAdmin.ts`). That includes any future `generateMetadata` or route handler.
+
+**Why:** Next.js renders a layout and its page concurrently. A layout-only `redirect()` still sent the page's rendered payload in the 307 body, and sent it in full (200 + `NEXT_REDIRECT`) for client-navigation RSC requests. In October 2026 this exposed operator, claim and venue data to logged-out requests on Production.
+
+The three layers:
+- **Middleware** redirects logged-out `/control-panel` and `/control-panel/*` requests before anything renders. It's defense in depth only: middleware can't check admin eligibility, and `/control-panel-login` is never matched.
+- **The layout and every page** call `requireControlPanelAdmin()`. This is the authoritative check:
+  - It uses `isControlPanelAdmin()` (an active `platform_admins` row, or the `CONTROL_PANEL_ADMIN_EMAILS` fallback) and fails closed on any error.
+  - It's cached per request, so the layout and page share one check.
+- **Server actions** keep their own admin check before any data access, because they're callable independently. Next.js only runs an action from a route that includes it; that's verified, but don't rely on it.
+
+**Enforcement:**
+- `tests/unit/controlPanelAuthz/coverage.test.ts` fails on any unguarded page, route handler, `generateMetadata`, or server action that touches data before its check.
+- `scripts/verifyControlPanelAuthz.ts` checks response bodies at runtime:
+  - **What it sends:** document and RSC requests, logged out, to every route.
+  - **What fails it:** the page's heading, email addresses, record ids, or private marker strings in an unauthorized response, or any response that isn't a redirect.
+
+Run it against a production build (`next build && next start`): the dev server adds debug metadata and a Turbopack-only module error on the claim and submission detail pages.
+
+---
+
 ## Bot Protection (Cloudflare Turnstile)
 
 Every unauthenticated public form/server action that writes to the database, creates an account, sends an email, or sends a Slack notification is gated by Cloudflare Turnstile. Client-side widget completion is never sufficient on its own — every protected server action re-verifies the token server-side via Siteverify before doing anything else.
