@@ -137,19 +137,25 @@ export default function WebsiteHeader({
 
           <div className="flex-1" />
 
-          {/* Desktop nav */}
-          <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
+          {/* Desktop nav — from lg; below lg the hamburger menu holds every item. */}
+          <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-1">
+            <Link
+              href="/weekly-picks"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              Weekly Picks
+            </Link>
             <button
               type="button"
               onClick={() => setSuggestOpen(true)}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Suggest a Venue
             </button>
             <button
               type="button"
               onClick={() => setAddVenueOpen(true)}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Add Your Venue
             </button>
@@ -162,7 +168,7 @@ export default function WebsiteHeader({
                 aria-expanded={savedOpen}
                 aria-haspopup="dialog"
                 aria-label={`Saved items${savedTotal > 0 ? `, ${savedTotal} saved` : ""}`}
-                className={`flex items-center gap-1.5 px-3 py-[7px] rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-2 xl:px-3 py-[7px] rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                   savedOpen
                     ? "bg-gray-100 text-gray-900"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
@@ -184,7 +190,8 @@ export default function WebsiteHeader({
                 >
                   <path d={HEART_PATH} />
                 </svg>
-                Saved
+                {/* Icon-only between lg and xl so the nav fits; the button's aria-label still names it. */}
+                <span className="hidden xl:inline">Saved</span>
                 {savedTotal > 0 && (
                   <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold bg-red-500 text-white leading-none">
                     {savedTotal > 99 ? "99+" : savedTotal}
@@ -206,7 +213,7 @@ export default function WebsiteHeader({
             ) : (
               <Link
                 href="/sign-in"
-                className="ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                className="ml-1 xl:ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 Consumer Sign In
               </Link>
@@ -214,7 +221,7 @@ export default function WebsiteHeader({
           </nav>
 
           {/* Mobile — saved icon + hamburger */}
-          <div className="md:hidden flex items-center gap-1">
+          <div className="lg:hidden flex items-center gap-1">
             {/* Compact saved icon for mobile header */}
             <button
               ref={mobileSavedBtnRef}
@@ -273,7 +280,7 @@ export default function WebsiteHeader({
 
         {/* Mobile saved dropdown — anchored to header bottom, full-width */}
         {savedOpen && (
-          <div ref={mobileDropdownRef} className="md:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
+          <div ref={mobileDropdownRef} className="lg:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
             <SavedDropdown
               open={savedOpen}
               onClose={() => setSavedOpen(false)}
@@ -308,7 +315,7 @@ export default function WebsiteHeader({
           role="dialog"
           aria-label="Navigation menu"
           aria-modal="true"
-          className="fixed inset-0 z-40 md:hidden"
+          className="fixed inset-0 z-40 lg:hidden"
         >
           <div
             className="absolute inset-0 bg-black/10 backdrop-blur-[2px]"
@@ -318,10 +325,19 @@ export default function WebsiteHeader({
 
           <nav
             aria-label="Mobile navigation"
-            className="absolute top-16 inset-x-0 bg-white border-b border-gray-100 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+            className="absolute top-16 md:top-[72px] inset-x-0 bg-white border-b border-gray-100 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
           >
             <div className="max-w-7xl mx-auto px-6">
               <ul role="list">
+                <li className="border-b border-gray-100">
+                  <Link
+                    href="/weekly-picks"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                  >
+                    Weekly Picks
+                  </Link>
+                </li>
                 <li className="border-b border-gray-100">
                   <button
                     type="button"

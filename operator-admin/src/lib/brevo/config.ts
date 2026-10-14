@@ -89,6 +89,54 @@ export function getExistingConsumerWelcomeListId(): number {
   return listId;
 }
 
+export type WeeklyPicksBrevoConfig = {
+  apiKey: string;
+  listId: number;
+  doiTemplateId: number;
+  /** Same semantics as BrevoConfig.testEmail — see stagingGuard.ts. */
+  testEmail: string | null;
+};
+
+/**
+ * Reads the Weekly Picks newsletter double opt-in configuration
+ * (src/lib/weeklyPicks/). Deliberately separate from getBrevoConfig() —
+ * matching getExistingConsumerWelcomeListId()'s precedent above — so the
+ * consumer lifecycle sync never depends on these variables and the
+ * newsletter signup never depends on BREVO_CONSUMER_LIST_ID. The Weekly
+ * Picks list is its own Brevo list, never the consumer list: the consumer
+ * sync removes contacts from that list whenever an account's
+ * marketing_consent becomes false, which would silently drop newsletter
+ * subscribers.
+ */
+export function getWeeklyPicksBrevoConfig(): WeeklyPicksBrevoConfig {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    throw new BrevoConfigError("BREVO_API_KEY is not set.");
+  }
+
+  const listId = parsePositiveInt(process.env.BREVO_WEEKLY_PICKS_LIST_ID, "BREVO_WEEKLY_PICKS_LIST_ID");
+  const doiTemplateId = parsePositiveInt(
+    process.env.BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID,
+    "BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID"
+  );
+
+  const rawTestEmail = process.env.BREVO_TEST_EMAIL;
+  const testEmail = rawTestEmail ? normalizeEmail(rawTestEmail) : null;
+
+  return { apiKey, listId, doiTemplateId, testEmail };
+}
+
+function parsePositiveInt(raw: string | undefined, name: string): number {
+  if (!raw) {
+    throw new BrevoConfigError(`${name} is not set.`);
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new BrevoConfigError(`${name} must be a positive integer.`);
+  }
+  return value;
+}
+
 /**
  * Reads the inbound webhook authentication token. Kept separate from
  * getBrevoConfig() — the webhook route needs this, the outbound

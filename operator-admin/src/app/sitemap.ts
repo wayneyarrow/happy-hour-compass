@@ -108,6 +108,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl("/business") },
     { url: absoluteUrl("/claim-your-venue") },
     { url: absoluteUrl("/careers") },
+    { url: absoluteUrl("/weekly-picks") },
     { url: absoluteUrl("/privacy") },
     { url: absoluteUrl("/terms") },
     // Market-agnostic primary discovery/search pages — see the module

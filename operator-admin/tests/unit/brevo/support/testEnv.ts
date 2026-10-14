@@ -3,6 +3,8 @@ const BREVO_ENV_KEYS = [
   "BREVO_CONSUMER_LIST_ID",
   "BREVO_TEST_EMAIL",
   "BREVO_WEBHOOK_TOKEN",
+  "BREVO_WEEKLY_PICKS_LIST_ID",
+  "BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID",
   // Not a Brevo-specific var, but the exact signal isProductionEnvironment()
   // (stagingGuard.ts) reads — managed here alongside the Brevo vars so
   // enqueue-time-guard tests can control "are we production" the same way

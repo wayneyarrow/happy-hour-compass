@@ -41,6 +41,14 @@
  *     hash-fragment signup-token path once setSession() succeeds — never on
  *     the pre-existing-session fallback path, so plain /welcome revisits and
  *     reloads after the token is consumed can't refire it.
+ *
+ * Weekly Picks newsletter (weekly_picks_signup_requested) — fired by
+ * (website)/weekly-picks/WeeklyPicksSignupForm.tsx only when the server
+ * action reports Brevo accepted the double opt-in request. Param:
+ * placement (a fixed WEEKLY_PICKS_PLACEMENTS value — never the email). It
+ * counts accepted requests, not confirmed or new subscribers (Brevo's list
+ * is the source of truth for those), and is separate from the
+ * consumer_signup_* account funnel. Nothing fires on /weekly-picks/confirmed.
  */
 
 import { sendGAEvent } from "@next/third-parties/google";
@@ -55,7 +63,8 @@ type GA4EventName =
   | "consumer_signup_completed"
   | "consumer_email_confirmed"
   | "homepage_discovery_mode_selected"
-  | "homepage_discovery_browse_clicked";
+  | "homepage_discovery_browse_clicked"
+  | "weekly_picks_signup_requested";
 
 type GA4EventParams = Record<string, string | number | boolean | null | undefined>;
 

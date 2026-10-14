@@ -10,6 +10,7 @@ import { SaveGuideButton } from "@/app/(website)/SaveGuideButton";
 import { ShareButton } from "@/app/(website)/ShareButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
+import { WeeklyPicksSection } from "@/app/(website)/weekly-picks/WeeklyPicksSection";
 import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
 import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 
@@ -269,6 +270,11 @@ export function GuideDetailView({
             {isVenueGuide ? "Browse Venues" : "Browse Events"}
           </Link>
         </div>
+
+        {/* ── Weekly Picks signup — after the featured content and its
+            Browse CTA (left intact as the direct next step), before the
+            FAQ and More Guides. Fixed placement, same form as everywhere. */}
+        <WeeklyPicksSection placement="guide_end" variant="compact" layout="inline" />
 
         {/* ── FAQ ───────────────────────────────────────────────────────────── */}
         <GuideFaqSection faqs={faqs} />

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import HeroSection from "./HeroSection";
 import { HomepageSectionsRenderer } from "./homepage/HomepageSectionsRenderer";
 import { DiscoveryPageTracking } from "./tracking/DiscoveryTrackingProvider";
+import { WeeklyPicksSection } from "./weekly-picks/WeeklyPicksSection";
+import { splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
@@ -96,15 +98,26 @@ export async function generateMetadata(): Promise<Metadata> {
 // on the public homepage — including Today's Specials as of migration
 // 092_daily_special_collections.sql — is owned by the published Homepage's
 // editorial Sections, in their own saved displayOrder; there is no legacy
-// static fallback content and no hardcoded section insertion. When no
-// Homepage is published for this geography (neither City nor Market), the
-// page simply ends after the Hero; see
+// static fallback content and no hardcoded section insertion — the one
+// exception is the fixed Weekly Picks newsletter signup (after the first
+// displayed section, and near the bottom), which is never a CMS section.
+// When no Homepage is published for this geography (neither City nor
+// Market), the page shows the Hero and the bottom signup only; see
 // docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
 
 export default async function WebsiteHomePage() {
   const { market, isPersisted } = await getActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
   const homepage = await getPublicHomepageForLocation(market.id, citySlug);
+
+  // Weekly Picks signup sits OUTSIDE the CMS section list. homepage.sections
+  // is already filtered to enabled sections that resolved to content
+  // (homepagePublic.ts), so its first entry is the first section actually
+  // displayed. The list is rendered in two slices around the main signup;
+  // section ids, kinds, order and discovery placements are unchanged
+  // (tracking keys by section id, never by index). The Control Panel
+  // preview renders HomepageSectionsRenderer directly and is unaffected.
+  const split = splitSectionsAroundSignup(homepage?.sections ?? []);
 
   // DiscoveryPageTracking: one discovery-tracking page view per mounted
   // homepage (website_discovery_events, migration 110). Only the live public
@@ -117,7 +130,16 @@ export default async function WebsiteHomePage() {
         isPersisted={isPersisted}
         dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
       />
-      {homepage && <HomepageSectionsRenderer sections={homepage.sections} />}
+      {split.showMainSignup && (
+        <>
+          <HomepageSectionsRenderer sections={split.first} />
+          <WeeklyPicksSection placement="homepage_main" variant="full" layout="page-width" />
+        </>
+      )}
+      {split.rest.length > 0 && <HomepageSectionsRenderer sections={split.rest} />}
+      {split.showBottomSignup && (
+        <WeeklyPicksSection placement="homepage_bottom" variant="compact" layout="page-width" />
+      )}
     </DiscoveryPageTracking>
   );
 }
