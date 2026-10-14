@@ -13,11 +13,14 @@ import {
   WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE,
 } from "../../../src/lib/weeklyPicks/weeklyPicks";
 
-function makeDeps(opts: { turnstileOk?: boolean; brevo?: () => Promise<void> } = {}) {
+function makeDeps(
+  opts: { turnstileOk?: boolean; brevo?: () => Promise<void>; slack?: () => Promise<"delivered" | "no-webhook" | "failed"> } = {}
+) {
   const calls = {
     turnstile: [] as Array<[string | null, string | null]>,
     brevo: [] as RequestWeeklyPicksDoubleOptInParams[],
     reports: [] as Array<{ stage: string; severity: string; context: Record<string, unknown> }>,
+    slack: [] as string[],
   };
   const deps: WeeklyPicksSignupDeps = {
     verifyTurnstile: async (token, ip) => {
@@ -32,6 +35,11 @@ function makeDeps(opts: { turnstileOk?: boolean; brevo?: () => Promise<void> } =
       calls.reports.push({ stage, severity, context });
     },
     siteUrl: () => "https://staging.happyhourcompass.com",
+    notifySlack: async (text) => {
+      calls.slack.push(text);
+      return opts.slack ? opts.slack() : "delivered";
+    },
+    environment: () => "staging",
   };
   return { deps, calls };
 }
@@ -156,4 +164,85 @@ test("homepage split: 0 → bottom only; 1 → main only; 2+ → main after firs
   assert.deepEqual(splitSectionsAroundSignup([]), { first: [], rest: [], showMainSignup: false, showBottomSignup: true });
   assert.deepEqual(splitSectionsAroundSignup(["a"]), { first: ["a"], rest: [], showMainSignup: true, showBottomSignup: false });
   assert.deepEqual(splitSectionsAroundSignup(["a", "b", "c"]), { first: ["a"], rest: ["b", "c"], showMainSignup: true, showBottomSignup: true });
+});
+
+// ── Slack: "Newsletter signup requested" ─────────────────────────────────────
+
+const EXPECTED_SLACK_TEXT = [
+  "*Newsletter signup requested*",
+  "Email: wayne+wp@example.com",
+  "Placement: homepage_main",
+  "Environment: staging",
+  "Confirmation is handled by Brevo; this alert does not mean a new subscriber was confirmed.",
+].join("\n");
+
+test("Slack: accepted request posts exactly one alert with email, placement and environment", async () => {
+  const { deps, calls } = makeDeps();
+  const result = await processWeeklyPicksSignup(VALID, deps);
+  assert.deepEqual(result, { status: "accepted" });
+  assert.deepEqual(calls.slack, [EXPECTED_SLACK_TEXT]);
+});
+
+test("Slack: nothing is sent for validation, consent, placement or Turnstile failures", async () => {
+  const cases = [
+    { input: { ...VALID, email: "nope" } },
+    { input: { ...VALID, consent: null } },
+    { input: { ...VALID, placement: "x" } },
+    { input: VALID, turnstileOk: false },
+  ];
+  for (const c of cases) {
+    const { deps, calls } = makeDeps({ turnstileOk: c.turnstileOk });
+    const result = await processWeeklyPicksSignup(c.input, deps);
+    assert.equal(result.status, "error");
+    assert.equal(calls.slack.length, 0);
+  }
+});
+
+test("Slack: nothing is sent when staging blocks the address or Brevo fails", async () => {
+  const failures: Array<() => never> = [
+    () => { throw new BrevoStagingGuardBlockedError("x@example.com"); },
+    () => { throw new BrevoConfigError("missing"); },
+    () => { throw new BrevoApiError("dup", "invalid_request", 400, "duplicate_request"); },
+    () => { throw new BrevoApiError("down", "transient", 502); },
+    () => { throw new Error("boom"); },
+  ];
+  for (const fail of failures) {
+    const { deps, calls } = makeDeps({ brevo: async () => fail() });
+    const result = await processWeeklyPicksSignup(VALID, deps);
+    assert.equal(result.status, "error");
+    assert.equal(calls.slack.length, 0);
+  }
+});
+
+test("Slack: a failed, missing or throwing webhook never fails the signup", async () => {
+  const originalError = console.error;
+  const logged: unknown[][] = [];
+  console.error = (...args: unknown[]) => { logged.push(args); };
+  try {
+    for (const slack of [
+      async () => "failed" as const,
+      async () => "no-webhook" as const,
+      async () => { throw new Error("slack exploded"); },
+    ]) {
+      const { deps, calls } = makeDeps({ slack });
+      const result = await processWeeklyPicksSignup(VALID, deps);
+      assert.deepEqual(result, { status: "accepted" });
+      assert.equal(calls.slack.length, 1);
+    }
+  } finally {
+    console.error = originalError;
+  }
+  // "failed" and the exception are logged; "no-webhook" (channel not configured) is not.
+  assert.equal(logged.length, 2);
+  assert.ok(String(logged[0][0]).includes("Slack notification not delivered"));
+  assert.ok(String(logged[1][0]).includes("Slack notification threw"));
+});
+
+test("Slack: the default dependency posts to #consumer-signup", async () => {
+  const { defaultWeeklyPicksSignupDeps } = await import("../../../src/lib/weeklyPicks/signup");
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const src = readFileSync(join(__dirname, "../../../src/lib/weeklyPicks/signup.ts"), "utf8");
+  assert.match(src, /sendSlackAcquisitionNotification\(\{ channel: "consumer-signup", text \}\)/);
+  assert.equal(typeof defaultWeeklyPicksSignupDeps.notifySlack, "function");
 });
