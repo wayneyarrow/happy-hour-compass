@@ -98,15 +98,23 @@ export type WeeklyPicksBrevoConfig = {
 };
 
 /**
- * Reads the Weekly Picks newsletter double opt-in configuration
- * (src/lib/weeklyPicks/). Deliberately separate from getBrevoConfig() —
- * matching getExistingConsumerWelcomeListId()'s precedent above — so the
- * consumer lifecycle sync never depends on these variables and the
- * newsletter signup never depends on BREVO_CONSUMER_LIST_ID. The Weekly
- * Picks list is its own Brevo list, never the consumer list: the consumer
- * sync removes contacts from that list whenever an account's
- * marketing_consent becomes false, which would silently drop newsletter
- * subscribers.
+ * Reads the account-free newsletter ("Weekly Picks") double opt-in
+ * configuration (src/lib/weeklyPicks/). "Weekly Picks" is customer-facing
+ * copy, not a separate Brevo audience: BREVO_WEEKLY_PICKS_LIST_ID points at
+ * the existing HHC Consumers list (the same list as Production's
+ * BREVO_CONSUMER_LIST_ID), and confirmed signups join it alongside
+ * consenting account holders.
+ *
+ * Sharing the list is safe with the consumer sync (consumerSync.ts): it only
+ * removes a contact from the list on an observed true -> false change of an
+ * account's marketing_consent (the /account toggle or a Brevo unsubscribe) —
+ * a real withdrawal. Newsletter-only contacts have no profile and are never
+ * touched, and an account still at marketing_consent=false is never removed
+ * by a later login or profile save.
+ *
+ * Kept separate from getBrevoConfig() — matching
+ * getExistingConsumerWelcomeListId()'s precedent above — so the account
+ * sync never depends on the double opt-in template variable.
  */
 export function getWeeklyPicksBrevoConfig(): WeeklyPicksBrevoConfig {
   const apiKey = process.env.BREVO_API_KEY;

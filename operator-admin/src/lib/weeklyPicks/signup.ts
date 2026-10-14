@@ -9,7 +9,6 @@ import { reportOperationalError } from "@/lib/observability/reportOperationalErr
 import type { OperationalErrorContext } from "@/lib/observability/reportOperationalError";
 import type { OperationalSeverity } from "@/lib/observability/types";
 import {
-  WEEKLY_PICKS_CONSENT_VERSION,
   WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE,
   WEEKLY_PICKS_EMAIL_INVALID_MESSAGE,
   WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE,
@@ -58,7 +57,6 @@ export type WeeklyPicksSignupDeps = {
     severity: OperationalSeverity;
     context: OperationalErrorContext;
   }) => void;
-  now: () => Date;
   siteUrl: () => string;
 };
 
@@ -68,7 +66,6 @@ export const defaultWeeklyPicksSignupDeps: WeeklyPicksSignupDeps = {
   reportError: ({ error, stage, severity, context }) => {
     reportOperationalError({ error, flow: FLOW, stage, severity, context });
   },
-  now: () => new Date(),
   siteUrl: getSiteUrl,
 };
 
@@ -109,11 +106,6 @@ export async function processWeeklyPicksSignup(
   try {
     await deps.requestDoubleOptIn({
       email,
-      attributes: {
-        WEEKLY_PICKS_SOURCE: placement,
-        WEEKLY_PICKS_CONSENT_AT: deps.now().toISOString(),
-        WEEKLY_PICKS_CONSENT_VERSION: WEEKLY_PICKS_CONSENT_VERSION,
-      },
       redirectionUrl: `${deps.siteUrl()}/weekly-picks/confirmed`,
     });
   } catch (err) {

@@ -3,23 +3,21 @@
  *
  * Signup is Brevo-managed double opt-in with no HHC database state (see
  * signup.ts). This module holds what both the form and the server action
- * must agree on: the consent wording and its version, the fixed placement
- * identifiers, and email validation.
+ * must agree on: the consent wording, the fixed placement identifiers, and
+ * email validation.
  *
- * WEEKLY_PICKS_CONSENT_TEXT and WEEKLY_PICKS_CONSENT_VERSION change
- * together: any edit to the checkbox wording must bump the version, since
- * the version (sent to Brevo as WEEKLY_PICKS_CONSENT_VERSION) is the only
- * record of which wording a subscriber agreed to.
+ * "Weekly Picks" is customer-facing copy: confirmed signups join the
+ * existing HHC Consumers list in Brevo (see getWeeklyPicksBrevoConfig()).
+ * The explicit permission is the checkbox below, which the server action
+ * requires, plus Brevo's own double opt-in confirmation.
  */
 
 export const WEEKLY_PICKS_CONSENT_TEXT =
   "Yes, email me Happy Hour Compass Weekly Picks every Thursday. I can unsubscribe anytime.";
 
-export const WEEKLY_PICKS_CONSENT_VERSION = "weekly-picks-2026-10-v1";
-
 /**
  * Fixed signup placements. The value is the only thing sent to analytics
- * and the WEEKLY_PICKS_SOURCE Brevo attribute — never free text.
+ * (never to Brevo) — never free text.
  */
 export const WEEKLY_PICKS_PLACEMENTS = [
   "weekly_picks_page",

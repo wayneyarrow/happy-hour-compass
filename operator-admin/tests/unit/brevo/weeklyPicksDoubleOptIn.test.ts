@@ -21,17 +21,12 @@ function installFakeFetch(handler: (call: FetchCall) => Response | Promise<Respo
 
 const PARAMS = {
   email: "wayne@example.com",
-  attributes: {
-    WEEKLY_PICKS_SOURCE: "homepage_main",
-    WEEKLY_PICKS_CONSENT_AT: "2026-10-14T18:00:00.000Z",
-    WEEKLY_PICKS_CONSENT_VERSION: "weekly-picks-2026-10-v1",
-  },
   redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed",
 };
 
 const STAGING_ENV = {
   BREVO_API_KEY: "fake-key",
-  BREVO_WEEKLY_PICKS_LIST_ID: "12",
+  BREVO_WEEKLY_PICKS_LIST_ID: "2",
   BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID: "34",
   BREVO_TEST_EMAIL: "Wayne@Example.com",
   VERCEL_ENV: "preview",
@@ -98,18 +93,12 @@ test("allowlisted address: one DOI request with exactly the expected shape", asy
     const body = JSON.parse(String(call.init.body));
     assert.deepEqual(body, {
       email: "wayne@example.com",
-      attributes: PARAMS.attributes,
-      includeListIds: [12],
+      includeListIds: [2],
       templateId: 34,
       redirectionUrl: PARAMS.redirectionUrl,
     });
-    // Never touches account-owned attributes/identifiers or the blocklist.
-    assert.deepEqual(Object.keys(body.attributes).sort(), [
-      "WEEKLY_PICKS_CONSENT_AT",
-      "WEEKLY_PICKS_CONSENT_VERSION",
-      "WEEKLY_PICKS_SOURCE",
-    ]);
-    assert.ok(!("emailBlacklisted" in body) && !("updateEnabled" in body) && !("listIds" in body));
+    // No attributes at all: an existing contact's names/identifiers are never touched; nor is the blocklist.
+    assert.ok(!("attributes" in body) && !("emailBlacklisted" in body) && !("updateEnabled" in body) && !("listIds" in body));
   });
 });
 

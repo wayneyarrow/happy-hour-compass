@@ -7,14 +7,11 @@ import { BrevoConfigError } from "../../../src/lib/brevo/config";
 import { BrevoStagingGuardBlockedError } from "../../../src/lib/brevo/stagingGuard";
 import { TURNSTILE_FAILURE_MESSAGE } from "../../../src/lib/turnstile";
 import {
-  WEEKLY_PICKS_CONSENT_VERSION,
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
   WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE,
   WEEKLY_PICKS_PLACEMENTS,
   WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE,
 } from "../../../src/lib/weeklyPicks/weeklyPicks";
-
-const NOW = new Date("2026-10-14T18:00:00.000Z");
 
 function makeDeps(opts: { turnstileOk?: boolean; brevo?: () => Promise<void> } = {}) {
   const calls = {
@@ -34,7 +31,6 @@ function makeDeps(opts: { turnstileOk?: boolean; brevo?: () => Promise<void> } =
     reportError: ({ stage, severity, context }) => {
       calls.reports.push({ stage, severity, context });
     },
-    now: () => NOW,
     siteUrl: () => "https://staging.happyhourcompass.com",
   };
   return { deps, calls };
@@ -85,7 +81,7 @@ test("Turnstile failure (or missing token) → turnstileFailed, no Brevo call", 
   }
 });
 
-test("every placement: accepted, one Brevo request with normalized email and only the approved attributes", async () => {
+test("every placement: accepted, one Brevo request with normalized email, no attributes, placement never sent", async () => {
   for (const placement of WEEKLY_PICKS_PLACEMENTS) {
     const { deps, calls } = makeDeps();
     const result = await processWeeklyPicksSignup({ ...VALID, placement }, deps);
@@ -93,11 +89,6 @@ test("every placement: accepted, one Brevo request with normalized email and onl
     assert.equal(calls.brevo.length, 1);
     assert.deepEqual(calls.brevo[0], {
       email: "wayne+wp@example.com",
-      attributes: {
-        WEEKLY_PICKS_SOURCE: placement,
-        WEEKLY_PICKS_CONSENT_AT: NOW.toISOString(),
-        WEEKLY_PICKS_CONSENT_VERSION,
-      },
       redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed",
     });
     assert.deepEqual(calls.turnstile[0], ["tok", "203.0.113.5"]);

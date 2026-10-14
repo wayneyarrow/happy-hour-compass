@@ -64,10 +64,11 @@ test("client form never imports server-only modules", () => {
 
 test("Weekly Picks never touches account identifiers or the blocklist", () => {
   const files = ["lib/weeklyPicks/signup.ts", "lib/weeklyPicks/weeklyPicks.ts", FORM, "app/(website)/weekly-picks/actions.ts"];
-  for (const f of files) assert.ok(!/FIRSTNAME|LASTNAME|EXT_ID|emailBlacklisted|blocklist/i.test(read(f)), f);
+  for (const f of files) assert.ok(!/FIRSTNAME|LASTNAME|EXT_ID|WEEKLY_PICKS_(SOURCE|CONSENT_AT|CONSENT_VERSION)|emailBlacklisted|blocklist/i.test(read(f)), f);
   const client = read("lib/brevo/client.ts");
   const fn = client.slice(client.indexOf("export async function requestWeeklyPicksDoubleOptIn"));
-  assert.ok(!/emailBlacklisted|updateEnabled|FIRSTNAME|EXT_ID/.test(fn.slice(0, fn.indexOf("\nasync function") > 0 ? fn.indexOf("\nasync function") : undefined)));
+  const body = fn.slice(0, fn.indexOf("\nasync function") > 0 ? fn.indexOf("\nasync function") : undefined);
+  assert.ok(!/emailBlacklisted|updateEnabled|FIRSTNAME|EXT_ID|attributes/.test(body), "DOI request sends no attributes and never touches the blocklist");
 });
 
 test("header: Weekly Picks link on desktop and mobile; Consumer Sign In unchanged", () => {

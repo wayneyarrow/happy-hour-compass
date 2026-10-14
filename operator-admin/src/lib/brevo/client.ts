@@ -248,28 +248,21 @@ function isAlreadyAbsentFromListError(status: number, message: string): boolean 
   return status === 400 && /already removed from list/i.test(message);
 }
 
-/** Weekly Picks contact attributes — must already exist in the Brevo account. */
-export type WeeklyPicksDoiAttributes = {
-  WEEKLY_PICKS_SOURCE: string;
-  WEEKLY_PICKS_CONSENT_AT: string;
-  WEEKLY_PICKS_CONSENT_VERSION: string;
-};
-
 export type RequestWeeklyPicksDoubleOptInParams = {
   email: string;
-  attributes: WeeklyPicksDoiAttributes;
   /** Where Brevo sends the person after they click the confirmation link. */
   redirectionUrl: string;
 };
 
 /**
- * Asks Brevo to run its own double opt-in for the Weekly Picks list:
- * POST /v3/contacts/doubleOptinConfirmation. Brevo sends the confirmation
- * email (its DOI template) and only adds the contact to the list once the
- * link is clicked. HHC stores nothing.
+ * Asks Brevo to run its own double opt-in for the account-free newsletter
+ * signup: POST /v3/contacts/doubleOptinConfirmation. Brevo sends the
+ * confirmation email (its DOI template) and only adds the contact to the
+ * HHC Consumers list (BREVO_WEEKLY_PICKS_LIST_ID) once the link is clicked.
+ * HHC stores nothing.
  *
- * Deliberately never sends FIRSTNAME/LASTNAME/EXT_ID — an existing account
- * holder's contact keeps the identifiers the consumer sync owns — and never
+ * Sends no contact attributes at all — an existing contact's names,
+ * identifiers and other attributes stay exactly as they are — and never
  * touches the blocklist: a previously unsubscribed/blocklisted contact is
  * left exactly as Brevo has it.
  *
@@ -294,7 +287,6 @@ export async function requestWeeklyPicksDoubleOptIn(params: RequestWeeklyPicksDo
 
   const body = {
     email: params.email,
-    attributes: params.attributes,
     includeListIds: [config.listId],
     templateId: config.doiTemplateId,
     redirectionUrl: params.redirectionUrl,
