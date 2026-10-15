@@ -85,9 +85,10 @@ test("vercel.json's two pre-existing cron entries are unchanged", () => {
   assert.equal(cs.schedule, "0 * * * *");
 });
 
-test("vercel.json now has exactly four cron entries total (email-open-tracking added after this worker)", () => {
-  assert.equal(VERCEL_JSON.crons.length, 4);
+test("vercel.json now has exactly ten cron entries total (email-open-tracking, then six Monday Scout report passes, added after this worker)", () => {
+  assert.equal(VERCEL_JSON.crons.length, 10);
   assert.ok(VERCEL_JSON.crons.some((c: { path: string }) => c.path === "/api/cron/email-open-tracking"));
+  assert.equal(VERCEL_JSON.crons.filter((c: { path: string }) => c.path === "/api/cron/scout-report").length, 6);
 });
 
 test("the dry-run script requires --dry-run and has no --apply/live-mode flag anywhere in its executable code", () => {
