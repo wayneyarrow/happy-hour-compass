@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatRate } from "@/lib/searchDiscoveryReporting/config";
+import { ScoutReportDownload } from "../ScoutReportDownload";
 
 /**
  * Presentational pieces for the Search & Discovery report — same visual
@@ -144,20 +145,23 @@ export function AnalyticsTabs({ active }: { active: "platform" | "search-discove
     { key: "search-discovery", label: "Search & Discovery", href: "/control-panel/analytics/search-discovery" },
   ] as const;
   return (
-    <nav aria-label="Analytics views" className="mb-6 flex gap-1 border-b border-gray-200">
-      {tabs.map((t) => (
-        <Link
-          key={t.key}
-          href={t.href}
-          aria-current={t.key === active ? "page" : undefined}
-          className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 ${
-            t.key === active ? "border-slate-900 text-slate-900" : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </nav>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 border-b border-gray-200">
+      <nav aria-label="Analytics views" className="flex gap-1">
+        {tabs.map((t) => (
+          <Link
+            key={t.key}
+            href={t.href}
+            aria-current={t.key === active ? "page" : undefined}
+            className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 ${
+              t.key === active ? "border-slate-900 text-slate-900" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      <ScoutReportDownload />
+    </div>
   );
 }
 
