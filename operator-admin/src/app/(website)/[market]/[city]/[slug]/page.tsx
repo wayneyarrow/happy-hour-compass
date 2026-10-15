@@ -7,6 +7,8 @@ import {
 } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
+import { getPublicGuidesFeaturingVenue } from "@/lib/data/venueFeaturedGuides";
+import { DISCOVERY_MODES } from "@/lib/homepageDiscoveryModes";
 import { buildVenueMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
@@ -281,6 +283,10 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   if (marketConfig.status !== "active" && !isPreviewAuthorized) {
     return <MarketComingSoon marketName={marketConfig.name} />;
   }
+
+  // "Featured in" — public venue guides in this venue's market that attach
+  // it via content_guide_venues. One query; [] (section hidden) on failure.
+  const featuredGuides = await getPublicGuidesFeaturingVenue(venue.venueUuid, venue.marketSlug);
 
   // Page-specific venue structured data — built from the raw venue.images
   // (never getVenueImageSrc()'s placeholder/fallback used for gallery display
@@ -726,6 +732,37 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
               </section>
             )}
 
+            {/* ── Featured in ─────────────────────────────────────────────────── */}
+            {featuredGuides.length > 0 && (
+              <section id="featured-in" style={{ scrollMarginTop: SCROLL_MARGIN }}>
+                <SectionHeading>Featured in</SectionHeading>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {featuredGuides.map((guide) => (
+                    <li key={guide.href}>
+                      {/* One link per card; same card surface as Upcoming
+                          Events, thumbnail rendered like the Saved guide
+                          thumbnail (plain hero_image_url, object-cover).
+                          No image → title-only card. */}
+                      <Link
+                        href={guide.href}
+                        className="flex h-full items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                      >
+                        {guide.heroImageUrl && (
+                          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={guide.heroImageUrl} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <span className="text-[15px] font-semibold text-gray-900 leading-snug line-clamp-2">
+                          {guide.title}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {/* ── Business Info ───────────────────────────────────────────────── */}
             <section id="info" style={{ scrollMarginTop: SCROLL_MARGIN }}>
               <SectionHeading>Business Info</SectionHeading>
@@ -844,6 +881,19 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
               venueName={venue.name}
               mapsUrl={mapsUrl}
             />
+
+            {/* Browse more — unfiltered Happy Hours discovery (not city-scoped). */}
+            <p>
+              <Link
+                href={DISCOVERY_MODES.happy_hours.destination}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                Browse more happy hours
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5" aria-hidden="true">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </Link>
+            </p>
 
             {/* Last updated */}
             {venue.updatedAt && (
