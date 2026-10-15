@@ -52,6 +52,18 @@ function isRowPubliclyActive(row: Record<string, any>, policy: PublicContentPoli
   });
 }
 
+/**
+ * Whether an event's linked venue is known to be unpublished. Public website
+ * event reads exclude such events, so an unpublished venue's details (and a
+ * venue link that would 404) never surface through its events. Only an
+ * explicit `is_published === false` counts — an event with no linked venue
+ * row (embed null) keeps its existing behaviour.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isLinkedVenueUnpublished(venue: Record<string, any> | null | undefined): boolean {
+  return venue?.is_published === false;
+}
+
 /** Venue embed fragment carrying only the plan context (for queries with no venues embed yet). */
 const VENUE_PLAN_ONLY_EMBED = `venues!venue_id(${VENUE_PLAN_CONTEXT_EMBED})`;
 
@@ -69,6 +81,8 @@ const VENUE_PLAN_ONLY_EMBED = `venues!venue_id(${VENUE_PLAN_CONTEXT_EMBED})`;
  */
 export type ConsumerEvent = {
   id: string;
+  /** Canonical slug — see src/lib/eventSlug.ts. Used by the public venue page to link each event to its canonical URL. */
+  slug?: string;
   /** Venue UUID — used for grouping, matches venues.id in the DB */
   venueId: string;
   title: string;
@@ -542,7 +556,7 @@ export async function getEventsForConsumerVenues(
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, venue_id, title, description, event_type, " +
+        "id, slug, venue_id, title, description, event_type, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, is_seeded_event, " +
           VENUE_PLAN_ONLY_EMBED
@@ -567,6 +581,7 @@ export async function getEventsForConsumerVenues(
       return isRecurring || !row.first_date || (row.first_date as string) >= today;
     }).map((row: Record<string, any>) => ({
       id: row.id as string,
+      slug: (row.slug as string | null) ?? undefined,
       venueId: row.venue_id as string,
       title: (row.title as string) ?? "",
       description: (row.description as string | null) ?? null,
@@ -927,7 +942,7 @@ export async function getPublishedEventsForWebsite(
         "id, slug, venue_id, title, description, event_type, image_url, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, is_seeded_event, " +
-          `venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
+          `venues(name, is_published, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .eq("is_published", true)
       .order("first_date", { ascending: true, nullsFirst: false })
@@ -947,6 +962,7 @@ export async function getPublishedEventsForWebsite(
       // Paused events (Comp/Trial grant recipients) never reach search
       // results, counts or pagination.
       if (!isRowPubliclyActive(row, eventVenuePolicy(row, nowMs))) return [];
+      if (isLinkedVenueUnpublished(row.venues)) return [];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};
@@ -1152,7 +1168,7 @@ async function getEventForWebsiteByField(
       supabase
         .from("venues")
         .select(
-          "id, slug, name, address_line1, phone, website_url, menu_url, " +
+          "id, slug, name, is_published, address_line1, phone, website_url, menu_url, " +
             "payment_types, business_hours, lat, lng, establishment_type, " +
             "about_your_venue, google_rating, google_review_count, hh_tagline, " +
             "hh_times, hh_food_details, hh_drink_details, " +
@@ -1182,6 +1198,13 @@ async function getEventForWebsiteByField(
         .eq("type", "venue_image")
         .order("sort_order", { ascending: true }),
     ]);
+
+    // An event at an unpublished venue 404s like an unpublished event, so its
+    // page never exposes unpublished venue details or a dead venue link.
+    // Preview (operator authoring) still renders it.
+    if (!isPreview && isLinkedVenueUnpublished(venueResult.data as Record<string, unknown> | null)) {
+      return null;
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const vr = (venueResult.data as Record<string, any> | null) ?? {};
@@ -1388,7 +1411,7 @@ export async function getEventPreviewsByIds(
       .from("events")
       .select(
         "id, slug, venue_id, title, image_url, first_date, start_time, end_time, recurrence, is_seeded_event, " +
-          `event_time, event_frequency, venues(name, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
+          `event_time, event_frequency, venues(name, is_published, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .in("id", eventIds)
       .eq("is_published", true);
@@ -1399,6 +1422,7 @@ export async function getEventPreviewsByIds(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (rows as Record<string, any>[])
       .filter((r) => isRowPubliclyActive(r, eventVenuePolicy(r, nowMs)))
+      .filter((r) => !isLinkedVenueUnpublished(r.venues))
       .map((r): EventPreview => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (r.venues as Record<string, any> | null) ?? {};
@@ -1448,7 +1472,7 @@ export async function getPublishedEventsByIds(
         "id, slug, venue_id, title, description, event_type, image_url, teaser, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, is_seeded_event, " +
-          `venues(name, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
+          `venues(name, is_published, lat, lng, establishment_type, market_geo:markets!market_id(slug), city_geo:cities!city_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`
       )
       .in("id", ids)
       .eq("is_published", true);
@@ -1459,6 +1483,7 @@ export async function getPublishedEventsByIds(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data as Record<string, any>[])
       .filter((row) => isRowPubliclyActive(row, eventVenuePolicy(row, nowMs)))
+      .filter((row) => !isLinkedVenueUnpublished(row.venues))
       .map((row): WebsiteEventListItem => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};

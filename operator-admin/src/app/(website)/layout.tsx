@@ -15,6 +15,7 @@ import {
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
+import { getFeaturedGuidesNavHref } from "@/lib/data/featuredGuidesNav";
 
 // Public-website-only, additive to the existing first-party analytics
 // pipeline (src/lib/analytics.ts, @vercel/analytics, /api/track/*).
@@ -56,16 +57,21 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
   // config-layer market name when the DB is unavailable or not yet seeded.
   let cities: CityRecord[] = [];
   let currentCityName = market.name;
+  // "Guides" nav target — null (link omitted) unless this market's Featured
+  // Guides collection page would actually render. See featuredGuidesNav.ts.
+  let featuredGuidesHref: string | null = null;
 
   try {
     // market.id == slug in both markets.ts config and the DB markets table.
     const marketRecord = await getMarketBySlug(market.id);
     if (marketRecord) {
-      const [allCities, defaultCity] = await Promise.all([
+      const [allCities, defaultCity, guidesHref] = await Promise.all([
         getCitiesWithVenues(marketRecord.id),
         getDefaultCityForMarket(marketRecord.id),
+        getFeaturedGuidesNavHref(marketRecord.id, market.id),
       ]);
       cities = allCities;
+      featuredGuidesHref = guidesHref;
       if (defaultCity) currentCityName = defaultCity.name;
     }
   } catch {
@@ -102,11 +108,12 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
           currentCityName={currentCityName}
           cities={cities}
           consumerUser={consumerUser}
+          featuredGuidesHref={featuredGuidesHref}
         />
 
         <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
 
-        <WebsiteFooter />
+        <WebsiteFooter featuredGuidesHref={featuredGuidesHref} />
       </div>
       <JsonLd nodes={[organizationNode, websiteNode]} />
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}

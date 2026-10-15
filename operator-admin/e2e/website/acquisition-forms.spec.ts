@@ -2,37 +2,34 @@ import { test, expect } from "./support/fixtures";
 import type { Page } from "@playwright/test";
 
 /**
- * Opens a header-triggered modal, going through the mobile hamburger menu on
- * narrow viewports. Scoped to the header's nav landmark (desktop:
- * "Main navigation", mobile: "Mobile navigation") because the footer renders
- * its own independent trigger with the same accessible name (e.g. "Add Your
- * Venue" appears in both the header and the footer as separate entry points
- * into separate modal instances) — an unscoped page-wide locator is
- * ambiguous.
+ * Opens an acquisition modal from its site-chrome trigger. Below xl the
+ * header's hamburger menu ("Mobile navigation") carries Suggest a Venue /
+ * Add Your Venue; from xl the desktop header holds discovery links only, so
+ * the entry point is the footer's own trigger. Scoped to that landmark
+ * because the same accessible name can appear in more than one place
+ * (separate entry points into separate modal instances) — an unscoped
+ * page-wide locator is ambiguous.
  */
 async function openHeaderTrigger(page: Page, label: string) {
   await (await headerTrigger(page, label)).click();
 }
 
 /**
- * Same header-trigger scoping as openHeaderTrigger() — opens the mobile
- * hamburger menu first on narrow viewports — but returns the Locator
- * instead of clicking it. Needed when a test has to assert focus returns
- * to this exact element later (e.g. after closing a modal it opened),
- * since a bare click() throws away the reference.
+ * Same trigger scoping as openHeaderTrigger() — opens the hamburger menu
+ * first when it is shown — but returns the Locator instead of clicking it.
+ * Needed when a test has to assert focus returns to this exact element
+ * later (e.g. after closing a modal it opened), since a bare click() throws
+ * away the reference.
  */
 async function headerTrigger(page: Page, label: string) {
-  const viewport = page.viewportSize();
-  const isMobile = (viewport?.width ?? 0) < 768;
-  if (isMobile) {
-    await page.getByRole("button", { name: "Open navigation menu" }).click();
+  const hamburger = page.getByRole("button", { name: "Open navigation menu" });
+  if (await hamburger.isVisible()) {
+    await hamburger.click();
     return page
       .getByRole("navigation", { name: "Mobile navigation" })
       .getByRole("button", { name: label, exact: true });
   }
-  return page
-    .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: label, exact: true });
+  return page.getByRole("contentinfo").getByRole("button", { name: label, exact: true });
 }
 
 test.describe("Acquisition forms — open without submitting", () => {

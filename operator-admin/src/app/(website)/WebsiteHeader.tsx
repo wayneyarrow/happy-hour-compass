@@ -12,6 +12,7 @@ import type { CityRecord } from "@/lib/geo/types";
 import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { SuggestVenueModalContent } from "./acquisition/SuggestVenueModalContent";
 import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
+import { buildSiteDiscoveryLinks } from "./siteDiscoveryLinks";
 
 export type ConsumerUser = {
   email: string;
@@ -24,6 +25,8 @@ type Props = {
   currentCityName: string;
   cities: CityRecord[];
   consumerUser?: ConsumerUser | null;
+  /** Featured Guides collection href, or null to omit "Guides" — see getFeaturedGuidesNavHref(). */
+  featuredGuidesHref?: string | null;
 };
 
 const HEART_PATH =
@@ -35,7 +38,9 @@ export default function WebsiteHeader({
   currentCityName,
   cities,
   consumerUser,
+  featuredGuidesHref = null,
 }: Props) {
+  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -137,28 +142,27 @@ export default function WebsiteHeader({
 
           <div className="flex-1" />
 
-          {/* Desktop nav — from lg; below lg the hamburger menu holds every item. */}
-          <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-1">
+          {/* Desktop nav — from xl (1280px); below xl the hamburger menu holds every
+              item. With the discovery links the full nav overflows at lg (1024px). */}
+          <nav aria-label="Main navigation" className="hidden xl:flex items-center gap-1">
+            {/* Discovery first. Suggest a Venue / Add Your Venue live in the
+                mobile menu and the footer (Company / For Businesses). */}
+            {discoveryLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={pathname === link.href ? "page" : undefined}
+                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                {link.label}
+              </Link>
+            ))}
             <Link
               href="/weekly-picks"
               className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Weekly Picks
             </Link>
-            <button
-              type="button"
-              onClick={() => setSuggestOpen(true)}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              Suggest a Venue
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddVenueOpen(true)}
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              Add Your Venue
-            </button>
 
             {/* Saved button + dropdown */}
             <div className="relative" ref={savedRef}>
@@ -221,7 +225,7 @@ export default function WebsiteHeader({
           </nav>
 
           {/* Mobile — saved icon + hamburger */}
-          <div className="lg:hidden flex items-center gap-1">
+          <div className="xl:hidden flex items-center gap-1">
             {/* Compact saved icon for mobile header */}
             <button
               ref={mobileSavedBtnRef}
@@ -280,7 +284,7 @@ export default function WebsiteHeader({
 
         {/* Mobile saved dropdown — anchored to header bottom, full-width */}
         {savedOpen && (
-          <div ref={mobileDropdownRef} className="lg:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
+          <div ref={mobileDropdownRef} className="xl:hidden absolute left-0 right-0 top-full z-50 px-4 pb-2">
             <SavedDropdown
               open={savedOpen}
               onClose={() => setSavedOpen(false)}
@@ -315,7 +319,7 @@ export default function WebsiteHeader({
           role="dialog"
           aria-label="Navigation menu"
           aria-modal="true"
-          className="fixed inset-0 z-40 lg:hidden"
+          className="fixed inset-0 z-40 xl:hidden"
         >
           <div
             className="absolute inset-0 bg-black/10 backdrop-blur-[2px]"
@@ -325,10 +329,22 @@ export default function WebsiteHeader({
 
           <nav
             aria-label="Mobile navigation"
-            className="absolute top-16 md:top-[72px] inset-x-0 bg-white border-b border-gray-100 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+            className="absolute top-16 md:top-[72px] inset-x-0 max-h-[calc(100dvh-4rem)] md:max-h-[calc(100dvh-72px)] overflow-y-auto overscroll-contain bg-white border-b border-gray-100 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
           >
             <div className="max-w-7xl mx-auto px-6">
               <ul role="list">
+                {discoveryLinks.map((link) => (
+                  <li key={link.href} className="border-b border-gray-100">
+                    <Link
+                      href={link.href}
+                      aria-current={pathname === link.href ? "page" : undefined}
+                      onClick={() => setMenuOpen(false)}
+                      className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
                 <li className="border-b border-gray-100">
                   <Link
                     href="/weekly-picks"

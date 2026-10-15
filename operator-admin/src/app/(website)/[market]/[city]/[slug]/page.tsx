@@ -6,6 +6,7 @@ import {
   getVenueByHistoricalSlug,
 } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
+import { buildEventPublicPath } from "@/lib/publicEventUrl";
 import { buildVenueMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
@@ -662,8 +663,19 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                 <SectionHeading>Upcoming Events</SectionHeading>
                 <div className="space-y-3">
                   {venue.events.map((event) => (
-                    <div
+                    <Link
                       key={event.id}
+                      // Same pattern as the event page's "More Events" list:
+                      // the venue's own market/city plus the event slug,
+                      // falling back to the UUID compat route only if the
+                      // slug is missing.
+                      href={
+                        buildEventPublicPath({
+                          marketSlug: venue.marketSlug,
+                          citySlug: venue.citySlug,
+                          eventSlug: event.slug,
+                        }) ?? `/website-events/${event.id}`
+                      }
                       className="flex items-start gap-4 p-5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors"
                     >
                       <div className="shrink-0 w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
@@ -698,7 +710,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                           </p>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </section>

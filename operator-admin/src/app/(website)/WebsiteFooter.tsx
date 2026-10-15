@@ -9,6 +9,8 @@ import { setMarketAction } from "@/app/(consumer)/marketActions";
 import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { ContactUsModalContent } from "./acquisition/ContactUsModalContent";
 import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
+import { SuggestVenueModalContent } from "./acquisition/SuggestVenueModalContent";
+import { buildSiteDiscoveryLinks } from "./siteDiscoveryLinks";
 
 /**
  * The permanent global footer for the public website (Business Funnel —
@@ -138,11 +140,18 @@ function FooterButton({
   );
 }
 
-export function WebsiteFooter() {
+export function WebsiteFooter({
+  featuredGuidesHref = null,
+}: {
+  /** Featured Guides collection href, or null to omit "Guides" — see getFeaturedGuidesNavHref(). */
+  featuredGuidesHref?: string | null;
+} = {}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [contactOpen, setContactOpen] = useState(false);
   const [addVenueOpen, setAddVenueOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
 
   // Launch config: with only one active market, switching to it from itself
   // is a no-op — render it as the current live market label instead of a
@@ -214,7 +223,19 @@ export function WebsiteFooter() {
             </div>
 
             {/* Navigation columns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-9 flex-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-8 gap-y-9 flex-1">
+              {/* Explore — sitewide discovery links (shared with the header) */}
+              <div>
+                <FooterColumnHeading>Explore</FooterColumnHeading>
+                <ul className="space-y-3">
+                  {discoveryLinks.map((link) => (
+                    <li key={link.href}>
+                      <FooterLink href={link.href}>{link.label}</FooterLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               {/* Markets */}
               <div>
                 <FooterColumnHeading>Markets</FooterColumnHeading>
@@ -275,6 +296,9 @@ export function WebsiteFooter() {
                     <FooterButton onClick={() => setContactOpen(true)}>Contact</FooterButton>
                   </li>
                   <li>
+                    <FooterButton onClick={() => setSuggestOpen(true)}>Suggest a Venue</FooterButton>
+                  </li>
+                  <li>
                     <FooterLink href="/careers">Careers</FooterLink>
                   </li>
                 </ul>
@@ -311,6 +335,15 @@ export function WebsiteFooter() {
         description="Have a question or feedback? We'd love to hear from you."
       >
         <ContactUsModalContent onDone={() => setContactOpen(false)} />
+      </AcquisitionModal>
+
+      <AcquisitionModal
+        open={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+        title="Suggest a Venue"
+        description="Know a great happy hour? Tell us about it and we'll look into adding it to the directory."
+      >
+        <SuggestVenueModalContent onDone={() => setSuggestOpen(false)} />
       </AcquisitionModal>
 
       <AcquisitionModal
