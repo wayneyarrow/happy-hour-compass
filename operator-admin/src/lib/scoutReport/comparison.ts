@@ -37,6 +37,27 @@ export function coverageComparability(current: Coverage, comparison: Coverage): 
   return { comparable: reasons.length === 0, reasons };
 }
 
+/**
+ * When environment labelling was rolled out — the moment the counted set of
+ * view rows changed. Commit 0b9d1db added server-side environment stamping to
+ * every /api/track/* route in one release (venue views and event views
+ * together). Earliest labelled tracking row in any table: 2026-10-10
+ * 23:09:25 UTC (a staging row); Production deployed at 23:51 UTC. From then on
+ * staging/preview/development rows are labelled and, under the established
+ * rule, not counted; every earlier row is unlabelled and counted.
+ *
+ * A table's own first labelled row is NOT the change point: a table with no
+ * traffic around the rollout (event views: last unlabelled row Oct 8, first
+ * labelled Oct 12) would otherwise appear to change days later than it did.
+ */
+export const ENVIRONMENT_LABELLING_ROLLOUT_AT = "2026-10-10T23:09:00.000Z";
+
+/** The change point for a table: the rollout, or that table's first labelled row if it were ever earlier. */
+export function effectiveLabellingStart(tableFirstLabelledAt: string | null, rolloutAt: string = ENVIRONMENT_LABELLING_ROLLOUT_AT): string {
+  if (!tableFirstLabelledAt) return rolloutAt;
+  return Date.parse(tableFirstLabelledAt) < Date.parse(rolloutAt) ? new Date(Date.parse(tableFirstLabelledAt)).toISOString() : rolloutAt;
+}
+
 type Side = "before" | "after" | "straddles";
 function sideOf(w: Pick<ReportWindow, "startUtc" | "endUtc">, at: number): Side {
   if (Date.parse(w.endUtc) <= at) return "before";
@@ -64,7 +85,7 @@ export function labellingComparability(
   return {
     comparable: false,
     reasons: [
-      `Environment labelling began at ${labellingStartedAt}. Rows recorded before then carry no environment label and are counted, as established, together with production rows; ` +
+      `Environment labelling was rolled out at ${labellingStartedAt} (one release for all tracking routes). Rows recorded before then carry no environment label and are counted, as established, together with production rows; ` +
         "rows labelled staging, preview or development are not counted. The composition of the unlabelled rows cannot be determined from the data, " +
         "so totals on either side of this change are reported as established but are not compared.",
     ],

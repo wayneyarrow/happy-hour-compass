@@ -167,7 +167,7 @@ test("usage: established totals per metric; labelled views not compared across t
   assert.equal(pu.venueViews.current.notCountedRows, 2, "rows the rule excludes are shown, not added");
   assert.equal(pu.venueViews.change.comparable, false);
   assert.equal(pu.venueViews.change.percentChange, null);
-  assert.match(pu.venueViews.change.notes.join(" "), /Environment labelling began/);
+  assert.match(pu.venueViews.change.notes.join(" "), /Environment labelling was rolled out/);
   // Daily Specials clicks: no environment filter (staging row counted, as established); clicks, not views.
   assert.equal(pu.dailySpecialClicks.current.total, 2);
   assert.deepEqual(pu.dailySpecialClicks.current.environmentBreakdown, { production: 1, staging: 1 });

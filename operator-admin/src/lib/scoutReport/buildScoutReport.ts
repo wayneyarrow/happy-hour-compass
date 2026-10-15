@@ -52,7 +52,7 @@ import { VENUE_VIEW_MILESTONES } from "@/lib/customerSuccess/venueViewMilestones
 import { fetchAllRows as fetchAllPages } from "@/lib/customerSuccess/pagination";
 import { VENUE_CLICK_TYPES, type VenueClickType } from "@/lib/venueClickTracking";
 import { computeReportWindows, coverageFor, isInWindow, type Coverage, type ReportWindow } from "./windows";
-import { compareMetric, combineComparability, coverageComparability, labellingComparability, type MetricComparison } from "./comparison";
+import { compareMetric, combineComparability, coverageComparability, effectiveLabellingStart, labellingComparability, type MetricComparison } from "./comparison";
 import { redactSearchTerm } from "./redaction";
 import { describeCommunication, isEarnedNotSent, milestoneProgress, verifyReaderCounts, type MilestoneCommunication, type MilestoneEventRow } from "./milestones";
 import { getEventViewCountsStrict, getVenueViewCountsStrict, sumCounts } from "./strictViewCounts";
@@ -338,7 +338,7 @@ async function buildProductUsage(deps: ScoutReportDeps, windows: { current: Repo
       current: { environmentBreakdown: environmentBreakdown(cur.venueViews), notCountedRows: notCounted?.[0] ?? null },
       comparison: { environmentBreakdown: environmentBreakdown(cmp.venueViews), notCountedRows: notCounted?.[1] ?? null },
     },
-    starts.venueViews.labellingStartedAt,
+    effectiveLabellingStart(starts.venueViews.labellingStartedAt),
     ws
   );
   const eventViews = weeklyMetric(
@@ -350,7 +350,7 @@ async function buildProductUsage(deps: ScoutReportDeps, windows: { current: Repo
       current: { environmentBreakdown: environmentBreakdown(cur.eventViews), notCountedRows: notCounted?.[2] ?? null },
       comparison: { environmentBreakdown: environmentBreakdown(cmp.eventViews), notCountedRows: notCounted?.[3] ?? null },
     },
-    starts.eventViews.labellingStartedAt,
+    effectiveLabellingStart(starts.eventViews.labellingStartedAt),
     ws
   );
   const dailySpecialClicks = weeklyMetric(cur.dailySpecialClicks.length, cmp.dailySpecialClicks.length, dCov.cur, dCov.cmp, {
