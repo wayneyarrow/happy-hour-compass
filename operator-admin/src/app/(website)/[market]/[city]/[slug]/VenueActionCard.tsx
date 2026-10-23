@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { computeHhStatus } from "@/lib/happyHourStatus";
+import { computeHhStatus, type HhSchedule } from "@/lib/happyHourStatus";
 import { haversineKm } from "@/lib/geo";
 import { trackVenueIntentClick } from "@/app/(website)/venueIntentTracking";
 
-type HHSlot = { start: string; end: string };
-
 type Props = {
-  happyHourWeekly: Record<string, HHSlot[]>;
+  hhSchedule: HhSchedule;
   hoursWeekly: Record<string, string>;
   lat: number | null;
   lng: number | null;
@@ -85,19 +83,23 @@ function getNextOpenInfo(hoursWeekly: Record<string, string>): string | null {
 
 // ─── HH status label ─────────────────────────────────────────────────────────
 
-function hhStatusLabel(weekly: Record<string, HHSlot[]>): {
+function hhStatusLabel(schedule: HhSchedule): {
   line1: string;
   line2?: string;
   isActive: boolean;
   isNone: boolean;
 } {
-  const status = computeHhStatus(weekly);
+  const status = computeHhStatus(schedule);
   if (status.type === "active") {
     return { line1: "Happy Hour On Now", line2: status.endsIn, isActive: true, isNone: false };
   }
   if (status.type === "upcoming") {
     const prefix = status.day === "Today" ? "Happy Hour Today" : `Happy Hour ${status.day}`;
     return { line1: prefix, line2: `Starts at ${status.startsAt}`, isActive: false, isNone: false };
+  }
+  if (status.type === "allDay") {
+    const prefix = status.day === "Today" ? "Happy Hour Today" : `Happy Hour ${status.day}`;
+    return { line1: prefix, line2: "All Day", isActive: false, isNone: false };
   }
   return { line1: "No happy hour scheduled", isActive: false, isNone: true };
 }
@@ -138,7 +140,7 @@ function ActionBtn({
 // ─── VenueActionCard ─────────────────────────────────────────────────────────
 
 export function VenueActionCard({
-  happyHourWeekly,
+  hhSchedule,
   hoursWeekly,
   lat,
   lng,
@@ -177,8 +179,8 @@ export function VenueActionCard({
   }, [lat, lng]);
 
   useEffect(() => {
-    setHh(hhStatusLabel(happyHourWeekly));
-  }, [happyHourWeekly]);
+    setHh(hhStatusLabel(hhSchedule));
+  }, [hhSchedule]);
 
   const hasSecondary = Boolean(menuUrl || websiteUrl || phone);
 

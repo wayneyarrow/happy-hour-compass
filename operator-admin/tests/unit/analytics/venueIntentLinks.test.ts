@@ -123,7 +123,7 @@ test("website venue page: Website/Menu info rows tracked with the venue UUID, at
   assert.match(VENUE_PAGE, /<TrackedVenueLink\s+venueId=\{venue\.venueUuid\}\s+clickType="website"\s+href=\{websiteUrl\}\s+target="_blank"\s+rel="noopener noreferrer"/);
   assert.match(VENUE_PAGE, /<TrackedVenueLink\s+venueId=\{venue\.venueUuid\}\s+clickType="menu"\s+href=\{menuUrl\}\s+target="_blank"\s+rel="noopener noreferrer"/);
   // Expand trackers now receive the UUID, not the slug (venue.id).
-  assert.match(VENUE_PAGE, /<HappyHourTimesCard\s+venueId=\{venue\.venueUuid\}/);
+  assert.match(VENUE_PAGE, /<WebsiteHappyHourTimesCard\s+venueId=\{venue\.venueUuid\}/);
   assert.match(VENUE_PAGE, /<BusinessHoursRow hoursWeekly=\{venue\.hoursWeekly\} venueId=\{venue\.venueUuid\} \/>/);
   assert.doesNotMatch(VENUE_PAGE, /venueId=\{venue\.id\}/);
   // Both action components receive the UUID.
@@ -156,7 +156,9 @@ test("website event page: venue Website/Menu links tracked with the event's venu
 
 test("HH schedule / business hours: only the collapsed→open transition records an event", () => {
   const hh = read("(consumer)/venue/[id]/HappyHourTimesCard.tsx");
+  const websiteHh = read("(website)/[market]/[city]/[slug]/WebsiteHappyHourTimesCard.tsx");
   const hours = read("(consumer)/event/[id]/BusinessHoursRow.tsx");
+  assert.match(websiteHh, /const opening = !expanded;\s+setExpanded\(\(v\) => !v\);\s+if \(opening\) \{\s+fetch\("\/api\/track\/venue-click"[\s\S]{0,400}clickType: "hh_schedule_expand"/);
   assert.match(hh, /const opening = !expanded;\s+setExpanded\(\(v\) => !v\);\s+if \(opening\) \{\s+fetch\("\/api\/track\/venue-click"[\s\S]{0,400}clickType: "hh_schedule_expand"/);
   assert.match(hours, /const opening = !expanded;\s+setExpanded\(\(v\) => !v\);\s+if \(opening && venueId\) \{\s+fetch\("\/api\/track\/venue-click"[\s\S]{0,400}clickType: "business_hours_expand"/);
 });

@@ -19,7 +19,8 @@ import { GoogleRatingBadge } from "@/app/(consumer)/venue/[id]/GoogleRatingBadge
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
 import { ShareButton } from "@/app/(website)/ShareButton";
 import { absoluteUrl } from "@/lib/siteUrl";
-import { HappyHourTimesCard } from "@/app/(consumer)/venue/[id]/HappyHourTimesCard";
+import { WebsiteHappyHourTimesCard } from "./WebsiteHappyHourTimesCard";
+import { buildHhSchedule, hasAnyHappyHour } from "@/lib/happyHourStatus";
 import { BusinessHoursRow } from "@/app/(consumer)/event/[id]/BusinessHoursRow";
 import { VenueViewTracker } from "@/app/(consumer)/venue/[id]/VenueViewTracker";
 import { VenueGallery } from "./VenueGallery";
@@ -340,13 +341,14 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   // empty weekly schedule (or vice versa) still has a Happy Hour section
   // worth showing; only a venue with neither gets no Happy Hour nav item
   // at all (falling through to e.g. "Daily Specials · Info" alone).
-  // hasAnySlotsInWeekly mirrors HappyHourTimesCard's own identical check
-  // (that component still independently falls back to "Happy hour
-  // information not available" if ever rendered with none — this flag
-  // only decides whether the section is offered at the page level).
-  const hasHappyHourWeekly = Object.values(venue.happyHourWeekly).some(
-    (slots) => Array.isArray(slots) && slots.length > 0
-  );
+  // One venue-local schedule (explicit windows + "All Day" days) shared by
+  // every Happy Hour surface on this page so they can't disagree.
+  // hasHappyHourWeekly mirrors WebsiteHappyHourTimesCard's own check (that
+  // component still independently falls back to "Happy hour information not
+  // available" if ever rendered with none — this flag only decides whether
+  // the section is offered at the page level).
+  const hhSchedule = buildHhSchedule(venue);
+  const hasHappyHourWeekly = hasAnyHappyHour(hhSchedule);
   const hasHappyHour = hasHappyHourWeekly || hasSpecials;
   // Expired Daily Specials (a one-time date before today, or a weekly
   // Special with no remaining occurrence) are never shown to consumers —
@@ -505,7 +507,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
 
           {/* Row 4: Live status pills (open/closed · HH status) — client-rendered */}
           <VenueIdentityStatus
-            happyHourWeekly={venue.happyHourWeekly}
+            hhSchedule={hhSchedule}
             hoursWeekly={venue.hoursWeekly}
           />
         </div>
@@ -563,12 +565,10 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                         Happy Hour Times
                       </h3>
                     </div>
-                    {/* Pass empty specials — offers render in their own subsection below */}
-                    <HappyHourTimesCard
+                    {/* Times only — offers render in their own subsection below */}
+                    <WebsiteHappyHourTimesCard
                       venueId={venue.venueUuid}
-                      happyHourWeekly={venue.happyHourWeekly}
-                      specialsFood={[]}
-                      specialsDrinks={[]}
+                      schedule={hhSchedule}
                       initialExpanded={wantsHappyHourExpanded}
                     />
                   </div>
@@ -919,7 +919,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
           <div className="hidden lg:block">
             <div className="sticky top-36">
               <VenueActionCard
-                happyHourWeekly={venue.happyHourWeekly}
+                hhSchedule={hhSchedule}
                 hoursWeekly={venue.hoursWeekly}
                 lat={venue.latitude}
                 lng={venue.longitude}

@@ -40,6 +40,7 @@ import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/l
 import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 // Returns null when the venue has no assigned market/city yet (see
 // buildVenuePublicPath) — no canonical URL exists to link to.
@@ -54,7 +55,7 @@ function venueToSearchResultCard(v: ConsumerVenue): SearchResultCardData | null 
     image: getVenueImageSrc(v),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
-    happyHourWeekly: v.happyHourWeekly,
+    hhSchedule: buildHhSchedule(v),
     distanceKm: null,
     establishmentType: v.establishmentType,
     foodSpecial: v.specialsFood[0] ?? undefined,

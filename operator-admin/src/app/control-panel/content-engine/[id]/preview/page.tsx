@@ -14,6 +14,7 @@ import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { GuideDetailView } from "@/app/(website)/[market]/guides/[slug]/GuideDetailView";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 /**
  * Admin-safe guide preview (Guide Experience V2 Card 2A).
@@ -96,7 +97,7 @@ export default async function GuidePreviewPage({
           image: getVenueImageSrc(v),
           isVerified: v.isVerified,
           googleRating: v.googleRating,
-          happyHourWeekly: v.happyHourWeekly,
+          hhSchedule: buildHhSchedule(v),
           distanceKm: null,
           establishmentType: v.establishmentType,
           foodSpecial: v.specialsFood[0] ?? undefined,

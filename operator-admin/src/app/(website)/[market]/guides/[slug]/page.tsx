@@ -25,6 +25,7 @@ import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/S
 import { getMarketById } from "@/lib/markets";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { GuideDetailView } from "./GuideDetailView";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 /**
  * Public Content Engine guide page (Card 5).
@@ -239,7 +240,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
           image: getVenueImageSrc(v),
           isVerified: v.isVerified,
           googleRating: v.googleRating,
-          happyHourWeekly: v.happyHourWeekly,
+          hhSchedule: buildHhSchedule(v),
           distanceKm: null,
           establishmentType: v.establishmentType,
           foodSpecial: v.specialsFood[0] ?? undefined,

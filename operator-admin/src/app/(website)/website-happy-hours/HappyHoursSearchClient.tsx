@@ -4,7 +4,13 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { haversineKm, isWithinBounds, type LatLngBounds } from "@/lib/geo";
-import { computeHhStatus, getCurrentDayName } from "@/lib/happyHourStatus";
+import {
+  computeHhStatus,
+  getActiveHappyHourDay,
+  getVenueLocalDayName,
+  hasHappyHourOnDay,
+  hasHappyHourOverlap,
+} from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
@@ -100,70 +106,21 @@ const SEARCH_URL_SYNC_DEBOUNCE_MS = 200;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Parses an "HH:MM" string to minutes since midnight. NaN propagates on malformed input, which every comparison below treats as a non-match (mirrors the previous single-time filter's behavior). */
+/** Parses an "HH:MM" filter value ("24:00" = Midnight) to minutes since midnight. */
 function timeStringToMinutes(hhMm: string): number {
   const [h, m] = hhMm.split(":").map(Number);
   return h * 60 + (m || 0);
 }
 
-/**
- * Returns true if any of the venue's weekly Happy Hour slots (any day)
- * overlaps the selected [selectedStartHhMm, selectedEndHhMm) range, using the
- * same start-inclusive/end-exclusive convention as computeHhStatus(): a slot
- * matches when slotStart < selectedEnd AND slotEnd > selectedStart.
- */
-function hasHappyHourOverlap(
-  weekly: Record<string, Array<{ start: string; end: string }>>,
-  selectedStartHhMm: string,
-  selectedEndHhMm: string
-): boolean {
-  const selectedStart = timeStringToMinutes(selectedStartHhMm);
-  const selectedEnd = timeStringToMinutes(selectedEndHhMm);
-  return Object.values(weekly).some((slots) =>
-    slots.some((slot) => {
-      const start = timeStringToMinutes(slot.start);
-      const end = slot.end === "close" ? 1440 : timeStringToMinutes(slot.end);
-      return start < selectedEnd && end > selectedStart;
-    })
-  );
-}
-
-/** True when `value` is a non-empty "HH:MM" string that parses to a finite number of minutes. Used only by hasValidHappyHourOnDay's slot-validity check below — "close" is deliberately NOT accepted here, since it's only ever a valid *end* value. */
-function isFiniteHhTime(value: string): boolean {
-  return (
-    typeof value === "string" &&
-    value.trim() !== "" &&
-    Number.isFinite(timeStringToMinutes(value))
-  );
-}
-
-/**
- * Returns true if the venue has at least one non-malformed Happy Hour slot
- * on `dayName` — regardless of whether it's active right now, already ended,
- * or hasn't started yet. This is the Day filter's own check, independent of
- * any selected Time range — see the Day + Time interaction in filteredCards
- * below, where a complete From/To range further narrows this same day's
- * slots by overlap.
- *
- * `dayName` is null when the Day filter is set to "All Days" (the default —
- * see resolveDayName) — every venue passes unconditionally in that case, so
- * this never re-introduces a "has Happy Hour on some day" qualification gate
- * of its own; venue qualification is decided upstream of this page.
- *
- * A slot counts only when both start and end are valid: start must parse to
- * a finite time (never "close" — that's only ever an end value); end must
- * either parse to a finite time or be the literal "close".
- */
-function hasValidHappyHourOnDay(
-  weekly: Record<string, Array<{ start: string; end: string }>>,
-  dayName: string | null
-): boolean {
-  if (dayName === null) return true;
-  const daySlots = weekly[dayName] ?? [];
-  return daySlots.some(
-    (slot) => isFiniteHhTime(slot.start) && (slot.end === "close" || isFiniteHhTime(slot.end))
-  );
-}
+// Day / Time / On Now checks use the shared venue-local schedule engine
+// (src/lib/happyHourStatus.ts) — the same one every card and the venue page
+// use — so filtering always agrees with the status a card shows:
+//   - On Now: getActiveHappyHourDay() — venue timezone, overnight carryover.
+//   - Day: hasHappyHourOnDay() — any valid window, or "All Day", on that
+//     day. A window belongs to the day it starts on.
+//   - Time: hasHappyHourOverlap() — start-inclusive/end-exclusive overlap,
+//     overnight windows compared on their full span; "All Day" without
+//     business hours never matches a time range (no invented times).
 
 /** Compact range label, e.g. "3–6 PM" (same period), "11 AM–2 PM" (crosses noon), or "10 PM–Midnight". */
 function formatTimeRangeDisplay(fromHhMm: string, toHhMm: string): string {
@@ -919,23 +876,25 @@ export function HappyHoursSearchClient({
     [cards]
   );
 
-  // Same wall-clock convention as computeHhStatus() (see getCurrentDayName's
-  // doc comment) — recomputed fresh each render/filter-change rather than
-  // live-ticking, matching how On Now's clock already behaves on this page.
-  const todayName = getCurrentDayName();
-
   // On Now forces Day to Today (Option A — see handleToggleOnNow), but this
   // is computed defensively here too rather than trusting that invariant
-  // alone, since it's what the Time-range overlap check below evaluates
-  // against.
-  const effectiveDayName = resolveDayName(onNowActive ? "today" : selectedDay, todayName);
+  // alone. "today" is resolved per venue, in that venue's own timezone
+  // (cardDayName in filteredCards), so it never depends on the visitor's clock.
+  const dayFilterValue: DayFilterValue = onNowActive ? "today" : selectedDay;
+  // The specific weekday cards should show, or null for the venue's own
+  // current day ("All Days" / "Today").
+  const effectiveDayName =
+    dayFilterValue === "all" || dayFilterValue === "today"
+      ? null
+      : resolveDayName(dayFilterValue, "");
 
-  // ── filter (live: On Now uses computeHhStatus so it reflects actual wall-clock time) ──
+  // ── filter (live: On Now uses getActiveHappyHourDay — venue-local, at filter time) ──
   // Ordered to mirror the product's Near Me → On Now → Day → Time → Type
   // filter sequence (Sort is a separate, later stage — see sortedCards
   // below). AND-combined checks are order-independent for correctness; this
   // ordering is purely for readability/maintainability.
   const filteredCards = useMemo(() => {
+    const now = new Date();
     const hasLoc = userLocation !== null;
     const trimmedQuery = searchQuery.trim();
     return cards.filter((card) => {
@@ -961,13 +920,19 @@ export function HappyHoursSearchClient({
         (card.googleRating === null || card.googleRating < TOP_RATED_MIN)
       )
         return false;
-      if (onNowActive && computeHhStatus(card.happyHourWeekly).type !== "active")
-        return false;
+      // On Now: the venue must have an active window, and Day/Time below are
+      // evaluated against the day that window started on — yesterday for an
+      // overnight carryover (e.g. Friday 9 PM–1 AM at Saturday 12:30 AM).
+      const activeDay = onNowActive ? getActiveHappyHourDay(card.hhSchedule, now) : null;
+      if (onNowActive && activeDay === null) return false;
+      const cardDayName =
+        activeDay ??
+        resolveDayName(dayFilterValue, getVenueLocalDayName(card.hhSchedule.timeZone, now));
       // Day is an independent filter ("All Days" by default — effectiveDayName
       // is null and every venue passes this check unconditionally): a venue
       // must have at least one valid Happy Hour slot on the effective day,
       // regardless of whether a Time range is set.
-      if (!hasValidHappyHourOnDay(card.happyHourWeekly, effectiveDayName)) return false;
+      if (cardDayName !== null && !hasHappyHourOnDay(card.hhSchedule, cardDayName)) return false;
       // Time range is active only once both bounds are chosen — a single
       // bound never filters (see requirement: "only one selected → do not
       // filter yet"). Once active, it further narrows the already
@@ -976,11 +941,14 @@ export function HappyHoursSearchClient({
       // week when Day is "All Days" (effectiveDayName === null), since there
       // is no single day to constrain to in that case.
       if (filterTimeFrom && filterTimeTo) {
-        const weeklyForOverlap =
-          effectiveDayName === null
-            ? card.happyHourWeekly
-            : { [effectiveDayName]: card.happyHourWeekly[effectiveDayName] ?? [] };
-        if (!hasHappyHourOverlap(weeklyForOverlap, filterTimeFrom, filterTimeTo))
+        if (
+          !hasHappyHourOverlap(
+            card.hhSchedule,
+            cardDayName === null ? null : [cardDayName],
+            timeStringToMinutes(filterTimeFrom),
+            timeStringToMinutes(filterTimeTo)
+          )
+        )
           return false;
       }
       if (selectedType && card.establishmentType !== selectedType) return false;
@@ -993,7 +961,7 @@ export function HappyHoursSearchClient({
     userLocation,
     topRatedActive,
     onNowActive,
-    effectiveDayName,
+    dayFilterValue,
     filterTimeFrom,
     filterTimeTo,
     selectedType,
@@ -1116,10 +1084,8 @@ export function HappyHoursSearchClient({
           let subtitle: string | undefined;
           let subtitleColor: MapMarker["subtitleColor"] = "gray";
 
-          // Computed client-side (this component is "use client") so it
-          // reflects the viewer's actual wall-clock time — see
-          // SearchResultCardData.happyHourWeekly.
-          const hh = computeHhStatus(c.happyHourWeekly);
+          // Venue-local status — see SearchResultCardData.hhSchedule.
+          const hh = computeHhStatus(c.hhSchedule);
 
           if (hh.type === "active") {
             subtitle = `On Now · ${hh.endsIn}`;
@@ -1132,6 +1098,9 @@ export function HappyHoursSearchClient({
                 ? "Tomorrow"
                 : hh.day;
             subtitle = `${day} · Starts ${hh.startsAt}`;
+            subtitleColor = "amber";
+          } else if (hh.type === "allDay") {
+            subtitle = `${hh.day} · All Day`;
             subtitleColor = "amber";
           } else {
             subtitle = c.establishmentType || undefined;

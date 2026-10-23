@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { computeHhStatus } from "@/lib/happyHourStatus";
-
-type HHSlot = { start: string; end: string };
+import { computeHhStatus, type HhSchedule } from "@/lib/happyHourStatus";
 
 const DAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -36,8 +34,8 @@ type HhPill =
   | { label: string; isActive: true }
   | { label: string; isActive: false; isSoon: boolean };
 
-function getHhPill(weekly: Record<string, HHSlot[]>): HhPill | null {
-  const status = computeHhStatus(weekly);
+function getHhPill(schedule: HhSchedule): HhPill | null {
+  const status = computeHhStatus(schedule);
   if (status.type === "active") {
     return { label: `Happy Hour · ${status.endsIn}`, isActive: true };
   }
@@ -48,24 +46,27 @@ function getHhPill(weekly: Record<string, HHSlot[]>): HhPill | null {
         : `Happy Hour ${status.day}`;
     return { label, isActive: false, isSoon: status.day === "Today" };
   }
+  if (status.type === "allDay") {
+    return { label: `Happy Hour ${status.day} · All Day`, isActive: false, isSoon: false };
+  }
   return null;
 }
 
 type Props = {
-  happyHourWeekly: Record<string, HHSlot[]>;
+  hhSchedule: HhSchedule;
   hoursWeekly: Record<string, string>;
 };
 
-export function VenueIdentityStatus({ happyHourWeekly, hoursWeekly }: Props) {
+export function VenueIdentityStatus({ hhSchedule, hoursWeekly }: Props) {
   const [openStatus, setOpenStatus] = useState<"Open Now" | "Closed" | null>(null);
   const [hhPill, setHhPill] = useState<HhPill | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setOpenStatus(getOpenStatus(hoursWeekly));
-    setHhPill(getHhPill(happyHourWeekly));
+    setHhPill(getHhPill(hhSchedule));
     setMounted(true);
-  }, [hoursWeekly, happyHourWeekly]);
+  }, [hoursWeekly, hhSchedule]);
 
   if (!mounted) return null;
 

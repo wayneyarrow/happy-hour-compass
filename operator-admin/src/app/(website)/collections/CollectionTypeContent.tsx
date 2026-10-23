@@ -11,6 +11,7 @@ import {
 } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
 import { EventSearchResults } from "@/app/(website)/website-events/EventSearchResults";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 /**
  * Type-specific Collection Landing Page content — the clean boundary
@@ -74,7 +75,7 @@ function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
     image: getVenueImageSrc(v),
     isVerified: v.isVerified,
     googleRating: v.googleRating,
-    happyHourWeekly: v.happyHourWeekly,
+    hhSchedule: buildHhSchedule(v),
     distanceKm: null,
     establishmentType: v.establishmentType,
     foodSpecial: v.specialsFood[0] ?? undefined,

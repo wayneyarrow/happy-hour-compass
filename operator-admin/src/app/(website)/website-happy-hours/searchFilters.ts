@@ -58,8 +58,8 @@ export const TO_TIME_OPTIONS: Array<{ value: string; label: string }> = [
 // An independent filter (a venue must have a valid Happy Hour slot on the
 // effective day to pass), which a complete From/To time-range filter then
 // further narrows by overlap. "today" is a sentinel — not a happyHourWeekly
-// key — resolved at evaluation time via the viewer's current local weekday
-// (todayName / getCurrentDayName()), the same convention On Now already uses.
+// key — resolved at evaluation time to each venue's own current local weekday
+// (getVenueLocalDayName(), src/lib/happyHourStatus.ts), as On Now is.
 // "all" is a second sentinel meaning "no day filter" — it is the default so a
 // fresh visit shows every qualifying venue regardless of which weekday they
 // run Happy Hour on, rather than silently hiding venues with no Happy Hour on

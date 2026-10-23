@@ -79,6 +79,13 @@ export type ConsumerVenue = {
   happyHourTagline: string;
   /** Parsed weekly HH schedule keyed by day name */
   happyHourWeekly: Record<string, Array<{ start: string; end: string }>>;
+  /**
+   * Days whose hh_times entry is the literal "All Day" (no explicit times).
+   * Kept separate from happyHourWeekly so that shape — and every consumer-app
+   * reader of it — is unchanged; the website resolves these against
+   * hoursWeekly (see buildHhSchedule, src/lib/happyHourStatus.ts).
+   */
+  happyHourAllDayDays: string[];
   /** Business hours keyed by day name — "H:MM AM - H:MM PM" or "CLOSED" */
   hoursWeekly: Record<string, string>;
   specialsFood: string[];
@@ -349,12 +356,33 @@ function expandScraperGroupedHhTimes(text: string): string {
 export function parseHhTimes(
   text: string | null
 ): Record<string, Array<{ start: string; end: string }>> {
+  return parseHhTimesDetailed(text).weekly;
+}
+
+/**
+ * Days whose hh_times entry is the literal "All Day" (e.g. "Monday: All Day",
+ * "Daily: All Day"). Days that also carry explicit time slots are excluded —
+ * an explicit schedule always wins over "All Day".
+ */
+export function parseHhAllDayDays(text: string | null): string[] {
+  return parseHhTimesDetailed(text).allDayDays;
+}
+
+function parseHhTimesDetailed(text: string | null): {
+  weekly: Record<string, Array<{ start: string; end: string }>>;
+  allDayDays: string[];
+} {
   const weekly: Record<string, Array<{ start: string; end: string }>> = {};
   DAYS.forEach((d) => {
     weekly[d] = [];
   });
+  const allDay = new Set<string>();
+  const result = () => ({
+    weekly,
+    allDayDays: DAYS.filter((d) => allDay.has(d) && weekly[d].length === 0),
+  });
 
-  if (!text?.trim()) return weekly;
+  if (!text?.trim()) return result();
 
   // Normalize Unicode space variants to ASCII space, strip CR characters, and trim
   // leading/trailing whitespace (including any trailing newline that Supabase appends
@@ -402,6 +430,10 @@ export function parseHhTimes(
 
     // Multiple comma- or &-separated slots: "4 PM–6 PM, 9 PM–11 PM" or "4 PM–6 PM & 9 PM–11 PM"
     for (const slotStr of timePart.split(/[,&]/).map((s) => s.trim()).filter(Boolean)) {
+      if (/^all[\s-]*day$/i.test(slotStr)) {
+        for (const day of days) allDay.add(day);
+        continue;
+      }
       const m = slotStr.match(/^(.+?)\s*[\u2013\-]\s*(.+)$/);
       if (!m) continue;
       const rawStart = m[1].trim();
@@ -422,7 +454,7 @@ export function parseHhTimes(
     }
   }
 
-  return weekly;
+  return result();
 }
 
 type DbDayHours = { open: string; close: string } | null;
@@ -618,6 +650,7 @@ function rowToConsumerVenue(
     paymentMethods,
     happyHourTagline: (row.hh_tagline as string) ?? "",
     happyHourWeekly: parseHhTimes(row.hh_times as string | null),
+    happyHourAllDayDays: parseHhAllDayDays(row.hh_times as string | null),
     hoursWeekly: mapBusinessHours(
       row.business_hours as Record<string, DbDayHours> | null
     ),

@@ -11,6 +11,7 @@ import {
   type WebsiteVenueCard,
 } from "./HappyHoursSearchClient";
 import { resolveInitialDayFilter, resolveInitialTimeRange } from "./searchFilters";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 // A primary consumer discovery/search page (linked from the homepage,
 // collections, and 404/coming-soon fallbacks — see homepageDiscoveryModes.ts
@@ -63,7 +64,7 @@ export default async function HappyHoursSearchPage({
 
   // Map ConsumerVenue → WebsiteVenueCard.
   // distanceKm starts null and is computed client-side once geolocation is granted.
-  // latitude, longitude, and happyHourWeekly are passed through so the client
+  // latitude, longitude, and hhSchedule are passed through so the client
   // component can compute real distances and apply live filter logic.
   // Venues with no assigned market/city (nullable by design, see
   // ConsumerVenue.marketSlug/citySlug) have no canonical public URL yet and
@@ -90,7 +91,7 @@ export default async function HappyHoursSearchPage({
       // Client-side filter / distance data
       latitude: venue.latitude,
       longitude: venue.longitude,
-      happyHourWeekly: venue.happyHourWeekly,
+      hhSchedule: buildHhSchedule(venue),
       // Client-side text search data (see matchVenueSearchTier) — already
       // loaded on `venue` by getPublishedVenuesForConsumer(), so forwarding
       // it here adds no additional query.

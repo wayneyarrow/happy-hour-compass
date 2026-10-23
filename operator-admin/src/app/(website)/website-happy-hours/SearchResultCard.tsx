@@ -3,13 +3,16 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
-import { computeHhStatusForDay, getCurrentDayName, type HhStatus } from "@/lib/happyHourStatus";
+import {
+  computeHhStatus,
+  computeHhStatusForDay,
+  type HhSchedule,
+  type HhStatus,
+} from "@/lib/happyHourStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type { HhStatus };
-
-type HHSlot = { start: string; end: string };
 
 export type SearchResultCardData = {
   /** Venue slug — used for the card key and href routing. */
@@ -23,14 +26,11 @@ export type SearchResultCardData = {
   isVerified: boolean;
   googleRating: number | null;
   /**
-   * Raw weekly schedule — the HH status is computed client-side (see
-   * HhStatusDisplay below) rather than passed pre-computed, so it always
-   * reflects the viewer's actual wall-clock time instead of the
-   * server/deployment timezone. Mirrors the Venue Detail page's
-   * calculateHappyHourStatus() pattern (HappyHourTimesCard.tsx /
-   * VenueActionCard.tsx / VenueIdentityStatus.tsx).
+   * Venue-local Happy Hour schedule (buildHhSchedule) — status is computed
+   * client-side after mount (see HhStatusDisplay below) so it's always
+   * current, and in the venue's timezone regardless of the viewer's.
    */
-  happyHourWeekly: Record<string, HHSlot[]>;
+  hhSchedule: HhSchedule;
   /** Distance from user in km. Null until client-side geolocation is available. */
   distanceKm: number | null;
   establishmentType: string;
@@ -106,31 +106,32 @@ function StarRating({ rating }: { rating: number }) {
 
 /**
  * Computes status client-side on mount (rather than accepting a pre-computed
- * prop) so the result always uses the viewer's actual wall-clock time — a
- * server-computed value would reflect the deployment server's timezone
- * instead. Renders nothing until mounted, matching VenueIdentityStatus.tsx's
- * pattern on the Venue Detail page.
+ * prop) so it reflects the current instant without a hydration mismatch;
+ * the result is venue-local (see src/lib/happyHourStatus.ts). Renders
+ * nothing until mounted, matching VenueIdentityStatus.tsx's pattern on the
+ * Venue Detail page.
  *
- * `effectiveDayName` is the schedule day this card should evaluate against —
- * passed down by callers with a Day filter (HappyHoursSearchClient) so an
- * upcoming card shows the *selected* day's schedule rather than always
- * today's; null when that Day filter is set to "All Days" (no specific day
- * selected), and defaults to the actual current day (same as undefined) for
- * both that case and callers with no Day filter concept at all (homepage
- * rail, Guide pages), preserving prior behaviour exactly for them.
+ * `effectiveDayName` is the specific weekday a Day filter selected
+ * (HappyHoursSearchClient) so an upcoming card shows that day's schedule;
+ * null/undefined means the venue's own current day — "All Days", "Today",
+ * and callers with no Day filter (homepage rail, Guide pages).
  */
 function HhStatusDisplay({
-  happyHourWeekly,
+  hhSchedule,
   effectiveDayName,
 }: {
-  happyHourWeekly: Record<string, HHSlot[]>;
+  hhSchedule: HhSchedule;
   effectiveDayName?: string | null;
 }) {
   const [status, setStatus] = useState<HhStatus | null>(null);
 
   useEffect(() => {
-    setStatus(computeHhStatusForDay(happyHourWeekly, effectiveDayName ?? getCurrentDayName()));
-  }, [happyHourWeekly, effectiveDayName]);
+    setStatus(
+      effectiveDayName
+        ? computeHhStatusForDay(hhSchedule, effectiveDayName)
+        : computeHhStatus(hhSchedule)
+    );
+  }, [hhSchedule, effectiveDayName]);
 
   if (!status || status.type === "none") return null;
 
@@ -162,7 +163,7 @@ function HhStatusDisplay({
     <div className="space-y-0.5">
       <p className="text-sm font-bold text-amber-700">{prefix}</p>
       <p className="text-sm text-gray-400">
-        {status.startsAt} – {status.endsAt}
+        {status.type === "allDay" ? "All Day" : `${status.startsAt} – ${status.endsAt}`}
       </p>
     </div>
   );
@@ -276,7 +277,7 @@ export function SearchResultCard({ data, effectiveDayName }: Props) {
 
           {/* 3. Happy Hour status — time-sensitive decision signal */}
           <HhStatusDisplay
-            happyHourWeekly={data.happyHourWeekly}
+            hhSchedule={data.hhSchedule}
             effectiveDayName={effectiveDayName}
           />
 

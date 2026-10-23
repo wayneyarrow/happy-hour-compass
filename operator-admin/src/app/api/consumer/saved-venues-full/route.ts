@@ -3,6 +3,7 @@ import { getPublishedVenuesByUuids } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import type { WebsiteVenueCard } from "@/app/(website)/website-happy-hours/HappyHoursSearchClient";
+import { buildHhSchedule } from "@/lib/happyHourStatus";
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         drinkSpecial: venue.specialsDrinks[0] ?? undefined,
         latitude: venue.latitude,
         longitude: venue.longitude,
-        happyHourWeekly: venue.happyHourWeekly,
+        hhSchedule: buildHhSchedule(venue),
       }];
     });
 
