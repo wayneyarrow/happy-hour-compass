@@ -1,6 +1,8 @@
 # "Explore These Local Favourites" rail — configuration rollout
 
-**Status:** prepared, NOT applied. Every step below writes to the shared Supabase project, so the live Kelowna Homepage changes the moment it runs, in every environment. Apply only after explicit approval.
+**Status: APPLIED 2026-10-23 ~22:50Z** via the SQL below, after Production was promoted to `1380628` (`630a6ce` + the ordering-reset fix). The new Collection's id is `b52710a1-e423-4539-b48b-17d56513e63b`; its homepage section id is `e13a93cc-2d82-4d27-9c06-7de54dfa7a04`. The SQL path wrote no Control Panel audit-log rows.
+
+**Pre-apply snapshot** (all homepage and Collection tables, taken 2026-10-23T22:45Z): `operator-admin/scripts/output/local-favourites-rollback-2026-10-23/`. It's gitignored and exists only on the machine that ran the rollout.
 
 ## Order of operations
 
@@ -89,3 +91,9 @@ The SQL path writes no Control Panel audit-log rows.
 - "View all" opens `/central-okanagan/collections/explore-these-local-favourites` and lists the same venues.
 - Card impressions, card clicks and the "View all" click record in `website_discovery_events` with the new section's id and `section_kind = venue_collection`.
 - Highly Rated now includes eligible West Kelowna and Lake Country venues.
+
+## Follow-up (separate, not started): Today's Specials inconsistencies
+
+Today's Specials was deliberately left unchanged by this rollout:
+- **Ordering:** `selectTodaysSpecials` ranks by Boost and merit only, so stored positions are ignored. Move Up/Down in its editor has no effect, and "Reset ordering overrides" isn't offered there.
+- **Discover exclusions:** the Daily Specials pool never checks `venues.exclude_from_discover`, for algorithm picks or forced includes, unlike every other algorithmic Collection.
