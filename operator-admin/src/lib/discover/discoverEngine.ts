@@ -416,6 +416,45 @@ export function getHighlyRated(
 }
 
 /**
+ * Local Favourites — local, discover-eligible, verified venues, ordered by
+ * the standard discover score (internal boost, effective plan — including
+ * Comp/Trial grants via operatorPlan — and Google rating).
+ *
+ * Verification is the rail's own requirement, and unlike the other rails it
+ * also binds manual additions: an include override never bypasses it (see
+ * isLocalFavouriteEligible and the Collections resolver's manual-add gate,
+ * collectionsPreview.ts).
+ */
+export function isLocalFavouriteEligible(venue: ConsumerVenue): boolean {
+  return venue.isVerified;
+}
+
+export function getLocalFavourites(
+  venues: ConsumerVenue[],
+  overrides: RailOverride[] = [],
+  market: MarketConfig = MARKET_CONFIG
+): ConsumerVenue[] {
+  const { excludedUuids, includedUuids } = splitOverrides(overrides);
+
+  const system = venues.filter(
+    (v) =>
+      !excludedUuids.has(v.venueUuid) &&
+      isNearMarket(v.latitude, v.longitude, market) &&
+      isDiscoverEligible(v) &&
+      isLocalFavouriteEligible(v)
+  );
+
+  const systemUuids = new Set(system.map((v) => v.venueUuid));
+  const includePool = buildIncludePool(venues, includedUuids, excludedUuids, systemUuids, market).filter(
+    isLocalFavouriteEligible
+  );
+
+  return dedupeById([...includePool, ...system]).sort(
+    (a, b) => scoreVenueForDiscover(b) - scoreVenueForDiscover(a)
+  );
+}
+
+/**
  * Featured Events — events flattened from local, discover-eligible venues.
  *
  * Override semantics (V1):
@@ -513,6 +552,9 @@ export function getRailVenuesByKey(
     case "featured-nearby": return getFeaturedNearby(venues, overrides, market);
     case "new-this-week":   return getNewThisWeek(venues, overrides, market);
     case "highly-rated":    return getHighlyRated(venues, overrides, market);
+    // Collections-only (not in RAIL_KEYS — no consumer-app rail or Discover
+    // Management tab uses it).
+    case "local-favourites": return getLocalFavourites(venues, overrides, market);
     default:                return [];
   }
 }

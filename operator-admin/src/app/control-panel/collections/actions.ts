@@ -13,6 +13,8 @@ import {
   replaceEventOverrides,
   replaceGuideItems,
   replaceDailySpecialOverrides,
+  validateVerifiedManualAdds,
+  filterVerifiedVenueIds,
   archiveCollection,
   restoreCollection,
   isCollectionType,
@@ -25,6 +27,7 @@ import {
   type DailySpecialOverrideInput,
 } from "@/lib/data/collections";
 import { resolveCollectionPreview, type CollectionPreviewResult } from "@/lib/data/collectionsPreview";
+import { algorithmRequiresVerifiedVenues } from "@/lib/data/collectionsShared";
 import type {
   CollectionVenueOverride,
   CollectionEventOverride,
@@ -427,6 +430,17 @@ export async function updateCollectionAction(
     };
   }
 
+  // ── Verified-only manual additions ───────────────────────────────────────
+  // Checked before any write, so a rejected save changes nothing.
+  // replaceVenueOverrides re-checks it as the data-layer backstop.
+  if (existing.collectionType === "venue") {
+    const verifiedError = await validateVerifiedManualAdds(
+      collectionId,
+      parseOverrideRows(formData, "venue_overrides").map((r) => ({ venueId: r.id, action: r.action, reasonType: r.reasonType }))
+    );
+    if (verifiedError) return { error: verifiedError, values };
+  }
+
   // ── Publishing validation ────────────────────────────────────────────────
   // "At least one resolvable item where practical" — checked against what
   // will actually be saved (submitted membership rows), not stale DB state.
@@ -559,6 +573,8 @@ export type CollectionCandidateSearchInput = {
   cityId: string | null;
   query: string;
   excludeIds: string[];
+  /** The Collection's algorithm — a verified-only algorithm (algorithmRequiresVerifiedVenues) limits venue results to verified venues. */
+  algorithmKey?: string | null;
 };
 
 function filterToCollectionGeography(
@@ -587,7 +603,10 @@ export async function searchCollectionVenueCandidatesAction(
     query: input.query,
     excludeIds: input.excludeIds,
   });
-  return filterToCollectionGeography(results, input.cityId);
+  const inGeography = filterToCollectionGeography(results, input.cityId);
+  if (!algorithmRequiresVerifiedVenues(input.algorithmKey ?? null)) return inGeography;
+  const verified = await filterVerifiedVenueIds(inGeography.map((r) => r.id));
+  return inGeography.filter((r) => verified.has(r.id));
 }
 
 export async function searchCollectionEventCandidatesAction(

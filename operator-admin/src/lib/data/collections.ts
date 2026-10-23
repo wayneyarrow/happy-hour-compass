@@ -34,6 +34,8 @@ import {
   isCollectionType,
   normalizeCollectionStatus,
   validateAlgorithmKey,
+  algorithmRequiresVerifiedVenues,
+  MANUAL_ADD_REASON,
   validateItemLimit,
   type CollectionType,
   type CollectionStatus,
@@ -619,6 +621,77 @@ function validateContentGeography(
   return null;
 }
 
+// ── Verified-only algorithms: manual-add validation ─────────────────────────
+//
+// For an algorithm where algorithmRequiresVerifiedVenues() is true, a NEW
+// manual add (include + MANUAL_ADD_REASON) must be a verified venue. Rows
+// already stored as manual adds are accepted unchanged even if the venue has
+// since lost verification — otherwise one de-verified venue would block every
+// unrelated save. Such a row simply doesn't render (the resolver re-checks
+// verification on every resolve — see isManualVenueAddEligible in
+// collectionsPreview.ts) and the editor lists it so it can be removed.
+
+export async function validateVerifiedManualAdds(
+  collectionId: string,
+  rows: { venueId: string; action: "include" | "exclude"; reasonType?: string | null }[]
+): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data: collection, error: collectionError } = await supabase
+    .from("collections")
+    .select("algorithm_key")
+    .eq("id", collectionId)
+    .maybeSingle();
+  if (collectionError || !collection) return "Collection not found.";
+  if (!algorithmRequiresVerifiedVenues((collection as Row).algorithm_key as string | null)) return null;
+
+  const manualAddIds = rows
+    .filter((r) => r.action === "include" && r.reasonType === MANUAL_ADD_REASON)
+    .map((r) => r.venueId);
+  if (manualAddIds.length === 0) return null;
+
+  const { data: stored, error: storedError } = await supabase
+    .from("collection_venue_overrides")
+    .select("venue_id")
+    .eq("collection_id", collectionId)
+    .eq("action", "include")
+    .eq("reason_type", MANUAL_ADD_REASON);
+  if (storedError) {
+    console.error("[validateVerifiedManualAdds] stored read failed:", storedError.message);
+    return "Could not validate manual additions. Please try again.";
+  }
+  const storedIds = new Set(((stored ?? []) as Row[]).map((r) => r.venue_id as string));
+  const newIds = manualAddIds.filter((id) => !storedIds.has(id));
+  if (newIds.length === 0) return null;
+
+  const { data: venues, error: venuesError } = await supabase
+    .from("venues")
+    .select("id, name, is_verified")
+    .in("id", newIds);
+  if (venuesError) {
+    console.error("[validateVerifiedManualAdds] venue read failed:", venuesError.message);
+    return "Could not validate manual additions. Please try again.";
+  }
+  const verified = new Set(((venues ?? []) as Row[]).filter((v) => v.is_verified === true).map((v) => v.id as string));
+  const unverified = newIds.filter((id) => !verified.has(id));
+  if (unverified.length === 0) return null;
+
+  const nameById = new Map(((venues ?? []) as Row[]).map((v) => [v.id as string, v.name as string]));
+  const names = unverified.map((id) => nameById.get(id) ?? id).join(", ");
+  return `This Collection only includes verified venues. Remove the unverified manual addition${unverified.length === 1 ? "" : "s"} (${names}) and save again.`;
+}
+
+/** Subset of `venueIds` that are verified — the Add search filter for verified-only algorithms. */
+export async function filterVerifiedVenueIds(venueIds: string[]): Promise<Set<string>> {
+  if (venueIds.length === 0) return new Set();
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("venues").select("id").in("id", venueIds).eq("is_verified", true);
+  if (error) {
+    console.error("[filterVerifiedVenueIds]", error.message);
+    return new Set();
+  }
+  return new Set(((data ?? []) as Row[]).map((r) => r.id as string));
+}
+
 async function fetchVenueGeographyById(
   venueIds: string[]
 ): Promise<Map<string, { marketId: string | null; cityId: string | null }>> {
@@ -765,6 +838,8 @@ export async function upsertVenueOverride(
   const geography = await fetchVenueGeographyById([input.venueId]);
   const geoError = validateContentGeography(geography.get(input.venueId) ?? null, collection, "Venue");
   if (geoError) return { success: false, error: geoError };
+  const verifiedError = await validateVerifiedManualAdds(collectionId, [input]);
+  if (verifiedError) return { success: false, error: verifiedError };
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("collection_venue_overrides").upsert(
@@ -828,6 +903,8 @@ export async function replaceVenueOverrides(
     const geoError = validateContentGeography(geography.get(row.venueId) ?? null, collection, "Venue");
     if (geoError) return { success: false, error: `${geoError} (venue_id: ${row.venueId})` };
   }
+  const verifiedError = await validateVerifiedManualAdds(collectionId, rows);
+  if (verifiedError) return { success: false, error: verifiedError };
 
   const supabase = createAdminClient();
   const { error: deleteError } = await supabase

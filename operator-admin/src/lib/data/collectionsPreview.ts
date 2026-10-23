@@ -58,11 +58,20 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getCollectionById } from "@/lib/data/collections";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getCPFeaturedEventCandidates, type CPFeaturedEventItem } from "@/lib/data/events";
-import { getRailVenuesByKey, type RailOverride, type MarketConfig } from "@/lib/discover/discoverEngine";
+import {
+  getRailVenuesByKey,
+  isDiscoverEligible,
+  isLocalFavouriteEligible,
+  type RailOverride,
+  type MarketConfig,
+} from "@/lib/discover/discoverEngine";
+import type { ConsumerVenue } from "@/lib/data/venues";
+import { orderAlgorithmicItems } from "@/lib/data/collectionOrdering";
 import { computeFeaturedEventRail } from "@/lib/discover/featuredEventsEngine";
 import type { EventRailOverride } from "@/lib/data/discoverOverridesShared";
 import {
   MANUAL_ADD_REASON,
+  algorithmRequiresVerifiedVenues,
   type CollectionType,
   type AlgorithmKey,
   type CollectionVenueOverride,
@@ -207,6 +216,29 @@ function resolveManualGuides(guideItems: CollectionGuideItem[]): CollectionPrevi
   };
 }
 
+// ── Manual-add eligibility ───────────────────────────────────────────────────
+//
+// A manual add bypasses its algorithm's own rail filter (e.g. a non-Patio
+// venue in Patio Picks) but never the venue-wide Discover exclusion, and
+// never a verified-only algorithm's verification requirement
+// (algorithmRequiresVerifiedVenues). Checked on every resolve, so an add
+// stops appearing as soon as the venue becomes ineligible — the stored row
+// is kept and reappears if the venue becomes eligible again. Published +
+// geography are already guaranteed by the candidate pool.
+
+export function isManualVenueAddEligible(venue: ConsumerVenue, algorithmKey: AlgorithmKey | null): boolean {
+  if (!isDiscoverEligible(venue)) return false;
+  if (algorithmRequiresVerifiedVenues(algorithmKey) && !isLocalFavouriteEligible(venue)) return false;
+  return true;
+}
+
+/** Same venue-wide Discover exclusion as above, plus the event's own Discover exclusion — the two flags featuredEventsEngine.ts applies to the algorithm's own picks. */
+export function isManualEventAddEligible(
+  event: Pick<CPFeaturedEventItem, "excludeFromDiscover" | "venueExcludeFromDiscover">
+): boolean {
+  return !event.excludeFromDiscover && !event.venueExcludeFromDiscover;
+}
+
 // ── Algorithmic resolution — venues ──────────────────────────────────────────
 
 async function resolveAlgorithmicVenues(
@@ -257,41 +289,24 @@ async function resolveAlgorithmicVenues(
   const algorithmVenues = cappedBase.filter((v) => !manualAddIds.has(v.venueUuid));
   const manualVenues = [...manualAddIds]
     .map((id) => venueByUuid.get(id))
-    .filter((v): v is NonNullable<typeof v> => v !== undefined);
+    .filter((v): v is ConsumerVenue => v !== undefined && isManualVenueAddEligible(v, algorithmKey));
 
   // Step 5: ordering/boost — applies uniformly across the combined list
   // (added on top per step 4, never capped by Item Limit) and never affects
   // origin, which was already fixed above.
-  const includeOverrides = overrides.filter((o) => o.action === "include");
-  const boostByVenue = new Map(includeOverrides.map((o) => [o.venueId, o.boost]));
-  // Position among override rows only — see module docstring "Explicit ordering note".
-  const orderByVenue = new Map(includeOverrides.map((o, i) => [o.venueId, i]));
+  // Precedence (boost, then stored position, then algorithm order) lives in
+  // collectionOrdering.ts, shared with the editor's Move Up/Down.
+  const ordered = orderAlgorithmicItems(
+    [...algorithmVenues, ...manualVenues],
+    (v) => v.venueUuid,
+    overrides.filter((o) => o.action === "include").map((o) => ({ id: o.venueId, boost: o.boost }))
+  );
 
-  const combined = [...algorithmVenues, ...manualVenues];
-  const withBoost = combined.map((v, index) => ({
-    venue: v,
-    index,
-    boost: boostByVenue.get(v.venueUuid) ?? 0,
-    origin: (manualAddIds.has(v.venueUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
-  }));
-  // Stable: boost lifts first; among equal boost, rows with an explicit
-  // override position tie-break by that position, then float above
-  // untouched algorithm-only ties; remaining ties keep algorithm order.
-  withBoost.sort((a, b) => {
-    if (b.boost !== a.boost) return b.boost - a.boost;
-    const orderA = orderByVenue.get(a.venue.venueUuid);
-    const orderB = orderByVenue.get(b.venue.venueUuid);
-    if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
-    if (orderA !== undefined) return -1;
-    if (orderB !== undefined) return 1;
-    return a.index - b.index;
-  });
-
-  const items: CollectionPreviewItem[] = withBoost.map(({ venue, boost, origin }) => ({
+  const items: CollectionPreviewItem[] = ordered.map(({ item: venue, boost }) => ({
     id: venue.venueUuid,
     primaryLabel: venue.name,
     secondaryLabel: venue.city || null,
-    origin,
+    origin: (manualAddIds.has(venue.venueUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
     boosted: boost > 0,
   }));
 
@@ -338,35 +353,20 @@ async function resolveAlgorithmicEvents(
   const algorithmEvents = cappedBase.filter((e) => !manualAddIds.has(e.eventUuid));
   const manualEvents = [...manualAddIds]
     .map((id) => eventByUuid.get(id))
-    .filter((e): e is NonNullable<typeof e> => e !== undefined);
+    .filter((e): e is CPFeaturedEventItem => e !== undefined && isManualEventAddEligible(e));
 
   // Step 5: ordering/boost — see resolveAlgorithmicVenues above.
-  const includeOverrides = overrides.filter((o) => o.action === "include");
-  const boostByEvent = new Map(includeOverrides.map((o) => [o.eventId, o.boost]));
-  const orderByEvent = new Map(includeOverrides.map((o, i) => [o.eventId, i]));
+  const ordered = orderAlgorithmicItems(
+    [...algorithmEvents, ...manualEvents],
+    (e) => e.eventUuid,
+    overrides.filter((o) => o.action === "include").map((o) => ({ id: o.eventId, boost: o.boost }))
+  );
 
-  const combined = [...algorithmEvents, ...manualEvents];
-  const withBoost = combined.map((e, index) => ({
-    event: e,
-    index,
-    boost: boostByEvent.get(e.eventUuid) ?? 0,
-    origin: (manualAddIds.has(e.eventUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
-  }));
-  withBoost.sort((a, b) => {
-    if (b.boost !== a.boost) return b.boost - a.boost;
-    const orderA = orderByEvent.get(a.event.eventUuid);
-    const orderB = orderByEvent.get(b.event.eventUuid);
-    if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
-    if (orderA !== undefined) return -1;
-    if (orderB !== undefined) return 1;
-    return a.index - b.index;
-  });
-
-  const items: CollectionPreviewItem[] = withBoost.map(({ event, boost, origin }) => ({
+  const items: CollectionPreviewItem[] = ordered.map(({ item: event, boost }) => ({
     id: event.eventUuid,
     primaryLabel: event.title,
     secondaryLabel: event.venueName,
-    origin,
+    origin: (manualAddIds.has(event.eventUuid) ? "manual-include" : "algorithm") as PreviewOrigin,
     boosted: boost > 0,
   }));
 

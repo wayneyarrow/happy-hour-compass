@@ -25,6 +25,7 @@ import { RAIL_LABELS, type RailKey } from "@/lib/data/discoverOverridesShared";
 // newer keys that have no legacy rail equivalent.
 const ALGORITHM_LABEL_OVERRIDES: Partial<Record<AlgorithmKey, string>> = {
   "todays-specials": "Today's Specials",
+  "local-favourites": "Local Favourites (verified venues only)",
 };
 function algorithmLabel(key: AlgorithmKey): string {
   return ALGORITHM_LABEL_OVERRIDES[key] ?? RAIL_LABELS[key as RailKey] ?? key;

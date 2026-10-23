@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import type { AttachmentCandidate } from "@/lib/data/contentGuideAttachments";
 import type { CollectionPreviewItem, CollectionPreviewResult } from "@/lib/data/collectionsPreview";
-import { MANUAL_ADD_REASON, type AlgorithmKey } from "@/lib/data/collectionsShared";
+import { MANUAL_ADD_REASON, algorithmRequiresVerifiedVenues, type AlgorithmKey } from "@/lib/data/collectionsShared";
+import { canMoveResolvedItem, moveResolvedItem } from "@/lib/data/collectionOrdering";
 import {
   searchCollectionVenueCandidatesAction,
   searchCollectionEventCandidatesAction,
@@ -41,11 +42,11 @@ import {
  * edits (only the standalone "Generate"/"Regenerate" button — a distinct,
  * separate trigger — was removed).
  *
- * Ordering note: an algorithmic Collection's own ranking is authoritative;
- * explicit order here is a secondary tie-break that only applies to rows
- * with an override entry (see collectionsPreview.ts's "Explicit ordering
- * note"). Moving a pure algorithm row up/down first "promotes" it to an
- * override (boost 0) so it becomes explicitly positionable.
+ * Ordering note: precedence is Boost, then stored position, then the
+ * algorithm's own order (collectionOrdering.ts). Move Up/Down moves an item
+ * exactly one position by storing positions for every item up to the moved
+ * pair (moveResolvedItem) — a move can't cross a Boost boundary, since Boost
+ * always wins; change the Boost value instead.
  *
  * resolvedResult / resolvedError seed `generated` / `generateError` from the
  * Edit page's own server-side resolution (see control-panel/collections/[id]/edit/page.tsx
@@ -215,7 +216,7 @@ export default function ResolvedCollectionTable({
     const handle = setTimeout(
       () => {
         startSearch(async () => {
-          const res = await searchAction({ marketId, cityId, query, excludeIds });
+          const res = await searchAction({ marketId, cityId, query, excludeIds, algorithmKey });
           setResults(res);
           setHasSearched(true);
         });
@@ -223,7 +224,7 @@ export default function ResolvedCollectionTable({
       query.trim() ? 250 : 0
     );
     return () => clearTimeout(handle);
-  }, [marketId, cityId, query, overrideRows, generated, searchAction]);
+  }, [marketId, cityId, query, overrideRows, generated, searchAction, algorithmKey]);
 
   function addCandidate(candidate: AttachmentCandidate) {
     const next: MembershipRow[] = [
@@ -261,16 +262,6 @@ export default function ResolvedCollectionTable({
   }
 
   // ── Algorithmic mode row actions ──────────────────────────────────────────
-
-  // Gives an already-resolved row a stored position/boost so it becomes
-  // reorderable/boostable — NOT a manual add (reasonType stays null; see
-  // MembershipRow's doc comment). A no-op if the row already exists (e.g.
-  // it's already a genuine manual add, or already promoted), so an existing
-  // row's reasonType is never touched by this.
-  function promote(rows: MembershipRow[], item: CollectionPreviewItem): MembershipRow[] {
-    if (rows.some((r) => r.id === item.id)) return rows;
-    return [...rows, { id: item.id, primaryLabel: item.primaryLabel, secondaryLabel: item.secondaryLabel, action: "include", boost: 0, reasonType: null }];
-  }
 
   function excludeItem(item: CollectionPreviewItem) {
     // Preserve reasonType from any existing row (e.g. a manual add being
@@ -320,24 +311,45 @@ export default function ResolvedCollectionTable({
     refreshResolvedList(next);
   }
 
+  // Boost of a resolved item as the resolver sees it (include rows only).
+  function boostOf(id: string): number {
+    return overrideRows.find((r) => r.id === id && r.action === "include")?.boost ?? 0;
+  }
+
   function moveGeneratedItem(item: CollectionPreviewItem, direction: -1 | 1) {
     if (!generated) return;
     const order = generated.items.map((i) => i.id);
-    const currentIndex = order.indexOf(item.id);
-    const targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= order.length) return;
-    const targetItem = generated.items[targetIndex];
-
-    let rows = promote(overrideRows, item);
-    rows = promote(rows, targetItem);
-    const idxA = rows.findIndex((r) => r.id === item.id);
-    const idxB = rows.findIndex((r) => r.id === targetItem.id);
-    const next = [...rows];
-    [next[idxA], next[idxB]] = [next[idxB], next[idxA]];
+    const itemById = new Map(generated.items.map((i) => [i.id, i]));
+    // Untouched items in the moved prefix get a promotion row — boost 0,
+    // reasonType null, so never a manual add (see MembershipRow's doc comment).
+    const next = moveResolvedItem(order, overrideRows, order.indexOf(item.id), direction, (id) => {
+      const resolved = itemById.get(id);
+      return { id, primaryLabel: resolved?.primaryLabel ?? "", secondaryLabel: resolved?.secondaryLabel ?? null, action: "include", boost: 0, reasonType: null };
+    });
+    if (!next) return;
 
     setOverrideRows(next);
     refreshResolvedList(next);
   }
+
+  function moveTitle(index: number, direction: -1 | 1): string | undefined {
+    if (!generated) return undefined;
+    const target = index + direction;
+    if (target < 0 || target >= generated.items.length) return undefined;
+    return boostOf(generated.items[index].id) !== boostOf(generated.items[target].id)
+      ? "Boost decides the order here — change the Boost value to move past this item."
+      : undefined;
+  }
+
+  // Manual additions that are stored but not in the resolved list — the
+  // venue became ineligible (unpublished, Discover-excluded, or unverified for
+  // a verified-only algorithm). Listed so they can be removed; they reappear
+  // automatically if the venue becomes eligible again.
+  const resolvedIdSet = new Set(generated?.items.map((i) => i.id) ?? []);
+  const hiddenManualRows = generated
+    ? overrideRows.filter((r) => r.action === "include" && r.reasonType === MANUAL_ADD_REASON && !resolvedIdSet.has(r.id))
+    : [];
+  const verifiedOnly = kind === "venue" && algorithmRequiresVerifiedVenues(algorithmKey);
 
   const excludedRows = overrideRows.filter((r) => r.action === "exclude");
   const serialized = JSON.stringify(
@@ -516,8 +528,8 @@ export default function ResolvedCollectionTable({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => moveGeneratedItem(item, -1)} disabled={index === 0 || isPending} className={arrowBtnCls} aria-label={`Move ${item.primaryLabel} up`}>↑</button>
-                          <button type="button" onClick={() => moveGeneratedItem(item, 1)} disabled={index === generated.items.length - 1 || isPending} className={arrowBtnCls} aria-label={`Move ${item.primaryLabel} down`}>↓</button>
+                          <button type="button" onClick={() => moveGeneratedItem(item, -1)} disabled={!canMoveResolvedItem(generated.items.map((i) => i.id), boostOf, index, -1) || isPending} title={moveTitle(index, -1)} className={arrowBtnCls} aria-label={`Move ${item.primaryLabel} up`}>↑</button>
+                          <button type="button" onClick={() => moveGeneratedItem(item, 1)} disabled={!canMoveResolvedItem(generated.items.map((i) => i.id), boostOf, index, 1) || isPending} title={moveTitle(index, 1)} className={arrowBtnCls} aria-label={`Move ${item.primaryLabel} down`}>↓</button>
                           {item.origin === "manual-include" ? (
                             <button type="button" onClick={() => removeAdded(item.id)} disabled={isPending} className={`${btnCls} ml-1 bg-white border-gray-200 text-gray-600 hover:bg-gray-50`}>
                               Remove
@@ -536,6 +548,37 @@ export default function ResolvedCollectionTable({
             </div>
           )}
         </div>
+      )}
+
+      {hiddenManualRows.length > 0 && (
+        <details className="mt-2" open>
+          <summary className="cursor-pointer text-sm font-medium text-gray-500 hover:text-gray-700 select-none">
+            Added but not shown ({hiddenManualRows.length})
+          </summary>
+          <p className="mt-1 text-xs text-gray-400">
+            {verifiedOnly
+              ? "These venues are no longer published, verified, or eligible for Discover. They reappear automatically if that changes."
+              : `These ${label}s are no longer published or eligible for Discover. They reappear automatically if that changes.`}
+          </p>
+          <ul className="mt-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {hiddenManualRows.map((row) => (
+              <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <span className="text-sm text-slate-700 block truncate">{row.primaryLabel}</span>
+                  {row.secondaryLabel && <span className="text-xs text-gray-400 block truncate">{row.secondaryLabel}</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAdded(row.id)}
+                  disabled={isPending}
+                  className={`${btnCls} shrink-0 bg-white border-gray-200 text-gray-600 hover:bg-gray-50`}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {excludedRows.length > 0 && (
@@ -579,7 +622,9 @@ export default function ResolvedCollectionTable({
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:outline-none"
         />
         <p className="mt-1.5 text-xs text-gray-400">
-          {cityId ? `Showing published ${label}s in this city.` : `Showing published ${label}s in this market.`}
+          {cityId
+            ? `Showing published${verifiedOnly ? ", verified" : ""} ${label}s in this city.`
+            : `Showing published${verifiedOnly ? ", verified" : ""} ${label}s in this market.`}
         </p>
         {isSearching && <p className="mt-1 text-xs text-gray-400">Searching…</p>}
         {!isSearching && hasSearched && results.length === 0 && (

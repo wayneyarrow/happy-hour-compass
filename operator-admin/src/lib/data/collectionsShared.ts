@@ -91,6 +91,9 @@ export const ALGORITHM_KEYS = [
   "new-this-week",
   "featured-events",
   "todays-specials",
+  // Collections-only venue algorithm (no legacy Discover rail) — see
+  // getLocalFavourites in discoverEngine.ts.
+  "local-favourites",
 ] as const;
 
 export type AlgorithmKey = (typeof ALGORITHM_KEYS)[number];
@@ -104,7 +107,23 @@ export const ALGORITHM_COLLECTION_TYPE: Record<AlgorithmKey, CollectionType> = {
   "new-this-week":   "venue",
   "featured-events": "event",
   "todays-specials": "daily_special",
+  "local-favourites": "venue",
 };
+
+/**
+ * Venue algorithms whose verification requirement also binds manual
+ * additions (every other algorithm lets a manual Add bypass its own rail
+ * filter). Enforced in three places that must agree: the resolver
+ * (collectionsPreview.ts — authoritative, so a venue that loses
+ * verification stops appearing), the Add search
+ * (searchCollectionVenueCandidatesAction) and save validation
+ * (collections.ts findNewUnverifiedManualAdds).
+ */
+const VERIFIED_ONLY_ALGORITHMS: ReadonlySet<AlgorithmKey> = new Set<AlgorithmKey>(["local-favourites"]);
+
+export function algorithmRequiresVerifiedVenues(algorithmKey: AlgorithmKey | string | null): boolean {
+  return algorithmKey !== null && VERIFIED_ONLY_ALGORITHMS.has(algorithmKey as AlgorithmKey);
+}
 
 export function isAlgorithmKey(value: string): value is AlgorithmKey {
   return (ALGORITHM_KEYS as readonly string[]).includes(value);
