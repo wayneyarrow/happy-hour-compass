@@ -98,3 +98,23 @@ export function moveResolvedItem<R extends MovableRow>(
   const rest = rows.filter((r) => !prefixSet.has(r.id));
   return [...prefixRows, ...rest];
 }
+
+// ── Reset ordering overrides ─────────────────────────────────────────────────
+
+/**
+ * Clears ordering overrides: removes the stored position/Boost rows of
+ * algorithm-picked items (so they return to the algorithm's order) and sets
+ * manual additions' Boost to 0. Manual additions and exclusions are kept —
+ * additions keep their stored rows, so they still sit above the automatic
+ * picks (precedence 2 above). Pure: callers apply it to unsaved editor state.
+ */
+export function resetOrderingOverrides<R extends MovableRow>(rows: R[], isManualAdd: (row: R) => boolean): R[] {
+  return rows
+    .filter((r) => r.action === "exclude" || isManualAdd(r))
+    .map((r) => (r.action === "include" && r.boost !== 0 ? { ...r, boost: 0 } : r));
+}
+
+/** Whether resetOrderingOverrides would change anything. */
+export function hasOrderingOverrides<R extends MovableRow>(rows: R[], isManualAdd: (row: R) => boolean): boolean {
+  return rows.some((r) => r.action === "include" && (!isManualAdd(r) || r.boost !== 0));
+}

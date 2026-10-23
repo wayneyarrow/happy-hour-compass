@@ -4,7 +4,12 @@ import { useEffect, useState, useTransition } from "react";
 import type { AttachmentCandidate } from "@/lib/data/contentGuideAttachments";
 import type { CollectionPreviewItem, CollectionPreviewResult } from "@/lib/data/collectionsPreview";
 import { MANUAL_ADD_REASON, algorithmRequiresVerifiedVenues, type AlgorithmKey } from "@/lib/data/collectionsShared";
-import { canMoveResolvedItem, moveResolvedItem } from "@/lib/data/collectionOrdering";
+import {
+  canMoveResolvedItem,
+  hasOrderingOverrides,
+  moveResolvedItem,
+  resetOrderingOverrides,
+} from "@/lib/data/collectionOrdering";
 import {
   searchCollectionVenueCandidatesAction,
   searchCollectionEventCandidatesAction,
@@ -332,6 +337,26 @@ export default function ResolvedCollectionTable({
     refreshResolvedList(next);
   }
 
+  // "Reset ordering overrides" — editor state only; persisted by Save like
+  // every other edit. Not offered for Today's Specials, whose ranking ignores
+  // stored positions.
+  const isManualAdd = (r: MembershipRow) => r.reasonType === MANUAL_ADD_REASON;
+  const canResetOrdering = kind !== "daily_special" && hasOrderingOverrides(overrideRows, isManualAdd);
+
+  function resetOrdering() {
+    const confirmed = window.confirm(
+      "Reset ordering overrides?\n\n" +
+        `• Algorithm-picked ${label}s lose their stored position and Boost, and return to the algorithm's order.\n` +
+        "• Manual additions stay in the Collection with Boost set to 0. They still appear above the algorithm's picks.\n" +
+        "• Exclusions stay as they are.\n\n" +
+        "Nothing is saved until you click Save."
+    );
+    if (!confirmed) return;
+    const next = resetOrderingOverrides(overrideRows, isManualAdd);
+    setOverrideRows(next);
+    refreshResolvedList(next);
+  }
+
   function moveTitle(index: number, direction: -1 | 1): string | undefined {
     if (!generated) return undefined;
     const target = index + direction;
@@ -453,10 +478,23 @@ export default function ResolvedCollectionTable({
       <input type="hidden" name={fieldName} value={serialized} />
 
       {generated && (
-        <p className="text-xs text-gray-400">
-          {generated.items.length} {label}{generated.items.length === 1 ? "" : "s"} resolved
-          {isPending && " · refreshing…"}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-400">
+            {generated.items.length} {label}{generated.items.length === 1 ? "" : "s"} resolved
+            {isPending && " · refreshing…"}
+          </p>
+          {kind !== "daily_special" && (
+            <button
+              type="button"
+              onClick={resetOrdering}
+              disabled={!canResetOrdering || isPending}
+              title={canResetOrdering ? undefined : "No stored positions or Boosts to reset."}
+              className={`${btnCls} bg-white border-gray-200 text-gray-600 hover:bg-gray-50`}
+            >
+              Reset ordering overrides
+            </button>
+          )}
+        </div>
       )}
 
       {generateError && (

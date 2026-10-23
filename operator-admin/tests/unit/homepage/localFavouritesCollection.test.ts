@@ -9,7 +9,13 @@ import {
   algorithmRequiresVerifiedVenues,
   validateAlgorithmKey,
 } from "../../../src/lib/data/collectionsShared";
-import { canMoveResolvedItem, moveResolvedItem, orderAlgorithmicItems } from "../../../src/lib/data/collectionOrdering";
+import {
+  canMoveResolvedItem,
+  hasOrderingOverrides,
+  moveResolvedItem,
+  orderAlgorithmicItems,
+  resetOrderingOverrides,
+} from "../../../src/lib/data/collectionOrdering";
 import type { ConsumerVenue } from "../../../src/lib/data/venues";
 
 /**
@@ -192,6 +198,46 @@ test("randomized: every allowed move is exactly one position; nothing else moves
   }
 });
 
+// ── Reset ordering overrides ─────────────────────────────────────────────────
+
+const isManual = (r: Row) => r.tag === "manual-add";
+
+test("reset: clears algorithm items' positions and Boosts; keeps manual additions (Boost 0) and exclusions", () => {
+  const algorithm = ["a", "b", "c", "d", "e"];
+  const rows: Row[] = [
+    { id: "d", action: "include", boost: 40 },
+    { id: "c", action: "include", boost: 0 },
+    { id: "m1", action: "include", boost: 70, tag: "manual-add" },
+    { id: "m2", action: "include", boost: 0, tag: "manual-add" },
+    { id: "b", action: "exclude", boost: 0 },
+    { id: "mx", action: "exclude", boost: 0, tag: "manual-add" },
+  ];
+  assert.equal(hasOrderingOverrides(rows, isManual), true);
+  const reset = resetOrderingOverrides(rows, isManual);
+  assert.deepEqual(reset, [
+    { id: "m1", action: "include", boost: 0, tag: "manual-add" },
+    { id: "m2", action: "include", boost: 0, tag: "manual-add" },
+    { id: "b", action: "exclude", boost: 0 },
+    { id: "mx", action: "exclude", boost: 0, tag: "manual-add" },
+  ]);
+  assert.equal(hasOrderingOverrides(reset, isManual), false);
+  // Manual additions keep their default placement above the algorithm order,
+  // which is restored for everything else (b stays excluded upstream).
+  assert.deepEqual(order([...algorithm.filter((id) => id !== "b"), "m1", "m2"], reset), ["m1", "m2", "a", "c", "d", "e"]);
+  assert.equal(rows[0].boost, 40, "input rows untouched (editor state only until Save)");
+});
+
+test("reset after moves restores the exact algorithm order", () => {
+  const algorithm = ["a", "b", "c", "d", "e", "f"];
+  let rows: Row[] = [];
+  for (const [index, dir] of [[5, -1], [4, -1], [1, 1]] as const) {
+    rows = moveResolvedItem(order(algorithm, rows), rows, index, dir, promote)!;
+  }
+  assert.notDeepEqual(order(algorithm, rows), algorithm);
+  assert.deepEqual(order(algorithm, resetOrderingOverrides(rows, isManual)), algorithm);
+  assert.equal(hasOrderingOverrides([], isManual), false);
+});
+
 // ── Wiring ───────────────────────────────────────────────────────────────────
 
 const root = join(__dirname, "../../..");
@@ -206,4 +252,6 @@ test("wiring: verified-only enforced in Add search and both save paths; editor u
   const table = src("src/app/control-panel/collections/ResolvedCollectionTable.tsx");
   assert.match(table, /moveResolvedItem\(/);
   assert.match(table, /algorithmKey \}\)/);
+  assert.match(table, /resetOrderingOverrides\(overrideRows/);
+  assert.match(table, /window\.confirm\(/);
 });
