@@ -233,13 +233,42 @@ export function isHappyHourActive(schedule: HhSchedule, now: Date = new Date()):
   return findActiveWindow(schedule, now) !== null;
 }
 
+/** Every window active at `now`, each with the day it started on (yesterday for an overnight carryover). */
+function activeWindows(schedule: HhSchedule, now: Date): Array<{ slot: HhSlot; day: string }> {
+  const { dayIndex, minutes } = localClock(now, schedule.timeZone);
+  const today = DAY_NAMES[dayIndex];
+  const yesterday = DAY_NAMES[(dayIndex + 6) % 7];
+  const at = (day: string, m: number) =>
+    (schedule.weekly[day] ?? [])
+      .filter((slot) => {
+        const r = slotMinutes(slot);
+        return r !== null && m >= r.start && m < r.end;
+      })
+      .map((slot) => ({ slot, day }));
+  return [...at(today, minutes), ...at(yesterday, minutes + MINUTES_PER_DAY)];
+}
+
+function slotOverlaps(slot: HhSlot, fromMin: number, toMin: number): boolean {
+  const r = slotMinutes(slot);
+  return r !== null && r.start < toMin && r.end > fromMin;
+}
+
 /**
- * The day the window active at `now` started on (yesterday for an overnight
- * carryover), or null when none is active. On Now evaluates the Day/Time
- * filters against this day, so a carryover window isn't dropped by them.
+ * On Now filter: true when a window is active at `now` and, if a Time range
+ * is set, an active window itself overlaps [fromMin, toMin) on the day it
+ * started (overnight windows on their full span). Another, inactive window
+ * on the same day never satisfies the range. With On Now the Day filter is
+ * "Today", which an active window always satisfies through the day it
+ * started on — so Friday 9 PM–1 AM still counts at Saturday 12:30 AM.
  */
-export function getActiveHappyHourDay(schedule: HhSchedule, now: Date = new Date()): string | null {
-  return findActiveWindow(schedule, now)?.day ?? null;
+export function matchesOnNow(
+  schedule: HhSchedule,
+  now: Date,
+  range: { fromMin: number; toMin: number } | null
+): boolean {
+  return activeWindows(schedule, now).some(
+    ({ slot }) => range === null || slotOverlaps(slot, range.fromMin, range.toMin)
+  );
 }
 
 /**
@@ -254,10 +283,7 @@ export function hasHappyHourOverlap(
   toMin: number
 ): boolean {
   return (days ?? [...DAY_NAMES]).some((day) =>
-    (schedule.weekly[day] ?? []).some((slot) => {
-      const r = slotMinutes(slot);
-      return r !== null && r.start < toMin && r.end > fromMin;
-    })
+    (schedule.weekly[day] ?? []).some((slot) => slotOverlaps(slot, fromMin, toMin))
   );
 }
 

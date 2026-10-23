@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 import { haversineKm, isWithinBounds, type LatLngBounds } from "@/lib/geo";
 import {
   computeHhStatus,
-  getActiveHappyHourDay,
   getVenueLocalDayName,
   hasHappyHourOnDay,
   hasHappyHourOverlap,
+  matchesOnNow,
 } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
@@ -115,7 +115,8 @@ function timeStringToMinutes(hhMm: string): number {
 // Day / Time / On Now checks use the shared venue-local schedule engine
 // (src/lib/happyHourStatus.ts) — the same one every card and the venue page
 // use — so filtering always agrees with the status a card shows:
-//   - On Now: getActiveHappyHourDay() — venue timezone, overnight carryover.
+//   - On Now: matchesOnNow() — venue timezone, overnight carryover; with a
+//     Time range, the active window itself must overlap it.
 //   - Day: hasHappyHourOnDay() — any valid window, or "All Day", on that
 //     day. A window belongs to the day it starts on.
 //   - Time: hasHappyHourOverlap() — start-inclusive/end-exclusive overlap,
@@ -888,7 +889,7 @@ export function HappyHoursSearchClient({
       ? null
       : resolveDayName(dayFilterValue, "");
 
-  // ── filter (live: On Now uses getActiveHappyHourDay — venue-local, at filter time) ──
+  // ── filter (live: On Now uses matchesOnNow — venue-local, at filter time) ──
   // Ordered to mirror the product's Near Me → On Now → Day → Time → Type
   // filter sequence (Sort is a separate, later stage — see sortedCards
   // below). AND-combined checks are order-independent for correctness; this
@@ -920,33 +921,40 @@ export function HappyHoursSearchClient({
         (card.googleRating === null || card.googleRating < TOP_RATED_MIN)
       )
         return false;
-      // On Now: the venue must have an active window, and Day/Time below are
-      // evaluated against the day that window started on — yesterday for an
-      // overnight carryover (e.g. Friday 9 PM–1 AM at Saturday 12:30 AM).
-      const activeDay = onNowActive ? getActiveHappyHourDay(card.hhSchedule, now) : null;
-      if (onNowActive && activeDay === null) return false;
-      const cardDayName =
-        activeDay ??
-        resolveDayName(dayFilterValue, getVenueLocalDayName(card.hhSchedule.timeZone, now));
-      // Day is an independent filter ("All Days" by default — effectiveDayName
-      // is null and every venue passes this check unconditionally): a venue
-      // must have at least one valid Happy Hour slot on the effective day,
-      // regardless of whether a Time range is set.
-      if (cardDayName !== null && !hasHappyHourOnDay(card.hhSchedule, cardDayName)) return false;
       // Time range is active only once both bounds are chosen — a single
       // bound never filters (see requirement: "only one selected → do not
-      // filter yet"). Once active, it further narrows the already
-      // Day-filtered result to slots overlapping the range — on the selected
-      // day only when a specific day is chosen, or across every day of the
-      // week when Day is "All Days" (effectiveDayName === null), since there
-      // is no single day to constrain to in that case.
-      if (filterTimeFrom && filterTimeTo) {
+      // filter yet").
+      const timeRange =
+        filterTimeFrom && filterTimeTo
+          ? { fromMin: timeStringToMinutes(filterTimeFrom), toMin: timeStringToMinutes(filterTimeTo) }
+          : null;
+      if (onNowActive) {
+        // On Now (Day is forced to Today): the venue needs an active window
+        // and, with a Time range, that active window itself must overlap it
+        // — never a different window on the same day. A carryover window
+        // (e.g. Friday 9 PM–1 AM at Saturday 12:30 AM) counts for the day
+        // it started on.
+        if (!matchesOnNow(card.hhSchedule, now, timeRange)) return false;
+      } else {
+        const cardDayName = resolveDayName(
+          dayFilterValue,
+          getVenueLocalDayName(card.hhSchedule.timeZone, now)
+        );
+        // Day is an independent filter ("All Days" by default — cardDayName
+        // is null and every venue passes this check unconditionally): a venue
+        // must have at least one valid Happy Hour slot on the effective day,
+        // regardless of whether a Time range is set.
+        if (cardDayName !== null && !hasHappyHourOnDay(card.hhSchedule, cardDayName)) return false;
+        // A Time range further narrows the Day-filtered result to slots
+        // overlapping it — on the selected day only when a specific day is
+        // chosen, or across every day of the week when Day is "All Days".
         if (
+          timeRange &&
           !hasHappyHourOverlap(
             card.hhSchedule,
             cardDayName === null ? null : [cardDayName],
-            timeStringToMinutes(filterTimeFrom),
-            timeStringToMinutes(filterTimeTo)
+            timeRange.fromMin,
+            timeRange.toMin
           )
         )
           return false;

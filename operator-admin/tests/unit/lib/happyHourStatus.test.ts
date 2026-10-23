@@ -6,11 +6,11 @@ import {
   computeHhStatusForDay,
   computeHhTodayText,
   formatHhDay,
-  getActiveHappyHourDay,
   getVenueLocalDayName,
   hasHappyHourOnDay,
   hasHappyHourOverlap,
   isHappyHourActive,
+  matchesOnNow,
   type HhSchedule,
 } from "../../../src/lib/happyHourStatus";
 import { parseHhAllDayDays, parseHhTimes } from "../../../src/lib/data/venues";
@@ -260,16 +260,68 @@ test("Day-filtered card status: other days show that day's window, today is live
   });
 });
 
-test("On Now + Day/Time during a carryover evaluate the day the window started", () => {
-  const s = schedule("Friday: 9 PM – 1 AM");
+// ─── On Now + Time range ─────────────────────────────────────────────────────
+
+const range = (from: number, to: number) => ({ fromMin: from * 60, toMin: to * 60 });
+
+test("On Now + Time matches the active window, not another window that day (regression)", () => {
+  // Saturday 12:30 AM: Friday 9 PM–1 AM is active; Friday also has 3–6 PM.
+  const s = schedule("Friday: 3 PM – 6 PM, 9 PM – 1 AM");
   const satEarly = at("2026-10-24T00:30:00-07:00");
-  assert.equal(getActiveHappyHourDay(s, satEarly), "Friday");
   assert.equal(getVenueLocalDayName(s.timeZone, satEarly), "Saturday");
-  // What HappyHoursSearchClient checks with On Now + "Today" + 10 PM–Midnight:
-  const day = getActiveHappyHourDay(s, satEarly)!;
-  assert.equal(hasHappyHourOnDay(s, day), true);
-  assert.equal(hasHappyHourOverlap(s, [day], 22 * 60, 24 * 60), true);
-  assert.equal(getActiveHappyHourDay(s, at("2026-10-24T01:00:00-07:00")), null);
+  assert.equal(matchesOnNow(s, satEarly, null), true);
+  assert.equal(matchesOnNow(s, satEarly, range(22, 24)), true); // 10 PM–Midnight: include
+  assert.equal(matchesOnNow(s, satEarly, range(12, 15)), false); // 12–3 PM: exclude
+  assert.equal(matchesOnNow(s, at("2026-10-24T01:00:00-07:00"), null), false);
+});
+
+test("On Now + Time at midnight boundaries", () => {
+  const s = schedule("Friday: 10 PM – 12 AM\nSaturday: 9 PM – 1 AM");
+  // Friday 11:59 PM: active, matches a late range, not a daytime one.
+  assert.equal(matchesOnNow(s, at("2026-10-23T23:59:00-07:00"), range(23, 24)), true);
+  assert.equal(matchesOnNow(s, at("2026-10-23T23:59:00-07:00"), range(11, 13)), false);
+  // Saturday 12:00 AM: the 12 AM window has ended (end exclusive).
+  assert.equal(matchesOnNow(s, at("2026-10-24T00:00:00-07:00"), null), false);
+  // Sunday 12:00 AM: Saturday's 9 PM–1 AM window carries over.
+  assert.equal(matchesOnNow(s, at("2026-10-25T00:00:00-07:00"), range(22, 24)), true);
+  assert.equal(matchesOnNow(s, at("2026-10-25T00:59:00-07:00"), range(21, 22)), true);
+  assert.equal(matchesOnNow(s, at("2026-10-25T01:00:00-07:00"), range(22, 24)), false);
+});
+
+test("On Now + Time for ordinary same-day windows", () => {
+  const s = schedule("Friday: 3 PM – 6 PM, 9 PM – 11 PM");
+  const fri4 = at("2026-10-23T16:00:00-07:00");
+  assert.equal(matchesOnNow(s, fri4, range(15, 16)), true); // touches start: overlaps 3–4 PM
+  assert.equal(matchesOnNow(s, fri4, range(17, 19)), true);
+  assert.equal(matchesOnNow(s, fri4, range(21, 23)), false); // the later, inactive window
+  assert.equal(matchesOnNow(s, fri4, range(18, 21)), false); // end exclusive: 6 PM not included
+  assert.equal(matchesOnNow(s, at("2026-10-23T19:00:00-07:00"), null), false); // between windows
+});
+
+test("On Now + Time with two active windows: either one can satisfy the range", () => {
+  // Saturday 12:30 AM: Friday 9 PM–2 AM (carryover) and Saturday 12 AM–1 AM are both active.
+  const s = schedule("Friday: 9 PM – 2 AM\nSaturday: 12 AM – 1 AM");
+  const satEarly = at("2026-10-24T00:30:00-07:00");
+  assert.equal(matchesOnNow(s, satEarly, range(22, 24)), true); // Friday window only
+  assert.equal(matchesOnNow(s, satEarly, range(0, 1)), true); // 12–1 AM (not a UI option): only the Saturday window
+  assert.equal(matchesOnNow(s, satEarly, range(12, 15)), false);
+});
+
+test("On Now ignores All Day without business hours, uses resolved All Day hours", () => {
+  const noHours = schedule("Saturday: All Day", { hours: { Saturday: "CLOSED" } });
+  assert.equal(matchesOnNow(noHours, at("2026-10-24T14:00:00-07:00"), null), false);
+  const withHours = schedule("Saturday: All Day", { hours: { Saturday: "11:00 AM - 10:00 PM" } });
+  assert.equal(matchesOnNow(withHours, at("2026-10-24T14:00:00-07:00"), range(12, 15)), true);
+  assert.equal(matchesOnNow(withHours, at("2026-10-24T14:00:00-07:00"), range(22, 24)), false);
+});
+
+test("Time filter with On Now off is unchanged: any window on the selected day", () => {
+  const s = schedule("Friday: 3 PM – 6 PM, 9 PM – 1 AM");
+  assert.equal(hasHappyHourOverlap(s, ["Friday"], 12 * 60, 15 * 60), false);
+  assert.equal(hasHappyHourOverlap(s, ["Friday"], 15 * 60, 16 * 60), true);
+  assert.equal(hasHappyHourOverlap(s, ["Friday"], 22 * 60, 24 * 60), true);
+  assert.equal(hasHappyHourOverlap(s, ["Saturday"], 22 * 60, 24 * 60), false);
+  assert.equal(hasHappyHourOnDay(s, "Friday"), true);
 });
 
 // ─── Agreement ───────────────────────────────────────────────────────────────
@@ -287,9 +339,7 @@ test("venue status, schedule card, and On Now agree at every 15 minutes for two 
     for (let t = start; t < start + 14 * 24 * 3600_000; t += 15 * 60_000) {
       const now = new Date(t);
       const onNow = isHappyHourActive(s, now);
-      const activeDay = getActiveHappyHourDay(s, now);
-      assert.equal(activeDay !== null, onNow, now.toISOString());
-      if (activeDay) assert.equal(hasHappyHourOnDay(s, activeDay), true, now.toISOString());
+      assert.equal(matchesOnNow(s, now, null), onNow, now.toISOString());
       assert.equal(computeHhStatus(s, now).type === "active", onNow, now.toISOString());
       assert.equal(computeHhTodayText(s, now).isActive, onNow, now.toISOString());
       const today = getVenueLocalDayName(s.timeZone, now);
