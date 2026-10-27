@@ -16,6 +16,8 @@ How to measure the public website (happyhourcompass.com) in a repeatable way, an
 | `operator-admin/scripts/perf/heroTiming.cjs` | Homepage HTML timing without a browser: when the hero arrives vs the whole document (several bases measured alternately; `--ua=facebook\|googlebot`) | yes |
 | `docs/performance/phase2a-local-2026-10-27/` + [`PHASE2A_HOMEPAGE_STREAMING.md`](PHASE2A_HOMEPAGE_STREAMING.md) | Homepage hero streaming: local before/after timing, Lighthouse, placeholder screenshots, failure and crawler checks | yes |
 | `docs/performance/phase1-production-2026-10-27/` + [`PHASE1_PRODUCTION_2026-10-27.md`](PHASE1_PRODUCTION_2026-10-27.md) | Phase 1 measured on Production after release, vs the baseline | yes |
+| `docs/performance/phase2a-production-2026-10-27/` + [`PHASE2A_PRODUCTION_2026-10-27.md`](PHASE2A_PRODUCTION_2026-10-27.md) | Phase 2A (homepage streaming) measured on Production after release | yes |
+| `docs/performance/region-experiment-2026-10-27/` + [`REGION_EXPERIMENT_2026-10-27.md`](REGION_EXPERIMENT_2026-10-27.md) | Function region experiment (iad1 / sfo1 / pdx1) on throwaway previews | yes |
 | `docs/performance/phase1-staging-2026-10-27/` | Staging before (`cc293d2`) / after (`67fc9fa`) data for the same change — same environment, directly comparable | yes |
 | `docs/performance/phase1-local-2026-10-26/` | Before/after data for the location + image-loading change (local builds): Lighthouse per-run CSVs, journeys, location/analytics checks | yes |
 | `docs/performance/baseline-*/` | Compact baseline data (per-run CSV, journey JSONL) | yes |
