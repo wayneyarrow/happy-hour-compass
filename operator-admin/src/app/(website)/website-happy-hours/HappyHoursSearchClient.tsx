@@ -719,6 +719,7 @@ export function HappyHoursSearchClient({
   const {
     coords: userLocation,
     status: locationStatus,
+    unavailableReason: locationUnavailableReason,
     request: requestLocation,
   } = useBrowserLocation({ timeoutMs: 8000 });
   // nearMeActive means the proximity filter is actually applied, so it only
@@ -747,16 +748,6 @@ export function HappyHoursSearchClient({
     setNearMeActive(true);
     setNearMePending(null);
   }, [userLocation, nearMePending]);
-
-  // A tap that joined an already-running request (e.g. the silent read for
-  // granted permission) resolves through status rather than its own promise.
-  useEffect(() => {
-    if (nearMePending !== "user") return;
-    if (locationStatus === "denied" || locationStatus === "unavailable" || locationStatus === "unsupported") {
-      setNearMePending(null);
-      setLocationFailure("nearMe");
-    }
-  }, [locationStatus, nearMePending]);
 
   // ── map/card sync state ──
   // hoveredCardId: set on card mouseenter → highlights matching marker
@@ -1294,7 +1285,7 @@ export function HappyHoursSearchClient({
 
           {/* Near Me — quick "right now" shortcut (see On Now below). */}
           <ChipButton
-            label={nearMePending === "user" && locationStatus === "requesting" ? "Locating…" : "Near Me"}
+            label={nearMePending === "user" ? "Locating…" : "Near Me"}
             active={nearMeActive}
             onClick={handleNearMe}
           />
@@ -1507,10 +1498,15 @@ export function HappyHoursSearchClient({
                 Your browser doesn&rsquo;t share location, so {locationFailure === "nearMe" ? "Near Me" : "Nearest First"} is
                 unavailable. You can still browse every venue below.
               </>
+            ) : locationUnavailableReason === "position_unavailable" ? (
+              <>
+                Your device couldn&rsquo;t determine your location. Check that location services
+                are on for this browser, then try again &mdash; or keep browsing every venue below.
+              </>
             ) : (
               <>
-                We couldn&rsquo;t find your location right now. Try again in a moment, or keep
-                browsing every venue below.
+                Finding your location took too long. Try again in a moment, or keep browsing
+                every venue below.
               </>
             )}
           </p>

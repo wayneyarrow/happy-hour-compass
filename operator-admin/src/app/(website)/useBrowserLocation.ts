@@ -21,8 +21,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *   requesting  — a getCurrentPosition() call is in flight
  *   granted     — coords available
  *   denied      — permission denied (now or previously)
- *   unavailable — permission allowed but no position (timeout, no fix)
+ *   unavailable — permission allowed but no position; `unavailableReason`
+ *                 says whether the browser timed out or reported that no
+ *                 position could be determined
  *   unsupported — no navigator.geolocation at all
+ *
+ * request() resolves with the outcome of the attempt it ends up waiting on.
+ * A call made while another attempt is in flight joins it (no duplicate
+ * browser request) — except that an explicit request joining the silent
+ * mount-time read gets a fresh attempt of its own if that read fails, so a
+ * tap never fails early just because it arrived late in the silent read's
+ * timeout window.
  */
 export type BrowserLocationStatus =
   | "idle"
@@ -34,45 +43,68 @@ export type BrowserLocationStatus =
 
 export type BrowserCoords = { lat: number; lng: number };
 
+export type BrowserLocationUnavailableReason = "timeout" | "position_unavailable";
+
 export function useBrowserLocation({ timeoutMs = 8000 }: { timeoutMs?: number } = {}) {
   const [coords, setCoords] = useState<BrowserCoords | null>(null);
   const [status, setStatus] = useState<BrowserLocationStatus>("idle");
-  const inFlightRef = useRef(false);
+  const [unavailableReason, setUnavailableReason] = useState<BrowserLocationUnavailableReason | null>(null);
+  const inFlightRef = useRef<{ promise: Promise<BrowserLocationStatus>; silent: boolean } | null>(null);
   const mountedRef = useRef(false);
 
-  const request = useCallback((): Promise<BrowserLocationStatus> => {
-    return new Promise((resolve) => {
+  const start = useCallback(
+    (silent: boolean): Promise<BrowserLocationStatus> => {
+      setStatus("requesting");
+      const attempt = { promise: null as unknown as Promise<BrowserLocationStatus>, silent };
+      attempt.promise = new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          ({ coords: c }) => {
+            if (inFlightRef.current === attempt) inFlightRef.current = null;
+            if (mountedRef.current) {
+              setCoords({ lat: c.latitude, lng: c.longitude });
+              setStatus("granted");
+              setUnavailableReason(null);
+            }
+            resolve("granted");
+          },
+          (err) => {
+            if (inFlightRef.current === attempt) inFlightRef.current = null;
+            const next: BrowserLocationStatus =
+              err.code === err.PERMISSION_DENIED ? "denied" : "unavailable";
+            if (mountedRef.current) {
+              setStatus(next);
+              setUnavailableReason(
+                next !== "unavailable" ? null : err.code === err.TIMEOUT ? "timeout" : "position_unavailable"
+              );
+            }
+            resolve(next);
+          },
+          { timeout: timeoutMs, maximumAge: 60_000 }
+        );
+      });
+      inFlightRef.current = attempt;
+      return attempt.promise;
+    },
+    [timeoutMs]
+  );
+
+  const request = useCallback(
+    ({ silent = false }: { silent?: boolean } = {}): Promise<BrowserLocationStatus> => {
       if (typeof navigator === "undefined" || !navigator.geolocation) {
         setStatus("unsupported");
-        resolve("unsupported");
-        return;
+        return Promise.resolve("unsupported");
       }
-      if (inFlightRef.current) {
-        resolve("requesting");
-        return;
-      }
-      inFlightRef.current = true;
-      setStatus("requesting");
-      navigator.geolocation.getCurrentPosition(
-        ({ coords: c }) => {
-          inFlightRef.current = false;
-          if (mountedRef.current) {
-            setCoords({ lat: c.latitude, lng: c.longitude });
-            setStatus("granted");
-          }
-          resolve("granted");
-        },
-        (err) => {
-          inFlightRef.current = false;
-          const next: BrowserLocationStatus =
-            err.code === err.PERMISSION_DENIED ? "denied" : "unavailable";
-          if (mountedRef.current) setStatus(next);
-          resolve(next);
-        },
-        { timeout: timeoutMs, maximumAge: 60_000 }
+      const current = inFlightRef.current;
+      if (!current) return start(silent);
+      if (silent || !current.silent) return current.promise;
+      // Explicit request joining the silent read: if that read fails, make
+      // this request's own attempt rather than reporting its failure.
+      return current.promise.then((s) =>
+        s === "granted" ? s : inFlightRef.current ? inFlightRef.current.promise : start(false)
       );
-    });
-  }, [timeoutMs]);
+    },
+    [start]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -83,7 +115,7 @@ export function useBrowserLocation({ timeoutMs = 8000 }: { timeoutMs?: number } 
         .query({ name: "geolocation" })
         .then((result) => {
           if (cancelled) return;
-          if (result.state === "granted") void request();
+          if (result.state === "granted") void request({ silent: true });
           else if (result.state === "denied") setStatus("denied");
         })
         .catch(() => {
@@ -96,5 +128,5 @@ export function useBrowserLocation({ timeoutMs = 8000 }: { timeoutMs?: number } 
     };
   }, [request]);
 
-  return { coords, status, request };
+  return { coords, status, unavailableReason, request };
 }

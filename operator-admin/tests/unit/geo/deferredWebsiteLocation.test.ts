@@ -32,7 +32,9 @@ test("only useBrowserLocation and the location switcher call getCurrentPosition"
 test("useBrowserLocation only reads on mount when permission is already granted", () => {
   const src = read("useBrowserLocation.ts");
   assert.match(src, /permissions\s*\n?\s*\.query\(\{ name: "geolocation" \}\)/);
-  assert.match(src, /if \(result\.state === "granted"\) void request\(\);/);
+  assert.match(src, /if \(result\.state === "granted"\) void request\(\{ silent: true \}\);/);
+  // An explicit request joining a failed silent read gets its own attempt.
+  assert.match(src, /if \(silent \|\| !current\.silent\) return current\.promise;/);
 });
 
 test("HeroSection makes no location request and no market auto-detect", () => {
