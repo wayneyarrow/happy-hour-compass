@@ -13,6 +13,9 @@ How to measure the public website (happyhourcompass.com) in a repeatable way, an
 | `operator-admin/scripts/perf/locationChecks.cjs` | Location-permission behaviour (prompt/granted/denied/unavailable/no Permissions API/unsupported) | yes |
 | `operator-admin/scripts/perf/visualCheck.cjs` | Mobile + desktop screenshots; verifies every first-viewport image loaded; counts deferred images; CLS | yes |
 | `operator-admin/scripts/perf/logSupabaseFetches.cjs` + `summarizeSupabaseFetches.cjs` | Investigation aid: logs Supabase requests made by one server render (preload, no app change) | yes |
+| `operator-admin/scripts/perf/heroTiming.cjs` | Homepage HTML timing without a browser: when the hero arrives vs the whole document (several bases measured alternately; `--ua=facebook\|googlebot`) | yes |
+| `docs/performance/phase2a-local-2026-10-27/` + [`PHASE2A_HOMEPAGE_STREAMING.md`](PHASE2A_HOMEPAGE_STREAMING.md) | Homepage hero streaming: local before/after timing, Lighthouse, placeholder screenshots, failure and crawler checks | yes |
+| `docs/performance/phase1-production-2026-10-27/` + [`PHASE1_PRODUCTION_2026-10-27.md`](PHASE1_PRODUCTION_2026-10-27.md) | Phase 1 measured on Production after release, vs the baseline | yes |
 | `docs/performance/phase1-staging-2026-10-27/` | Staging before (`cc293d2`) / after (`67fc9fa`) data for the same change — same environment, directly comparable | yes |
 | `docs/performance/phase1-local-2026-10-26/` | Before/after data for the location + image-loading change (local builds): Lighthouse per-run CSVs, journeys, location/analytics checks | yes |
 | `docs/performance/baseline-*/` | Compact baseline data (per-run CSV, journey JSONL) | yes |
@@ -82,7 +85,7 @@ Compare equal-length windows that start after a release is fully live.
 
 ## Tracking and analytics during tests
 
-Every script blocks the requests in `trackingBlockList.cjs` and reports anything tracking-like that still got a response (`TRACKING AUDIT` line). A run is valid only if the audit reports none.
+Every script blocks the requests in `trackingBlockList.cjs` and reports anything tracking-like that still got a response (`TRACKING AUDIT` line). A run is valid only if the audit reports none. After changing the list, run `node scripts/perf/trackingBlockList.cjs` — it checks sample URLs for Production, staging, `*.vercel.app` deployment URLs and localhost.
 
 Blocked: first-party `/api/track/*` (venue/event views, discovery, search, clicks, saves); GA4 collection (`google-analytics.com`, `analytics.google.com`, `www.google.com/g/collect`, `googletagmanager.com` collect, `doubleclick.net`); Vercel Web Analytics and Speed Insights beacons, which use **per-project randomized first-party paths** (e.g. `/f16ccac995dd8fff/view`, `/a351f4d163e0e851/vitals`), not `/_vercel/*`; Sentry envelopes (`*.sentry.io/api/*`).
 
