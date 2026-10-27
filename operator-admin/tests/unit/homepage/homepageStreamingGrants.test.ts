@@ -182,11 +182,14 @@ test("shared failure before streaming: a failed Homepage record lookup resolves 
   assert.equal(await getPublicHomepageRecordForLocation("central-okanagan", "kelowna"), null);
 });
 
-test("render-stage failure: the boundary around the Sections renders nothing instead of the global error page", async () => {
+test("render-stage failure: the boundary around the Sections shows the browse links instead of the global error page", async () => {
   const { HomepageSectionsErrorBoundary } = await import("@/app/(website)/homepage/HomepageSectionsErrorBoundary");
+  // tsx compiles JSX with the classic runtime (React.createElement).
+  (globalThis as { React?: unknown }).React = await import("react");
   assert.deepEqual(HomepageSectionsErrorBoundary.getDerivedStateFromError(), { failed: true });
   const boundary = new HomepageSectionsErrorBoundary({ children: "sections" });
   assert.equal(boundary.render(), "sections");
   boundary.state = { failed: true };
-  assert.equal(boundary.render(), null);
+  const fallback = boundary.render() as { props: { children: { type: { name?: string } } } };
+  assert.equal(fallback.props.children.type.name, "HomepageBrowseLinks");
 });

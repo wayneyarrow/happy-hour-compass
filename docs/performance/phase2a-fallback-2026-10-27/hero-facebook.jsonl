@@ -1,0 +1,3 @@
+{"path":"/","run":1,"base":"http://localhost:3100","at":"2026-10-27T17:11:52.315Z","ua":"facebook","headers":1308,"status":200,"vercelId":null,"cache":null,"first":1309,"hero":1309,"end":1315,"bytes":409893}
+{"path":"/","run":2,"base":"http://localhost:3100","at":"2026-10-27T17:11:53.633Z","ua":"facebook","headers":1158,"status":200,"vercelId":null,"cache":null,"first":1158,"hero":1158,"end":1164,"bytes":409893}
+{"path":"/","run":3,"base":"http://localhost:3100","at":"2026-10-27T17:11:54.797Z","ua":"facebook","headers":1220,"status":200,"vercelId":null,"cache":null,"first":1220,"hero":1220,"end":1225,"bytes":409893}

@@ -52,12 +52,25 @@ test("the old all-in-one loader is gone", () => {
   assert.doesNotMatch(loader + page, /getPublicHomepageForLocation/);
 });
 
-test("without JavaScript the placeholder gives way to links to the listing pages (no empty shapes, no reserved gap)", () => {
+test("the placeholder gives way to the browse links: immediately without JavaScript, after a delay when Sections never arrive", () => {
   const placeholder = readFileSync(join(SRC, "app/(website)/homepage/HomepageSectionsPlaceholder.tsx"), "utf8");
-  assert.match(placeholder, /<noscript>[\s\S]*\[data-homepage-sections-skeleton\]\{display:none\}\[data-homepage-sections-placeholder\]\{min-height:0\}[\s\S]*<\/noscript>/);
+  const links = readFileSync(join(SRC, "app/(website)/homepage/HomepageBrowseLinks.tsx"), "utf8");
   for (const href of ["/website-happy-hours", "/website-daily-specials", "/website-events"]) {
-    assert.ok(placeholder.includes(`<Link href="${href}"`), `links to ${href}`);
+    assert.ok(links.includes(`<Link href="${href}"`), `links to ${href}`);
   }
-  assert.match(placeholder, /<div data-homepage-sections-placeholder aria-busy="true" className="min-h-\[1200px\]">/);
-  assert.match(placeholder, /<section data-homepage-sections-skeleton aria-hidden="true"/);
+  // Delayed reveal is pure CSS (works when no script runs): links hidden until the delay, then
+  // shown while the skeleton hides and the reserved height collapses.
+  assert.match(placeholder, /const FALLBACK_DELAY = "10s";/);
+  assert.match(placeholder, /"\[data-homepage-sections-fallback\]\{visibility:hidden;animation:hhc-sections-fallback-show 0s " \+ FALLBACK_DELAY \+ " forwards\}"/);
+  assert.match(placeholder, /"\[data-homepage-sections-skeleton\]\{animation:hhc-sections-fallback-hide 0s " \+ FALLBACK_DELAY \+ " forwards\}"/);
+  assert.match(placeholder, /"\[data-homepage-sections-placeholder\]\{animation:hhc-sections-fallback-collapse 0s " \+ FALLBACK_DELAY \+ " forwards\}"/);
+  // Without JavaScript: immediately, with no reserved gap.
+  assert.match(placeholder, /<noscript>\s*<style>\{NOSCRIPT_CSS\}<\/style>\s*<\/noscript>/);
+  assert.match(placeholder, /"\[data-homepage-sections-placeholder\]\{min-height:0;animation:none\}"/);
+  assert.match(placeholder, /"\[data-homepage-sections-skeleton\]\{display:none\}"/);
+  assert.match(placeholder, /"\[data-homepage-sections-fallback\]\{visibility:visible;position:static;animation:none\}"/);
+  assert.match(placeholder, /<section data-homepage-sections-fallback[^>]*>\s*<HomepageBrowseLinks \/>/);
+  // No reduced-motion override anywhere may cancel the (zero-duration) reveal.
+  const css = readFileSync(join(SRC, "app/globals.css"), "utf8");
+  assert.doesNotMatch(css, /prefers-reduced-motion/);
 });

@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { Component, type ReactNode } from "react";
+import { HomepageBrowseLinks } from "./HomepageBrowseLinks";
 
 /**
  * Last-resort boundary around the homepage's streamed editorial Sections
@@ -12,7 +13,10 @@ import { Component, type ReactNode } from "react";
  * error page and replace the already-visible header and hero; with it the
  * visitor keeps the header, hero and footer, and the error is reported.
  *
- * Renders nothing on error: no partial or misleading editorial content.
+ * On error it shows the browse links instead: no partial or misleading
+ * editorial content, but still a way into the site. This also covers a
+ * response that is cut off before the Sections arrive (the client then
+ * fails to render them).
  */
 export class HomepageSectionsErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -26,6 +30,11 @@ export class HomepageSectionsErrorBoundary extends Component<{ children: ReactNo
   }
 
   render() {
-    return this.state.failed ? null : this.props.children;
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="py-10 md:py-12 border-t border-gray-100">
+        <HomepageBrowseLinks />
+      </section>
+    );
   }
 }

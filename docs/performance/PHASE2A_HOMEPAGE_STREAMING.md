@@ -180,3 +180,77 @@ Same method as before: a temporary switch, controlled by an environment variable
   - a record lookup failing;
   - the error boundary.
 - **Mutation checks:** removing the grant from the test data, or removing the catch, makes the relevant test fail.
+
+## Staging (2026-10-27)
+
+- **Deployments:**
+  - new: `dpl_9RooTrwofPz3bSkPBpr6Vp6TucVk`, built from `a182778`, iad1;
+  - previous: `dpl_3setZQaeikwRZvNhDM8whj5AoAsV` (`5592a2e`).
+- **Method:** both were measured alternately on their `*.vercel.app` deployment URLs (the homepage has no map, so the Maps key restriction doesn't matter), from the Pacific Northwest, with all tracking blocked. No tracking request got through in any run.
+- **Data:** [`phase2a-staging-2026-10-27/`](phase2a-staging-2026-10-27/).
+
+### Hero arrival (10 alternating runs, ms)
+
+| | Hero, per run | Median | Full document, median |
+|---|---|---|---|
+| Previous | 2922 2960 2679 2926 3060 4016 2984 2803 3383 3571 | 2972 | 3028 |
+| New | 1347 1231 1426 1447 1219 1213 1175 1192 1265 1582 | **1248** | 2924 |
+
+### Lighthouse (3 alternating rounds, mobile, DevTools throttling)
+
+| | FCP = LCP per run | Median | CLS | TBT (median) | Score |
+|---|---|---|---|---|---|
+| Previous, cold | 7411 5097 3669 | 5097 ms | 0 | 181 ms | 66 |
+| New, cold | 2833 2730 2642 | **2730 ms** | 0 | 264 ms | 87 |
+| Previous, warm | 2904 3169 3161 (LCP) | 3161 ms | 0 | 119 ms | 86 |
+| New, warm | 1157 1295 1297 | **1295 ms** | 0 | 138 ms | 98 |
+
+- **Outlier:** the previous deployment's first cold run (7.4 s) looks like a cold start.
+- **Vercel function figures** (`/`, 35–40 renders per deployment, mostly test traffic, too few to rely on): duration p50 2696 → 2507 ms; CPU p50 800 → 520 ms; time to first byte p50 2599 → 908 ms.
+
+### Checks against the previous deployment
+
+- **Same finished homepage:** sections, links, placements, Weekly Picks, metadata, JSON-LD and discovery payloads are all identical, with CLS 0.
+- **Market switching:** the same.
+- **Comped venues:** they appear identically, including content only a plan above Free allows.
+- **JavaScript off:** the browse links, no skeleton, the placeholder collapsed to 137 px.
+- **Bot user agents:** Googlebot and Facebook user agents get complete HTML.
+- **Caching:** all responses are `private, no-cache, no-store` with `x-vercel-cache: MISS`, so visitor and bot responses can't be mixed by the CDN.
+
+### When page scripts fail (JavaScript enabled)
+
+The scripts that move streamed Sections into place are small inline scripts (`$RS`/`$RC`) inside the HTML response, not separate files. Each case below altered only the test browser's own copy of the staging response:
+
+| Case | What the visitor sees |
+|---|---|
+| External JavaScript files fail to load | All Sections in place (the inline scripts still run), but the page isn't interactive |
+| Inline placement scripts blocked | All Sections; the page's JavaScript rebuilds them |
+| Response cut off before the Sections arrive | Hero, then the footer: no Sections, no links ([screenshot](phase2a-staging-2026-10-27/screens/stream-cut-before-sections.png)) |
+| JavaScript enabled but no script runs | **The placeholder stays indefinitely** (still showing at 15 s), with no links: `<noscript>` only applies when JavaScript is turned off ([screenshot](phase2a-staging-2026-10-27/screens/scripts-enabled-none-run.png)) |
+
+Before streaming, the last case still showed every Section, because they were plain HTML.
+
+## Loading fallback (local build, 2026-10-27)
+
+**Change:**
+1. **Delayed reveal.** The placeholder already contains the browse links (Happy Hours, Daily Specials, Events), hidden. Pure CSS reveals them after **10 s** if the Sections still haven't arrived, hiding the empty shapes and collapsing the reserved height at the same moment. It needs no script, so it also covers JavaScript being enabled while no script runs, and a stalled stream.
+   - It's a zero-duration step rather than an animation of motion. The site has no reduced-motion override that could cancel it.
+2. **Without JavaScript,** a `<noscript>` style shows the same links immediately.
+3. **Error boundary.** On a shared failure the boundary now shows the same links instead of nothing.
+
+**Build note:** the production minifier mis-folded the CSS when it was written with template literals: it dropped `s forwards}` from two rules, which broke the reveal. The CSS is now plain string concatenation, and the served CSS was checked in the built page.
+
+Data: [`phase2a-fallback-2026-10-27/`](phase2a-fallback-2026-10-27/). Single low-priority local build, one server at a time, tracking blocked.
+
+| Case | Result |
+|---|---|
+| Normal load | Placeholder replaced by the Sections; the links are never visible (checked partway through loading); CLS 0; finished page, Weekly Picks, JSON-LD and discovery payloads identical to staging `a182778` |
+| JavaScript disabled | Links immediately; no shapes; footer directly below (771 px on mobile) ([screenshot](phase2a-fallback-2026-10-27/screens/javascript-off.png)) |
+| JavaScript enabled, no script runs | Shapes until 10 s after the placeholder renders, then the links with the footer directly below ([screenshot](phase2a-fallback-2026-10-27/screens/scripts-enabled-none-run-after-10s.png)) |
+| Same, with reduced motion | Identical |
+| Response cut off just before the Sections (a local proxy that drops the connection) | Links in every run. Chrome handled the cut two ways: either the page's JavaScript failed on the missing data and the error boundary showed the links almost at once, or the page stayed "loading" and the CSS fallback showed them at 10 s |
+| Simulated shared rendering failure (temporary patch, restored) | Visitors: links within 3 s, CLS 0.086 (was 0.25 with an empty boundary) ([screenshot](phase2a-fallback-2026-10-27/screens/shared-render-failure.png)). Crawlers: 500, unchanged |
+| Keyboard | The links are reached by Tab (11 presses from the top on mobile), show the browser's focus outline and open on Enter, in every fallback case |
+
+- **Hero timing** (10 runs, local): median 474 ms (runs 532 503 453 444 464 463 476 509 584 471), against 453 ms before this change.
+- **Bot user agents:** Googlebot and Facebook still get complete HTML with all 10 headings in place. Their `<head>` differs from a visitor's only in Sentry's random trace IDs.
