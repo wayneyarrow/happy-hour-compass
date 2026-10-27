@@ -6,6 +6,7 @@ import { Turnstile, type TurnstileHandle } from "@/components/Turnstile";
 import { FieldError } from "@/components/FieldError";
 import { trackGA4Event } from "@/lib/ga4";
 import {
+  WEEKLY_PICKS_BUTTON_CONSENT_TEXT,
   WEEKLY_PICKS_CONSENT_TEXT,
   WEEKLY_PICKS_HEADLINE,
   WEEKLY_PICKS_PROMISE,
@@ -16,6 +17,7 @@ import {
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
   isValidWeeklyPicksEmail,
   normalizeWeeklyPicksEmail,
+  weeklyPicksUsesButtonConsent,
   type WeeklyPicksPlacement,
   type WeeklyPicksSignupState,
 } from "@/lib/weeklyPicks/weeklyPicks";
@@ -34,6 +36,11 @@ import { subscribeToWeeklyPicks } from "./actions";
  *
  * Turnstile renders only once the visitor interacts with the form, so the
  * homepage's two forms don't load challenges for every page view.
+ *
+ * Consent: button-consent placements (the homepage) have no checkbox — the
+ * submit button is the consent action, described by the notice beside it,
+ * which links to the Privacy Policy's contact section (name, mailing
+ * address, email). Every other placement keeps the checkbox and sender line.
  */
 
 /** Same field name as TURNSTILE_TOKEN_FIELD — src/lib/turnstile.ts is server-only. */
@@ -57,6 +64,8 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
   const id = useId();
   const emailId = `${id}-email`;
   const consentId = `${id}-consent`;
+  const consentNoticeId = `${id}-consent-notice`;
+  const buttonConsent = weeklyPicksUsesButtonConsent(placement);
 
   const [result, setResult] = useState<WeeklyPicksSignupState>({ status: "idle" });
   const [isPending, startTransition] = useTransition();
@@ -91,7 +100,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
     const clientErrors: { email?: string; consent?: string } = {};
     if (!email) clientErrors.email = WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE;
     else if (!isValidWeeklyPicksEmail(email)) clientErrors.email = WEEKLY_PICKS_EMAIL_INVALID_MESSAGE;
-    if (!consented) clientErrors.consent = WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE;
+    if (!buttonConsent && !consented) clientErrors.consent = WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE;
 
     if (clientErrors.email || clientErrors.consent) {
       setResult({ status: "error", fieldErrors: clientErrors });
@@ -206,25 +215,27 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
           </div>
 
           {/* Permission comes before the button in reading and Tab order. */}
-          <div className="mt-4">
-            <div className="flex items-start gap-3">
-              <input
-                ref={consentRef}
-                id={consentId}
-                name="weekly_picks_consent"
-                type="checkbox"
-                value="yes"
-                aria-required="true"
-                aria-invalid={!!fieldErrors?.consent}
-                aria-describedby={fieldErrors?.consent ? `${consentId}-error` : undefined}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 shrink-0"
-              />
-              <label htmlFor={consentId} className="text-[13px] text-gray-700 leading-snug cursor-pointer">
-                {WEEKLY_PICKS_CONSENT_TEXT}
-              </label>
+          {!buttonConsent && (
+            <div className="mt-4">
+              <div className="flex items-start gap-3">
+                <input
+                  ref={consentRef}
+                  id={consentId}
+                  name="weekly_picks_consent"
+                  type="checkbox"
+                  value="yes"
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors?.consent}
+                  aria-describedby={fieldErrors?.consent ? `${consentId}-error` : undefined}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400 shrink-0"
+                />
+                <label htmlFor={consentId} className="text-[13px] text-gray-700 leading-snug cursor-pointer">
+                  {WEEKLY_PICKS_CONSENT_TEXT}
+                </label>
+              </div>
+              <FieldError id={`${consentId}-error`} message={fieldErrors?.consent} />
             </div>
-            <FieldError id={`${consentId}-error`} message={fieldErrors?.consent} />
-          </div>
+          )}
 
           {engaged && (
             <div className="mt-4">
@@ -239,18 +250,33 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
           <button
             type="submit"
             disabled={isPending}
+            aria-describedby={buttonConsent ? consentNoticeId : undefined}
             className="mt-4 w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-[15px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
           >
             {isPending ? "Sending…" : "Send me the weekly picks"}
           </button>
 
-          <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-            Sent by Happy Hour Compass ({SUPPORT_EMAIL}). See our{" "}
-            <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-700">
-              Privacy Policy
-            </Link>
-            .
-          </p>
+          {buttonConsent ? (
+            <p id={consentNoticeId} className="mt-3 text-[13px] text-gray-600 leading-snug">
+              {WEEKLY_PICKS_BUTTON_CONSENT_TEXT} See our{" "}
+              <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-800">
+                Privacy Policy
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy#contact" className="underline underline-offset-2 hover:text-gray-800">
+                contact details
+              </Link>
+              .
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+              Sent by Happy Hour Compass ({SUPPORT_EMAIL}). See our{" "}
+              <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-700">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </form>
       )}
     </div>
