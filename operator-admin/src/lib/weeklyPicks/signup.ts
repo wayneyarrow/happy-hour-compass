@@ -13,13 +13,11 @@ import type { OperationalSeverity } from "@/lib/observability/types";
 import {
   WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE,
   WEEKLY_PICKS_EMAIL_INVALID_MESSAGE,
-  WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE,
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
   WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE,
   isValidWeeklyPicksEmail,
   isWeeklyPicksPlacement,
   normalizeWeeklyPicksEmail,
-  weeklyPicksUsesButtonConsent,
   type WeeklyPicksSignupState,
 } from "./weeklyPicks";
 
@@ -51,7 +49,6 @@ export type { WeeklyPicksSignupState };
 
 export type WeeklyPicksSignupInput = {
   email: unknown;
-  consent: unknown;
   placement: unknown;
   turnstileToken: unknown;
   remoteIp: string | null;
@@ -89,20 +86,11 @@ export async function processWeeklyPicksSignup(
   // ── 1. Field validation — cheap, before any network call ─────────────────
   const rawEmail = typeof input.email === "string" ? input.email : "";
   const email = normalizeWeeklyPicksEmail(rawEmail);
-  const fieldErrors: { email?: string; consent?: string } = {};
-
-  if (!email) fieldErrors.email = WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE;
-  else if (!isValidWeeklyPicksEmail(email)) fieldErrors.email = WEEKLY_PICKS_EMAIL_INVALID_MESSAGE;
-
-  // The checkbox is the explicit permission — it must have been ticked —
-  // except on button-consent placements, where submitting is the consent
-  // action. An unknown placement is treated as a checkbox placement.
-  if (!weeklyPicksUsesButtonConsent(input.placement) && input.consent !== "yes") {
-    fieldErrors.consent = WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE;
-  }
-
-  if (fieldErrors.email || fieldErrors.consent) {
-    return { status: "error", fieldErrors };
+  // Submitting the form is the consent action (see WEEKLY_PICKS_CONSENT_TEXT);
+  // Brevo's double opt-in confirmation is still required below.
+  if (!email) return { status: "error", fieldErrors: { email: WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE } };
+  if (!isValidWeeklyPicksEmail(email)) {
+    return { status: "error", fieldErrors: { email: WEEKLY_PICKS_EMAIL_INVALID_MESSAGE } };
   }
 
   // Only a tampered form can send an unknown placement.
