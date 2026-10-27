@@ -13,6 +13,7 @@ How to measure the public website (happyhourcompass.com) in a repeatable way, an
 | `operator-admin/scripts/perf/locationChecks.cjs` | Location-permission behaviour (prompt/granted/denied/unavailable/no Permissions API/unsupported) | yes |
 | `operator-admin/scripts/perf/visualCheck.cjs` | Mobile + desktop screenshots; verifies every first-viewport image loaded; counts deferred images; CLS | yes |
 | `operator-admin/scripts/perf/logSupabaseFetches.cjs` + `summarizeSupabaseFetches.cjs` | Investigation aid: logs Supabase requests made by one server render (preload, no app change) | yes |
+| `docs/performance/phase1-staging-2026-10-27/` | Staging before (`cc293d2`) / after (`67fc9fa`) data for the same change — same environment, directly comparable | yes |
 | `docs/performance/phase1-local-2026-10-26/` | Before/after data for the location + image-loading change (local builds): Lighthouse per-run CSVs, journeys, location/analytics checks | yes |
 | `docs/performance/baseline-*/` | Compact baseline data (per-run CSV, journey JSONL) | yes |
 | `operator-admin/scripts/output/perf/<label>/` | Raw Lighthouse JSON (~600 KB each) | no (gitignored) |
