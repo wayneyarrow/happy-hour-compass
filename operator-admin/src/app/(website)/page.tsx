@@ -39,10 +39,6 @@ async function getHeroCityContext(market: Market): Promise<{ cityName: string; c
   return { cityName: market.name, citySlug: null };
 }
 
-// TEMPORARY region experiment (throwaway preview branch, never merged): run this
-// route's function in iad1. The iad1 and sfo1 branches differ only in this line.
-export const preferredRegion = "iad1";
-
 const DEFAULT_TITLE = "Happy Hour Compass — Find the best happy hours near you";
 const DEFAULT_DESCRIPTION =
   "Discover curated happy hour deals at bars and restaurants near you. Real menus, real prices, real hours — updated by the venues themselves.";
