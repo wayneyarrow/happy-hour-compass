@@ -37,6 +37,8 @@ export function GuideCard({ guideId, title, href, heroImageUrl }: Props) {
             <img
               src={heroImageUrl}
               alt={title}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
             />
           )}

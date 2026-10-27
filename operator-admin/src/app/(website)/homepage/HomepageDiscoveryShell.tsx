@@ -14,9 +14,9 @@ import { DAILY_SPECIALS_NEW_UNTIL, isFeatureNewBadgeVisible } from "@/lib/newBad
  * route and any future public Homepage route render an identical shell
  * without duplicating the composition.
  *
- * isPersisted is always passed as `true` to HeroSection so its geolocation
- * auto-detect effect never fires — the Discovery Shell must reflect the
- * Homepage's OWN saved geography, never the viewer's browser location.
+ * HeroSection makes no browser location request of its own, so the
+ * Discovery Shell always reflects the Homepage's OWN saved geography, never
+ * the viewer's browser location.
  *
  * `banner` is an optional slot rendered directly above WebsiteHeader, inside
  * the SAME sticky wrapper — this is how the Control Panel preview route
@@ -59,7 +59,6 @@ export function HomepageDiscoveryShell({ market, cityName, cities, banner, stick
       </div>
       <HeroSection
         market={market}
-        isPersisted
         dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
       />
     </>

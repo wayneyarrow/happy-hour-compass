@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { computeHhStatus, type HhSchedule } from "@/lib/happyHourStatus";
 import { haversineKm } from "@/lib/geo";
 import { trackVenueIntentClick } from "@/app/(website)/venueIntentTracking";
+import { useBrowserLocation } from "@/app/(website)/useBrowserLocation";
 
 type Props = {
   hhSchedule: HhSchedule;
@@ -152,7 +153,14 @@ export function VenueActionCard({
 }: Props) {
   const [openStatus, setOpenStatus] = useState<string | null>(null);
   const [nextOpen, setNextOpen] = useState<string | null>(null);
-  const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  // Distance is shown only when the browser already has location permission
+  // (read silently, never prompting) — see useBrowserLocation. No location
+  // request is made on page load.
+  const { coords: userCoords } = useBrowserLocation({ timeoutMs: 6000 });
+  const distanceKm =
+    userCoords && lat !== null && lng !== null
+      ? haversineKm(userCoords.lat, userCoords.lng, lat, lng)
+      : null;
   // Computed client-side on mount (rather than during render) so it always
   // uses the viewer's actual wall-clock time — computing it directly in the
   // render body would run once during SSR (server timezone) and again on
@@ -166,17 +174,6 @@ export function VenueActionCard({
     setOpenStatus(status);
     setNextOpen(status === "Closed" ? getNextOpenInfo(hoursWeekly) : null);
   }, [hoursWeekly]);
-
-  useEffect(() => {
-    if (!navigator.geolocation || lat === null || lng === null) return;
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setDistanceKm(haversineKm(coords.latitude, coords.longitude, lat, lng));
-      },
-      () => {},
-      { timeout: 6000, maximumAge: 60_000 }
-    );
-  }, [lat, lng]);
 
   useEffect(() => {
     setHh(hhStatusLabel(hhSchedule));

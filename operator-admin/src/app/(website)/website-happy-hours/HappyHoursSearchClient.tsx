@@ -16,6 +16,7 @@ import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard"
 import SearchContextHeader from "./SearchContextHeader";
 import { MobileMapResultsSheet, PEEK_HEIGHT_PX } from "./MobileMapResultsSheet";
 import { SearchResultsMap, type MapMarker } from "../SearchResultsMap";
+import { useBrowserLocation } from "../useBrowserLocation";
 import { ControlPosition } from "@vis.gl/react-google-maps";
 import type { Market } from "@/lib/markets";
 import { trackGA4Event } from "@/lib/ga4";
@@ -548,6 +549,9 @@ export function HappyHoursSearchClient({
   // page-load sync, not a genuine filter change) so only real subsequent
   // filter/search changes are counted. See the effect below.
   const isFirstFilterSyncRef = useRef(true);
+  // Set when Near Me switches on only because a restored ?near=1 URL got its
+  // (silently read) location — a state restoration, not a filter change.
+  const suppressNextFilterEventRef = useRef(false);
 
   // ── dropdown open state ──
   const [typeOpen, setTypeOpen] = useState(false);
@@ -596,8 +600,9 @@ export function HappyHoursSearchClient({
       // GA4 discovery_filtered — fires once per settled (debounced) filter
       // change, never on the initial mount sync. Sort is intentionally
       // excluded from the count: it reorders results, it doesn't filter them.
-      if (isFirstFilterSyncRef.current) {
+      if (isFirstFilterSyncRef.current || suppressNextFilterEventRef.current) {
         isFirstFilterSyncRef.current = false;
+        suppressNextFilterEventRef.current = false;
       } else {
         const filterCount = [
           !!trimmedQuery,
@@ -656,7 +661,10 @@ export function HappyHoursSearchClient({
     setFilterTimeFrom(from);
     setFilterTimeTo(to);
 
-    setNearMeActive(params.get("near") === "1");
+    // ?near=1 only turns Near Me on once a position is available without a
+    // prompt (permission already granted); otherwise it is dropped.
+    setNearMeActive(false);
+    setNearMePending(params.get("near") === "1" ? "url" : null);
     setTopRatedActive(params.get("top") === "1");
 
     const typeParam = params.get("type");
@@ -705,13 +713,50 @@ export function HappyHoursSearchClient({
   }, [enableSearch]);
 
   // ── geo state ──
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-  const [locationStatus, setLocationStatus] = useState<
-    "idle" | "requesting" | "granted" | "denied"
-  >("idle");
+  // Deferred: never prompts on load. Coords arrive silently only when the
+  // browser already has location permission; otherwise only after Near Me
+  // or an explicit "Nearest First" choice (see useBrowserLocation).
+  const {
+    coords: userLocation,
+    status: locationStatus,
+    request: requestLocation,
+  } = useBrowserLocation({ timeoutMs: 8000 });
+  // nearMeActive means the proximity filter is actually applied, so it only
+  // ever turns on once a position exists. Until then Near Me is "pending":
+  // "user" = the visitor tapped it, "url" = restored from ?near=1.
+  const [nearMePending, setNearMePending] = useState<"user" | "url" | null>(null);
+  // Which explicit request (Near Me / Nearest First) failed to produce a
+  // position — drives the hint below, so it only ever appears in response to
+  // the visitor's own action, never for a permission state found on load.
+  const [locationFailure, setLocationFailure] = useState<"nearMe" | "nearest" | null>(null);
+
+  function requestLocationExplicitly(source: "nearMe" | "nearest") {
+    setLocationFailure(null);
+    void requestLocation().then((s) => {
+      if (s === "denied" || s === "unavailable" || s === "unsupported") {
+        setLocationFailure(source);
+        if (source === "nearMe") setNearMePending(null);
+      }
+    });
+  }
+
+  // Pending Near Me switches on as soon as a position arrives.
+  useEffect(() => {
+    if (!userLocation || !nearMePending) return;
+    if (nearMePending === "url") suppressNextFilterEventRef.current = true;
+    setNearMeActive(true);
+    setNearMePending(null);
+  }, [userLocation, nearMePending]);
+
+  // A tap that joined an already-running request (e.g. the silent read for
+  // granted permission) resolves through status rather than its own promise.
+  useEffect(() => {
+    if (nearMePending !== "user") return;
+    if (locationStatus === "denied" || locationStatus === "unavailable" || locationStatus === "unsupported") {
+      setNearMePending(null);
+      setLocationFailure("nearMe");
+    }
+  }, [locationStatus, nearMePending]);
 
   // ── map/card sync state ──
   // hoveredCardId: set on card mouseenter → highlights matching marker
@@ -815,24 +860,6 @@ export function HappyHoursSearchClient({
   const sortPanelRef = useRef<HTMLDivElement>(null);
   const timePanelRef = useRef<HTMLDivElement>(null);
   const dayPanelRef = useRef<HTMLDivElement>(null);
-
-  // Request geolocation on mount — same auto-request pattern as VenueList.tsx.
-  // When granted, the default "distance" sort activates and cards are sorted nearest-first.
-  useEffect(() => {
-    if (!navigator?.geolocation) {
-      setLocationStatus("denied");
-      return;
-    }
-    setLocationStatus("requesting");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
-        setLocationStatus("granted");
-      },
-      () => setLocationStatus("denied"),
-      { timeout: 8000, maximumAge: 60_000 }
-    );
-  }, []);
 
   // Click-outside close for all dropdowns in one listener.
   useEffect(() => {
@@ -1037,18 +1064,40 @@ export function HappyHoursSearchClient({
   // ── handlers ──
 
   function handleNearMe() {
-    if (nearMeActive) {
+    if (nearMeActive || nearMePending === "user") {
       setNearMeActive(false);
+      setNearMePending(null);
+      setLocationFailure(null);
       return;
     }
-    // Don't activate if browser denied permission.
-    if (locationStatus === "denied") return;
-    setNearMeActive(true);
+    // Near Me is an explicit location action. With a position it applies at
+    // once; otherwise it waits ("Locating…") for the visitor's answer and
+    // only applies if a position actually arrives.
+    if (userLocation) {
+      setNearMeActive(true);
+      return;
+    }
+    setNearMePending("user");
+    requestLocationExplicitly("nearMe");
+  }
+
+  function handleSortSelect(s: SortOption) {
+    setSortBy(s);
+    setSortOpen(false);
+    // Choosing "Nearest First" is an explicit request for distance sorting.
+    if (s === "distance" && !userLocation) {
+      if (nearMePending === "url") setNearMePending(null);
+      requestLocationExplicitly("nearest");
+    } else if (locationFailure === "nearest") {
+      setLocationFailure(null);
+    }
   }
 
   function clearAllFilters() {
     setSearchQuery("");
     setNearMeActive(false);
+    setNearMePending(null);
+    setLocationFailure(null);
     setOnNowActive(false);
     setTopRatedActive(false);
     setSelectedType(null);
@@ -1186,6 +1235,10 @@ export function HappyHoursSearchClient({
   // ── chip labels ──
 
   const hasLoc = userLocation !== null;
+  // "Nearest" stays the selected sort, but without a position the list is in
+  // its default order — so the chip doesn't claim "Nearest" until it is true.
+  const sortChipLabel =
+    sortBy === "distance" && !hasLoc ? "Sort" : null;
   const sortLabel =
     sortBy === "collection"
       ? "Collection Order"
@@ -1241,7 +1294,7 @@ export function HappyHoursSearchClient({
 
           {/* Near Me — quick "right now" shortcut (see On Now below). */}
           <ChipButton
-            label="Near Me"
+            label={nearMePending === "user" && locationStatus === "requesting" ? "Locating…" : "Near Me"}
             active={nearMeActive}
             onClick={handleNearMe}
           />
@@ -1340,7 +1393,7 @@ export function HappyHoursSearchClient({
           {/* Sort */}
           <div ref={sortRef} className="relative flex-shrink-0">
             <ChipButton
-              label={`Sort: ${sortLabel}`}
+              label={sortChipLabel ?? `Sort: ${sortLabel}`}
               active={sortOpen}
               onClick={() => setSortOpen((v) => !v)}
               hasArrow
@@ -1352,10 +1405,7 @@ export function HappyHoursSearchClient({
                   sortBy={sortBy}
                   collectionOrder={collectionOrder}
                   hasLoc={hasLoc}
-                  onSelect={(s) => {
-                    setSortBy(s);
-                    setSortOpen(false);
-                  }}
+                  onSelect={handleSortSelect}
                 />
               </div>
             )}
@@ -1436,20 +1486,33 @@ export function HappyHoursSearchClient({
               sortBy={sortBy}
               collectionOrder={collectionOrder}
               hasLoc={hasLoc}
-              onSelect={(s) => {
-                setSortBy(s);
-                setSortOpen(false);
-              }}
+              onSelect={handleSortSelect}
             />
           </div>
         )}
 
-        {/* Location denied hint — only shown when Near Me was activated but denied */}
-        {nearMeActive && locationStatus === "denied" && (
+        {/* Location hint — only after an explicit Near Me / Nearest First
+            request didn't produce a position. Browsing is unaffected: without
+            coords Near Me doesn't filter and Nearest keeps the default order. */}
+        {(locationFailure === "nearMe" || (locationFailure === "nearest" && sortBy === "distance")) && (
           <p role="status" aria-live="polite" className="px-4 md:px-6 pb-2.5 text-xs text-amber-700">
-            We couldn&rsquo;t access your location, so Near Me is unavailable. You
-            can allow location access in your browser settings, or select a
-            location manually instead.
+            {locationStatus === "denied" ? (
+              <>
+                We couldn&rsquo;t access your location, so {locationFailure === "nearMe" ? "Near Me" : "Nearest First"} is
+                unavailable. You can allow location access in your browser settings, or select a
+                location manually instead.
+              </>
+            ) : locationStatus === "unsupported" ? (
+              <>
+                Your browser doesn&rsquo;t share location, so {locationFailure === "nearMe" ? "Near Me" : "Nearest First"} is
+                unavailable. You can still browse every venue below.
+              </>
+            ) : (
+              <>
+                We couldn&rsquo;t find your location right now. Try again in a moment, or keep
+                browsing every venue below.
+              </>
+            )}
           </p>
         )}
       </div>
@@ -1505,7 +1568,7 @@ export function HappyHoursSearchClient({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {desktopVisibleCards.map((card) => (
+              {desktopVisibleCards.map((card, i) => (
                 <div
                   key={card.id}
                   data-card-id={card.id}
@@ -1518,7 +1581,7 @@ export function HappyHoursSearchClient({
                       : "",
                   ].join(" ")}
                 >
-                  <SearchResultCard data={card} effectiveDayName={effectiveDayName} />
+                  <SearchResultCard data={card} effectiveDayName={effectiveDayName} imagePriority={i < 2} />
                 </div>
               ))}
             </div>
@@ -1666,8 +1729,8 @@ export function HappyHoursSearchClient({
             </div>
           ) : (
             <div className="px-4 pb-8 space-y-4">
-              {mobileVisibleCards.map((card) => (
-                <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
+              {mobileVisibleCards.map((card, i) => (
+                <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} imagePriority={i < 2} />
               ))}
             </div>
           ))}

@@ -57,7 +57,7 @@ export function FeatureSection({ section }: Props) {
           >
             {feature.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={feature.imageUrl} alt={feature.title} className="w-full h-full object-cover" />
+              <img src={feature.imageUrl} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
             )}
           </div>
 

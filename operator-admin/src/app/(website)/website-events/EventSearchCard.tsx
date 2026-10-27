@@ -161,9 +161,11 @@ function EventImagePlaceholder() {
 
 type Props = {
   event: WebsiteEventListItem;
+  /** First visible card(s) only: eager, high-priority image. Others lazy-load. */
+  imagePriority?: boolean;
 };
 
-export function EventSearchCard({ event }: Props) {
+export function EventSearchCard({ event, imagePriority = false }: Props) {
   const typeLabel = getEventTypeLabel(event.eventType);
   const typeEmoji = getEventTypeEmoji(event.eventType);
   const showType = typeLabel && event.eventType !== "other";
@@ -210,6 +212,9 @@ export function EventSearchCard({ event }: Props) {
             <img
               src={event.imageUrl}
               alt={event.title}
+              loading={imagePriority ? "eager" : "lazy"}
+              fetchPriority={imagePriority ? "high" : "auto"}
+              decoding="async"
               className="w-full h-full object-cover"
             />
           ) : (

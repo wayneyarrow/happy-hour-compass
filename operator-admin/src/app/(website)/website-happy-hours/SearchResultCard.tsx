@@ -180,9 +180,15 @@ type Props = {
    * callers with no Day filter concept.
    */
   effectiveDayName?: string | null;
+  /**
+   * True only for the first card(s) visible on first load of a listing:
+   * fetched eagerly at high priority. Every other card image is lazy-loaded
+   * (the browser still loads lazy images that are in or near the viewport).
+   */
+  imagePriority?: boolean;
 };
 
-export function SearchResultCard({ data, effectiveDayName }: Props) {
+export function SearchResultCard({ data, effectiveDayName, imagePriority = false }: Props) {
   return (
     // `<article>` (not the Link) is the outer element so the Save button
     // below can be an interactive sibling of the Link rather than nested
@@ -223,6 +229,9 @@ export function SearchResultCard({ data, effectiveDayName }: Props) {
           <img
             src={data.image}
             alt={data.name}
+            loading={imagePriority ? "eager" : "lazy"}
+            fetchPriority={imagePriority ? "high" : "auto"}
+            decoding="async"
             className="w-full h-full object-cover"
             onError={(e) => {
               // Hide broken images gracefully — bg-gray-100 shows as placeholder

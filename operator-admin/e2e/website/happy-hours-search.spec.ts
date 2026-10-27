@@ -78,8 +78,10 @@ test.describe("Happy Hours search", () => {
   });
 
   test("Sort control changes the active sort and the URL", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Sort: Nearest" })).toBeVisible();
-    await page.getByRole("button", { name: "Sort: Nearest" }).click();
+    // No location in this context: "Nearest" is the selected sort but can't
+    // apply yet, so the chip doesn't claim it.
+    await expect(page.getByRole("button", { name: "Sort", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Sort", exact: true }).click();
     await page.getByRole("button", { name: "Top Rated First" }).click();
     await expect(page.getByRole("button", { name: "Sort: Top Rated" })).toBeVisible();
     await expect.poll(() => urlSearch(page)).toContain("sort=rating");

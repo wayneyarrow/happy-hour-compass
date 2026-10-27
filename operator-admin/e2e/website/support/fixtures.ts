@@ -1,4 +1,8 @@
 import { test as base, expect, type Page } from "@playwright/test";
+// Shared with scripts/perf — the single list of analytics/tracking/error
+// requests a test run must never send (Vercel Analytics/Speed Insights beacons,
+// GA4 collection, Sentry envelopes, first-party /api/track/*).
+import trackingBlockList from "../../../scripts/perf/trackingBlockList.cjs";
 
 /**
  * Cross-browser compatibility audit fixtures — public website only.
@@ -84,6 +88,12 @@ export const test = base.extend<{ diagnostics: Diagnostics }>({
       // for the same URLs (e.g. discovery-tracking.spec.ts) still wins.
       if (process.env.E2E_INTERCEPT_TRACKING === "1") {
         await page.context().route("**/api/track/**", (route) => route.fulfill({ status: 204, body: "" }));
+        // Also answer every other analytics/error beacon locally (204, not an
+        // abort, so it never counts as a first-party network failure).
+        await page.context().route(
+          (url) => !/\/api\/track\//.test(url.href) && trackingBlockList.isTrackingRequest(url.href),
+          (route) => route.fulfill({ status: 204, body: "" })
+        );
       }
 
       page.on("pageerror", (err) => {

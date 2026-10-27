@@ -750,7 +750,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                         {guide.heroImageUrl && (
                           <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-gray-100">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={guide.heroImageUrl} alt="" className="w-full h-full object-cover" />
+                            <img src={guide.heroImageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                           </div>
                         )}
                         <span className="text-[15px] font-semibold text-gray-900 leading-snug line-clamp-2">

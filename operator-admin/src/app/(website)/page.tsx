@@ -106,7 +106,7 @@ export async function generateMetadata(): Promise<Metadata> {
 // docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
 
 export default async function WebsiteHomePage() {
-  const { market, isPersisted } = await getActiveMarket();
+  const { market } = await getActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
   const homepage = await getPublicHomepageForLocation(market.id, citySlug);
 
@@ -127,7 +127,6 @@ export default async function WebsiteHomePage() {
     <DiscoveryPageTracking marketId={market.id} homepageId={homepage?.id ?? null}>
       <HeroSection
         market={market}
-        isPersisted={isPersisted}
         dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
       />
       {split.showMainSignup && (

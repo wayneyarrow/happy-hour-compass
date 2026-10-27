@@ -1,0 +1,31 @@
+file,group,score,htmlEnd,fcp,lcp,tbt,cls,totalKB,imageKB,imageReqs,scriptKB,requests,lcpElement,fetchTime,lighthouse
+ds_cold_1,ds_cold,98,738,1593,1593,148,0,454,15,1,300,30,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:22:00.047Z,13.5.0
+ds_cold_2,ds_cold,98,736,1569,1569,147,0,454,15,1,300,30,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:22:49.714Z,13.5.0
+ds_cold_3,ds_cold,97,736,1607,1607,162,0,454,15,1,300,30,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:23:39.315Z,13.5.0
+ds_warm_1,ds_warm,100,737,834,834,72,0,34,0,1,0,29,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:22:25.350Z,13.5.0
+ds_warm_2,ds_warm,98,739,743,743,162,0,34,0,1,0,29,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:23:15.008Z,13.5.0
+ds_warm_3,ds_warm,100,740,708,708,88,0,34,0,1,0,29,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T23:24:04.599Z,13.5.0
+hh_cold_1,hh_cold,63,863,1649,8867,242,0.001,1504,774,9,576,52,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:18:42.437Z,13.5.0
+hh_cold_2,hh_cold,61,1241,2091,9247,247,0.001,1504,774,9,576,52,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:19:46.026Z,13.5.0
+hh_cold_3,hh_cold,62,852,1779,8866,263,0.001,1504,774,9,576,52,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:20:51.019Z,13.5.0
+hh_warm_1,hh_warm,96,900,837,2030,194,0.001,50,0,9,0,50,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:19:17.599Z,13.5.0
+hh_warm_2,hh_warm,95,874,807,2002,229,0.001,50,0,9,0,50,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:20:22.467Z,13.5.0
+hh_warm_3,hh_warm,60,5148,5074,6295,184,0.001,50,0,9,0,50,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T23:21:26.663Z,13.5.0
+home_cold_1,home_cold,91,2052,2776,2776,97,0,1374,891,5,314,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:15:36.739Z,13.5.0
+home_cold_2,home_cold,88,2114,2833,2833,174,0,1375,891,5,314,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:16:39.217Z,13.5.0
+home_cold_3,home_cold,89,2089,2851,2851,141,0,1375,891,5,314,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:17:41.303Z,13.5.0
+home_warm_1,home_warm,96,2353,2233,2233,95,0,65,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:16:09.543Z,13.5.0
+home_warm_2,home_warm,98,1895,1701,1833,114,0,65,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:17:11.909Z,13.5.0
+home_warm_3,home_warm,98,1980,1793,1931,106,0,65,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T23:18:13.637Z,13.5.0
+v_joey_cold_1,v_joey_cold,77,690,1642,5002,219,0.011,1077,376,7,571,50,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:27:36.187Z,13.5.0
+v_joey_cold_2,v_joey_cold,76,730,1719,5108,245,0.011,1076,376,7,571,46,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:28:34.883Z,13.5.0
+v_joey_cold_3,v_joey_cold,76,690,1569,5030,255,0.011,1076,376,7,571,46,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:29:30.842Z,13.5.0
+v_joey_warm_1,v_joey_warm,97,688,788,788,182,0,25,0,7,0,44,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:28:09.897Z,13.5.0
+v_joey_warm_2,v_joey_warm,96,689,714,813,227,0.011,25,0,7,0,44,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:29:06.113Z,13.5.0
+v_joey_warm_3,v_joey_warm,97,701,833,833,187,0,25,0,7,0,44,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T23:30:01.673Z,13.5.0
+v_tsp_cold_1,v_tsp_cold,63,739,1637,14233,253,0.007,2491,1790,12,571,51,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:24:28.808Z,13.5.0
+v_tsp_cold_2,v_tsp_cold,61,700,1674,14158,335,0.007,2492,1790,12,571,51,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:25:31.230Z,13.5.0
+v_tsp_cold_3,v_tsp_cold,63,693,1638,14185,259,0.007,2492,1790,12,571,51,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:26:33.799Z,13.5.0
+v_tsp_warm_1,v_tsp_warm,98,696,810,810,176,0.007,27,0,12,0,49,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:25:05.995Z,13.5.0
+v_tsp_warm_2,v_tsp_warm,98,701,739,739,176,0.007,27,0,12,0,49,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:26:08.442Z,13.5.0
+v_tsp_warm_3,v_tsp_warm,98,693,776,776,173,0.007,27,0,12,0,49,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T23:27:10.723Z,13.5.0

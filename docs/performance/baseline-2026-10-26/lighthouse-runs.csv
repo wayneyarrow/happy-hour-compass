@@ -1,0 +1,31 @@
+file,group,score,htmlEnd,fcp,lcp,tbt,cls,totalKB,imageKB,imageReqs,scriptKB,requests,lcpElement,fetchTime,lighthouse
+ds_cold_1,ds_cold,91,918,2135,2135,275,0,631,15,1,485,37,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:35:09.262Z,13.5.0
+ds_cold_2,ds_cold,90,925,2191,2191,285,0,631,15,1,485,37,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:36:04.247Z,13.5.0
+ds_cold_3,ds_cold,91,805,2098,2098,294,0,631,15,1,485,37,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:36:59.384Z,13.5.0
+ds_warm_1,ds_warm,95,722,749,833,256,0,26,0,1,0,36,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:35:35.630Z,13.5.0
+ds_warm_2,ds_warm,96,727,810,810,210,0,26,0,1,0,36,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:36:30.483Z,13.5.0
+ds_warm_3,ds_warm,96,871,951,951,242,0,26,0,1,0,37,"<p class=""text-sm text-gray-600 leading-relaxed line-clamp-3"">",2026-10-26T22:37:25.076Z,13.5.0
+hh_cold_1,hh_cold,-1,1300,2270,49046,-1,0.001,11308,10756,66,504,106,"<img src=""/images/venues/wine-bar/venue-pic-wine-bar-10.jpg"" alt=""19 Okanagan Grill + Bar""",2026-10-26T22:29:18.705Z,13.5.0
+hh_cold_2,hh_cold,-1,1795,2484,49532,-1,0.001,11257,10704,66,504,106,"<img src=""/images/venues/wine-bar/venue-pic-wine-bar-10.jpg"" alt=""19 Okanagan Grill + Bar""",2026-10-26T22:31:16.876Z,13.5.0
+hh_cold_3,hh_cold,-1,1496,4523,49234,-1,0.001,11290,10738,66,504,106,"<img src=""/images/venues/wine-bar/venue-pic-wine-bar-10.jpg"" alt=""19 Okanagan Grill + Bar""",2026-10-26T22:33:14.341Z,13.5.0
+hh_warm_1,hh_warm,79,1228,1213,2996,598,0.001,37,0,72,0,127,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T22:30:39.034Z,13.5.0
+hh_warm_2,hh_warm,80,1248,1448,3071,518,0.001,37,0,72,0,126,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T22:32:37.929Z,13.5.0
+hh_warm_3,hh_warm,83,1248,1205,2881,468,0.001,37,0,72,0,126,"<img alt="""" src=""https://maps.googleapis.com/maps/api/js/StaticMapService.GetMapImage?1m2&",2026-10-26T22:34:33.414Z,13.5.0
+home_cold_1,home_cold,64,2894,4621,4621,328,0,10405,9863,46,499,86,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:23:38.985Z,13.5.0
+home_cold_2,home_cold,66,3178,3918,3918,504,0,10368,9825,46,499,86,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:25:35.917Z,13.5.0
+home_cold_3,home_cold,60,2774,5110,5110,357,0,10427,9885,46,499,86,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:27:25.371Z,13.5.0
+home_warm_1,home_warm,73,3497,3467,3467,433,0,28,0,46,0,86,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:25:00.016Z,13.5.0
+home_warm_2,home_warm,91,2653,2616,2616,149,0,28,0,46,0,86,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:26:52.878Z,13.5.0
+home_warm_3,home_warm,88,2900,2862,2862,170,0,28,0,47,0,87,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-26T22:28:44.396Z,13.5.0
+v_joey_cold_1,v_joey_cold,64,849,2258,6279,427,0.011,1420,474,10,782,62,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:41:34.928Z,13.5.0
+v_joey_cold_2,v_joey_cold,63,798,2315,6224,462,0.011,1416,471,10,782,62,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:42:39.759Z,13.5.0
+v_joey_cold_3,v_joey_cold,60,1335,2766,6782,439,0.011,1420,474,10,782,62,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:43:44.216Z,13.5.0
+v_joey_warm_1,v_joey_warm,95,1023,1109,1109,274,0,17,0,10,0,60,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:42:09.857Z,13.5.0
+v_joey_warm_2,v_joey_warm,93,852,938,938,309,0,16,0,10,0,60,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:43:14.419Z,13.5.0
+v_joey_warm_3,v_joey_warm,93,1142,1333,1333,301,0.011,17,0,10,0,60,"<img src=""/images/venues/casual-dining/venue-pic-casual-dining-8.jpg"" alt=""JOEY Kelowna"" l",2026-10-26T22:44:19.729Z,13.5.0
+v_tsp_cold_1,v_tsp_cold,53,832,2101,15324,489,0.013,2883,1935,18,783,70,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:37:53.780Z,13.5.0
+v_tsp_cold_2,v_tsp_cold,52,1101,1932,15543,529,0.013,2908,1961,17,783,69,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:39:07.105Z,13.5.0
+v_tsp_cold_3,v_tsp_cold,54,1018,2377,15529,408,0.013,2882,1935,17,783,69,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:40:20.994Z,13.5.0
+v_tsp_warm_1,v_tsp_warm,94,645,844,844,300,0.013,18,0,17,0,67,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:38:36.764Z,13.5.0
+v_tsp_warm_2,v_tsp_warm,90,781,806,912,415,0.013,18,0,17,0,67,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:39:50.727Z,13.5.0
+v_tsp_warm_3,v_tsp_warm,90,1615,1690,1774,376,0.013,18,0,17,0,67,"<img src=""https://juphyhxdmcvseeufbiay.supabase.co/storage/v1/object/public/venue-im…"" alt",2026-10-26T22:41:03.967Z,13.5.0

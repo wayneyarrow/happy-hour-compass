@@ -938,7 +938,7 @@ export function EventSearchResults({
             <EmptyState hasFilters={hasFilters} />
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {filtered.map((event) => {
+              {filtered.map((event, i) => {
                 const hoverKey =
                   event.venueLat !== null && event.venueLng !== null
                     ? `${event.venueLat},${event.venueLng}`
@@ -949,7 +949,7 @@ export function EventSearchResults({
                     onMouseEnter={() => hoverKey && setHoveredCardId(hoverKey)}
                     onMouseLeave={() => setHoveredCardId(null)}
                   >
-                    <EventSearchCard event={event} />
+                    <EventSearchCard event={event} imagePriority={i < 2} />
                   </div>
                 );
               })}
@@ -1000,8 +1000,8 @@ export function EventSearchResults({
           <EmptyState hasFilters={hasFilters} />
         ) : (
           <div className="px-4 pb-8 space-y-4">
-            {filtered.map((event) => (
-              <EventSearchCard key={event.id} event={event} />
+            {filtered.map((event, i) => (
+              <EventSearchCard key={event.id} event={event} imagePriority={i < 2} />
             ))}
           </div>
         )}

@@ -338,7 +338,7 @@ export async function resolveDiscoveryShellGeography(
   // Falls back to a minimal stand-in only if a market is somehow missing from
   // the static config (shouldn't happen for a real, active market) — the
   // Discovery Shell components only read market.id/market.name for display,
-  // never lat/lng, in the preview (see HeroSection's isPersisted=true guard).
+  // never lat/lng, in the preview (HeroSection makes no location request).
   const staticMarket: Market =
     getStaticMarketBySlug(marketSlug) ?? {
       id: marketSlug,

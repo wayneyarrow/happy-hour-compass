@@ -1,11 +1,8 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import type { Market } from "@/lib/markets";
-import { findNearestActiveMarket } from "@/lib/markets";
-import { setMarketAction } from "@/app/(consumer)/marketActions";
 import { HeroDiscoverySearch } from "./HeroDiscoverySearch";
 import { trackGA4Event } from "@/lib/ga4";
 import { useDiscoveryTracker, type PlacementContextValue } from "./tracking/DiscoveryTrackingProvider";
@@ -20,7 +17,6 @@ const HERO_PLACEMENT: PlacementContextValue = { surface: "homepage_hero" };
 
 type Props = {
   market: Market;
-  isPersisted: boolean;
   /**
    * Whether the Daily Specials selector option should show its "NEW"
    * badge — computed server-side via isFeatureNewBadgeVisible() and passed
@@ -31,33 +27,14 @@ type Props = {
   dailySpecialsNewBadgeVisible: boolean;
 };
 
-export default function HeroSection({ market, isPersisted, dailySpecialsNewBadgeVisible }: Props) {
-  const router = useRouter();
+export default function HeroSection({ market, dailySpecialsNewBadgeVisible }: Props) {
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>(DEFAULT_DISCOVERY_MODE);
-  const [, startTransition] = useTransition();
 
   const activeConfig = DISCOVERY_MODES[discoveryMode];
 
-  // Auto-detect market on first visit when no cookie is set.
-  // Reuses the same findNearestActiveMarket + setMarketAction as MarketChip.
-  useEffect(() => {
-    if (isPersisted) return;
-    if (!navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const nearest = findNearestActiveMarket(coords.latitude, coords.longitude);
-        startTransition(async () => {
-          await setMarketAction(nearest.id);
-          if (nearest.id !== market.id) {
-            router.refresh();
-          }
-        });
-      },
-      () => {},
-      { timeout: 5000, maximumAge: 60_000 }
-    );
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // No automatic location request here: first-time visitors browse the
+  // default market without a permission prompt. Choosing a market by
+  // location is explicit, via WebsiteLocationSwitcher's "Use my location".
 
   // GA4 homepage_discovery_mode_selected — fires only for a genuine change
   // away from the current mode: never for the Happy Hours default on page
