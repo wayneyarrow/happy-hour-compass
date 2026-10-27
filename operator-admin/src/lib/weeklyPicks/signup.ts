@@ -19,6 +19,7 @@ import {
   isValidWeeklyPicksEmail,
   isWeeklyPicksPlacement,
   normalizeWeeklyPicksEmail,
+  weeklyPicksUsesButtonConsent,
   type WeeklyPicksSignupState,
 } from "./weeklyPicks";
 
@@ -93,8 +94,12 @@ export async function processWeeklyPicksSignup(
   if (!email) fieldErrors.email = WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE;
   else if (!isValidWeeklyPicksEmail(email)) fieldErrors.email = WEEKLY_PICKS_EMAIL_INVALID_MESSAGE;
 
-  // The checkbox is the explicit permission — it must have been ticked.
-  if (input.consent !== "yes") fieldErrors.consent = WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE;
+  // The checkbox is the explicit permission — it must have been ticked —
+  // except on button-consent placements, where submitting is the consent
+  // action. An unknown placement is treated as a checkbox placement.
+  if (!weeklyPicksUsesButtonConsent(input.placement) && input.consent !== "yes") {
+    fieldErrors.consent = WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE;
+  }
 
   if (fieldErrors.email || fieldErrors.consent) {
     return { status: "error", fieldErrors };
