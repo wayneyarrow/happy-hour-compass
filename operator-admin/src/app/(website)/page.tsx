@@ -1,13 +1,23 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { userAgent } from "next/server";
 import HeroSection from "./HeroSection";
 import { HomepageSectionsRenderer } from "./homepage/HomepageSectionsRenderer";
+import { HomepageSectionsPlaceholder } from "./homepage/HomepageSectionsPlaceholder";
+import { HomepageSectionsErrorBoundary } from "./homepage/HomepageSectionsErrorBoundary";
 import { DiscoveryPageTracking } from "./tracking/DiscoveryTrackingProvider";
 import { WeeklyPicksSection } from "./weekly-picks/WeeklyPicksSection";
 import { splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
 import { getActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
-import { getPublicHomepageForLocation } from "@/lib/data/homepagePublic";
+import {
+  getPublicHomepageRecordForLocation,
+  resolvePublicHomepageSections,
+  type HomepagePublicRecord,
+  type HomepagePreviewSection,
+} from "@/lib/data/homepagePublic";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { DAILY_SPECIALS_NEW_UNTIL, isFeatureNewBadgeVisible } from "@/lib/newBadge";
 
@@ -65,7 +75,9 @@ const DEFAULT_DESCRIPTION =
 export async function generateMetadata(): Promise<Metadata> {
   const { market } = await getActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
-  const homepage = await getPublicHomepageForLocation(market.id, citySlug);
+  // The Homepage record only — its SEO fields are on the record itself, so
+  // metadata never waits for (or triggers) Section resolution.
+  const homepage = await getPublicHomepageRecordForLocation(market.id, citySlug);
 
   const title = homepage?.metaTitle ?? homepage?.pageTitle ?? DEFAULT_TITLE;
   const description = homepage?.metaDescription ?? DEFAULT_DESCRIPTION;
@@ -73,7 +85,7 @@ export async function generateMetadata(): Promise<Metadata> {
   // path/canonicalPath deliberately omitted — buildPageMetadata defaults
   // both to "/", which is exactly the live route this metadata is for.
   // ogImage also omitted — the Homepage CMS has no image field of its own
-  // (see HomepagePublicData), so this falls through to buildPageMetadata's
+  // (see HomepageDetail), so this falls through to buildPageMetadata's
   // own DEFAULT_OG_IMAGE, the same sitewide brand asset every other
   // image-less page already falls back to.
   const base = buildPageMetadata({
@@ -108,16 +120,21 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function WebsiteHomePage() {
   const { market } = await getActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
-  const homepage = await getPublicHomepageForLocation(market.id, citySlug);
+  // Only the Homepage record (identity for discovery tracking, plus its
+  // enabled Sections in saved order) is awaited here. Section content is
+  // resolved inside the Suspense boundary below, so the header and hero are
+  // sent as soon as this record is known, and the Sections stream in after
+  // (HomepageSectionsPlaceholder holds their space meanwhile).
+  const homepage = await getPublicHomepageRecordForLocation(market.id, citySlug);
 
-  // Weekly Picks signup sits OUTSIDE the CMS section list. homepage.sections
-  // is already filtered to enabled sections that resolved to content
-  // (homepagePublic.ts), so its first entry is the first section actually
-  // displayed. The list is rendered in two slices around the main signup;
-  // section ids, kinds, order and discovery placements are unchanged
-  // (tracking keys by section id, never by index). The Control Panel
-  // preview renders HomepageSectionsRenderer directly and is unaffected.
-  const split = splitSectionsAroundSignup(homepage?.sections ?? []);
+  // Recognised crawlers and link-preview bots (Next's userAgent().isBot:
+  // Googlebot, Bingbot, facebookexternalhit, Twitterbot, …) get the same
+  // page fully rendered in document order instead of streamed — identical
+  // content and markup, just sent once everything has resolved (the
+  // pre-streaming behaviour). Streamed Sections arrive in hidden blocks
+  // that a script moves into place, so a crawler that doesn't run
+  // JavaScript would otherwise never see them in the page.
+  const renderAllAtOnce = userAgent({ headers: await headers() }).isBot;
 
   // DiscoveryPageTracking: one discovery-tracking page view per mounted
   // homepage (website_discovery_events, migration 110). Only the live public
@@ -129,6 +146,39 @@ export default async function WebsiteHomePage() {
         market={market}
         dailySpecialsNewBadgeVisible={isFeatureNewBadgeVisible(new Date(), DAILY_SPECIALS_NEW_UNTIL)}
       />
+      {homepage ? (
+        <HomepageSectionsErrorBoundary>
+          {renderAllAtOnce ? (
+            <HomepageEditorialSections homepage={homepage} marketSlug={market.id} />
+          ) : (
+            <Suspense fallback={<HomepageSectionsPlaceholder />}>
+              <HomepageEditorialSections homepage={homepage} marketSlug={market.id} />
+            </Suspense>
+          )}
+        </HomepageSectionsErrorBoundary>
+      ) : (
+        <HomepageSectionsWithSignup sections={[]} />
+      )}
+    </DiscoveryPageTracking>
+  );
+}
+
+async function HomepageEditorialSections({ homepage, marketSlug }: { homepage: HomepagePublicRecord; marketSlug: string }) {
+  const sections = await resolvePublicHomepageSections(homepage, marketSlug);
+  return <HomepageSectionsWithSignup sections={sections} />;
+}
+
+// Weekly Picks signup sits OUTSIDE the CMS section list. `sections` is
+// already filtered to enabled sections that resolved to content
+// (homepagePublic.ts), so its first entry is the first section actually
+// displayed. The list is rendered in two slices around the main signup;
+// section ids, kinds, order and discovery placements are unchanged
+// (tracking keys by section id, never by index). The Control Panel
+// preview renders HomepageSectionsRenderer directly and is unaffected.
+function HomepageSectionsWithSignup({ sections }: { sections: HomepagePreviewSection[] }) {
+  const split = splitSectionsAroundSignup(sections);
+  return (
+    <>
       {split.showMainSignup && (
         <>
           <HomepageSectionsRenderer sections={split.first} />
@@ -139,6 +189,6 @@ export default async function WebsiteHomePage() {
       {split.showBottomSignup && (
         <WeeklyPicksSection placement="homepage_bottom" variant="compact" layout="page-width" />
       )}
-    </DiscoveryPageTracking>
+    </>
   );
 }

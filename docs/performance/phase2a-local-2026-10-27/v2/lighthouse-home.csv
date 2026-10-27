@@ -1,0 +1,7 @@
+round,file,group,score,htmlEnd,fcp,lcp,tbt,cls,totalKB,imageKB,imageReqs,scriptKB,requests,lcpElement,fetchTime,lighthouse
+1,home_cold_1,home_cold,97,2472,1681,1681,162,0,1411,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:00:21.034Z,13.5.0
+1,home_warm_1,home_warm,99,1995,898,898,133,0,69,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:00:53.501Z,13.5.0
+2,home_cold_1,home_cold,92,2634,1656,1656,326,0,1410,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:01:25.264Z,13.5.0
+2,home_warm_1,home_warm,99,1768,805,805,128,0,69,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:01:57.179Z,13.5.0
+3,home_cold_1,home_cold,95,2489,1663,1663,226,0,1410,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:02:26.917Z,13.5.0
+3,home_warm_1,home_warm,96,2068,886,886,215,0,69,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T16:02:59.296Z,13.5.0

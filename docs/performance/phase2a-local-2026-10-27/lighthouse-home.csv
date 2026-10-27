@@ -1,0 +1,13 @@
+version,round,file,group,score,htmlEnd,fcp,lcp,tbt,cls,totalKB,imageKB,imageReqs,scriptKB,requests,lcpElement,fetchTime,lighthouse
+before,1,home_cold_1,home_cold,92,1969,2689,2689,94,0,1374,891,5,313,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:05:35.982Z,13.5.0
+before,1,home_warm_1,home_warm,98,2081,1928,1928,70,0,66,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:06:09.312Z,13.5.0
+after,1,home_cold_1,home_cold,98,2457,1649,1649,141,0,1410,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:06:38.518Z,13.5.0
+after,1,home_warm_1,home_warm,99,2169,940,940,143,0,68,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:07:10.780Z,13.5.0
+before,2,home_cold_1,home_cold,89,2144,2912,2912,122,0,1374,891,5,313,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:07:39.747Z,13.5.0
+before,2,home_warm_1,home_warm,98,1837,1656,1723,95,0,66,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:08:12.348Z,13.5.0
+after,2,home_cold_1,home_cold,98,2382,1585,1585,147,0,1410,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:08:41.179Z,13.5.0
+after,2,home_warm_1,home_warm,98,1852,766,766,170,0,68,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:09:13.181Z,13.5.0
+before,3,home_cold_1,home_cold,90,2044,2820,2820,123,0,1374,891,5,313,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:09:41.659Z,13.5.0
+before,3,home_warm_1,home_warm,99,1837,1703,1703,63,0,66,0,5,0,38,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:10:15.078Z,13.5.0
+after,3,home_cold_1,home_cold,94,2639,1843,1843,232,0,1410,924,6,314,40,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:10:44.925Z,13.5.0
+after,3,home_warm_1,home_warm,98,2082,827,827,161,0,68,0,6,0,39,"<span class=""block text-[2.75rem] sm:text-6xl md:text-7xl font-extrabold leading-[1.05]…"">",2026-10-27T15:11:17.997Z,13.5.0

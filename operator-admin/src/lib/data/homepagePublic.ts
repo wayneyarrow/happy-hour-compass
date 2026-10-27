@@ -30,59 +30,68 @@
  */
 
 import { getPublishedHomepageForLocation } from "@/lib/data/homepages";
-import type { HomepageStatus } from "@/lib/data/homepagesShared";
+import type { HomepageDetail } from "@/lib/data/homepagesShared";
 import { resolveSection } from "@/lib/data/homepagesRendering";
 import type { HomepagePreviewSection } from "@/lib/data/homepagesRendering";
+import { reportOperationalError } from "@/lib/observability/reportOperationalError";
 
 export type { HomepagePreviewGuideCard, HomepagePreviewFeatureCard, HomepagePreviewSection } from "@/lib/data/homepagesRendering";
 
-export type HomepagePublicData = {
-  id: string;
-  status: HomepageStatus;
-  cityName: string | null;
-  marketName: string;
-  /** SEO fields belonging to the Homepage that was ACTUALLY resolved (city or market fallback) — never fabricated for the fallback geography. */
-  pageTitle: string | null;
-  metaTitle: string | null;
-  metaDescription: string | null;
-  ogTitle: string | null;
-  ogDescription: string | null;
-  canonicalUrl: string | null;
-  /** Already filtered to Sections that resolved to at least one usable item, in saved display order. Empty array is valid — the page renders the Discovery Shell with no editorial sections below it. */
-  sections: HomepagePreviewSection[];
-};
-
 /**
- * Published-only Homepage resolution for a market/city, with city-to-market
- * fallback. Returns null when neither a Published City Homepage nor a
- * Published Market Homepage exists for this geography — callers should fall
- * back to the existing Discovery Shell with no CMS-driven editorial
- * sections in that case (never a 404 — the public homepage route always
- * renders something).
+ * The Published Homepage record for this geography — identity (id, used by
+ * discovery tracking), its own SEO fields (belonging to the Homepage that
+ * was ACTUALLY resolved — city or market fallback — never fabricated for the
+ * fallback geography) and its enabled Sections in saved display order, not
+ * yet resolved to content. Null when neither a Published City Homepage nor
+ * a Published Market Homepage exists — callers should fall back to the
+ * existing Discovery Shell with no CMS-driven editorial sections in that
+ * case (never a 404 — the public homepage route always renders something).
+ *
+ * Kept separate from resolvePublicHomepageSections() so the homepage can
+ * send its header and hero (which need only this record) while the
+ * Sections are still resolving, and so metadata never resolves Sections.
  */
-export async function getPublicHomepageForLocation(
+export type HomepagePublicRecord = HomepageDetail;
+
+export async function getPublicHomepageRecordForLocation(
   marketSlug: string,
   citySlug?: string | null
-): Promise<HomepagePublicData | null> {
-  const homepage = await getPublishedHomepageForLocation(marketSlug, citySlug);
-  if (!homepage) return null;
+): Promise<HomepagePublicRecord | null> {
+  return getPublishedHomepageForLocation(marketSlug, citySlug);
+}
 
+/**
+ * Resolves a Published Homepage's Sections to rendering-ready content.
+ * Already filtered to Sections that resolved to at least one usable item,
+ * in saved display order. Empty array is valid — the page renders the
+ * Discovery Shell with no editorial sections below it.
+ *
+ * Each Section resolves in isolation: one that throws (an unexpected
+ * exception — the data readers themselves log and return empty on query
+ * failures) is reported and left out, so it can never blank the hero or
+ * the other Sections. For visitors the page has already been sent with a
+ * 200 by the time Sections resolve (they stream in behind the hero), so a
+ * throw here could otherwise only surface as the global error page.
+ */
+export async function resolvePublicHomepageSections(
+  homepage: HomepagePublicRecord,
+  marketSlug: string
+): Promise<HomepagePreviewSection[]> {
   const resolvedSections = await Promise.all(
-    homepage.sections.map((section) => resolveSection(section, marketSlug))
+    homepage.sections.map(async (section) => {
+      try {
+        return await resolveSection(section, marketSlug);
+      } catch (error) {
+        reportOperationalError({
+          error,
+          flow: "public-homepage",
+          stage: "section-resolve",
+          severity: "operational",
+          context: { homepageId: homepage.id, sectionId: section.id, sectionType: section.sectionType, contentMode: section.contentMode },
+        });
+        return null;
+      }
+    })
   );
-  const sections = resolvedSections.filter((s): s is HomepagePreviewSection => s !== null);
-
-  return {
-    id: homepage.id,
-    status: homepage.status,
-    cityName: homepage.cityName,
-    marketName: homepage.marketName,
-    pageTitle: homepage.pageTitle,
-    metaTitle: homepage.metaTitle,
-    metaDescription: homepage.metaDescription,
-    ogTitle: homepage.ogTitle,
-    ogDescription: homepage.ogDescription,
-    canonicalUrl: homepage.canonicalUrl,
-    sections,
-  };
+  return resolvedSections.filter((s): s is HomepagePreviewSection => s !== null);
 }

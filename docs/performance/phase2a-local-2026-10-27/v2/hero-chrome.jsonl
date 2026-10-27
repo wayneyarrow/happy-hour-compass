@@ -1,0 +1,10 @@
+{"path":"/","run":1,"base":"http://localhost:3100","at":"2026-10-27T15:59:45.169Z","ua":"chrome","headers":629,"status":200,"vercelId":null,"cache":null,"first":630,"hero":630,"end":1474,"bytes":416964}
+{"path":"/","run":2,"base":"http://localhost:3100","at":"2026-10-27T15:59:46.646Z","ua":"chrome","headers":552,"status":200,"vercelId":null,"cache":null,"first":553,"hero":553,"end":1317,"bytes":416963}
+{"path":"/","run":3,"base":"http://localhost:3100","at":"2026-10-27T15:59:47.964Z","ua":"chrome","headers":478,"status":200,"vercelId":null,"cache":null,"first":478,"hero":479,"end":1250,"bytes":416965}
+{"path":"/","run":4,"base":"http://localhost:3100","at":"2026-10-27T15:59:49.214Z","ua":"chrome","headers":435,"status":200,"vercelId":null,"cache":null,"first":435,"hero":435,"end":1170,"bytes":416964}
+{"path":"/","run":5,"base":"http://localhost:3100","at":"2026-10-27T15:59:50.385Z","ua":"chrome","headers":467,"status":200,"vercelId":null,"cache":null,"first":467,"hero":467,"end":1363,"bytes":416964}
+{"path":"/","run":6,"base":"http://localhost:3100","at":"2026-10-27T15:59:51.749Z","ua":"chrome","headers":465,"status":200,"vercelId":null,"cache":null,"first":465,"hero":465,"end":1213,"bytes":416965}
+{"path":"/","run":7,"base":"http://localhost:3100","at":"2026-10-27T15:59:52.962Z","ua":"chrome","headers":439,"status":200,"vercelId":null,"cache":null,"first":440,"hero":440,"end":1174,"bytes":416993}
+{"path":"/","run":8,"base":"http://localhost:3100","at":"2026-10-27T15:59:54.137Z","ua":"chrome","headers":435,"status":200,"vercelId":null,"cache":null,"first":435,"hero":436,"end":1200,"bytes":416963}
+{"path":"/","run":9,"base":"http://localhost:3100","at":"2026-10-27T15:59:55.337Z","ua":"chrome","headers":411,"status":200,"vercelId":null,"cache":null,"first":411,"hero":412,"end":1164,"bytes":416964}
+{"path":"/","run":10,"base":"http://localhost:3100","at":"2026-10-27T15:59:56.502Z","ua":"chrome","headers":424,"status":200,"vercelId":null,"cache":null,"first":425,"hero":425,"end":1200,"bytes":416964}

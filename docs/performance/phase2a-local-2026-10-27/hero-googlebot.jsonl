@@ -1,0 +1,6 @@
+{"path":"/","run":1,"base":"http://localhost:3101","at":"2026-10-27T15:05:44.178Z","ua":"googlebot","headers":1356,"status":200,"vercelId":null,"cache":null,"first":1357,"hero":1358,"end":1375,"bytes":409641}
+{"path":"/","run":1,"base":"http://localhost:3100","at":"2026-10-27T15:05:45.556Z","ua":"googlebot","headers":460,"status":200,"vercelId":null,"cache":null,"first":461,"hero":461,"end":1188,"bytes":414852}
+{"path":"/","run":2,"base":"http://localhost:3101","at":"2026-10-27T15:05:46.744Z","ua":"googlebot","headers":1368,"status":200,"vercelId":null,"cache":null,"first":1368,"hero":1368,"end":1379,"bytes":409612}
+{"path":"/","run":2,"base":"http://localhost:3100","at":"2026-10-27T15:05:48.124Z","ua":"googlebot","headers":465,"status":200,"vercelId":null,"cache":null,"first":465,"hero":465,"end":1286,"bytes":414882}
+{"path":"/","run":3,"base":"http://localhost:3101","at":"2026-10-27T15:05:49.410Z","ua":"googlebot","headers":1396,"status":200,"vercelId":null,"cache":null,"first":1396,"hero":1397,"end":1403,"bytes":409613}
+{"path":"/","run":3,"base":"http://localhost:3100","at":"2026-10-27T15:05:50.814Z","ua":"googlebot","headers":430,"status":200,"vercelId":null,"cache":null,"first":431,"hero":431,"end":1221,"bytes":414853}
