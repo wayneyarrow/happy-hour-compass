@@ -254,3 +254,31 @@ Data: [`phase2a-fallback-2026-10-27/`](phase2a-fallback-2026-10-27/). Single low
 
 - **Hero timing** (10 runs, local): median 474 ms (runs 532 503 453 444 464 463 476 509 584 471), against 453 ms before this change.
 - **Bot user agents:** Googlebot and Facebook still get complete HTML with all 10 headings in place. Their `<head>` differs from a visitor's only in Sentry's random trace IDs.
+
+## Loading fallback on staging (2026-10-27)
+
+- **Deployments:**
+  - new: `dpl_HFPo4knVS9hxUHEiB6cJ1LGxKUeR`, built from `e11158d`, iad1;
+  - previous: `dpl_9RooTrwofPz3bSkPBpr6Vp6TucVk` (`a182778`).
+- **Served CSS:** the deployed page contains the fallback CSS intact (full `10s` rules).
+- **Data:** [`phase2a-fallback-staging-2026-10-27/`](phase2a-fallback-staging-2026-10-27/).
+
+**Hero arrival** (10 alternating runs on the deployment URLs, ms):
+
+| | Hero, per run | Median | Full document, median |
+|---|---|---|---|
+| Previous (`a182778`) | 1376 1116 1314 1179 1218 1182 1075 1048 1056 1092 | 1148 | 2555 |
+| New (`e11158d`) | 1741 1351 1336 1105 1154 1056 1406 1086 1066 1199 | 1177 | 2624 |
+
+**Checked on the deployed build:**
+
+- **Finished homepage:** unchanged from `a182778` on mobile and desktop. Sections, links, placements, both Weekly Picks placements, metadata, JSON-LD and discovery payloads (8 exposures; 14/29 impressions; the same click) are identical. CLS 0, and no tracking request got through.
+- **JavaScript off:** links immediately, footer directly below (771 px on mobile), no shapes ([screenshot](phase2a-fallback-staging-2026-10-27/screens/javascript-off-mobile.png)).
+- **Scripts enabled but not running** (with and without reduced motion): shapes at 3 s, links by 15 s ([screenshot](phase2a-fallback-staging-2026-10-27/screens/scripts-enabled-none-run-15s.png)). The only layout shift (0.086) is the deliberate collapse at 10 s.
+- **Keyboard:** the links take focus with Tab, show the focus outline and open on Enter in every fallback case.
+- **Interrupted response:** a local relay forwarded staging's real response and dropped the connection just before the Sections. It only reads from staging. Links appeared in all 4 runs:
+  - in 3 runs, within 3 s through the error boundary;
+  - in 1 run, the page stayed "loading" and the CSS reveal was pending.
+- **Crawlers:** Googlebot and Facebook user agents get complete HTML, the same size as on `a182778`. The `<head>` is identical for all user agents. Every response is `private, no-store`, `x-vercel-cache: MISS`.
+
+**Local only:** the shared rendering failure; triggering it on a deployed build would need test code or data changes.
