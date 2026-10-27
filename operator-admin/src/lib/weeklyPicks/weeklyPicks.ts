@@ -8,14 +8,16 @@
  *
  * "Weekly Picks" is customer-facing copy: confirmed signups join the
  * existing HHC Consumers list in Brevo (see getWeeklyPicksBrevoConfig()).
- * The explicit permission is the checkbox below, which the server action
- * requires — except on the homepage placements, where pressing the signup
- * button next to WEEKLY_PICKS_BUTTON_CONSENT_TEXT is the consent action —
- * plus, everywhere, Brevo's own double opt-in confirmation.
+ * There is no permission checkbox: pressing the signup button, with
+ * WEEKLY_PICKS_CONSENT_TEXT directly beside it, is the consent action, and
+ * Brevo's own double opt-in confirmation is still required before anyone
+ * is added to the list.
  */
 
 export const WEEKLY_PICKS_CONSENT_TEXT =
-  "Yes, email me Happy Hour Compass Weekly Picks every Thursday. I can unsubscribe anytime.";
+  "By signing up, you agree to receive Happy Hour Compass Weekly Picks by email. Unsubscribe anytime.";
+
+export const WEEKLY_PICKS_SIGNUP_BUTTON_LABEL = "Sign up for Weekly Picks";
 
 /**
  * Fixed signup placements. The value is the only thing sent to analytics
@@ -33,25 +35,6 @@ export type WeeklyPicksPlacement = (typeof WEEKLY_PICKS_PLACEMENTS)[number];
 export function isWeeklyPicksPlacement(value: unknown): value is WeeklyPicksPlacement {
   return typeof value === "string" && (WEEKLY_PICKS_PLACEMENTS as readonly string[]).includes(value);
 }
-
-/**
- * Placements with no permission checkbox: the signup button is the active
- * consent action, with WEEKLY_PICKS_BUTTON_CONSENT_TEXT directly beside it.
- * Every other placement keeps the checkbox, and the server still requires it.
- */
-export const WEEKLY_PICKS_BUTTON_CONSENT_PLACEMENTS = [
-  "homepage_main",
-  "homepage_bottom",
-] as const satisfies readonly WeeklyPicksPlacement[];
-
-export function weeklyPicksUsesButtonConsent(placement: unknown): boolean {
-  return (
-    typeof placement === "string" && (WEEKLY_PICKS_BUTTON_CONSENT_PLACEMENTS as readonly string[]).includes(placement)
-  );
-}
-
-export const WEEKLY_PICKS_BUTTON_CONSENT_TEXT =
-  "By signing up, you agree to receive Happy Hour Compass Weekly Picks by email. Unsubscribe anytime.";
 
 /**
  * Splits the homepage's displayed sections around the main signup.
@@ -105,7 +88,7 @@ export type WeeklyPicksSignupState =
   | {
       status: "error";
       message?: string;
-      fieldErrors?: { email?: string; consent?: string };
+      fieldErrors?: { email?: string };
       turnstileFailed?: boolean;
     };
 
@@ -119,8 +102,6 @@ export const WEEKLY_PICKS_PROMISE_COMPACT =
 
 export const WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE = "Enter your email address.";
 export const WEEKLY_PICKS_EMAIL_INVALID_MESSAGE = "Enter a valid email address, like you@example.com.";
-export const WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE =
-  "Please tick the box so we can email you Weekly Picks.";
 export const WEEKLY_PICKS_GENERIC_ERROR_MESSAGE =
   "We couldn't sign you up right now. Please try again in a few minutes.";
 export const WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE =

@@ -14,7 +14,6 @@ export async function subscribeToWeeklyPicks(formData: FormData): Promise<Weekly
   const heads = await headers();
   return processWeeklyPicksSignup({
     email: formData.get("email"),
-    consent: formData.get("weekly_picks_consent"),
     placement: formData.get("placement"),
     turnstileToken: formData.get(TURNSTILE_TOKEN_FIELD),
     remoteIp: getClientIpFromHeaders(heads),

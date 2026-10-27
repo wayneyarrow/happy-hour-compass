@@ -55,14 +55,14 @@ test("analytics: one GA4 event with only the placement; no Vercel trackEvent; co
   assert.ok(/redirect\("\/weekly-picks\/confirmed"\)/.test(confirmed), "query string is stripped server-side");
 });
 
-test("consent: homepage boxes use the button + notice; other placements keep the checkbox and sender line", () => {
+test("consent: one form, no checkbox or sender line; button + notice with Privacy Policy and contact links", () => {
   const form = read(FORM);
-  assert.ok(/!buttonConsent && \(\s*<div className="mt-4">\s*<div className="flex items-start gap-3">\s*<input\s+ref=\{consentRef\}/.test(form), "checkbox renders only without button consent");
-  assert.ok(/if \(!buttonConsent && !consented\)/.test(form), "client skips the checkbox check only for button consent");
-  assert.ok(form.includes("{WEEKLY_PICKS_BUTTON_CONSENT_TEXT}"));
-  assert.ok(form.includes('href="/privacy#contact"'), "button-consent notice links to the mailing address and contact email");
-  assert.ok(/aria-describedby=\{buttonConsent \? consentNoticeId : undefined\}/.test(form));
-  assert.ok(form.includes("Sent by Happy Hour Compass ({SUPPORT_EMAIL})"), "checkbox placements keep the sender line");
+  assert.ok(!/type="checkbox"|weekly_picks_consent/.test(form), "no permission checkbox");
+  assert.ok(!form.includes("Sent by Happy Hour Compass"), "no visible sender line");
+  assert.ok(form.includes(": WEEKLY_PICKS_SIGNUP_BUTTON_LABEL}") && form.includes("{WEEKLY_PICKS_CONSENT_TEXT}"));
+  assert.ok(form.includes('href="/privacy"') && form.includes('href="/privacy#contact"'));
+  assert.ok(form.includes("aria-describedby={consentNoticeId}"));
+  assert.ok(!/weekly_picks_consent|consent/.test(read("app/(website)/weekly-picks/actions.ts")));
   const privacy = read("app/(legal)/privacy/page.tsx");
   assert.ok(privacy.includes('<Section id="contact"') && privacy.includes("1756 Sonora Drive"), "contact anchor and mailing address exist");
 });

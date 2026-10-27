@@ -10,8 +10,6 @@ import {
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
   WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE,
   WEEKLY_PICKS_PLACEMENTS,
-  WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE,
-  WEEKLY_PICKS_BUTTON_CONSENT_PLACEMENTS,
 } from "../../../src/lib/weeklyPicks/weeklyPicks";
 
 function makeDeps(
@@ -47,7 +45,6 @@ function makeDeps(
 
 const VALID = {
   email: "  Wayne+WP@Example.com ",
-  consent: "yes",
   placement: "homepage_main",
   turnstileToken: "tok",
   remoteIp: "203.0.113.5",
@@ -64,37 +61,16 @@ test("invalid or missing email → field error, no Turnstile or Brevo call", asy
   }
 });
 
-test("checkbox placements: unchecked (or forged) permission checkbox → consent field error, no calls", async () => {
-  for (const placement of ["weekly_picks_page", "guide_end", "anything-else"]) {
-    for (const consent of [null, "", "on", "true", "no"]) {
-      const { deps, calls } = makeDeps();
-      const result = await processWeeklyPicksSignup({ ...VALID, placement, consent }, deps);
-      assert.deepEqual(result, { status: "error", fieldErrors: { consent: WEEKLY_PICKS_CONSENT_REQUIRED_MESSAGE } });
-      assert.equal(calls.turnstile.length + calls.brevo.length, 0);
-    }
+test("every placement: no checkbox field needed (button is the consent action); still Turnstile then one double opt-in", async () => {
+  for (const placement of WEEKLY_PICKS_PLACEMENTS) {
+    const { deps, calls } = makeDeps();
+    const result = await processWeeklyPicksSignup({ ...VALID, placement }, deps);
+    assert.deepEqual(result, { status: "accepted" });
+    assert.equal(calls.turnstile.length, 1);
+    assert.deepEqual(calls.brevo, [
+      { email: "wayne+wp@example.com", redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed" },
+    ]);
   }
-});
-
-test("button-consent placements (homepage): no checkbox needed; still Turnstile then one double opt-in", async () => {
-  assert.deepEqual([...WEEKLY_PICKS_BUTTON_CONSENT_PLACEMENTS], ["homepage_main", "homepage_bottom"]);
-  for (const placement of WEEKLY_PICKS_BUTTON_CONSENT_PLACEMENTS) {
-    for (const consent of [null, undefined, "yes"]) {
-      const { deps, calls } = makeDeps();
-      const result = await processWeeklyPicksSignup({ ...VALID, placement, consent }, deps);
-      assert.deepEqual(result, { status: "accepted" });
-      assert.equal(calls.turnstile.length, 1);
-      assert.deepEqual(calls.brevo, [
-        { email: "wayne+wp@example.com", redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed" },
-      ]);
-    }
-  }
-});
-
-test("button-consent placements still reject a missing Turnstile token before Brevo", async () => {
-  const { deps, calls } = makeDeps({ turnstileOk: false });
-  const result = await processWeeklyPicksSignup({ ...VALID, placement: "homepage_bottom", consent: null, turnstileToken: null }, deps);
-  assert.deepEqual(result, { status: "error", message: TURNSTILE_FAILURE_MESSAGE, turnstileFailed: true });
-  assert.equal(calls.brevo.length, 0);
 });
 
 test("unknown placement → generic error, no calls", async () => {
@@ -208,10 +184,9 @@ test("Slack: accepted request posts exactly one alert with email, placement and 
   assert.deepEqual(calls.slack, [EXPECTED_SLACK_TEXT]);
 });
 
-test("Slack: nothing is sent for validation, consent, placement or Turnstile failures", async () => {
+test("Slack: nothing is sent for validation, placement or Turnstile failures", async () => {
   const cases = [
     { input: { ...VALID, email: "nope" } },
-    { input: { ...VALID, placement: "guide_end", consent: null } },
     { input: { ...VALID, placement: "x" } },
     { input: VALID, turnstileOk: false },
   ];
