@@ -168,7 +168,7 @@ On Vercel the first request for each variant is resized once and then served fro
 
 ## Remaining risks
 
-- **Vercel's first-resize latency is unmeasured.** The first visitor to a new variant pays the resize cost. Measure it on staging.
+- **First-resize latency.** The first visitor to each new variant waits for the resize: up to about 1 s for a large Supabase photo on staging (Vercel p95 1.17 s). After that it's a CDN hit.
 - **Retina desktop** loads 1600-px WebP originals for large slots (about 150–200 KB). That's still smaller than before, but larger than phone views.
 - **Map popups (`SearchResultsMap`) still use the original image URL.** The browser can't reuse the card's resized copy, so opening a popup downloads the original. That was also true before, and map popups are out of scope.
 - **The guide-page venue grid** uses a fixed `sizes` value. If that layout changes, the value needs updating.
@@ -181,10 +181,104 @@ On Vercel the first request for each variant is resized once and then served fro
 
 None of these touch data or storage.
 
+## Staging (2026-10-28)
+
+- **Deployed:** `website` `b955127`, `dpl_25uR8kjYVwqixxSRnC6dEJ2RMcCE`, Ready 18:50 UTC, `['pdx1']`, staging.happyhourcompass.com.
+  - This push also carried the docs-only commits `091bda5`, `1581491` and `4e425a1`.
+  - `vercel.json` is unchanged (`"regions": ["pdx1"]`).
+- **Before:** the previous staging deployment (`f6cab18`, the same app as Production), measured 18:36–18:48 UTC just before the push.
+- **After:** measured 18:50–19:16 UTC.
+- **Conditions:** the documented ones (Lighthouse 13.5.0, mobile, DevTools throttling), with tracking blocked; every audit reported nothing got through.
+
+### Lighthouse, mobile, 3 runs
+
+Data: `staging-before-images.csv`, `staging-after-images.csv`.
+
+| Page | Load | Before LCP (runs) | After LCP (runs) | Median | Photo requests / KB |
+|---|---|---|---|---|---|
+| Train Station Pub | cold | 14291, 14331, 14494 | 3206, 3293, 3214 | **14.33 → 3.21 s** | 6 / 1,756 → 7 / 68 |
+| Joey | cold | 5243, 5353, 5405 | 3427, 3453, 3352 | **5.35 → 3.43 s** | 1 / 343 → 1 / 76 |
+| Happy Hours | cold | 11177, 9413, 9377 | 8022, 7581, 7548 | **9.41 → 7.58 s** | 4 / 743 → 4 / 160 |
+| Train Station Pub | warm | 842, 818, 768 | 768, 719, 704 | 0.82 → 0.72 s | |
+| Joey | warm | 792, 774, 798 | 835, 924, 740 | 0.79 → 0.84 s | |
+| Happy Hours | warm | 2079, 2089, 1946 | 2408, 2158, 1982 | 2.08 → 2.16 s | |
+
+- **Maps is unchanged:** 6–10 requests and 129–179 KB per page. It's still Happy Hours' LCP element, and its load delay is 6.5 s after (median).
+- **Venue pages:** LCP is now mostly the main photo's own download, about 2.5 s on the throttled link (it was 14 s on Train Station Pub).
+- **Warm loads** are within normal run-to-run variation, since images come from the browser cache.
+
+### First resize versus cached (Vercel, staging)
+
+Image sizes nobody had requested yet, timed from the Pacific Northwest (time to first byte):
+
+| Request | MISS | HIT (2 repeats) |
+|---|---|---|
+| Train Station Pub main photo, 750 px (Supabase source, 373 KB) | 1.04 s | 0.28, 0.26 s |
+| Same, 96 px | 0.44 s | 0.15, 0.14 s |
+| Joey placeholder, 750 px | 0.62 s | 0.31, 0.14 s |
+| Same, 96 px | 0.27 s | 0.20, 0.16 s |
+
+- **Headers:** `content-type: image/webp`, `x-vercel-cache: MISS` then `HIT`, and `age` increasing. Cache-control is a one-year `must-revalidate` for Supabase sources and a one-year `immutable` for placeholders.
+- **Vercel metrics since the deploy (all test traffic):** 242 transformations. Source 55.4 MB → output 6.3 MB (−89%). Resize duration p50 176 ms, p95 1.17 s, max 1.68 s.
+- **"Cold" in Lighthouse** means a cold browser cache. The CDN copies were already warm from the checks above. The first visitor to an uncached variant adds the MISS cost in the table.
+
+### Checks on staging
+
+- **Delivered widths, bytes, duplicates and fallback** match the local results.
+  - Data: `image-requests-staging.jsonl`, `delivered-widths-and-fallback-staging.txt`.
+  - Phone photo bytes: Happy Hours 159 KB, Train Station Pub 68 KB, Joey 77 KB.
+  - All photos are WebP, with no duplicate downloads from the hidden copies.
+  - The broken-image fallback hides the image; the phone thumbnail strip is unchanged.
+- **Refused requests** all return 400: a quality other than 70/75, another host, another bucket, a query string, a non-standard width.
+- **Non-allowlisted sources** render as the original URL with no `srcset`.
+- **Interactions:** a thumbnail tap switches the main photo; hover zoom is 1.05; the full-screen viewer (1600-px original) opens and closes with Escape; the all-photos overlay loads originals.
+- **Screenshots** (phone 2×, desktop 1×), staging against Production as the "before" reference:
+  - Same page sizes and the same first-screen image loading.
+  - CLS 0 / 0.002–0.005.
+  - Mean pixel difference 0.85–2.63, only inside photos.
+  - High-density crops at 2× desktop and 3× phone: `screens-hidpi-tsp-production-vs-staging.jpg`. Same framing and sharpness.
+- **Guide page** (`/central-okanagan/guides/date-night-happy-hours-in-kelowna`): the venue cards get 640 px on a phone, 384 on desktop and 640 on retina. Discovery tracking fired (2 batches, intercepted).
+- **Tracking:** the homepage fired 4 discovery batches and Train Station Pub its venue view. Everything was answered locally; nothing got through.
+
+### Journeys, median of 3, ms
+
+Data: `journeys-staging-*.jsonl`, `journeys-production-reference.jsonl`.
+
+| Journey | Unthrottled before → after | Fast 4G before → after | Fast 4G rerun, staging vs Production, 19:13–19:15 |
+|---|---|---|---|
+| J1 Home → Happy Hours | 988 → 810 | 1318 → 1671 | 1328 vs 1288 |
+| J2 Happy Hours → venue | 641 → 621 | 923 → 1446 | 1314 vs 1059 |
+| J3 venue → Back | 125 → 131 | 349 → 448 | 487 vs 432 |
+| J4 On Now on / off | 116 / 211 → 80 / 236 | 231 / 706 → 198 / 794 | 220 / 877 vs 239 / 834 |
+| J5 Daily Specials → venue | 732 → 586 | 764 → 1073 | 803 vs 864 |
+
+**The slower Fast 4G runs** spent their extra time before the URL changed, waiting for the venue page's navigation data from the server (976–1,714 ms against 405–472 ms before). The photo change doesn't affect that.
+- **Timing:** they fell at 19:00:12–19:01:00, when Production's hourly jobs run against the shared database.
+- **The rerun:** in the rerun away from the hour, J1 and J5 match Production. One J2 run still took 3.9 s, again before the URL changed.
+- **Why Production was faster:** it used prefetched navigation data, while staging fetched it on click (low-traffic staging instances).
+- **Status:** inconclusive, not attributable to images. Recheck after any Production promotion.
+
+### Cost (estimate)
+
+- **Testing so far:** 242 transformations, about $0.01–0.02.
+- **The projection above still holds:** about 1,500–3,000 variants per cache cycle (about $0.08–0.25), plus cache writes (average output about 26 KB, roughly $0.05). That's about **$0.20–0.50/month**.
+- **Shared cache:** the resized images cached during staging testing are reused by Production, because the cache key is per project.
+
+### Comparison limitations
+
+- 3 runs per measure, from one location.
+- The "before" staging deployment had been idle, and the "after" deployment was new; both are low-traffic.
+- Production served as the visual and journey reference, so it's same-time but a different hostname and traffic level.
+- Real-user effect needs Speed Insights after any Production release.
+
 ## Next validation (after approval)
 
-1. **Staging:**
-   - Lighthouse (3 cold and 3 warm runs on the three pages) and the journeys.
-   - `/_next/image` returning WebP, and `x-vercel-cache` going `MISS` → `HIT`, with the first-resize time.
-   - The transformation count (`vercel metrics vercel.image_transformation.count`).
-2. **Production:** the same checks, plus 7 days of transformation counts and cost, then Speed Insights.
+1. **Wayne's visual review on staging:**
+   - phone, desktop and high-density;
+   - cards, gallery, thumbnails, full-screen and all-photos views;
+   - a guide page.
+2. **Production, if promoted:**
+   - the same checks;
+   - Fast 4G journeys rechecked;
+   - 7 days of transformation counts and cost;
+   - then Speed Insights.
