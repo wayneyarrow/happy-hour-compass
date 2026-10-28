@@ -1,8 +1,36 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
+import { isOptimizableImageSrc, PHOTO_QUALITY } from "@/lib/imageDelivery";
 
 type VenueImage = { url: string };
+
+// ─── Rendered image widths (`<img sizes>`) ────────────────────────────────────
+//
+// Derived from the layout below: the desktop grid sits in max-w-7xl with
+// px-6 (md) / lg:px-10 gutters and gap-2; with supporting images it splits
+// 3fr/2fr, and 3-4 supporting images form a 2×2 grid on the right.
+//
+// The mobile hero and the desktop primary image are both always in the DOM
+// (one hidden by CSS) and both load eagerly, so they must share ONE sizes
+// value: the browser then picks the same srcset candidate for both and
+// downloads it once, as it did with the single original URL.
+
+function mainImageSizes(hasRight: boolean): string {
+  return hasRight
+    ? "(min-width: 1280px) 715px, (min-width: 1024px) calc(60vw - 53px), (min-width: 768px) calc(60vw - 34px), 100vw"
+    : "(min-width: 1280px) 1200px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 48px), 100vw";
+}
+
+function supportingImageSizes(rightIsGrid: boolean): string {
+  return rightIsGrid
+    ? "(min-width: 1280px) 234px, (min-width: 1024px) calc(20vw - 22px), calc(20vw - 15px)"
+    : "(min-width: 1280px) 477px, (min-width: 1024px) calc(40vw - 35px), calc(40vw - 22px)";
+}
+
+// Mobile thumbnail strip: 56×42 buttons with a 2px border.
+const THUMBNAIL_SIZES = "52px";
 
 type Props = {
   images: VenueImage[];
@@ -202,13 +230,16 @@ function DesktopGallery({
     >
       {/* Primary image */}
       <div className="relative overflow-hidden group">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={images[0].url}
           alt={venueName}
+          fill
+          sizes={mainImageSizes(hasRight)}
+          quality={PHOTO_QUALITY}
+          unoptimized={!isOptimizableImageSrc(images[0].url)}
           loading="eager"
           fetchPriority="high"
-          className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.backgroundColor = "#f3f4f6";
             (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -235,12 +266,15 @@ function DesktopGallery({
         >
           {rightImages.map((img, i) => (
             <div key={i} className="relative overflow-hidden group">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={img.url}
                 alt=""
+                fill
+                sizes={supportingImageSizes(rightIsGrid)}
+                quality={PHOTO_QUALITY}
+                unoptimized={!isOptimizableImageSrc(img.url)}
                 loading="lazy"
-                className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.backgroundColor = "#f3f4f6";
                   (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -301,13 +335,16 @@ function MobileGallery({
     <div className="md:hidden">
       {/* Hero */}
       <div className="relative h-[280px] bg-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={images[activeIndex]?.url ?? ""}
+        <Image
+          src={images[activeIndex].url}
           alt={venueName}
+          fill
+          sizes={mainImageSizes(images.length > 1)}
+          quality={PHOTO_QUALITY}
+          unoptimized={!isOptimizableImageSrc(images[activeIndex].url)}
           loading="eager"
           fetchPriority="high"
-          className="w-full h-full object-cover object-center"
+          className="object-cover object-center"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
@@ -339,7 +376,7 @@ function MobileGallery({
               type="button"
               onClick={() => setActiveIndex(i)}
               aria-label={`View image ${i + 1}`}
-              className="shrink-0 rounded-md overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              className="relative shrink-0 rounded-md overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               style={{
                 width: 56,
                 height: 42,
@@ -351,12 +388,15 @@ function MobileGallery({
                 transition: "border-color 0.15s, opacity 0.15s",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={img.url}
                 alt=""
+                fill
+                sizes={THUMBNAIL_SIZES}
+                quality={PHOTO_QUALITY}
+                unoptimized={!isOptimizableImageSrc(img.url)}
                 loading="lazy"
-                className="w-full h-full object-cover object-center"
+                className="object-cover object-center"
               />
             </button>
           ))}

@@ -14,6 +14,12 @@ import { WeeklyPicksSection } from "@/app/(website)/weekly-picks/WeeklyPicksSect
 import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
 import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 
+// Venue card image width in the "Hand-picked spots" grid below: 1 column
+// (px-6 gutters), 2 columns from sm, 3 columns of the max-w-5xl container
+// (lg:px-10, gap-6) from lg.
+const GUIDE_VENUE_CARD_IMAGE_SIZES =
+  "(min-width: 1024px) 299px, (min-width: 640px) calc(50vw - 36px), calc(100vw - 48px)";
+
 /**
  * Guide Experience V2 — the guide-detail presentation, extracted (Card 2A)
  * from this route's page.tsx so it can be reused by the Control Panel's
@@ -230,7 +236,7 @@ export function GuideDetailView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {venueCards.map((v, i) => (
                     <TrackedDiscoveryItem key={v.venueUuid} itemType="venue" itemId={v.venueUuid} position={i} className="grid">
-                      <SearchResultCard data={v} />
+                      <SearchResultCard data={v} imageSizes={GUIDE_VENUE_CARD_IMAGE_SIZES} />
                     </TrackedDiscoveryItem>
                   ))}
                 </div>

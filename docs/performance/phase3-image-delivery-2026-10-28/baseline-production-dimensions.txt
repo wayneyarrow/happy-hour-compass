@@ -1,0 +1,43 @@
+== mobile /website-happy-hours
+placeholder disp 0x0 need~ 0w natural 1600x1067 136KB hidden y=0 eager/high loaded venue-pic-wine-bar-10.jpg
+supabase disp 0x0 need~ 0w natural 1600x2133 360KB hidden y=0 eager/high loaded 0af35fc1-cdd9-49a3-8f63-9df13080a841.jpg
+placeholder disp 378x200 need~ 662w natural 1600x1067 136KB visible y=544 eager/high loaded venue-pic-wine-bar-10.jpg
+supabase disp 378x200 need~ 662w natural 1600x2133 360KB visible y=945 eager/high loaded 0af35fc1-cdd9-49a3-8f63-9df13080a841.jpg
+placeholder disp 378x200 need~ 662w natural 1067x1600 97KB visible y=1390 lazy/auto loaded venue-pic-bar-3.jpg
+placeholder disp 378x200 need~ 662w natural 1200x1600 148KB visible y=1814 lazy/auto loaded venue-pic-winery-1.jpg
+== mobile /central-okanagan/kelowna/train-station-pub
+supabase disp 412x280 need~ 721w natural 1600x1067 372KB visible y=65 eager/high loaded c0c6fb17-a422-4726-8267-184a49463bf3.jpg
+supabase disp 52x38 need~ 91w natural 1600x1067 372KB visible y=357 lazy/auto loaded c0c6fb17-a422-4726-8267-184a49463bf3.jpg
+supabase disp 52x38 need~ 91w natural 1600x1067 298KB visible y=357 lazy/auto loaded 01d0d62a-587e-4176-ac18-9faea66194fc.jpg
+supabase disp 52x38 need~ 91w natural 1600x1067 258KB visible y=357 lazy/auto loaded 501a814d-2ffe-48af-8d8b-fd0b839323fc.jpg
+supabase disp 52x38 need~ 91w natural 1600x1054 337KB visible y=357 lazy/auto loaded e5fe52a0-0209-4630-9f7e-220ea24d1768.jpg
+supabase disp 0x0 need~ 0w natural 1600x1067 372KB hidden y=0 eager/high loaded c0c6fb17-a422-4726-8267-184a49463bf3.jpg
+supabase disp 56x56 need~ 98w natural 1600x1164 282KB visible y=1822 lazy/auto loaded 8858c154-f4dc-4e21-8690-25a70b2c8c0c.jpg
+supabase disp 56x56 need~ 98w natural 1600x1067 204KB visible y=1916 lazy/auto loaded 95f96166-7fa3-4b19-ab2c-149555085bc6.jpg
+== mobile /central-okanagan/kelowna/joey
+placeholder disp 412x280 need~ 721w natural 1600x1067 342KB visible y=65 eager/high loaded venue-pic-casual-dining-8.jpg
+placeholder disp 0x0 need~ 0w natural 1600x1067 342KB hidden y=0 eager/high loaded venue-pic-casual-dining-8.jpg
+== desktop /website-happy-hours
+placeholder disp 307x200 need~ 307w natural 1600x1067 136KB visible y=327 eager/high loaded venue-pic-wine-bar-10.jpg
+supabase disp 307x200 need~ 307w natural 1600x2133 360KB visible y=327 eager/high loaded 0af35fc1-cdd9-49a3-8f63-9df13080a841.jpg
+placeholder disp 307x200 need~ 307w natural 1067x1600 97KB visible y=793 lazy/auto loaded venue-pic-bar-3.jpg
+placeholder disp 307x200 need~ 307w natural 1200x1600 148KB visible y=793 lazy/auto loaded venue-pic-winery-1.jpg
+placeholder disp 307x200 need~ 307w natural 1600x1067 117KB visible y=1259 lazy/auto loaded venue-pic-brewery-5.jpg
+supabase disp 307x200 need~ 307w natural 1600x960 282KB visible y=1259 lazy/auto loaded 20d13c84-f6ac-498a-9921-ad6dc8a52b09.jpg
+supabase disp 307x200 need~ 307w natural 1600x2400 1053KB visible y=1705 lazy/auto loaded 5f9f5e57-2a9c-4553-8048-5f921a68049b.jpg
+supabase disp 307x200 need~ 307w natural 917x1237 155KB visible y=1705 lazy/auto loaded f92fbb87-27f0-4b1c-8323-7a95213b4fc5.jpg
+placeholder disp 307x200 need~ 307w natural 1067x1600 188KB visible y=2130 lazy/auto loaded venue-pic-cocktail-bar-1.jpg
+placeholder disp 307x200 need~ 307w natural 1600x1067 170KB visible y=2130 lazy/auto loaded venue-pic-brewery-6.jpg
+placeholder disp 0x0 need~ 0w natural 1600x1067 136KB hidden y=0 eager/high loaded venue-pic-wine-bar-10.jpg
+supabase disp 0x0 need~ 0w natural 1600x2133 360KB hidden y=0 eager/high loaded 0af35fc1-cdd9-49a3-8f63-9df13080a841.jpg
+== desktop /central-okanagan/kelowna/train-station-pub
+supabase disp 0x0 need~ 0w natural 1600x1067 372KB hidden y=0 eager/high loaded c0c6fb17-a422-4726-8267-184a49463bf3.jpg
+supabase disp 715x480 need~ 715w natural 1600x1067 372KB visible y=97 eager/high loaded c0c6fb17-a422-4726-8267-184a49463bf3.jpg
+supabase disp 234x236 need~ 234w natural 1600x1067 298KB visible y=97 lazy/auto loaded 01d0d62a-587e-4176-ac18-9faea66194fc.jpg
+supabase disp 234x236 need~ 234w natural 1600x1067 258KB visible y=97 lazy/auto loaded 501a814d-2ffe-48af-8d8b-fd0b839323fc.jpg
+supabase disp 234x236 need~ 234w natural 1600x1054 337KB visible y=341 lazy/auto loaded e5fe52a0-0209-4630-9f7e-220ea24d1768.jpg
+supabase disp 56x56 need~ 56w natural 1600x1164 282KB visible y=1619 lazy/auto loaded 8858c154-f4dc-4e21-8690-25a70b2c8c0c.jpg
+supabase disp 56x56 need~ 56w natural 1600x1067 204KB visible y=1619 lazy/auto loaded 95f96166-7fa3-4b19-ab2c-149555085bc6.jpg
+== desktop /central-okanagan/kelowna/joey
+placeholder disp 0x0 need~ 0w natural 1600x1067 342KB hidden y=0 eager/high loaded venue-pic-casual-dining-8.jpg
+placeholder disp 1200x480 need~1200w natural 1600x1067 342KB visible y=97 eager/high loaded venue-pic-casual-dining-8.jpg

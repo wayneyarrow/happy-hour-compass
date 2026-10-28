@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { SaveVenueButton } from "@/app/(website)/SaveVenueButton";
+import { isOptimizableImageSrc, PHOTO_QUALITY } from "@/lib/imageDelivery";
 import {
   computeHhStatus,
   computeHhStatusForDay,
@@ -186,9 +188,24 @@ type Props = {
    * (the browser still loads lazy images that are in or near the viewport).
    */
   imagePriority?: boolean;
+  /**
+   * The card image's rendered width, as an `<img sizes>` value. Defaults to
+   * the Happy Hours listing: full width minus the 16px gutters on mobile,
+   * one of two columns in the left half of the page from md up. Other
+   * layouts (e.g. guide pages) pass their own.
+   */
+  imageSizes?: string;
 };
 
-export function SearchResultCard({ data, effectiveDayName, imagePriority = false }: Props) {
+const HAPPY_HOURS_CARD_IMAGE_SIZES =
+  "(min-width: 768px) calc(25vw - 28px), calc(100vw - 32px)";
+
+export function SearchResultCard({
+  data,
+  effectiveDayName,
+  imagePriority = false,
+  imageSizes = HAPPY_HOURS_CARD_IMAGE_SIZES,
+}: Props) {
   return (
     // `<article>` (not the Link) is the outer element so the Save button
     // below can be an interactive sibling of the Link rather than nested
@@ -225,19 +242,23 @@ export function SearchResultCard({ data, effectiveDayName, imagePriority = false
       >
         {/* ── Hero Image ───────────────────────────────────────────────── */}
         <div className="relative h-[200px] overflow-hidden bg-gray-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={data.image}
-            alt={data.name}
-            loading={imagePriority ? "eager" : "lazy"}
-            fetchPriority={imagePriority ? "high" : "auto"}
-            decoding="async"
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              // Hide broken images gracefully — bg-gray-100 shows as placeholder
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
+          {data.image && (
+            <Image
+              src={data.image}
+              alt={data.name}
+              fill
+              sizes={imageSizes}
+              quality={PHOTO_QUALITY}
+              unoptimized={!isOptimizableImageSrc(data.image)}
+              loading={imagePriority ? "eager" : "lazy"}
+              fetchPriority={imagePriority ? "high" : "auto"}
+              className="object-cover"
+              onError={(e) => {
+                // Hide broken images gracefully — bg-gray-100 shows as placeholder
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
 
           {/* Gradient — darkens the top edge so pills remain legible */}
           <div

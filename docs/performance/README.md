@@ -19,6 +19,7 @@ How to measure the public website (happyhourcompass.com) in a repeatable way, an
 | `docs/performance/phase2a-production-2026-10-27/` + [`PHASE2A_PRODUCTION_2026-10-27.md`](PHASE2A_PRODUCTION_2026-10-27.md) | Phase 2A (homepage streaming) measured on Production after release | yes |
 | `docs/performance/region-experiment-2026-10-27/` + [`REGION_EXPERIMENT_2026-10-27.md`](REGION_EXPERIMENT_2026-10-27.md) + [`REGION_PDX1_PRODUCTION_PLAN.md`](REGION_PDX1_PRODUCTION_PLAN.md) | Function region experiment (iad1 / sfo1 / pdx1) on throwaway previews, the pdx1 staging trial, and the Production move plan | yes |
 | `docs/performance/region-pdx1-production-2026-10-28/` + [`REGION_PDX1_PRODUCTION_2026-10-28.md`](REGION_PDX1_PRODUCTION_2026-10-28.md) | pdx1 Production move: release record, first job cycles, before/after performance, follow-ups | yes |
+| `docs/performance/phase3-image-delivery-2026-10-28/` + [`PHASE3_IMAGE_DELIVERY.md`](PHASE3_IMAGE_DELIVERY.md) | Phase 3 image delivery (next/image): baseline, delivered vs displayed sizes, quality choice, local before/after | yes |
 | `docs/performance/phase1-staging-2026-10-27/` | Staging before (`cc293d2`) / after (`67fc9fa`) data for the same change — same environment, directly comparable | yes |
 | `docs/performance/phase1-local-2026-10-26/` | Before/after data for the location + image-loading change (local builds): Lighthouse per-run CSVs, journeys, location/analytics checks | yes |
 | `docs/performance/baseline-*/` | Compact baseline data (per-run CSV, journey JSONL) | yes |

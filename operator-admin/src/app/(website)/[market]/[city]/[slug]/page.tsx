@@ -1,6 +1,8 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
+import { isOptimizableImageSrc, PHOTO_QUALITY } from "@/lib/imageDelivery";
 import {
   getVenueWithEventsForConsumerById,
   getVenueByHistoricalSlug,
@@ -748,9 +750,17 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
                         className="flex h-full items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                       >
                         {guide.heroImageUrl && (
-                          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-gray-100">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={guide.heroImageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                          <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                            <Image
+                              src={guide.heroImageUrl}
+                              alt=""
+                              fill
+                              sizes="56px"
+                              quality={PHOTO_QUALITY}
+                              unoptimized={!isOptimizableImageSrc(guide.heroImageUrl)}
+                              loading="lazy"
+                              className="object-cover"
+                            />
                           </div>
                         )}
                         <span className="text-[15px] font-semibold text-gray-900 leading-snug line-clamp-2">

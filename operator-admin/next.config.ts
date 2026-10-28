@@ -1,7 +1,26 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { PHOTO_QUALITY, SUPABASE_IMAGE_HOST, SUPABASE_IMAGE_PATH_PREFIX } from "./src/lib/imageDelivery";
 
 const nextConfig: NextConfig = {
+  // Performance Phase 3: next/image may optimize remote images from the one
+  // public Supabase bucket only (exact host, exact path, no query string).
+  // Local /images/... placeholders need no entry (no localPatterns = all
+  // local paths allowed). Formats and sizes are the Next.js defaults (WebP).
+  // `qualities` limits /_next/image to the two values in use: PHOTO_QUALITY
+  // for venue photos and the default 75 for every other next/image (logos).
+  images: {
+    qualities: [PHOTO_QUALITY, 75],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: SUPABASE_IMAGE_HOST,
+        port: "",
+        pathname: `${SUPABASE_IMAGE_PATH_PREFIX}**`,
+        search: "",
+      },
+    ],
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
