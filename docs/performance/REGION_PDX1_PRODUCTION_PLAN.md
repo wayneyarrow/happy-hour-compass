@@ -1,6 +1,6 @@
 # pdx1 (Portland) Production move: decision and monitoring plan
 
-Status: **proposed, not promoted.** Evidence: [REGION_EXPERIMENT_2026-10-27.md](REGION_EXPERIMENT_2026-10-27.md).
+Status: **promoted 2026-10-28** (`main` `f6cab18`, `dpl_9gswdy5EJid1A81zMVd3aV12rZpJ`). Results and follow-ups: [REGION_PDX1_PRODUCTION_2026-10-28.md](REGION_PDX1_PRODUCTION_2026-10-28.md). Evidence: [REGION_EXPERIMENT_2026-10-27.md](REGION_EXPERIMENT_2026-10-27.md).
 
 - **Staging** runs pdx1: first `d8a4f5d` (`dpl_4buej6LkQ3ZFfZZFHAmzdB6kNu8t`), now `34f2c8d` (`dpl_7HDgCyWEcYrow4Qk8Z2zjcBCetys`). Wayne's signed-in Operator Admin and Control Panel checks passed there.
 - **Production** (preflight, 2026-10-28) is `main` `b165217`, `dpl_HnBJSqxstCGeAgnAs6ndA9RGPGUs`, iad1. This is the Weekly Picks consent change cherry-picked onto `9aa07f4`. It is the **rollback point**. Don't roll back to `dpl_94x4iTNnCuCMZjZcEBcs3p1MNPtB`: that would also undo the consent change.

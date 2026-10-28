@@ -118,16 +118,19 @@ CPU is unchanged, as expected: the gain is time spent waiting on the database.
 - **Server metrics:** the pdx1 window is short (78 minutes, 123 renders) and includes test traffic. Other routes' server metrics are dominated by cached and prefetch requests, so they're left out.
 - **Real-user confirmation** needs about 28 days of Speed Insights.
 
-## Not yet verified (needs real events)
+## Remaining follow-ups (unverified on pdx1; no active monitoring)
 
-- Any email sent by Resend from pdx1.
-- A Resend open-tracking webhook.
-- A Brevo API call (outbox with work, or a newsletter signup).
-- Any Brevo webhook.
-- A Stripe webhook or Checkout.
-- A real form submission.
-- The Scout report: Monday 2026-11-02 17:00 UTC.
-- Real-user speed (Speed Insights, about 28 days).
+Nothing is watching these automatically. Each is checked when the real event happens. Rollback steps are in the [plan](REGION_PDX1_PRODUCTION_PLAN.md#rollback-steps).
+
+| Follow-up | When | Where to check | Escalate if |
+|---|---|---|---|
+| **Real email sending** (Resend: setup, reminder, milestone, password reset, signup) | Next real send (about 2 a day) | Resend → Emails; Control Panel email notes; Sentry | Failures, timeouts or "unconfirmed" outcomes |
+| Resend open-tracking webhook | Next tracked email opened (about daily) | Resend → Webhooks; `#customer-success` | Repeated non-200 deliveries |
+| **Brevo processing** (outbox with work, newsletter signup, Brevo webhook) | Next signup or consumer change (days apart) | Vercel logs `brevo-sync-outbox` (`claimed` > 0, `failed` 0); Brevo dashboard | Brevo timeouts or the outbox stuck |
+| **Stripe webhooks** (and Checkout) | Next Stripe event (unpredictable) | Stripe → Developers → Webhooks | Non-2xx responses (Stripe retries for up to 3 days) |
+| **Next Scout report** | Mon 2026-11-02 17:00 UTC (09:00 PST) | Control Panel → Analytics → Scout report; Vercel logs; `#ops-alerts` | Report missing after the 18:40 retry |
+| Real form submissions | Next submission | Control Panel; Slack intake channels | Errors or missing notifications |
+| **Real-user performance** | About 2026-11-25 (28 days) | Vercel Speed Insights, mobile p75 LCP/FCP, against the 28 days before 2026-10-28 | No improvement, or a regression |
 
 ## Pre-existing log errors (not caused by the move)
 
