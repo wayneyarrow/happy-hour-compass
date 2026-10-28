@@ -1,6 +1,6 @@
 # Phase 3: Focused image delivery
 
-Status: **in Production since 2026-10-28** (`main` `42a444d`, `dpl_2BQaUY6spHGCijssnj51EZcwfTwt`). See "Production" below.
+Status: **closed — in Production since 2026-10-28** (`main` `42a444d`, `dpl_2BQaUY6spHGCijssnj51EZcwfTwt`). See "Phase 3 closure" at the end.
 
 Data: [`phase3-image-delivery-2026-10-28/`](phase3-image-delivery-2026-10-28/).
 
@@ -375,8 +375,65 @@ Two comparisons, both away from the hourly jobs.
 - The deployment-URL journeys use `*.vercel.app` hostnames, where Maps most likely doesn't load.
 - Real-user effect needs Speed Insights (about 28 days).
 
-## Next validation
+## Phase 3 closure (2026-10-28)
 
-- **7 days:** transformation counts, cost and image errors.
-- **About 28 days:** Speed Insights.
-- **Decide on the `srcset` trimming follow-up** above.
+Phase 3 is **closed**. The scope stays as released in `b955127`.
+
+### Verified Production improvements
+
+Measured on Production with the documented test conditions (slow mobile, cold load, median of 3):
+
+| Page | Largest image shown | Photo download |
+|---|---|---|
+| Train Station Pub | 15.38 → 3.49 s | 1,756 → 68 KB |
+| Joey | 6.17 → 3.83 s | 343 → 76 KB |
+| Happy Hours | 10.21 → 8.36 s, still limited by Maps | 743 → 160 KB |
+
+Every photo is WebP at its displayed width. Quality, cropping, layout, the gallery and tracking are unchanged, and failed photos are now hidden properly.
+
+### Accepted trade-off: list re-render overhead
+
+On a 4×-slowed CPU, re-rendering the Happy Hours list takes about **65–90 ms** longer than before:
+
+| Journey (6 alternating runs) | Before | After |
+|---|---|---|
+| Back to Happy Hours | 242 ms | 306 ms |
+| Turning On Now off | 279 ms | 363 ms |
+| Home → Happy Hours | 1,302 ms | 1,390 ms |
+
+A CPU profile of "On Now off" puts busy CPU at a median of 856 → 930 ms. Attribute writes went from 13 to 29 ms, and image URL generation takes about 7 ms.
+
+**Cause:** each of the 132 card images carries a 16-candidate `srcset`. The card's `calc()` `sizes` value prevents Next.js from trimming the candidate list.
+
+**Decision:** accepted (Wayne, 2026-10-28) in exchange for the image-loading improvements above.
+
+**Limits of this measurement:**
+- It was taken on `*.vercel.app` deployment URLs, where Maps most likely doesn't load.
+- On the Production domain the difference was within run-to-run variation.
+- It's a lab measurement on a 4×-slowed CPU, not real-device data.
+
+### Deferred, not implemented: shorter `srcset` for the Happy Hours card
+
+Proposed option D: build the card's props with `getImageProps()`, keep the existing `sizes`, and restrict `srcset` to 384/640/750/828/1080/1200. Estimated effect:
+- About 2.3 → 0.85 KB per card.
+- Happy Hours HTML about 1,178 → 970 KB raw.
+- Overhead reduced to about 20–30 ms.
+
+**Deferred** because it needs custom image handling (including broken-image detection) for a small, estimated benefit. Also considered and not adopted:
+- Plain `vw` in `sizes` (10 candidates).
+- A fixed `width={384}` (2 candidates, softer on large monitors and 3× phones).
+- Trimming the global `deviceSizes`/`imageSizes` (affects about 20 other images, including logos and `/business` visuals).
+
+The duplicated phone and desktop card lists predate Phase 3 and are also out of scope.
+
+### Follow-ups (monitoring only; not active work)
+
+- **Image usage and cost** (from about 2026-11-04): `vercel metrics vercel.image_transformation.count` / `source_size_bytes` / `optimized_size_bytes` / `request_duration_ms`, and the image line on the Vercel usage page.
+  - Estimate: about $0.20–0.50/month.
+  - Investigate if transformations keep growing well past the variants actually in use, or if `/_next/image` errors appear.
+- **Real-user performance** (from about 2026-11-25): Vercel Speed Insights, mobile p75 LCP for `/website-happy-hours` and venue routes. Compare 28 days after 2026-10-28 with the 28 days before.
+- **Known limitations still in place:**
+  - The first visitor to a new variant waits up to about 1 s.
+  - Retina desktop gets the 1600-px WebP original.
+  - Map popups still load original photos.
+  - Happy Hours is still limited by Maps loading (out of scope).
