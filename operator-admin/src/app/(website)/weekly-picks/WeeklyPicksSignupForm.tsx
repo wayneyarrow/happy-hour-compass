@@ -8,9 +8,9 @@ import { trackGA4Event } from "@/lib/ga4";
 import {
   WEEKLY_PICKS_CONSENT_TEXT,
   WEEKLY_PICKS_SIGNUP_BUTTON_LABEL,
+  WEEKLY_PICKS_EYEBROW,
   WEEKLY_PICKS_HEADLINE,
   WEEKLY_PICKS_PROMISE,
-  WEEKLY_PICKS_PROMISE_COMPACT,
   WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE,
   WEEKLY_PICKS_EMAIL_INVALID_MESSAGE,
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
@@ -137,7 +137,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
     <div className={isFull ? "" : "md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-10 md:items-start"}>
       {!hideIntro && (
         <div className={isFull ? "mb-6" : "mb-5 md:mb-0"}>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">Weekly Picks</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">{WEEKLY_PICKS_EYEBROW}</p>
           <Heading
             className={
               isFull
@@ -148,7 +148,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
             {WEEKLY_PICKS_HEADLINE}
           </Heading>
           <p className={`mt-2 text-gray-600 leading-relaxed ${isFull ? "text-[15px] md:text-base max-w-xl" : "text-sm"}`}>
-            {isFull ? WEEKLY_PICKS_PROMISE : WEEKLY_PICKS_PROMISE_COMPACT}
+            {WEEKLY_PICKS_PROMISE}
           </p>
         </div>
       )}
@@ -168,7 +168,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
             Almost done
           </ResultHeading>
           <p className="mt-1.5 text-sm text-gray-600 leading-relaxed">
-            Check your inbox for a confirmation link. If you already receive Weekly Picks,
+            Check your inbox for a confirmation link. If you already receive Your Happy Hour Plans,
             you&rsquo;re all set. If you need help,{" "}
             <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-800">
               contact us
@@ -177,7 +177,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
           </p>
         </div>
       ) : (
-        <form noValidate onSubmit={handleSubmit} onFocus={engage} aria-label="Weekly Picks signup">
+        <form noValidate onSubmit={handleSubmit} onFocus={engage} aria-label="Your Happy Hour Plans newsletter signup">
           <input type="hidden" name="placement" value={placement} />
 
           {formMessage && (

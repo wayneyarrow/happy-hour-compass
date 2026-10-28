@@ -19,7 +19,7 @@ import { buildPageMetadata } from "@/lib/seo/metadata";
 export const metadata: Metadata = {
   ...buildPageMetadata({
     title: "You're confirmed",
-    description: "Thanks for confirming your Happy Hour Compass Weekly Picks subscription.",
+    description: "Thanks for confirming your subscription to Your Happy Hour Plans, the Happy Hour Compass newsletter.",
     path: "/weekly-picks/confirmed",
   }),
   robots: { index: false, follow: true },
@@ -47,7 +47,7 @@ export default async function WeeklyPicksConfirmedPage({
           Thanks for confirming
         </h1>
         <p className="mt-4 text-base md:text-lg text-gray-600 leading-relaxed">
-          Look out for your local picks every Thursday.
+          Look out for Your Happy Hour Plans in your inbox every Thursday.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <Link

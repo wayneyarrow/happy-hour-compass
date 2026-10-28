@@ -9,7 +9,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const EFFECTIVE_DATE = "June 19, 2026";
-const LAST_UPDATED   = "October 14, 2026";
+const LAST_UPDATED   = "October 28, 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -296,7 +296,7 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Brevo</strong> — Email marketing service used to manage newsletter
-            subscriptions (such as Weekly Picks), confirm sign-ups, send marketing emails, and
+            subscriptions (such as Your Happy Hour Plans), confirm sign-ups, send marketing emails, and
             process unsubscribe requests.{" "}
             <a href="https://www.brevo.com/legal/privacypolicy/" target="_blank" rel="noopener noreferrer">
               Brevo Privacy Policy

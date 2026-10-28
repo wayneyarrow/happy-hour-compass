@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/seo/metadata";
-import { WEEKLY_PICKS_HEADLINE, WEEKLY_PICKS_PROMISE } from "@/lib/weeklyPicks/weeklyPicks";
+import { WEEKLY_PICKS_EYEBROW, WEEKLY_PICKS_HEADLINE, WEEKLY_PICKS_PROMISE } from "@/lib/weeklyPicks/weeklyPicks";
 import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
 
 /**
@@ -11,9 +11,9 @@ import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
  */
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "Weekly Picks newsletter",
+  title: "Your Happy Hour Plans newsletter",
   description:
-    "A free weekly Thursday email with local happy hours, food finds, daily specials and events across Kelowna, West Kelowna and Lake Country.",
+    "Your Happy Hour Plans is a free weekly Thursday email with local happy hours, food finds, daily specials and events across Kelowna, West Kelowna and Lake Country.",
   path: "/weekly-picks",
 });
 
@@ -28,7 +28,7 @@ export default function WeeklyPicksPage() {
   return (
     <section className="bg-amber-50/60">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-10 md:pt-16 pb-14 md:pb-20">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">Weekly Picks</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">{WEEKLY_PICKS_EYEBROW}</p>
         <h1 className="mt-2 text-3xl md:text-[2.75rem] font-bold text-gray-900 tracking-tight leading-tight">
           {WEEKLY_PICKS_HEADLINE}
         </h1>

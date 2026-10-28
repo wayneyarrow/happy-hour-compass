@@ -83,9 +83,10 @@ test("Weekly Picks never touches account identifiers or the blocklist", () => {
   assert.ok(!/emailBlacklisted|updateEnabled|FIRSTNAME|EXT_ID|attributes/.test(body), "DOI request sends no attributes and never touches the blocklist");
 });
 
-test("header: Weekly Picks link on desktop and mobile; Consumer Sign In unchanged", () => {
+test("header: Newsletter link to /weekly-picks on desktop and mobile; Consumer Sign In unchanged", () => {
   const header = read("app/(website)/WebsiteHeader.tsx");
   assert.equal((header.match(/href="\/weekly-picks"/g) ?? []).length, 2);
+  assert.equal((header.match(/^\s*Newsletter$/gm) ?? []).length, 2);
   assert.equal((header.match(/Consumer Sign In/g) ?? []).length, 2);
   assert.equal((header.match(/href="\/sign-in"/g) ?? []).length, 2);
 });

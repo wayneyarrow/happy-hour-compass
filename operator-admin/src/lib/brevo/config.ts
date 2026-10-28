@@ -98,9 +98,9 @@ export type WeeklyPicksBrevoConfig = {
 };
 
 /**
- * Reads the account-free newsletter ("Weekly Picks") double opt-in
- * configuration (src/lib/weeklyPicks/). "Weekly Picks" is customer-facing
- * copy, not a separate Brevo audience: BREVO_WEEKLY_PICKS_LIST_ID points at
+ * Reads the account-free newsletter ("Your Happy Hour Plans", formerly
+ * "Weekly Picks") double opt-in configuration (src/lib/weeklyPicks/). The
+ * newsletter name is customer-facing copy, not a separate Brevo audience: BREVO_WEEKLY_PICKS_LIST_ID points at
  * the existing HHC Consumers list (the same list as Production's
  * BREVO_CONSUMER_LIST_ID), and confirmed signups join it alongside
  * consenting account holders.

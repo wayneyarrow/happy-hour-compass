@@ -161,7 +161,7 @@ export default function WebsiteHeader({
               href="/weekly-picks"
               className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-              Weekly Picks
+              Newsletter
             </Link>
 
             {/* Saved button + dropdown */}
@@ -351,7 +351,7 @@ export default function WebsiteHeader({
                     onClick={() => setMenuOpen(false)}
                     className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
                   >
-                    Weekly Picks
+                    Newsletter
                   </Link>
                 </li>
                 <li className="border-b border-gray-100">

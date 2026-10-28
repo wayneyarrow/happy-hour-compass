@@ -6,8 +6,10 @@
  * must agree on: the consent wording, the fixed placement identifiers, and
  * email validation.
  *
- * "Weekly Picks" is customer-facing copy: confirmed signups join the
- * existing HHC Consumers list in Brevo (see getWeeklyPicksBrevoConfig()).
+ * The newsletter's public name is "Your Happy Hour Plans" (it was "Weekly
+ * Picks" — internal identifiers, the /weekly-picks route and analytics
+ * events keep the old name). Confirmed signups join the existing HHC
+ * Consumers list in Brevo (see getWeeklyPicksBrevoConfig()).
  * There is no permission checkbox: pressing the signup button, with
  * WEEKLY_PICKS_CONSENT_TEXT directly beside it, is the consent action, and
  * Brevo's own double opt-in confirmation is still required before anyone
@@ -15,9 +17,9 @@
  */
 
 export const WEEKLY_PICKS_CONSENT_TEXT =
-  "By signing up, you agree to receive Happy Hour Compass Weekly Picks by email. Unsubscribe anytime.";
+  "By signing up, you agree to receive Your Happy Hour Plans, the Happy Hour Compass newsletter, by email. Unsubscribe anytime.";
 
-export const WEEKLY_PICKS_SIGNUP_BUTTON_LABEL = "Sign up for Weekly Picks";
+export const WEEKLY_PICKS_SIGNUP_BUTTON_LABEL = "Sign me up";
 
 /**
  * Fixed signup placements. The value is the only thing sent to analytics
@@ -94,15 +96,15 @@ export type WeeklyPicksSignupState =
 
 // ── User-facing copy ─────────────────────────────────────────────────────────
 
-export const WEEKLY_PICKS_HEADLINE = "Your next happy hour plan, delivered.";
+/** Small label above the headline; rendered uppercase by CSS. */
+export const WEEKLY_PICKS_EYEBROW = "Free weekly newsletter";
+export const WEEKLY_PICKS_HEADLINE = "Your Happy Hour Plans";
 export const WEEKLY_PICKS_PROMISE =
   "Get local happy hours, food finds, daily specials and events across Kelowna, West Kelowna and Lake Country in your inbox every Thursday. Free.";
-export const WEEKLY_PICKS_PROMISE_COMPACT =
-  "Local happy hours, food finds, daily specials and events across Kelowna, West Kelowna and Lake Country. Every Thursday. Free.";
 
 export const WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE = "Enter your email address.";
 export const WEEKLY_PICKS_EMAIL_INVALID_MESSAGE = "Enter a valid email address, like you@example.com.";
 export const WEEKLY_PICKS_GENERIC_ERROR_MESSAGE =
   "We couldn't sign you up right now. Please try again in a few minutes.";
 export const WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE =
-  "Weekly Picks signup is limited to approved test addresses on this staging site.";
+  "Newsletter signup is limited to approved test addresses on this staging site.";

@@ -31,14 +31,14 @@ export function WeeklyPicksSection({ placement, variant, layout }: Props) {
 
   if (layout === "inline") {
     return (
-      <section aria-label="Weekly Picks newsletter signup" className="mb-12">
+      <section aria-label="Your Happy Hour Plans newsletter signup" className="mb-12">
         {card}
       </section>
     );
   }
 
   return (
-    <section aria-label="Weekly Picks newsletter signup" className="py-10 md:py-12 border-t border-gray-100">
+    <section aria-label="Your Happy Hour Plans newsletter signup" className="py-10 md:py-12 border-t border-gray-100">
       <div className="max-w-7xl mx-auto px-6 lg:px-10">{card}</div>
     </section>
   );
