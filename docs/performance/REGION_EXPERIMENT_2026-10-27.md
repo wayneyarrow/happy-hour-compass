@@ -157,3 +157,59 @@ All server-side work moves; middleware does not.
 | Resend and Brevo webhooks | Not called: with their secrets missing on generic previews, both raise a Slack alert | Untested |
 | Operator Admin and Control Panel signed-in flows | Not tested: no test credentials, and sign-in writes (login notifications) to the shared database | Untested |
 | Emails (Resend), Brevo calls, Stripe API calls, real cron runs, submitting forms | Not run (real sends, writes or billing) | Untested; code inspection only |
+
+## Staging trial: pdx1 via `vercel.json` (2026-10-27)
+
+- **Change:** `d8a4f5d` on `website` adds `"regions": ["pdx1"]` to `operator-admin/vercel.json`, after the docs-only commit `296c81f`. No other application file changed.
+- **Staging:** `dpl_4buej6LkQ3ZFfZZFHAmzdB6kNu8t`. The deployment record lists `['pdx1']`, and every function response comes from `pdx1::pdx1`: pages, navigation requests, `/api/health`, webhooks and crons. Static files and middleware redirects come from the CDN or edge.
+- **Control:** the previous staging deployment `dpl_29Zr95wse2XuZK7W5CakinarxzWB`. It has the same `website` environment and application code, in iad1.
+- **Unchanged:** Production stays `dpl_94x4iTNnCuCMZjZcEBcs3p1MNPtB` (`main` `9aa07f4`), still `pdx1::iad1`. The project default region is still `['iad1']`.
+
+### Timing, staging pdx1 vs the iad1 control (alternating, 19:52–19:54 UTC)
+
+| | iad1 control | pdx1 staging |
+|---|---|---|
+| Homepage hero, per run (ms) | 1915 1290 1241 1108 1281 1196 1354 1422 1169 1179 | 626 909 694 3959 772 2509 726 795 864 678 |
+| Homepage hero / full document, median | 1261 / 3021 ms | **784 / 1745 ms** |
+| Happy Hours full document, 5 runs | 1419 1175 1260 1028 1585 (median 1260) | 675 699 797 739 1136 (median 739) |
+| Train Station Pub full document, 5 runs | 1123 887 817 913 918 (median 913) | 808 549 519 612 514 (median 549) |
+
+The two slow pdx1 homepage runs (3959 and 2509 ms) look like new instances starting on a brand-new deployment.
+
+### Verified on staging (pdx1)
+
+- **Homepage:** identical to the iad1 control on mobile and desktop. Sections and order (Local Favourites, Today's Specials, comped venues), both Weekly Picks placements, metadata, JSON-LD and discovery payloads all match, CLS 0, and no tracking request got through.
+- **Market switching:** works, and its server action runs in pdx1.
+- **Route sweep:** 31 routes, with statuses identical to the control.
+- **Crawlers:** complete HTML for Googlebot and Facebook user agents; `private, no-store`, `MISS`. Fallbacks work with JavaScript off and with scripts not running, and are keyboard-reachable.
+- **Webhook and cron gates** (pdx1 and the control behave identically):
+  - Stripe, bogus signature: 400.
+  - Resend, unsigned: 401.
+  - Brevo, wrong token: 401.
+  - All 5 crons, no credentials: 401.
+
+  Nothing behind these gates ran.
+- **Unit tests** for email tracking, Brevo, Stripe, subscriptions, activation, Customer Success and the Scout report: 1,530 pass. This logic doesn't depend on region.
+
+### Side effects and test facilities (not run)
+
+| Flow | Side effects if run | Test facility available | Status / proposed verification |
+|---|---|---|---|
+| Stripe webhook processing and Checkout | Writes `venue_subscriptions` / `plan_change_events` in the shared database; Slack plan-change alerts | Staging uses Stripe test mode (2026-10-10 QA) | Untested. Needs an authorized QA session with a QA venue and cleanup, as on 2026-10-10. |
+| Resend sends (transactional email) | Real email; `email_messages` registry rows | Resend's test recipients (`…@resend.dev`) still write registry rows | Untested. First real sends would be after promotion: monitor the Resend dashboard and Sentry. |
+| Resend open-tracking webhook | `email_provider_events` rows; Slack `#customer-success` | — | Untested past the signature gate. |
+| Brevo API and webhook (Weekly Picks DOI, sync outbox) | Brevo contacts, DOI emails, outbox rows | Brevo has no sandbox in use | Untested past the token gate. |
+| Crons (5) | Database writes, emails, Slack | Vercel runs crons in Production only. `activation-reminders:dry-run` runs locally only | Not verifiable on staging. Check the first runs after promotion (cron logs, Sentry, `#ops-alerts`), with instant rollback ready. |
+| Form submissions (contact, suggest, add venue, claim, signup) | Database rows, emails, Slack | Turnstile-gated | The action path was verified earlier with a fake token (no write); real submissions untested. |
+| Operator Admin / Control Panel signed in | Sign-in records login notifications | Wayne's staging accounts | Wayne's read-only checks (below). |
+
+### Rollback
+
+- **Staging:** revert `d8a4f5d` on `website` and push. The new staging deployment uses the project default (iad1); confirm `x-vercel-id` shows `::iad1::` and the deployment record shows `['iad1']`.
+- **Production, if pdx1 is ever promoted:**
+  1. Vercel instant rollback to the previous Production deployment. Each deployment keeps the region it was built with, so iad1 returns immediately with no rebuild.
+  2. Instant rollback doesn't change the project setting (which stays iad1) or `vercel.json`. After a rollback, Vercel stops automatically assigning the Production domain to new deployments until one is promoted, so the next step must be deliberate.
+  3. Revert the region commit on `website`, fast-forward `main` and promote that deployment, so `main` doesn't reintroduce pdx1.
+  4. Verify `::iad1::` on the Production domain.
+
+**Important:** `website` now contains the pdx1 line. Any future fast-forward of `main` to `website` will move Production to pdx1. Decide on the region, or revert the line, before promoting any other website work.
