@@ -1,0 +1,18 @@
+prod-after mobile hh 44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig  44css→need77/got w=orig
+prod-after mobile v_tsp 412css→need721/got w=750  52css→need91/got w=96  52css→need91/got w=96  52css→need91/got w=96  52css→need91/got w=96  56css→need98/got w=128  56css→need98/got w=128  26css→need46/got w=orig  42css→need74/got w=orig
+prod-after mobile v_joey 412css→need721/got w=750  26css→need46/got w=orig  42css→need74/got w=orig
+prod-after mobile guide 364css→need637/got w=orig  13css→need22/got w=640  362css→need634/got w=640  362css→need634/got w=640
+prod-after desktop hh 307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384  307css→need307/got w=384
+prod-after desktop v_tsp 715css→need715/got w=750  234css→need234/got w=256  234css→need234/got w=256  234css→need234/got w=256  56css→need56/got w=64  56css→need56/got w=64  26css→need26/got w=orig  26css→need26/got w=orig
+prod-after desktop v_joey 1200css→need1200/got w=1200  26css→need26/got w=orig  26css→need26/got w=orig
+prod-after desktop guide 944css→need944/got w=orig  13css→need13/got w=384  297css→need297/got w=384  297css→need297/got w=384  297css→need297/got w=384  297css→need297/got w=384  297css→need297/got w=384  297css→need297/got w=384
+prod-after retina hh 330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750  330css→need659/got w=750
+prod-after retina v_tsp 715css→need1430/got w=1920  234css→need469/got w=640  234css→need469/got w=640  234css→need469/got w=640  56css→need112/got w=128  56css→need112/got w=128  26css→need52/got w=orig  26css→need52/got w=orig
+prod-after retina v_joey 1200css→need2400/got w=3840  26css→need52/got w=orig  26css→need52/got w=orig
+prod-after retina guide 944css→need1888/got w=orig  13css→need25/got w=640  297css→need593/got w=640  297css→need593/got w=640  297css→need593/got w=640  297css→need593/got w=640  297css→need593/got w=640  297css→need593/got w=640
+prod-after BROKEN mobile hh failedReqs 3 imgs: none/0x0 none/0x0
+prod-after BROKEN desktop hh failedReqs 3 imgs: none/0x0 none/0x0
+prod-after BROKEN mobile v_tsp failedReqs 3 imgs: none/0x0 block/52x38 none/0x0
+prod-after BROKEN desktop v_tsp failedReqs 2 imgs: none/0x0 block/0x0 none/0x0
+prod-after BROKEN mobile v_joey failedReqs 2 imgs: none/0x0 none/0x0
+prod-after BROKEN desktop v_joey failedReqs 2 imgs: none/0x0 none/0x0

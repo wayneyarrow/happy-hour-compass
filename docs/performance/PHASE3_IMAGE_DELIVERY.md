@@ -1,6 +1,6 @@
 # Phase 3: Focused image delivery
 
-Status: **on staging for review, not in Production** (2026-10-28). Staging results: see "Staging" below.
+Status: **in Production since 2026-10-28** (`main` `42a444d`, `dpl_2BQaUY6spHGCijssnj51EZcwfTwt`). See "Production" below.
 
 Data: [`phase3-image-delivery-2026-10-28/`](phase3-image-delivery-2026-10-28/).
 
@@ -271,14 +271,112 @@ Data: `journeys-staging-*.jsonl`, `journeys-production-reference.jsonl`.
 - Production served as the visual and journey reference, so it's same-time but a different hostname and traffic level.
 - Real-user effect needs Speed Insights after any Production release.
 
-## Next validation (after approval)
+## Production (2026-10-28)
 
-1. **Wayne's visual review on staging:**
-   - phone, desktop and high-density;
-   - cards, gallery, thumbnails, full-screen and all-photos views;
-   - a guide page.
-2. **Production, if promoted:**
-   - the same checks;
-   - Fast 4G journeys rechecked;
-   - 7 days of transformation counts and cost;
-   - then Speed Insights.
+- **Release:** `main` fast-forwarded `f6cab18` → `42a444d` at 19:37 UTC.
+  - Commits: `091bda5`, `1581491`, `4e425a1` (docs); `b955127` (the image change, identical to reviewed staging); `42a444d` (docs).
+  - Deployment `dpl_2BQaUY6spHGCijssnj51EZcwfTwt`, Ready 19:39:58 UTC, `['pdx1']`, on happyhourcompass.com and www.
+  - `vercel.json` is unchanged.
+- **Rollback target:** `dpl_9gswdy5EJid1A81zMVd3aV12rZpJ` (`f6cab18`, pdx1), with `vercel rollback dpl_9gswdy5EJid1A81zMVd3aV12rZpJ --scope team_8bFabDMUHQheF2tNTU8Mmf7R`. Then revert `b955127` on `website` before the next promotion.
+- **Staging before promotion:** `42a444d` (`dpl_AuS5TzZvRe3GGS5UgviZ28EW5Hfo`), Ready, smoke check passed.
+
+### Lighthouse, mobile, 3 runs, Production domain
+
+Before 19:23–19:33 UTC on `f6cab18`, after 19:44–19:55 UTC. Data: `production-before-images.csv`, `production-after-images.csv`.
+
+| Page | Load | Before LCP (runs) | After LCP (runs) | Median | Photo requests / KB |
+|---|---|---|---|---|---|
+| Train Station Pub | cold | 15332, 15382, 15439 | 3480, 3505, 3487 | **15.38 → 3.49 s** | 6 / 1,756 → 7 / 68 |
+| Joey | cold | 6170, 6144, 6242 | 3912, 3698, 3831 | **6.17 → 3.83 s** | 1 / 343 → 1 / 76 |
+| Happy Hours | cold | 10053, 11040, 10213 | 8362, 8455, 8095 | **10.21 → 8.36 s** | 4 / 743 → 4 / 160 |
+| Train Station Pub | warm | 793, 756, 764 | 1009, 714, 782 | 0.76 → 0.78 s | |
+| Joey | warm | 818, 3867, 946 | 761, 1261, 2066 | 0.95 → 1.26 s (noisy both sides) | |
+| Happy Hours | warm | 2225, 2256, 2265 | 2934, 2461, 2098 | 2.26 → 2.46 s | |
+
+- **Maps** is unchanged (6–11 requests, 103–179 KB per page) and is still Happy Hours' LCP element.
+- **Happy Hours load delay:** 8.96 → 7.28 s.
+- **Main photo download time:** Train Station Pub 14.6 → 2.7 s, Joey 5.4 → 3.0 s.
+- **Warm loads** are within normal variation; images come from the browser cache either way.
+
+### Image cache on Production (checked, not assumed)
+
+Requests to happyhourcompass.com right after the deploy, before any page was loaded:
+- **Variants staging had requested:** already `HIT` on the first request (TTFB 0.11–0.23 s). The cache is per project and shared between staging and Production.
+- **New variants:** `MISS` on first request, then `HIT`.
+  - Train Station Pub photo at 1080 px: 0.76 s → 0.26, 0.14 s.
+  - Train Station Pub main at 2048 px: 0.85 s → 0.14, 0.15 s.
+- **Formats:** all `image/webp`.
+- **Vercel metrics in 5-minute buckets:**
+  - Staging testing: 302 transformations (preview).
+  - Production 19:40–20:10 UTC: 6 transformations, p50 191 ms / p95 545 ms. The rest were already cached.
+
+### Checks on Production
+
+Data: `image-requests-production.jsonl`, `delivered-widths-and-fallback-production.txt`.
+
+- **Widths, bytes, formats and duplicates** are identical to staging.
+  - Phone: Happy Hours 159 KB, Train Station Pub 68 KB, Joey 77 KB.
+  - All WebP, no duplicate downloads.
+  - Retina desktop gets 1920 (served at the 1600-px source).
+- **Broken-image fallback** hides the image.
+- **Gallery:** thumbnail tap, hover zoom 1.05, full-screen viewer (original) with Escape to close, and the all-photos overlay all work.
+- **Guide page** venue cards: 640 px on phone and retina, 384 on desktop.
+- **Screenshots** against the pre-release Production reference: same page sizes and first-screen image loading, CLS 0 / 0.002–0.005, mean pixel difference 0.66–2.63, only inside photos.
+- **Tracking** (intercepted): the homepage sent 4 discovery batches, the guide page 2, and Train Station Pub its venue view. Nothing got through.
+
+### Journeys recheck
+
+Two comparisons, both away from the hourly jobs.
+
+**1. Production domain, before (19:33) and after (20:04), 3 runs each.** Data: `journeys-production-before.jsonl`, `journeys-production-after.jsonl`.
+
+| Journey | Fast 4G before → after | Unthrottled before → after |
+|---|---|---|
+| J1 Home → Happy Hours | 1298 → 1257 | 1177 → 1078 (one 4.4 s outlier after) |
+| J2 Happy Hours → venue | 965 → 860 | 638 → 694 |
+| J3 venue → Back | 457 → 437 | 126 → 134 |
+| J4 On Now on / off | 214 / 740 → 210 / 746 | 92 / 227 → 66 / 224 |
+| J5 Daily Specials → venue | 962 → 887 | 638 → 790 |
+
+**2. The old and new deployments' own URLs, alternated, Fast 4G, 6 runs each, 20:05–20:10, both warmed first.** Data: `journeys-deployment-url-*.jsonl`.
+
+| Journey | Old `f6cab18` (runs) → median | New `42a444d` (runs) → median |
+|---|---|---|
+| J1 Home → Happy Hours | 1264 1752 1301 1303 1209 1311 → 1302 | 1405 1374 1445 1352 1233 1579 → 1390 |
+| J2 Happy Hours → venue | 953 1107 852 1129 896 899 → 926 | 1082 1054 1144 828 1097 869 → 1068 |
+| J3 venue → Back | 253 255 251 225 218 232 → 242 | 344 327 293 316 296 283 → 306 |
+| J4 On Now off | 263 279 296 276 278 280 → 279 | 376 362 319 374 361 363 → 363 |
+| J4 On Now on | 124 (median) | 128 |
+| J5 Daily Specials → venue | 857 | 851 |
+
+**Finding: a small client-side cost when the Happy Hours list re-renders.** It's consistent across all 6 alternating runs:
+- About +65 ms on Back to Happy Hours, +85 ms on turning On Now off, and about +90 ms on Home → Happy Hours, all on a 4×-slowed CPU.
+
+**It isn't database load.** Back and the filter make no server request, and the URL change happens immediately.
+
+**Cause:** every card image now carries a 16-candidate `srcset`, about 2.3 KB per image.
+- The Happy Hours HTML grows from 849 to 1,178 KB raw (42 → 55 KB compressed).
+- 132 card images, across the phone list and the desktop grid.
+- These are client components, so the browser rebuilds those URLs each time the list re-renders.
+
+**Why the domain comparison didn't show it:** the domain's figures include Maps work, which adds variation (J4 off is about 740 ms there against about 280 ms on the deployment URLs). Maps most likely doesn't load on the `*.vercel.app` URLs.
+
+**Mitigation (not implemented):** limit `images.deviceSizes`/`imageSizes` to the widths actually used, to shorten every `srcset`. That's a follow-up for decision.
+
+### Cost (estimate)
+
+- **Unchanged:** about $0.20–0.50/month at current traffic.
+- **First 30 minutes on Production:** 6 transformations. Staging testing pre-warmed the shared cache.
+
+### Limitations
+
+- 3 runs (6 for the deployment-URL journeys), from one location, on the same day.
+- The "before" and "after" domain runs are 20–30 minutes apart.
+- The deployment-URL journeys use `*.vercel.app` hostnames, where Maps most likely doesn't load.
+- Real-user effect needs Speed Insights (about 28 days).
+
+## Next validation
+
+- **7 days:** transformation counts, cost and image errors.
+- **About 28 days:** Speed Insights.
+- **Decide on the `srcset` trimming follow-up** above.
