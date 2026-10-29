@@ -14,7 +14,12 @@ import { trackGA4Event } from "@/lib/ga4";
 import { DiscoverySearchInput } from "../DiscoverySearchInput";
 import { useSearchCapture } from "../tracking/useSearchCapture";
 import { buildEventFilterSearchParams, parseEventFilterSearchParams } from "./eventFilterUrl";
-import { eventOccursOnDate, getMarketTodayAndTomorrow } from "./eventCalendarDates";
+import {
+  eventHasOccurrenceOn,
+  eventOccursOnDate,
+  getMarketTodayAndTomorrow,
+  getTargetWeekendDates,
+} from "./eventCalendarDates";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
 
@@ -79,12 +84,6 @@ function buildCalendarCells(month: Date): Array<Date | null> {
 function dowFromIso(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).getDay();
-}
-
-function eventOccursOnDow(e: WebsiteEventListItem, dow: number): boolean {
-  if (e.recurrence === "daily") return true;
-  if (!e.firstDate) return true; // permissive for undated
-  return dowFromIso(e.firstDate) === dow;
 }
 
 function eventOccursInRange(
@@ -490,6 +489,7 @@ export function EventSearchResults({
   // Date so the calendar logic below is unchanged.
   const { todayIso, tomorrowIso } = getMarketTodayAndTomorrow(market.id, new Date());
   const today = parseIsoLocal(todayIso)!;
+  const weekendDates = getTargetWeekendDates(todayIso);
 
   // ── Date filter chips ──────────────────────────────────────────────────────
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
@@ -682,10 +682,7 @@ export function EventSearchResults({
       if (dateFilter === "today") return eventOccursOnDate(e, todayIso);
       if (dateFilter === "tomorrow") return eventOccursOnDate(e, tomorrowIso);
       if (dateFilter === "weekend") {
-        return (
-          eventOccursOnDow(e, 0) || // Sunday
-          eventOccursOnDow(e, 6)    // Saturday
-        );
+        return weekendDates.some((d) => eventHasOccurrenceOn(e, d));
       }
       if (hasAppliedRange && calAppliedStart && calAppliedEnd) {
         return eventOccursInRange(e, calAppliedStart, calAppliedEnd);

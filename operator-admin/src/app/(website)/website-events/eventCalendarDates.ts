@@ -51,8 +51,8 @@ export function getMarketTodayAndTomorrow(
  * Today/Tomorrow filter chip match for one market-local calendar date. A
  * one-off event matches only its own first_date; a daily event always; any
  * other recurring event (weekly/biweekly/monthly) its first_date's weekday,
- * as before. Undated events stay permissive. (This Weekend keeps its own
- * fixed Saturday/Sunday weekday rule in EventSearchResults.)
+ * as before. Undated events stay permissive. (This Weekend uses the stricter
+ * getTargetWeekendDates() + eventHasOccurrenceOn() instead.)
  */
 export function eventOccursOnDate(
   e: { firstDate: string | null; recurrence: string | null },
@@ -63,6 +63,53 @@ export function eventOccursOnDate(
   const isRecurring = e.recurrence && e.recurrence !== "none";
   if (!isRecurring) return e.firstDate === iso;
   return weekdayOfIso(e.firstDate) === weekdayOfIso(iso);
+}
+
+function daysBetweenIso(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = isoParts(fromIso);
+  const [ty, tm, td] = isoParts(toIso);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
+}
+
+/**
+ * Whether an event has an occurrence on `iso`: never before its first_date,
+ * then daily every day, weekly on first_date's weekday, biweekly every 14
+ * days from first_date, monthly on first_date's day of month (as the operator
+ * form describes it), and a one-off only on first_date. An unrecognised
+ * recurrence falls back to the weekly rule. Events have no end date, so none
+ * is applied. Undated events stay permissive, like the other date filters.
+ */
+export function eventHasOccurrenceOn(
+  e: { firstDate: string | null; recurrence: string | null },
+  iso: string
+): boolean {
+  if (!e.firstDate) return true; // permissive for undated
+  if (iso < e.firstDate) return false;
+  switch (e.recurrence) {
+    case null:
+    case "none":
+      return iso === e.firstDate;
+    case "daily":
+      return true;
+    case "biweekly":
+      return daysBetweenIso(e.firstDate, iso) % 14 === 0;
+    case "monthly":
+      return isoParts(iso)[2] === isoParts(e.firstDate)[2];
+    default:
+      return weekdayOfIso(iso) === weekdayOfIso(e.firstDate);
+  }
+}
+
+/**
+ * The This Weekend filter's target dates for a market-local `todayIso`:
+ * Monday–Friday the coming Saturday and Sunday; Saturday–Sunday the current
+ * weekend. Only dates from today on are returned (on Sunday, just Sunday),
+ * matching the server-side rule that already drops yesterday's one-offs.
+ */
+export function getTargetWeekendDates(todayIso: string): string[] {
+  const dow = weekdayOfIso(todayIso);
+  const saturdayIso = dow === 0 ? addDaysToIso(todayIso, -1) : addDaysToIso(todayIso, 6 - dow);
+  return [saturdayIso, addDaysToIso(saturdayIso, 1)].filter((d) => d >= todayIso);
 }
 
 /**
