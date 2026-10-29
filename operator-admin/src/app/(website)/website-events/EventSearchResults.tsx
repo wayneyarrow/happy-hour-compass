@@ -14,6 +14,7 @@ import { trackGA4Event } from "@/lib/ga4";
 import { DiscoverySearchInput } from "../DiscoverySearchInput";
 import { useSearchCapture } from "../tracking/useSearchCapture";
 import { buildEventFilterSearchParams, parseEventFilterSearchParams } from "./eventFilterUrl";
+import { getMarketTodayAndTomorrow } from "./eventCalendarDates";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
 
@@ -26,17 +27,6 @@ const MONTHS_SHORT = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
-function todayLocal(): Date {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function tomorrowLocal(): Date {
-  const d = todayLocal();
-  d.setDate(d.getDate() + 1);
-  return d;
-}
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -495,8 +485,12 @@ export function EventSearchResults({
 }: Props) {
   const pathname = usePathname();
 
-  const today = todayLocal();
-  const tomorrow = tomorrowLocal();
+  // The selected market's calendar date (not the server's UTC date during
+  // SSR, nor the visitor's browser timezone), as local-midnight Dates so the
+  // existing weekday/calendar logic below is unchanged.
+  const { todayIso, tomorrowIso } = getMarketTodayAndTomorrow(market.id, new Date());
+  const today = parseIsoLocal(todayIso)!;
+  const tomorrow = parseIsoLocal(tomorrowIso)!;
 
   // ── Date filter chips ──────────────────────────────────────────────────────
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
@@ -949,7 +943,7 @@ export function EventSearchResults({
                     onMouseEnter={() => hoverKey && setHoveredCardId(hoverKey)}
                     onMouseLeave={() => setHoveredCardId(null)}
                   >
-                    <EventSearchCard event={event} imagePriority={i < 2} />
+                    <EventSearchCard event={event} imagePriority={i < 2} marketId={market.id} />
                   </div>
                 );
               })}
@@ -1001,7 +995,7 @@ export function EventSearchResults({
         ) : (
           <div className="px-4 pb-8 space-y-4">
             {filtered.map((event, i) => (
-              <EventSearchCard key={event.id} event={event} imagePriority={i < 2} />
+              <EventSearchCard key={event.id} event={event} imagePriority={i < 2} marketId={market.id} />
             ))}
           </div>
         )}

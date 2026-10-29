@@ -1,115 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { WebsiteEventListItem } from "@/lib/data/events";
 import { getEventTypeLabel, getEventTypeEmoji } from "@/lib/eventTypes";
 import { SaveEventButton } from "@/app/(website)/SaveEventButton";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
-
-// ─── Date badge helpers ───────────────────────────────────────────────────────
-
-const DAYS_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const DAYS_PLURAL = [
-  "SUNDAYS", "MONDAYS", "TUESDAYS", "WEDNESDAYS",
-  "THURSDAYS", "FRIDAYS", "SATURDAYS",
-];
-const MONTHS_SHORT = [
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
-];
-
-function localIso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * Builds the two-line date badge shown on event cards.
- * Top line: day label (TODAY / TOMORROW / FRI / FRIDAYS / etc.)
- * Bottom line: date or time context
- */
-function buildDateBadge(
-  firstDate: string | null,
-  recurrence: string | null,
-  startTime: string | null
-): { top: string; bottom: string | null } {
-  // start_time is stored as human-readable "7:00 PM" (not HH:MM); use directly.
-  const timeLabel = startTime ?? null;
-
-  const now = new Date();
-  const todayIso = localIso(now);
-  const tomorrowDate = new Date(now);
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowIso = localIso(tomorrowDate);
-
-  const isRecurring = recurrence && recurrence !== "none";
-
-  if (!isRecurring) {
-    // One-off event
-    if (!firstDate) return { top: "DATE TBD", bottom: timeLabel };
-    if (firstDate === todayIso) return { top: "TODAY", bottom: timeLabel };
-    if (firstDate === tomorrowIso) return { top: "TOMORROW", bottom: timeLabel };
-
-    // Parse date without timezone shift
-    const [y, mo, d] = firstDate.split("-").map(Number);
-    const date = new Date(y, mo - 1, d);
-    const dayShort = DAYS_SHORT[date.getDay()];
-    const monthDay = `${MONTHS_SHORT[date.getMonth()]} ${d}`;
-    return { top: dayShort, bottom: monthDay };
-  }
-
-  // Recurring event
-  if (recurrence === "daily") return { top: "DAILY", bottom: timeLabel };
-  if (recurrence === "monthly") return { top: "MONTHLY", bottom: timeLabel };
-
-  // Weekly / biweekly — derive day from firstDate
-  if (firstDate) {
-    const [y, mo, d] = firstDate.split("-").map(Number);
-    const dow = new Date(y, mo - 1, d).getDay();
-    const todayDow = now.getDay();
-    const tomorrowDow = tomorrowDate.getDay();
-
-    if (dow === todayDow) return { top: "TODAY", bottom: timeLabel };
-    if (dow === tomorrowDow) return { top: "TOMORROW", bottom: timeLabel };
-
-    return {
-      top: DAYS_PLURAL[dow],
-      bottom: recurrence === "biweekly" ? "BIWEEKLY" : timeLabel,
-    };
-  }
-
-  return { top: "RECURRING", bottom: timeLabel };
-}
+import { buildEventDateBadge, getMarketTodayAndTomorrow } from "./eventCalendarDates";
 
 // ─── DateBadge ────────────────────────────────────────────────────────────────
 
 /**
- * Computes the badge client-side on mount (rather than during render) so it
- * always uses the viewer's actual wall-clock time — computing TODAY/TOMORROW
- * directly in the render body would run once during SSR (server timezone,
- * UTC on the deployment host) and again on client hydration (browser
- * timezone), producing mismatched HTML and a React hydration-mismatch error
- * whenever the two differ. Mirrors the mount-gated pattern used for the
- * venue-card happy-hour status (SearchResultCard.tsx / VenueActionCard.tsx).
- * Only the badge itself withholds rendering pre-mount — the rest of the
- * event card (image, title, save button, etc.) is unaffected.
+ * Rendered during SSR and hydration alike: TODAY/TOMORROW are relative to the
+ * market's local date (eventCalendarDates.ts), not the runtime's own
+ * timezone, so the server (UTC) and the browser compute the same badge.
+ * suppressHydrationWarning only covers the instant a render straddles the
+ * market's midnight between server and browser.
  */
 function DateBadge({
   firstDate,
   recurrence,
   startTime,
+  marketId,
 }: {
   firstDate: string | null;
   recurrence: string | null;
   startTime: string | null;
+  marketId: string;
 }) {
-  const [badge, setBadge] = useState<{ top: string; bottom: string | null } | null>(null);
-
-  useEffect(() => {
-    setBadge(buildDateBadge(firstDate, recurrence, startTime));
-  }, [firstDate, recurrence, startTime]);
-
-  if (!badge) return null;
+  const { todayIso } = getMarketTodayAndTomorrow(marketId, new Date());
+  const badge = buildEventDateBadge(firstDate, recurrence, startTime, todayIso);
 
   return (
     <div
@@ -121,9 +40,9 @@ function DateBadge({
         leading-none
       "
     >
-      <span className="text-[10px] font-bold text-gray-900 tracking-wider">{badge.top}</span>
+      <span className="text-[10px] font-bold text-gray-900 tracking-wider" suppressHydrationWarning>{badge.top}</span>
       {badge.bottom && (
-        <span className="text-[10px] font-semibold text-amber-600 tracking-wide mt-0.5">
+        <span className="text-[10px] font-semibold text-amber-600 tracking-wide mt-0.5" suppressHydrationWarning>
           {badge.bottom}
         </span>
       )}
@@ -163,9 +82,11 @@ type Props = {
   event: WebsiteEventListItem;
   /** First visible card(s) only: eager, high-priority image. Others lazy-load. */
   imagePriority?: boolean;
+  /** Selected market for TODAY/TOMORROW; defaults to the event's own market (homepage rails, guides). */
+  marketId?: string;
 };
 
-export function EventSearchCard({ event, imagePriority = false }: Props) {
+export function EventSearchCard({ event, imagePriority = false, marketId }: Props) {
   const typeLabel = getEventTypeLabel(event.eventType);
   const typeEmoji = getEventTypeEmoji(event.eventType);
   const showType = typeLabel && event.eventType !== "other";
@@ -238,6 +159,7 @@ export function EventSearchCard({ event, imagePriority = false }: Props) {
             firstDate={event.firstDate}
             recurrence={event.recurrence}
             startTime={event.startTime}
+            marketId={marketId ?? event.marketSlug ?? ""}
           />
         </div>
 
