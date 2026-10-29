@@ -96,6 +96,11 @@ test("every public reader embeds the venue plan context in the SAME query as the
   assert.doesNotMatch(venues, /getPublicPlanState/);
 
   const events = src("src/lib/data/events.ts");
+  assert.match(
+    events,
+    /const VENUE_PLAN_AND_MARKET_EMBED = `venues!venue_id\([^`]*\$\{VENUE_PLAN_CONTEXT_EMBED\}\)`/,
+    "the plan+market embed still carries the plan context"
+  );
   for (const fn of [
     "getEventForConsumerById",
     "getEventsForConsumerVenues",
@@ -110,7 +115,7 @@ test("every public reader embeds the venue plan context in the SAME query as the
     assert.ok(start >= 0, fn);
     const next = events.indexOf("\nexport ", start + 10);
     const body = events.slice(start, next === -1 ? undefined : next);
-    assert.match(body, /VENUE_PLAN_(ONLY|CONTEXT)_EMBED/, `${fn} must embed the venue plan context`);
+    assert.match(body, /VENUE_PLAN_(ONLY|CONTEXT|AND_MARKET)_EMBED/, `${fn} must embed the venue plan context`);
     assert.match(body, /isRowPubliclyActive\(/, `${fn} must filter paused events`);
     assert.match(body, /is_seeded_event/, `${fn} must select is_seeded_event for the grandfathered exception`);
     assert.match(body, /catch \(err\)/, `${fn} must turn a missing embed into its normal error result`);

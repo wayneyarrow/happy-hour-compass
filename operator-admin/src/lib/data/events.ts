@@ -15,6 +15,7 @@ import { toMarketConfig, type Market } from "@/lib/markets";
 import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
 import { resolveVenuePlanContext, VENUE_PLAN_CONTEXT_EMBED } from "@/lib/planGrants/publicPlanState";
 import { higherPlan } from "@/lib/planGrants/grantState";
+import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
 import {
   type PublicContentPolicy,
   isEventPubliclyActive,
@@ -66,6 +67,30 @@ export function isLinkedVenueUnpublished(venue: Record<string, any> | null | und
 
 /** Venue embed fragment carrying only the plan context (for queries with no venues embed yet). */
 const VENUE_PLAN_ONLY_EMBED = `venues!venue_id(${VENUE_PLAN_CONTEXT_EMBED})`;
+
+/** Plan context plus the venue's market slug — for queries that also apply the upcoming/past date rule (eventLocalToday). */
+const VENUE_PLAN_AND_MARKET_EMBED = `venues!venue_id(market_geo:markets!market_id(slug), ${VENUE_PLAN_CONTEXT_EMBED})`;
+
+/**
+ * "Today" (YYYY-MM-DD) for the date-only upcoming/past rule
+ * (upcomingBucket), in the event's own market timezone — resolved from its
+ * venue's market (`market_geo` embed) via getMarketLocalIsoDate(), never the
+ * server's UTC date. Before this, a one-off event dropped out at UTC
+ * midnight (5 PM PDT / 4 PM PST) on its own local day. A venue with no
+ * resolvable market uses `fallbackMarketId` (the active market, where the
+ * caller has one), else marketLocalDate.ts's default timezone.
+ */
+export function eventLocalToday(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  venues: Record<string, any> | Record<string, any>[] | null | undefined,
+  now: Date,
+  fallbackMarketId = ""
+): string {
+  const venue = Array.isArray(venues) ? venues[0] : venues;
+  const marketGeo = Array.isArray(venue?.market_geo) ? venue.market_geo[0] : venue?.market_geo;
+  const marketId = (marketGeo?.slug as string | undefined) ?? fallbackMarketId;
+  return getMarketLocalIsoDate(marketId, now);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public type
@@ -559,7 +584,7 @@ export async function getEventsForConsumerVenues(
         "id, slug, venue_id, title, description, event_type, " +
           "first_date, start_time, end_time, recurrence, " +
           "event_time, event_frequency, is_seeded_event, " +
-          VENUE_PLAN_ONLY_EMBED
+          VENUE_PLAN_AND_MARKET_EMBED
       )
       .in("venue_id", venueIds)
       .eq("is_published", true)
@@ -571,14 +596,14 @@ export async function getEventsForConsumerVenues(
       return [];
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const nowMs = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).filter((row: Record<string, any>) => {
       if (!options?.includePaused && !isRowPubliclyActive(row, eventVenuePolicy(row, nowMs))) return false;
       const isRecurring = row.recurrence && row.recurrence !== "none";
-      return isRecurring || !row.first_date || (row.first_date as string) >= today;
+      return isRecurring || !row.first_date || (row.first_date as string) >= eventLocalToday(row.venues, now);
     }).map((row: Record<string, any>) => ({
       id: row.id as string,
       slug: (row.slug as string | null) ?? undefined,
@@ -683,23 +708,25 @@ export async function getPublishedEventsForConsumer(): Promise<
       return [];
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-
-    const nowMs = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRows = (data ?? []) as Record<string, any>[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bucket = (row: Record<string, any>) =>
+      upcomingBucket(row.first_date, row.recurrence, eventLocalToday(row.venues, now));
 
     // Exclude paused events (Comp/Trial grant recipients), then past one-off
     // events (bucket 1). Recurring events otherwise always show.
     const rows = allRows.filter(
       (row) =>
         isRowPubliclyActive(row, eventVenuePolicy(row, nowMs)) &&
-        upcomingBucket(row.first_date, row.recurrence, today) !== 1
+        bucket(row) !== 1
     );
 
     rows.sort((a, b) => {
-      const bA = upcomingBucket(a.first_date, a.recurrence, today);
-      const bB = upcomingBucket(b.first_date, b.recurrence, today);
+      const bA = bucket(a);
+      const bB = bucket(b);
       if (bA !== bB) return bA - bB;
 
       if (bA === 0) {
@@ -814,7 +841,7 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
           "event_time, event_frequency, is_seeded_event, " +
           "internal_boost, exclude_from_discover, " +
           "venues!venue_id(" +
-            `id, slug, name, lat, lng, exclude_from_discover, ${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ${VENUE_PLAN_CONTEXT_EMBED}` +
+            `id, slug, name, lat, lng, exclude_from_discover, market_geo:markets!market_id(slug), ${VENUE_SUBSCRIPTION_JOIN_FRAGMENT}, ${VENUE_PLAN_CONTEXT_EMBED}` +
           ")"
       )
       .eq("is_published", true)
@@ -825,8 +852,8 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
       return [];
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const nowMs = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
@@ -843,7 +870,7 @@ export async function getCPFeaturedEventCandidates(): Promise<CPFeaturedEventIte
       if (!isRowPubliclyActive(row, planContext.policy)) return [];
 
       // Filter out past one-off events (same logic as upcomingBucket)
-      if (upcomingBucket(firstDate, recurrence, today) === 1) return [];
+      if (upcomingBucket(firstDate, recurrence, eventLocalToday(row.venues, now)) === 1) return [];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const venue = (row.venues as Record<string, any> | null) ?? {};
@@ -953,9 +980,9 @@ export async function getPublishedEventsForWebsite(
       return [];
     }
 
-    const today = new Date().toISOString().slice(0, 10);
     const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
-    const nowMs = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).flatMap((row: Record<string, any>) => {
@@ -984,7 +1011,7 @@ export async function getPublishedEventsForWebsite(
 
       // Exclude past one-off events (same logic as upcomingBucket === 1)
       const isRecurring = recurrence && recurrence !== "none";
-      if (!isRecurring && firstDate && firstDate < today) return [];
+      if (!isRecurring && firstDate && firstDate < eventLocalToday(venue, now, market.id)) return [];
 
       return [
         {
@@ -1129,7 +1156,7 @@ async function getEventForWebsiteByField(
           "event_time, event_frequency, " +
           "ticketing_enabled, ticket_url, sold_out, is_seeded_event, " +
           "price_display, age_restriction, reservation_recommendation, parking_notes, accessibility_notes, " +
-          VENUE_PLAN_ONLY_EMBED
+          VENUE_PLAN_AND_MARKET_EMBED
       )
       .eq(field, value);
     if (!options?.includeUnpublished) {
@@ -1159,7 +1186,8 @@ async function getEventForWebsiteByField(
 
     const firstDate = (row.first_date as string | null) ?? null;
     const recurrence = (row.recurrence as string | null) ?? null;
-    const today = new Date().toISOString().slice(0, 10);
+    // Same venue (and market) for this event and its "other events" list below.
+    const today = eventLocalToday(row.venues, new Date());
     const isRecurring = recurrence && recurrence !== "none";
     const isExpired = !isRecurring && firstDate !== null && firstDate < today;
 
