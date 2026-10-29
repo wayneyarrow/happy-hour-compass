@@ -53,6 +53,7 @@ export default function WebsiteHeader({
   const savedRef = useRef<HTMLDivElement>(null);          // desktop button + dropdown
   const mobileSavedBtnRef = useRef<HTMLButtonElement>(null); // mobile heart button
   const mobileDropdownRef = useRef<HTMLDivElement>(null);    // mobile dropdown wrapper
+  const menuButtonRef = useRef<HTMLButtonElement>(null);      // mobile menu open/close toggle
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -81,6 +82,18 @@ export default function WebsiteHeader({
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [savedOpen]);
+
+  // Escape closes the mobile menu (an aria-modal dialog) and returns focus to its toggle.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   // Lock body scroll when mobile menu is open.
   useEffect(() => {
@@ -262,6 +275,7 @@ export default function WebsiteHeader({
             </button>
 
             <button
+              ref={menuButtonRef}
               type="button"
               aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={menuOpen}
