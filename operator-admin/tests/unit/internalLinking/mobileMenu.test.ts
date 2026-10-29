@@ -19,3 +19,10 @@ test("Escape closes the open mobile menu and returns focus to its toggle", () =>
   assert.match(effect, /removeEventListener\("keydown"/);
   assert.match(header, /ref=\{menuButtonRef\}\s+type="button"\s+aria-label=\{menuOpen \? "Close navigation menu"/);
 });
+
+test("the menu overlay stacks above the venue sticky section bar and below the header", () => {
+  const stickyNav = readFileSync(path.join(process.cwd(), "src/app/(website)/[market]/[city]/[slug]/StickyNav.tsx"), "utf8");
+  assert.match(stickyNav, /sticky top-16 md:top-\[72px\] z-40 /);
+  assert.match(header, /<header\s+className=\{`sticky top-0 z-50 /);
+  assert.match(header, /id="website-mobile-menu"[\s\S]{0,120}className="fixed inset-0 z-\[45\] xl:hidden"/);
+});

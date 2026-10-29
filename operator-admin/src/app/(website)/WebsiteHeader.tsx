@@ -326,14 +326,16 @@ export default function WebsiteHeader({
         <AddVenueModalContent onDone={() => setAddVenueOpen(false)} />
       </AcquisitionModal>
 
-      {/* Mobile menu overlay */}
+      {/* Mobile menu overlay — z-[45]: above page-level sticky bars (venue
+          StickyNav is z-40) so its backdrop covers them, below the z-50
+          header so the toggle stays usable. */}
       {menuOpen && (
         <div
           id="website-mobile-menu"
           role="dialog"
           aria-label="Navigation menu"
           aria-modal="true"
-          className="fixed inset-0 z-40 xl:hidden"
+          className="fixed inset-0 z-[45] xl:hidden"
         >
           <div
             className="absolute inset-0 bg-black/10 backdrop-blur-[2px]"
