@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   addDaysToIso,
   buildEventDateBadge,
+  eventOccursOnDate,
   getMarketTodayAndTomorrow,
   weekdayOfIso,
 } from "../../../src/app/(website)/website-events/eventCalendarDates";
@@ -125,12 +126,50 @@ test("weekly badges follow the market weekday; daily/monthly/biweekly labels are
   });
 });
 
+// ── Today/Tomorrow chip matching ─────────────────────────────────────────────
+
+const ev = (firstDate: string | null, recurrence: string | null) => ({ firstDate, recurrence });
+
+test("Today on Thu Oct 29: a one-off matches only its own date — the Thu Nov 19 market does not", () => {
+  inEachProcessZone(() => {
+    const { todayIso, tomorrowIso } = getMarketTodayAndTomorrow("central-okanagan", new Date("2026-10-29T18:00:00Z"));
+    assert.equal(todayIso, "2026-10-29");
+    assert.equal(eventOccursOnDate(ev("2026-10-29", "none"), todayIso), true);
+    assert.equal(eventOccursOnDate(ev("2026-11-19", "none"), todayIso), false, "First Frost Family Market (Thu Nov 19)");
+    assert.equal(eventOccursOnDate(ev("2026-11-19", null), todayIso), false, "null recurrence is one-off");
+    assert.equal(eventOccursOnDate(ev("2026-10-30", "none"), tomorrowIso), true);
+    assert.equal(eventOccursOnDate(ev("2026-11-06", "none"), tomorrowIso), false, "a later Friday is not Tomorrow");
+  });
+});
+
+test("Today/Tomorrow at 6 PM PDT use the Pacific date, not the UTC date", () => {
+  inEachProcessZone(() => {
+    const { todayIso, tomorrowIso } = getMarketTodayAndTomorrow("central-okanagan", PDT_6PM); // Wed Oct 28
+    assert.equal(eventOccursOnDate(ev("2026-10-28", "none"), todayIso), true);
+    assert.equal(eventOccursOnDate(ev("2026-10-29", "none"), todayIso), false);
+    assert.equal(eventOccursOnDate(ev("2026-10-29", "none"), tomorrowIso), true);
+  });
+});
+
+test("recurring matching is unchanged: weekly/biweekly/monthly by weekday, daily always, undated permissive", () => {
+  const thu = "2026-10-29";
+  assert.equal(eventOccursOnDate(ev("2026-03-12", "weekly"), thu), true); // a Thursday-weekly event
+  assert.equal(eventOccursOnDate(ev("2026-03-11", "weekly"), thu), false); // a Wednesday-weekly event
+  assert.equal(eventOccursOnDate(ev("2026-03-12", "biweekly"), thu), true);
+  assert.equal(eventOccursOnDate(ev("2026-03-12", "monthly"), thu), true);
+  assert.equal(eventOccursOnDate(ev("2026-03-09", "daily"), thu), true);
+  assert.equal(eventOccursOnDate(ev(null, "none"), thu), true);
+  assert.equal(eventOccursOnDate(ev(null, "weekly"), thu), true);
+});
+
 test("wiring: the Events page derives today/tomorrow and card badges from the selected market", () => {
   const dir = path.join(process.cwd(), "src/app/(website)/website-events");
   const results = readFileSync(path.join(dir, "EventSearchResults.tsx"), "utf8");
   const card = readFileSync(path.join(dir, "EventSearchCard.tsx"), "utf8");
 
   assert.match(results, /getMarketTodayAndTomorrow\(market\.id, new Date\(\)\)/);
+  assert.match(results, /dateFilter === "today"\) return eventOccursOnDate\(e, todayIso\)/);
+  assert.match(results, /dateFilter === "tomorrow"\) return eventOccursOnDate\(e, tomorrowIso\)/);
   assert.doesNotMatch(results, /todayLocal|tomorrowLocal/);
   assert.equal((results.match(/<EventSearchCard [^>]*marketId=\{market\.id\}/g) ?? []).length, 2);
   // Weekend stays a fixed Saturday/Sunday rule.

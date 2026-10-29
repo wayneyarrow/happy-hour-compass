@@ -48,6 +48,24 @@ export function getMarketTodayAndTomorrow(
 }
 
 /**
+ * Today/Tomorrow filter chip match for one market-local calendar date. A
+ * one-off event matches only its own first_date; a daily event always; any
+ * other recurring event (weekly/biweekly/monthly) its first_date's weekday,
+ * as before. Undated events stay permissive. (This Weekend keeps its own
+ * fixed Saturday/Sunday weekday rule in EventSearchResults.)
+ */
+export function eventOccursOnDate(
+  e: { firstDate: string | null; recurrence: string | null },
+  iso: string
+): boolean {
+  if (e.recurrence === "daily") return true;
+  if (!e.firstDate) return true; // permissive for undated
+  const isRecurring = e.recurrence && e.recurrence !== "none";
+  if (!isRecurring) return e.firstDate === iso;
+  return weekdayOfIso(e.firstDate) === weekdayOfIso(iso);
+}
+
+/**
  * The two-line date badge shown on event cards, relative to `todayIso`.
  * Top line: day label (TODAY / TOMORROW / FRI / FRIDAYS / etc.)
  * Bottom line: date or time context

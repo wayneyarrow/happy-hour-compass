@@ -14,7 +14,7 @@ import { trackGA4Event } from "@/lib/ga4";
 import { DiscoverySearchInput } from "../DiscoverySearchInput";
 import { useSearchCapture } from "../tracking/useSearchCapture";
 import { buildEventFilterSearchParams, parseEventFilterSearchParams } from "./eventFilterUrl";
-import { getMarketTodayAndTomorrow } from "./eventCalendarDates";
+import { eventOccursOnDate, getMarketTodayAndTomorrow } from "./eventCalendarDates";
 
 // ─── Calendar helpers (adapted from EventsDiscovery) ─────────────────────────
 
@@ -486,11 +486,10 @@ export function EventSearchResults({
   const pathname = usePathname();
 
   // The selected market's calendar date (not the server's UTC date during
-  // SSR, nor the visitor's browser timezone), as local-midnight Dates so the
-  // existing weekday/calendar logic below is unchanged.
+  // SSR, nor the visitor's browser timezone); `today` as a local-midnight
+  // Date so the calendar logic below is unchanged.
   const { todayIso, tomorrowIso } = getMarketTodayAndTomorrow(market.id, new Date());
   const today = parseIsoLocal(todayIso)!;
-  const tomorrow = parseIsoLocal(tomorrowIso)!;
 
   // ── Date filter chips ──────────────────────────────────────────────────────
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
@@ -680,8 +679,8 @@ export function EventSearchResults({
   // resolved Collection order and it stays that way through every filter.
   const filtered = events
     .filter((e) => {
-      if (dateFilter === "today") return eventOccursOnDow(e, today.getDay());
-      if (dateFilter === "tomorrow") return eventOccursOnDow(e, tomorrow.getDay());
+      if (dateFilter === "today") return eventOccursOnDate(e, todayIso);
+      if (dateFilter === "tomorrow") return eventOccursOnDate(e, tomorrowIso);
       if (dateFilter === "weekend") {
         return (
           eventOccursOnDow(e, 0) || // Sunday
