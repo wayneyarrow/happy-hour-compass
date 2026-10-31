@@ -4,8 +4,8 @@ import type { Page } from "@playwright/test";
 /**
  * Opens an acquisition modal from its site-chrome trigger. Below xl the
  * header's hamburger menu ("Mobile navigation") carries Suggest a Venue /
- * Add Your Venue; from xl the desktop header holds discovery links only, so
- * the entry point is the footer's own trigger. Scoped to that landmark
+ * Add Your Venue; from xl the desktop header has no Suggest a Venue, so the
+ * entry point is the footer's own trigger (for both, for consistency). Scoped to that landmark
  * because the same accessible name can appear in more than one place
  * (separate entry points into separate modal instances) — an unscoped
  * page-wide locator is ambiguous.

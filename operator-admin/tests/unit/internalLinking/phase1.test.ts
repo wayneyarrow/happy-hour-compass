@@ -92,11 +92,14 @@ test("layout resolves the Guides href once and shares it with header and footer"
   assert.match(layout, /<WebsiteFooter featuredGuidesHref=\{featuredGuidesHref\} \/>/);
 });
 
-test("Suggest a Venue / Add Your Venue left the desktop header but keep their modals", () => {
+test("Suggest a Venue stays off the desktop header; Add Your Venue sits between Newsletter and Saved", () => {
   const header = read("src/app/(website)/WebsiteHeader.tsx");
   const desktopNav = header.slice(header.indexOf('aria-label="Main navigation"'), header.indexOf("{/* Mobile — saved icon"));
   assert.ok(!desktopNav.includes("setSuggestOpen(true)"));
-  assert.ok(!desktopNav.includes("setAddVenueOpen(true)"));
+  const addVenue = desktopNav.indexOf("setAddVenueOpen(true)");
+  assert.ok(addVenue > desktopNav.indexOf(">\n              Newsletter"), "after Newsletter");
+  assert.ok(addVenue < desktopNav.indexOf("{/* Saved button + dropdown */}"), "before Saved");
+  assert.equal((header.match(/<AddVenueModalContent /g) ?? []).length, 1, "one shared modal instance");
   const mobileNav = header.slice(header.indexOf('aria-label="Mobile navigation"'));
   assert.ok(mobileNav.indexOf("discoveryLinks.map") < mobileNav.indexOf("Suggest a Venue"), "discovery first on mobile");
   assert.ok(mobileNav.includes("setAddVenueOpen(true)"));

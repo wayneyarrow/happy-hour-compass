@@ -156,26 +156,34 @@ export default function WebsiteHeader({
           <div className="flex-1" />
 
           {/* Desktop nav — from xl (1280px); below xl the hamburger menu holds every
-              item. With the discovery links the full nav overflows at lg (1024px). */}
-          <nav aria-label="Main navigation" className="hidden xl:flex items-center gap-1">
-            {/* Discovery first. Suggest a Venue / Add Your Venue live in the
-                mobile menu and the footer (Company / For Businesses). */}
+              item. The row is capped at 1200px (max-w-7xl), so items use tight
+              px-2 padding with no gap to fit Add Your Venue at every width. */}
+          <nav aria-label="Main navigation" className="hidden xl:flex items-center">
+            {/* Discovery first. Suggest a Venue lives in the mobile menu and
+                the footer; Add Your Venue is also here, after Newsletter. */}
             {discoveryLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 aria-current={pathname === link.href ? "page" : undefined}
-                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 {link.label}
               </Link>
             ))}
             <Link
               href="/weekly-picks"
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 xl:px-3 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               Newsletter
             </Link>
+            <button
+              type="button"
+              onClick={() => setAddVenueOpen(true)}
+              className="text-sm font-semibold text-amber-600 hover:text-amber-700 px-2 py-[7px] rounded-full hover:bg-amber-50 transition-colors whitespace-nowrap"
+            >
+              Add Your Venue
+            </button>
 
             {/* Saved button + dropdown */}
             <div className="relative" ref={savedRef}>
@@ -185,7 +193,7 @@ export default function WebsiteHeader({
                 aria-expanded={savedOpen}
                 aria-haspopup="dialog"
                 aria-label={`Saved items${savedTotal > 0 ? `, ${savedTotal} saved` : ""}`}
-                className={`flex items-center gap-1.5 px-2 xl:px-3 py-[7px] rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-2 py-[7px] rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
                   savedOpen
                     ? "bg-gray-100 text-gray-900"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
@@ -230,7 +238,7 @@ export default function WebsiteHeader({
             ) : (
               <Link
                 href="/sign-in"
-                className="ml-1 xl:ml-2 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                className="ml-1 inline-flex items-center px-4 py-[7px] border border-gray-200 rounded-full text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 Consumer Sign In
               </Link>
