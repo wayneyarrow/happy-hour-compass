@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { WEEKLY_PICKS_EYEBROW, WEEKLY_PICKS_HEADLINE, WEEKLY_PICKS_PROMISE } from "@/lib/weeklyPicks/weeklyPicks";
+import { giveawayCalloutNowMs, isGiveawayCalloutVisible } from "@/lib/weeklyPicks/giveaway";
 import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
+import { GiveawayCallout } from "./GiveawayCallout";
 
 /**
  * Public Weekly Picks landing page — the permanent destination for
@@ -9,6 +11,14 @@ import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
  * on every screen size. Signup is Brevo-managed double opt-in; see
  * src/lib/weeklyPicks/signup.ts.
  */
+
+/**
+ * Rendered per request so the time-boxed giveaway callout appears and
+ * disappears exactly on schedule. Without this the page is prerendered at
+ * build time (and served from the CDN), freezing whatever the callout state
+ * was when the deployment was built.
+ */
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Your Happy Hour Plans newsletter",
@@ -25,6 +35,8 @@ const INCLUDED = [
 ];
 
 export default function WeeklyPicksPage() {
+  const showGiveaway = isGiveawayCalloutVisible(giveawayCalloutNowMs());
+
   return (
     <section className="bg-amber-50/60">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-10 md:pt-16 pb-14 md:pb-20">
@@ -38,6 +50,7 @@ export default function WeeklyPicksPage() {
 
         <div className="mt-8 rounded-2xl bg-white border border-amber-100 shadow-[0_1px_8px_rgba(0,0,0,0.05)] px-5 py-6 sm:px-7 sm:py-7">
           <WeeklyPicksSignupForm placement="weekly_picks_page" variant="full" headingAs="h1" hideIntro />
+          {showGiveaway && <GiveawayCallout />}
         </div>
 
         <h2 className="mt-10 text-sm font-bold text-gray-900">What you&rsquo;ll get every Thursday</h2>
