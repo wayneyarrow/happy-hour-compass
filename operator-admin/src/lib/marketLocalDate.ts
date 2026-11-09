@@ -43,8 +43,13 @@ export function getMarketTimeZone(marketId: string): string {
  */
 export function getMarketLocalIsoDate(marketId: string, now: Date): string {
   const timeZone = getMarketTimeZone(marketId);
-  // en-CA's default date format is already "YYYY-MM-DD".
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  // Built from parts because en-CA's default layout comes from the runtime's
+  // locale data and isn't guaranteed to be "YYYY-MM-DD" in every browser.
+  // Callers do calendar arithmetic on this string, so a different layout
+  // throws on the client (Sentry a310b75e).
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 /** The market-local weekday (0=Sunday..6=Saturday) for `now`, via getMarketLocalIsoDate(). */
