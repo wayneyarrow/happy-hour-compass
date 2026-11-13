@@ -8,8 +8,8 @@ import { HomepageSectionsPlaceholder } from "./homepage/HomepageSectionsPlacehol
 import { HomepageSectionsErrorBoundary } from "./homepage/HomepageSectionsErrorBoundary";
 import { DiscoveryPageTracking } from "./tracking/DiscoveryTrackingProvider";
 import { WeeklyPicksSection } from "./weekly-picks/WeeklyPicksSection";
-import { splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { isWeeklyPicksOfferedInMarket, splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import type { Market } from "@/lib/markets";
 import {
@@ -64,7 +64,8 @@ const DEFAULT_DESCRIPTION =
  * WEBSITE_PRODUCT_PLAYBOOK.md, but no /{market} or /{market}/{city} route
  * exists yet anywhere in the app — the public homepage is only ever
  * reachable at "/", with the active market/city resolved server-side from
- * a cookie (getActiveMarket()), never from the URL. A canonical tag must
+ * the saved-choice cookie or, on a first visit, the visitor's country
+ * (getWebsiteActiveMarket()), never from the URL. A canonical tag must
  * point at a URL that actually resolves today; the per-geography path
  * 404s for every visitor and every crawler regardless of which Homepage
  * record is live. This is a sequencing gap between the SEO layer and the
@@ -73,7 +74,7 @@ const DEFAULT_DESCRIPTION =
  * this is the one place that needs to start using them.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
   // The Homepage record only — its SEO fields are on the record itself, so
   // metadata never waits for (or triggers) Section resolution.
@@ -118,7 +119,7 @@ export async function generateMetadata(): Promise<Metadata> {
 // docs/website/HOMEPAGE_COLLECTIONS_PRODUCT_SPEC.md.
 
 export default async function WebsiteHomePage() {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
   const { citySlug } = await getHeroCityContext(market);
   // Only the Homepage record (identity for discovery tracking, plus its
   // enabled Sections in saved order) is awaited here. Section content is
@@ -157,7 +158,7 @@ export default async function WebsiteHomePage() {
           )}
         </HomepageSectionsErrorBoundary>
       ) : (
-        <HomepageSectionsWithSignup sections={[]} />
+        <HomepageSectionsWithSignup sections={[]} marketSlug={market.id} />
       )}
     </DiscoveryPageTracking>
   );
@@ -165,7 +166,7 @@ export default async function WebsiteHomePage() {
 
 async function HomepageEditorialSections({ homepage, marketSlug }: { homepage: HomepagePublicRecord; marketSlug: string }) {
   const sections = await resolvePublicHomepageSections(homepage, marketSlug);
-  return <HomepageSectionsWithSignup sections={sections} />;
+  return <HomepageSectionsWithSignup sections={sections} marketSlug={marketSlug} />;
 }
 
 // Weekly Picks signup sits OUTSIDE the CMS section list. `sections` is
@@ -175,7 +176,18 @@ async function HomepageEditorialSections({ homepage, marketSlug }: { homepage: H
 // section ids, kinds, order and discovery placements are unchanged
 // (tracking keys by section id, never by index). The Control Panel
 // preview renders HomepageSectionsRenderer directly and is unaffected.
-function HomepageSectionsWithSignup({ sections }: { sections: HomepagePreviewSection[] }) {
+// Markets without the newsletter (isWeeklyPicksOfferedInMarket — it's a
+// Central Okanagan newsletter) render the same sections with no signup.
+function HomepageSectionsWithSignup({
+  sections,
+  marketSlug,
+}: {
+  sections: HomepagePreviewSection[];
+  marketSlug: string;
+}) {
+  if (!isWeeklyPicksOfferedInMarket(marketSlug)) {
+    return sections.length > 0 ? <HomepageSectionsRenderer sections={sections} /> : null;
+  }
   const split = splitSectionsAroundSignup(sections);
   return (
     <>

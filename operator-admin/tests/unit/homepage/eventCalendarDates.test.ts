@@ -184,15 +184,18 @@ test("target weekend: Monday–Friday use the coming weekend, Saturday the curre
 
 test("target weekend follows the market's local date, not UTC or the process timezone", () => {
   inEachProcessZone(() => {
-    // Sun Nov 1, 6 PM PST (DST has just ended) — UTC is already Monday.
+    // Sun Nov 1, 7 PM in Kelowna (UTC−7 — BC no longer falls back) — UTC is already Monday.
     const sundayEvening = new Date("2026-11-02T02:00:00.000Z");
     assert.deepEqual(weekendFor("central-okanagan", sundayEvening), ["2026-11-01"]);
     // Fri Oct 30, 6 PM PDT — UTC is already Saturday; still the coming weekend.
     assert.deepEqual(weekendFor("central-okanagan", new Date("2026-10-31T01:00:00.000Z")), ["2026-10-31", "2026-11-01"]);
-    // 00:30 MST Mon Nov 2 in Calgary is 23:30 PST Sun Nov 1 in Central Okanagan.
+    // 00:30 MST Mon Nov 2 in Calgary is 23:30 PST Sun Nov 1 in Greater San
+    // Diego. (Central Okanagan no longer differs from Calgary here: since
+    // tzdata 2026b BC is permanent UTC−7, so it's 00:30 Monday there too.)
     const instant = new Date("2026-11-02T07:30:00.000Z");
     assert.deepEqual(weekendFor("calgary", instant), ["2026-11-07", "2026-11-08"]);
-    assert.deepEqual(weekendFor("central-okanagan", instant), ["2026-11-01"]);
+    assert.deepEqual(weekendFor("greater-san-diego", instant), ["2026-11-01"]);
+    assert.deepEqual(weekendFor("central-okanagan", instant), ["2026-11-07", "2026-11-08"]);
   });
 });
 

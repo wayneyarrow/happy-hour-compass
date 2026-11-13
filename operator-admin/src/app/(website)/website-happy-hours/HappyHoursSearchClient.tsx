@@ -12,6 +12,9 @@ import {
   matchesOnNow,
 } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
+import { isVenueNameMatchTier } from "@/lib/discover/marketScope";
+import { displayDayAndTime, resolveTimeDisplay } from "@/lib/venueTimeDisplay";
+import { getVisitorTimeZone } from "@/lib/timeZones";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
 import SearchContextHeader from "./SearchContextHeader";
 import { MobileMapResultsSheet, PEEK_HEIGHT_PX } from "./MobileMapResultsSheet";
@@ -63,6 +66,15 @@ export type WebsiteVenueCard = SearchResultCardData & {
 
 /** True when `card` matches `query` via the shared venue search helper. */
 function matchesSearchQuery(card: WebsiteVenueCard, query: string): boolean {
+  return searchTier(card, query) !== null;
+}
+
+/** True when `query` matches `card`'s name (tiers 0–1) — the only match that reaches other markets. */
+function matchesVenueName(card: WebsiteVenueCard, query: string): boolean {
+  return isVenueNameMatchTier(searchTier(card, query));
+}
+
+function searchTier(card: WebsiteVenueCard, query: string) {
   return (
     matchVenueSearchTier(query, {
       name: card.name,
@@ -72,9 +84,11 @@ function matchesSearchQuery(card: WebsiteVenueCard, query: string): boolean {
       searchTags: card.searchTags ?? [],
       specialsFood: card.specialsFood ?? [],
       specialsDrinks: card.specialsDrinks ?? [],
-    }) !== null
+    })
   );
 }
+
+const NO_CARDS: WebsiteVenueCard[] = [];
 
 /**
  * Narrows `cards` to those within `bounds`, via the same shared
@@ -473,10 +487,112 @@ function EmptyState({
   );
 }
 
+/**
+ * Map pins for `list`. Status is venue-local (src/lib/happyHourStatus.ts);
+ * an upcoming start reads in the visitor's clock, labelled, when they're in
+ * another timezone (`visitorTimeZone`, null until mounted / unknown).
+ */
+function cardsToMapMarkers(
+  list: Array<WebsiteVenueCard & { distanceKm: number | null }>,
+  visitorTimeZone: string | null
+): MapMarker[] {
+  const now = new Date();
+  return list
+        .filter((c) => c.latitude !== null && c.longitude !== null)
+        .map((c) => {
+          let subtitle: string | undefined;
+          let subtitleColor: MapMarker["subtitleColor"] = "gray";
+
+          // Venue-local status — see SearchResultCardData.hhSchedule.
+          const hh = computeHhStatus(c.hhSchedule);
+
+          if (hh.type === "active") {
+            subtitle = `On Now · ${hh.endsIn}`;
+            subtitleColor = "green";
+          } else if (hh.type === "upcoming") {
+            const day =
+              hh.day === "Today"
+                ? "Today"
+                : hh.day === "Tomorrow"
+                ? "Tomorrow"
+                : hh.day;
+            const shown = displayDayAndTime(
+              resolveTimeDisplay(c.hhSchedule.timeZone, visitorTimeZone, now),
+              hh.startsAtMs,
+              { day, time: hh.startsAt },
+              now
+            );
+            subtitle = `${shown.day} · Starts ${shown.time}`;
+            subtitleColor = "amber";
+          } else if (hh.type === "allDay") {
+            subtitle = `${hh.day} · All Day`;
+            subtitleColor = "amber";
+          } else {
+            subtitle = c.establishmentType || undefined;
+            subtitleColor = "gray";
+          }
+
+          const metaParts: string[] = [];
+          if (c.googleRating !== null)
+            metaParts.push(`★ ${c.googleRating.toFixed(1)}`);
+          if (c.distanceKm !== null)
+            metaParts.push(`${c.distanceKm.toFixed(1)} km`);
+
+          return {
+            id: c.id,
+            lat: c.latitude!,
+            lng: c.longitude!,
+            name: c.name,
+            image: c.image,
+            subtitle,
+            subtitleColor,
+            metaLine: metaParts.length > 0 ? metaParts.join(" · ") : undefined,
+            href: c.href,
+          };
+        });
+}
+
+// ─── Other-market name matches ────────────────────────────────────────────────
+
+/**
+ * Venues in another market that the search matched by name — listed after
+ * the selected market's results, each card carrying its "City, ST"
+ * location, so a venue searched for by name is found from any market.
+ */
+function OtherMarketMatches({
+  cards,
+  effectiveDayName,
+  columns,
+}: {
+  cards: WebsiteVenueCard[];
+  effectiveDayName: string | null;
+  columns: 1 | 2;
+}) {
+  if (cards.length === 0) return null;
+  return (
+    <section className="mt-8" data-testid="other-market-matches" aria-label="Matching venues in other areas">
+      <h2 className="text-sm font-semibold text-gray-700 mb-3">Also matching in other areas</h2>
+      <div className={columns === 2 ? "grid grid-cols-2 gap-4" : "space-y-4"}>
+        {cards.map((card) => (
+          <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type Props = {
   cards: WebsiteVenueCard[];
+  /**
+   * Published venues in the visitor's *other* active markets (each with a
+   * `locationLabel`), from partitionVenuesByMarket(). Never part of the
+   * selected market's browsing: they appear only as a name match for the
+   * search query, or once the visitor pans/zooms the map to them. Only the
+   * Happy Hours page passes this; other callers are unaffected.
+   */
+  otherMarketCards?: WebsiteVenueCard[];
   market: Market;
   /**
    * When provided, replaces the default SearchContextHeader in both desktop
@@ -516,6 +632,7 @@ type Props = {
 
 export function HappyHoursSearchClient({
   cards,
+  otherMarketCards = NO_CARDS,
   market,
   contextHeader,
   collectionOrder = false,
@@ -912,11 +1029,11 @@ export function HappyHoursSearchClient({
   // filter sequence (Sort is a separate, later stage — see sortedCards
   // below). AND-combined checks are order-independent for correctness; this
   // ordering is purely for readability/maintainability.
-  const filteredCards = useMemo(() => {
+  const { filteredCards, filteredOtherCards } = useMemo(() => {
     const now = new Date();
     const hasLoc = userLocation !== null;
     const trimmedQuery = searchQuery.trim();
-    return cards.filter((card) => {
+    const passes = (card: WebsiteVenueCard) => {
       if (trimmedQuery && !matchesSearchQuery(card, trimmedQuery)) return false;
       if (
         nearMeActive &&
@@ -979,9 +1096,11 @@ export function HappyHoursSearchClient({
       }
       if (selectedType && card.establishmentType !== selectedType) return false;
       return true;
-    });
+    };
+    return { filteredCards: cards.filter(passes), filteredOtherCards: otherMarketCards.filter(passes) };
   }, [
     cards,
+    otherMarketCards,
     searchQuery,
     nearMeActive,
     userLocation,
@@ -1000,6 +1119,12 @@ export function HappyHoursSearchClient({
   // filters (flagged by otherFiltersActive), before the map viewport further
   // narrows what's visibly rendered: map bounds are a pan/zoom interaction,
   // not part of what the visitor searched for.
+  // Other-market venues found by name (see otherMarketCards) count as results
+  // of the search; ones merely on the map off-screen don't.
+  const trimmedSearch = searchQuery.trim();
+  const otherMarketNameMatchCount = trimmedSearch
+    ? filteredOtherCards.filter((c) => matchesVenueName(c, trimmedSearch)).length
+    : 0;
   const otherFiltersActive =
     nearMeActive || onNowActive || topRatedActive || !!selectedType || selectedDay !== "all" || !!(filterTimeFrom && filterTimeTo);
   const { markTyped: markSearchTyped, captureNow: captureSearchNow } = useSearchCapture({
@@ -1007,7 +1132,7 @@ export function HappyHoursSearchClient({
     mode: "happy_hours",
     marketId: market.id,
     query: searchQuery,
-    results: { count: filteredCards.length, capped: false, otherFiltersActive },
+    results: { count: filteredCards.length + otherMarketNameMatchCount, capped: false, otherFiltersActive },
     detectInitialOrigin: true,
     enabled: enableSearch,
   });
@@ -1019,10 +1144,10 @@ export function HappyHoursSearchClient({
   // "collection" never sorts at all — filteredCards already preserves `cards`' input
   // order (Array.filter is order-preserving), so this is exactly the resolved
   // Collection order, restored whenever the visitor switches back to it.
-  const sortedCards = useMemo(() => {
+  const sortCards = useMemo(() => (list: WebsiteVenueCard[]) => {
     const hasLoc = userLocation !== null;
 
-    const withDist = filteredCards.map((card) => ({
+    const withDist = list.map((card) => ({
       ...card,
       distanceKm:
         hasLoc && card.latitude !== null && card.longitude !== null
@@ -1050,7 +1175,16 @@ export function HappyHoursSearchClient({
       }
       return a.name.localeCompare(b.name);
     });
-  }, [filteredCards, userLocation, sortBy]);
+  }, [userLocation, sortBy]);
+  const sortedCards = useMemo(() => sortCards(filteredCards), [sortCards, filteredCards]);
+  const sortedOtherCards = useMemo(() => sortCards(filteredOtherCards), [sortCards, filteredOtherCards]);
+  // Other-market venues the query matched by name — shown in the list even
+  // when they're off-screen, and the map's fit target when nothing in the
+  // selected market matched.
+  const otherMarketNameMatches = useMemo(
+    () => (trimmedSearch ? sortedOtherCards.filter((c) => matchesVenueName(c, trimmedSearch)) : []),
+    [sortedOtherCards, trimmedSearch]
+  );
 
   // ── handlers ──
 
@@ -1124,57 +1258,30 @@ export function HappyHoursSearchClient({
   }
 
   // ── map markers — only venues with valid coordinates ──
-  const mapMarkers = useMemo<MapMarker[]>(
-    () =>
-      sortedCards
-        .filter((c) => c.latitude !== null && c.longitude !== null)
-        .map((c) => {
-          let subtitle: string | undefined;
-          let subtitleColor: MapMarker["subtitleColor"] = "gray";
-
-          // Venue-local status — see SearchResultCardData.hhSchedule.
-          const hh = computeHhStatus(c.hhSchedule);
-
-          if (hh.type === "active") {
-            subtitle = `On Now · ${hh.endsIn}`;
-            subtitleColor = "green";
-          } else if (hh.type === "upcoming") {
-            const day =
-              hh.day === "Today"
-                ? "Today"
-                : hh.day === "Tomorrow"
-                ? "Tomorrow"
-                : hh.day;
-            subtitle = `${day} · Starts ${hh.startsAt}`;
-            subtitleColor = "amber";
-          } else if (hh.type === "allDay") {
-            subtitle = `${hh.day} · All Day`;
-            subtitleColor = "amber";
-          } else {
-            subtitle = c.establishmentType || undefined;
-            subtitleColor = "gray";
-          }
-
-          const metaParts: string[] = [];
-          if (c.googleRating !== null)
-            metaParts.push(`★ ${c.googleRating.toFixed(1)}`);
-          if (c.distanceKm !== null)
-            metaParts.push(`${c.distanceKm.toFixed(1)} km`);
-
-          return {
-            id: c.id,
-            lat: c.latitude!,
-            lng: c.longitude!,
-            name: c.name,
-            image: c.image,
-            subtitle,
-            subtitleColor,
-            metaLine: metaParts.length > 0 ? metaParts.join(" · ") : undefined,
-            href: c.href,
-          };
-        }),
-    [sortedCards]
+  // Pins: the selected market's results plus other markets' venues (so
+  // panning to Solana Beach from Kelowna shows Encore Sushi). The camera
+  // only ever frames the selected market's results — or, when none matched
+  // a search, the other-market name matches — so other markets' pins never
+  // pull the initial view away (see SearchResultsMap fitMarkers).
+  const [visitorTimeZone, setVisitorTimeZone] = useState<string | null>(null);
+  useEffect(() => setVisitorTimeZone(getVisitorTimeZone()), []);
+  const inMarketMarkers = useMemo(
+    () => cardsToMapMarkers(sortedCards, visitorTimeZone),
+    [sortedCards, visitorTimeZone]
   );
+  const otherMarketMarkers = useMemo(
+    () => cardsToMapMarkers(sortedOtherCards, visitorTimeZone),
+    [sortedOtherCards, visitorTimeZone]
+  );
+  const mapMarkers = useMemo<MapMarker[]>(
+    () => [...inMarketMarkers, ...otherMarketMarkers],
+    [inMarketMarkers, otherMarketMarkers]
+  );
+  const fitMarkers = useMemo<MapMarker[]>(() => {
+    if (inMarketMarkers.length > 0) return inMarketMarkers;
+    const ids = new Set(otherMarketNameMatches.map((c) => c.id));
+    return otherMarketMarkers.filter((m) => ids.has(m.id));
+  }, [inMarketMarkers, otherMarketMarkers, otherMarketNameMatches]);
 
   // Mobile-only: once the map has reported a viewport (from expanding and
   // panning/zooming it), narrow the venue list to only cards within that
@@ -1187,9 +1294,12 @@ export function HappyHoursSearchClient({
   // desktopVisibleCards/desktopMapBounds and never reads this — filters/sort/
   // search above are unaffected, this only ever narrows their already-
   // produced result set.
+  // With a reported viewport, the list is whatever published venues are in
+  // view — the selected market's, or another market's once the visitor has
+  // panned there. Without one, the selected market's results only.
   const mobileVisibleCards = useMemo(
-    () => filterCardsWithinBounds(sortedCards, mapBounds),
-    [sortedCards, mapBounds]
+    () => (mapBounds ? filterCardsWithinBounds([...sortedCards, ...sortedOtherCards], mapBounds) : sortedCards),
+    [sortedCards, sortedOtherCards, mapBounds]
   );
 
   // Desktop equivalent — always live (no expand/collapse gate), since the
@@ -1197,16 +1307,38 @@ export function HappyHoursSearchClient({
   // (mapMarkers, above) intentionally stay on the full sortedCards set; only
   // this list-facing value narrows with the viewport.
   const desktopVisibleCards = useMemo(
-    () => filterCardsWithinBounds(sortedCards, desktopMapBounds),
-    [sortedCards, desktopMapBounds]
+    () =>
+      desktopMapBounds
+        ? filterCardsWithinBounds([...sortedCards, ...sortedOtherCards], desktopMapBounds)
+        : sortedCards,
+    [sortedCards, sortedOtherCards, desktopMapBounds]
   );
+  // Other-market name matches not already in the visible list — always
+  // listed (in their own group) so a venue searched for by name is found
+  // from any market, wherever the map is.
+  const desktopNameMatchesElsewhere = useMemo(() => {
+    const visible = new Set(desktopVisibleCards.map((c) => c.id));
+    return otherMarketNameMatches.filter((c) => !visible.has(c.id));
+  }, [desktopVisibleCards, otherMarketNameMatches]);
+  const mobileNameMatchesElsewhere = useMemo(() => {
+    const visible = new Set(mobileVisibleCards.map((c) => c.id));
+    return otherMarketNameMatches.filter((c) => !visible.has(c.id));
+  }, [mobileVisibleCards, otherMarketNameMatches]);
+  const otherMarketIds = useMemo(() => new Set(otherMarketCards.map((c) => c.id)), [otherMarketCards]);
+  const desktopVisibleInMarketCount = desktopVisibleCards.filter((c) => !otherMarketIds.has(c.id)).length;
+  // Nothing at all to show: no selected-market result, nothing in view, and
+  // no other-market name match.
+  const desktopNoResults =
+    sortedCards.length === 0 && desktopVisibleCards.length === 0 && desktopNameMatchesElsewhere.length === 0;
+  const mobileNoResults =
+    sortedCards.length === 0 && mobileVisibleCards.length === 0 && mobileNameMatchesElsewhere.length === 0;
 
   // Label shown in the results sheet's header — visible in both the peek and
   // open states, so it doubles as the live viewport count while collapsed.
   // Recomputes on every mapBounds change (see mobileVisibleCards above),
   // which fires from the map's onIdle after each pan/zoom.
   const sheetHeaderLabel =
-    sortedCards.length === 0
+    mobileNoResults
       ? "No venues found"
       : mobileVisibleCards.length === 0
       ? "No venues in this area"
@@ -1532,6 +1664,7 @@ export function HappyHoursSearchClient({
               back out re-widens it naturally instead. */}
           {desktopMapBounds &&
             desktopVisibleCards.length > 0 &&
+            desktopVisibleInMarketCount === desktopVisibleCards.length &&
             desktopVisibleCards.length < sortedCards.length && (
               <p className="mb-4 text-xs text-gray-500">
                 Showing {desktopVisibleCards.length} of {sortedCards.length} venue
@@ -1546,9 +1679,10 @@ export function HappyHoursSearchClient({
               </p>
             )}
 
-          {sortedCards.length === 0 ? (
+          {desktopNoResults ? (
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
           ) : desktopVisibleCards.length === 0 ? (
+            desktopNameMatchesElsewhere.length > 0 ? null : (
             <div className="text-center py-16">
               <p className="text-sm font-semibold text-gray-500">No venues in this area</p>
               <p className="text-xs text-gray-400 mt-1">
@@ -1562,6 +1696,7 @@ export function HappyHoursSearchClient({
                 Show all results
               </button>
             </div>
+            )
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {desktopVisibleCards.map((card, i) => (
@@ -1582,6 +1717,8 @@ export function HappyHoursSearchClient({
               ))}
             </div>
           )}
+
+          <OtherMarketMatches cards={desktopNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={2} />
         </div>
 
         {/* Map column — sticky within viewport */}
@@ -1592,6 +1729,7 @@ export function HappyHoursSearchClient({
           >
             <SearchResultsMap
               markers={mapMarkers}
+              fitMarkers={fitMarkers}
               marketCenter={market.mapCenter}
               marketZoom={market.mapZoom}
               className="flex-1 rounded-2xl overflow-hidden"
@@ -1624,6 +1762,7 @@ export function HappyHoursSearchClient({
         >
           <SearchResultsMap
             markers={mapMarkers}
+            fitMarkers={fitMarkers}
             marketCenter={market.mapCenter}
             marketZoom={market.mapZoom}
             className="absolute inset-0"
@@ -1687,12 +1826,14 @@ export function HappyHoursSearchClient({
                 containerHeightPx={expandedContainerHeightPx}
                 headerLabel={sheetHeaderLabel}
               >
-                {sortedCards.length === 0 ? (
+                {mobileNoResults ? (
                   <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
                 ) : mobileVisibleCards.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">
-                    Pan or zoom out to see venues in this area.
-                  </p>
+                  mobileNameMatchesElsewhere.length > 0 ? null : (
+                    <p className="text-sm text-gray-400 text-center py-8">
+                      Pan or zoom out to see venues in this area.
+                    </p>
+                  )
                 ) : (
                   <div className="space-y-4">
                     {mobileVisibleCards.map((card) => (
@@ -1700,6 +1841,7 @@ export function HappyHoursSearchClient({
                     ))}
                   </div>
                 )}
+                <OtherMarketMatches cards={mobileNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={1} />
               </MobileMapResultsSheet>
             </>
           )}
@@ -1713,16 +1855,18 @@ export function HappyHoursSearchClient({
             viewport, mobileVisibleCards equals sortedCards, so this is
             unchanged from prior behaviour. */}
         {!mapExpanded &&
-          (sortedCards.length === 0 ? (
+          (mobileNoResults ? (
             <div className="px-4 pb-8">
               <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
             </div>
           ) : mobileVisibleCards.length === 0 ? (
+            mobileNameMatchesElsewhere.length > 0 ? null : (
             <div className="px-4 pb-8">
               <p className="text-sm text-gray-400 text-center py-8">
                 Expand the map and pan or zoom out to see venues in this area.
               </p>
             </div>
+            )
           ) : (
             <div className="px-4 pb-8 space-y-4">
               {mobileVisibleCards.map((card, i) => (
@@ -1730,6 +1874,11 @@ export function HappyHoursSearchClient({
               ))}
             </div>
           ))}
+        {!mapExpanded && mobileNameMatchesElsewhere.length > 0 && (
+          <div className="px-4 pb-8">
+            <OtherMarketMatches cards={mobileNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={1} />
+          </div>
+        )}
       </div>
 
       {footerCta}

@@ -343,6 +343,8 @@ export async function resolveDiscoveryShellGeography(
     getStaticMarketBySlug(marketSlug) ?? {
       id: marketSlug,
       name: marketRecord?.name ?? "",
+      country: "CA",
+      regionCode: "",
       status: "active",
       center: { lat: 0, lng: 0 },
       radiusKm: 0,

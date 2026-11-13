@@ -36,6 +36,8 @@ function schedule(
 }
 
 const at = (iso: string) => new Date(iso);
+// Real instant a status refers to (untilMs / startsAtMs / endsAtMs).
+const ms = (iso: string) => Date.parse(iso);
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
@@ -67,7 +69,7 @@ test("start is inclusive, end is exclusive", () => {
   assert.equal(isHappyHourActive(s, at("2026-10-23T17:59:00-07:00")), true);
   assert.equal(isHappyHourActive(s, at("2026-10-23T18:00:00-07:00")), false);
   assert.deepEqual(computeHhStatus(s, at("2026-10-23T16:00:00-07:00")), {
-    type: "active", endsIn: "Ends in 2 hr", until: "6 PM",
+    type: "active", endsIn: "Ends in 2 hr", until: "6 PM", untilMs: ms("2026-10-23T18:00:00-07:00"),
   });
 });
 
@@ -82,7 +84,7 @@ test("Friday 9 PM–1 AM stays active until Saturday 1 AM", () => {
   assert.equal(isHappyHourActive(s, at("2026-10-24T00:59:00-07:00")), true);
   assert.equal(isHappyHourActive(s, at("2026-10-24T01:00:00-07:00")), false);
   assert.deepEqual(computeHhStatus(s, at("2026-10-24T00:30:00-07:00")), {
-    type: "active", endsIn: "Ends in 30 min", until: "1 AM",
+    type: "active", endsIn: "Ends in 30 min", until: "1 AM", untilMs: ms("2026-10-24T01:00:00-07:00"),
   });
   assert.deepEqual(computeHhTodayText(s, at("2026-10-23T23:00:00-07:00")), {
     text: "On now · until 1 AM", isActive: true,
@@ -114,6 +116,7 @@ test("after a carryover ends, the status moves on to today's own windows", () =>
   const s = schedule("Friday: 9 PM – 1 AM\nSaturday: 3 PM – 5 PM");
   assert.deepEqual(computeHhStatus(s, at("2026-10-24T01:30:00-07:00")), {
     type: "upcoming", day: "Today", startsAt: "3 PM", endsAt: "5 PM",
+    startsAtMs: ms("2026-10-24T15:00:00-07:00"), endsAtMs: ms("2026-10-24T17:00:00-07:00"),
   });
 });
 
@@ -124,6 +127,7 @@ test("multiple daily windows, including a late one past midnight", () => {
   assert.equal(isHappyHourActive(s, at("2026-10-23T17:00:00-07:00")), true);
   assert.deepEqual(computeHhStatus(s, at("2026-10-23T19:00:00-07:00")), {
     type: "upcoming", day: "Today", startsAt: "9 PM", endsAt: "1 AM",
+    startsAtMs: ms("2026-10-23T21:00:00-07:00"), endsAtMs: ms("2026-10-24T01:00:00-07:00"),
   });
   assert.equal(isHappyHourActive(s, at("2026-10-24T00:15:00-07:00")), true);
   assert.equal(formatHhDay(s, "Friday"), "3 PM–6 PM, 9 PM–1 AM");
@@ -136,6 +140,7 @@ test("closed days point to the next Happy Hour day", () => {
   const s = schedule("Monday: 4 PM – 6 PM");
   assert.deepEqual(computeHhStatus(s, at("2026-10-24T12:00:00-07:00")), {
     type: "upcoming", day: "Monday", startsAt: "4 PM", endsAt: "6 PM",
+    startsAtMs: ms("2026-10-26T16:00:00-07:00"), endsAtMs: ms("2026-10-26T18:00:00-07:00"),
   });
   assert.deepEqual(computeHhStatus(s, at("2026-10-25T12:00:00-07:00")).type, "upcoming");
   assert.equal(computeHhTodayText(s, at("2026-10-25T12:00:00-07:00")).text, "No happy hour today · Next: Tomorrow");
@@ -183,9 +188,26 @@ test("spring forward: an overnight window through 2 AM counts one hour less", ()
   assert.equal(isHappyHourActive(s, at("2026-03-08T03:00:00-07:00")), false);
 });
 
-test("fall back: an overnight window through 2 AM counts one hour more, both 1 AMs active", () => {
-  // Sun 2026-11-01 02:00 PDT → 01:00 PST.
+// tzdata 2026b: British Columbia has been permanent UTC−7 since 2026-03-09
+// and did not fall back on 2026-11-01. The fall-back cases below therefore
+// use Greater San Diego (California still observes US daylight saving);
+// before 2026b they were written against Central Okanagan, which stopped
+// being correct — they failed on any runtime with current timezone data.
+
+test("BC did not fall back on 2026-11-01 (permanent UTC−7, tzdata 2026b)", () => {
   const s = schedule("Saturday: 9 PM – 3 AM");
+  // 1 AM Sunday in Kelowna is UTC−7; the window ends 2 real hours later.
+  assert.equal((computeHhStatus(s, at("2026-11-01T01:00:00-07:00")) as { endsIn: string }).endsIn, "Ends in 2 hr");
+  assert.equal(isHappyHourActive(s, at("2026-11-01T03:00:00-07:00")), false);
+  // Winter evenings stay UTC−7: 4 PM Kelowna on a December Tuesday.
+  const tue = schedule("Tuesday: 4 PM – 6 PM");
+  assert.equal(isHappyHourActive(tue, at("2026-12-15T16:00:00-07:00")), true);
+  assert.equal(isHappyHourActive(tue, at("2026-12-15T15:59:00-07:00")), false);
+});
+
+test("fall back: an overnight window through 2 AM counts one hour more, both 1 AMs active", () => {
+  // Sun 2026-11-01 02:00 PDT → 01:00 PST (California).
+  const s = schedule("Saturday: 9 PM – 3 AM", { market: "greater-san-diego" });
   const first = at("2026-11-01T01:00:00-07:00");
   const second = at("2026-11-01T01:30:00-08:00");
   assert.equal((computeHhStatus(s, first) as { endsIn: string }).endsIn, "Ends in 3 hr");
@@ -196,8 +218,10 @@ test("fall back: an overnight window through 2 AM counts one hour more, both 1 A
 test("ordinary windows on DST-change days follow local wall-clock time", () => {
   const s = schedule("Sunday: 4 PM – 6 PM");
   assert.equal(isHappyHourActive(s, at("2026-03-08T16:00:00-07:00")), true);
-  assert.equal(isHappyHourActive(s, at("2026-11-01T16:00:00-08:00")), true);
-  assert.equal(isHappyHourActive(s, at("2026-11-01T15:59:00-08:00")), false);
+  // California, fall-back day.
+  const sd = schedule("Sunday: 4 PM – 6 PM", { market: "greater-san-diego" });
+  assert.equal(isHappyHourActive(sd, at("2026-11-01T16:00:00-08:00")), true);
+  assert.equal(isHappyHourActive(sd, at("2026-11-01T15:59:00-08:00")), false);
 });
 
 // ─── All Day ─────────────────────────────────────────────────────────────────
@@ -257,6 +281,7 @@ test("Day-filtered card status: other days show that day's window, today is live
   assert.equal(computeHhStatusForDay(s, "Friday", friLate).type, "active");
   assert.deepEqual(computeHhStatusForDay(s, "Saturday", friLate), {
     type: "upcoming", day: "Saturday", startsAt: "3 PM", endsAt: "5 PM",
+    startsAtMs: ms("2026-10-24T15:00:00-07:00"), endsAtMs: ms("2026-10-24T17:00:00-07:00"),
   });
 });
 

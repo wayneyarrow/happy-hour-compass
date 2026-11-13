@@ -19,9 +19,18 @@
  *   - "All Day" days (ConsumerVenue.happyHourAllDayDays) use that day's
  *     business hours. Without usable business hours the day is shown as
  *     "All Day" but never reported as on now and never matched by time.
+ *   - Runtime-independent: every Intl call resolves its zone through
+ *     intlTimeZoneFor() (src/lib/timeZones.ts), so stale bundled timezone
+ *     data (BC's permanent UTC−7, tzdata 2026b) can't make the server and a
+ *     browser disagree.
+ *   - Statuses carry the real instants they refer to (`untilMs`,
+ *     `startsAtMs`, …) so a visitor in another timezone can be shown the
+ *     converted time (src/lib/venueTimeDisplay.ts) without re-deriving the
+ *     schedule logic.
  */
 
 import { getMarketTimeZone } from "@/lib/marketLocalDate";
+import { intlTimeZoneFor } from "@/lib/timeZones";
 
 const DAY_NAMES = [
   "Sunday",
@@ -125,7 +134,7 @@ export function slotMinutes(slot: HhSlot): { start: number; end: number } | null
 }
 
 /** Parses a hoursWeekly entry ("11:00 AM - 10:00 PM" | "CLOSED") to a slot. */
-function parseBusinessHoursEntry(entry: string | undefined): { start: string; end: string } | null {
+export function parseBusinessHoursEntry(entry: string | undefined): { start: string; end: string } | null {
   if (!entry || entry === "CLOSED") return null;
   const parts = entry.split(" - ");
   if (parts.length !== 2) return null;
@@ -168,7 +177,7 @@ function wallClockFormatter(timeZone: string): Intl.DateTimeFormat {
 
 /** Wall-clock fields of `instant` in `timeZone`, reinterpreted as UTC ms. */
 function wallClockAsUtcMs(instant: Date, timeZone: string): number {
-  const parts = wallClockFormatter(timeZone).formatToParts(instant);
+  const parts = wallClockFormatter(intlTimeZoneFor(timeZone, instant)).formatToParts(instant);
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
   return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
 }
@@ -180,6 +189,23 @@ function localClock(now: Date, timeZone: string): { dayIndex: number; minutes: n
     dayIndex: wall.getUTCDay(),
     minutes: wall.getUTCHours() * 60 + wall.getUTCMinutes(),
   };
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Converts a venue-local wall time — `minutesFromToday` minutes after the
+ * start of the venue's current local day at `now` (may exceed one day) —
+ * to the real instant (UTC ms). Two passes so a daylight-saving change
+ * between now and the target is accounted for.
+ */
+function venueWallToInstantMs(now: Date, timeZone: string, minutesFromToday: number): number {
+  const wallNow = wallClockAsUtcMs(now, timeZone);
+  const targetWall = wallNow - (((wallNow % MS_PER_DAY) + MS_PER_DAY) % MS_PER_DAY) + minutesFromToday * 60_000;
+  const offsetAt = (ms: number) => wallClockAsUtcMs(new Date(ms), timeZone) - Math.floor(ms / 1000) * 1000;
+  let guess = targetWall - offsetAt(now.getTime());
+  guess = targetWall - offsetAt(guess);
+  return guess;
 }
 
 /** The venue-local weekday name ("Sunday".."Saturday") at `now`. */
@@ -321,8 +347,8 @@ function formatEndsIn(diff: number): string {
  *   - none:     nothing this week.
  */
 export type HhStatus =
-  | { type: "active"; endsIn: string; until: string }
-  | { type: "upcoming"; day: string; startsAt: string; endsAt: string }
+  | { type: "active"; endsIn: string; until: string; untilMs: number }
+  | { type: "upcoming"; day: string; startsAt: string; endsAt: string; startsAtMs: number; endsAtMs: number }
   | { type: "allDay"; day: string }
   | { type: "none" };
 
@@ -330,14 +356,31 @@ function dayLabel(offset: number, name: string): string {
   return offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : name;
 }
 
-function firstSlotStatus(slots: HhSlot[], day: string): HhStatus | null {
+/**
+ * The first window in `slots` as an "upcoming" status. `when` places the
+ * slots' day `dayOffset` venue-local days after today, so the status can
+ * carry real instants.
+ */
+function firstSlotStatus(
+  slots: HhSlot[],
+  day: string,
+  when: { now: Date; timeZone: string; dayOffset: number }
+): HhStatus | null {
   const valid = slots
     .map((slot) => ({ slot, r: slotMinutes(slot) }))
     .filter((x) => x.r !== null)
     .sort((a, b) => a.r!.start - b.r!.start);
   if (valid.length === 0) return null;
-  const { slot } = valid[0];
-  return { type: "upcoming", day, startsAt: formatHhTime(slot.start), endsAt: formatHhTime(slot.end) };
+  const { slot, r } = valid[0];
+  const base = when.dayOffset * MINUTES_PER_DAY;
+  return {
+    type: "upcoming",
+    day,
+    startsAt: formatHhTime(slot.start),
+    endsAt: formatHhTime(slot.end),
+    startsAtMs: venueWallToInstantMs(when.now, when.timeZone, base + r!.start),
+    endsAtMs: venueWallToInstantMs(when.now, when.timeZone, base + r!.end),
+  };
 }
 
 /**
@@ -354,6 +397,7 @@ export function computeHhStatus(schedule: HhSchedule, now: Date = new Date()): H
       type: "active",
       endsIn: formatEndsIn(active.minutesLeft),
       until: formatHhTime(active.slot.end),
+      untilMs: now.getTime() + active.minutesLeft * 60_000,
     };
   }
 
@@ -363,13 +407,14 @@ export function computeHhStatus(schedule: HhSchedule, now: Date = new Date()): H
     const r = slotMinutes(slot);
     return r !== null && r.start > minutes;
   });
-  const todayStatus = firstSlotStatus(laterToday, "Today");
+  const when = (dayOffset: number) => ({ now, timeZone: schedule.timeZone, dayOffset });
+  const todayStatus = firstSlotStatus(laterToday, "Today", when(0));
   if (todayStatus) return todayStatus;
   if (schedule.allDayWithoutHours.includes(today)) return { type: "allDay", day: "Today" };
 
   for (let i = 1; i <= 7; i++) {
     const name = DAY_NAMES[(dayIndex + i) % 7];
-    const status = firstSlotStatus(schedule.weekly[name] ?? [], dayLabel(i, name));
+    const status = firstSlotStatus(schedule.weekly[name] ?? [], dayLabel(i, name), when(i));
     if (status) return status;
     if (schedule.allDayWithoutHours.includes(name)) return { type: "allDay", day: dayLabel(i, name) };
   }
@@ -386,24 +431,45 @@ export function computeHhStatusForDay(
   targetDayName: string,
   now: Date = new Date()
 ): HhStatus {
-  if (targetDayName === getVenueLocalDayName(schedule.timeZone, now)) {
+  const todayIndex = localClock(now, schedule.timeZone).dayIndex;
+  if (targetDayName === DAY_NAMES[todayIndex]) {
     return computeHhStatus(schedule, now);
   }
-  const status = firstSlotStatus(schedule.weekly[targetDayName] ?? [], targetDayName);
+  const targetIndex = DAY_NAMES.indexOf(targetDayName as (typeof DAY_NAMES)[number]);
+  const dayOffset = targetIndex < 0 ? 0 : (targetIndex - todayIndex + 7) % 7;
+  const status = firstSlotStatus(schedule.weekly[targetDayName] ?? [], targetDayName, {
+    now,
+    timeZone: schedule.timeZone,
+    dayOffset,
+  });
   if (status) return status;
   if (schedule.allDayWithoutHours.includes(targetDayName)) return { type: "allDay", day: targetDayName };
   return { type: "none" };
 }
 
 /**
- * Detail-page "Today:" line (the schedule card), venue-local.
+ * Formats an instant for display. Defaults to the venue-local wall time
+ * already computed by the schedule (`venueText`); a visitor in another
+ * timezone passes a formatter from src/lib/venueTimeDisplay.ts instead.
+ */
+export type InstantFormatter = (instantMs: number, venueText: string) => string;
+
+const venueLocalText: InstantFormatter = (_ms, venueText) => venueText;
+
+/**
+ * Detail-page "Today:" line (the schedule card). Which window counts as
+ * "today" is always venue-local; `formatAt` only changes how its times read.
  */
 export function computeHhTodayText(
   schedule: HhSchedule,
-  now: Date = new Date()
+  now: Date = new Date(),
+  formatAt: InstantFormatter = venueLocalText
 ): { text: string; isActive: boolean } {
   const active = findActiveWindow(schedule, now);
-  if (active) return { text: `On now · until ${formatHhTime(active.slot.end)}`, isActive: true };
+  if (active) {
+    const untilMs = now.getTime() + active.minutesLeft * 60_000;
+    return { text: `On now · until ${formatAt(untilMs, formatHhTime(active.slot.end))}`, isActive: true };
+  }
 
   const { dayIndex, minutes } = localClock(now, schedule.timeZone);
   const today = DAY_NAMES[dayIndex];
@@ -413,10 +479,14 @@ export function computeHhTodayText(
     .sort((a, b) => a.r!.start - b.r!.start);
 
   const next = todayRanges.find((x) => x.r!.start > minutes);
-  if (next) return { text: `Starts at ${formatHhTime(next.slot.start)}`, isActive: false };
+  if (next) {
+    const ms = venueWallToInstantMs(now, schedule.timeZone, next.r!.start);
+    return { text: `Starts at ${formatAt(ms, formatHhTime(next.slot.start))}`, isActive: false };
+  }
   if (todayRanges.length > 0) {
     const last = todayRanges[todayRanges.length - 1];
-    return { text: `Ended at ${formatHhTime(last.slot.end)}`, isActive: false };
+    const ms = venueWallToInstantMs(now, schedule.timeZone, last.r!.end);
+    return { text: `Ended at ${formatAt(ms, formatHhTime(last.slot.end))}`, isActive: false };
   }
   if (schedule.allDayWithoutHours.includes(today)) return { text: "All Day", isActive: false };
 
@@ -441,4 +511,80 @@ export function formatHhDay(schedule: HhSchedule, dayName: string): string {
       return slot.allDay ? `All Day (${range})` : range;
     })
     .join(", ");
+}
+
+// ─── Weekly conversion ───────────────────────────────────────────────────────
+
+/** One window of the coming week as real instants (see weeklyWindowInstants). */
+export type WindowInstant = { venueDay: string; startMs: number; endMs: number; allDay?: boolean };
+
+/**
+ * Every valid window of `weekly` placed on its next occurrence within the
+ * venue-local week starting today (today's windows stay on today, even if
+ * already over), as real instants — the input a visitor-timezone timetable
+ * is built from (src/lib/venueTimeDisplay.ts).
+ */
+export function weeklyWindowInstants(
+  weekly: Record<string, HhSlot[]>,
+  timeZone: string,
+  now: Date = new Date()
+): WindowInstant[] {
+  const todayIndex = localClock(now, timeZone).dayIndex;
+  const out: WindowInstant[] = [];
+  for (let offset = 0; offset < 7; offset++) {
+    const venueDay = DAY_NAMES[(todayIndex + offset) % 7];
+    for (const slot of weekly[venueDay] ?? []) {
+      const r = slotMinutes(slot);
+      if (!r) continue;
+      const base = offset * MINUTES_PER_DAY;
+      out.push({
+        venueDay,
+        startMs: venueWallToInstantMs(now, timeZone, base + r.start),
+        endMs: venueWallToInstantMs(now, timeZone, base + r.end),
+        ...(slot.allDay ? { allDay: true } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+// ─── Business hours ──────────────────────────────────────────────────────────
+
+/** Business hours ("11:00 AM - 10:00 PM" | "CLOSED" per day) as a schedule in the venue's timezone. */
+export function buildBusinessHoursSchedule(
+  hoursWeekly: Record<string, string>,
+  timeZone: string
+): HhSchedule {
+  const weekly: Record<string, HhSlot[]> = {};
+  for (const day of DAY_NAMES) {
+    const slot = parseBusinessHoursEntry(hoursWeekly[day]);
+    weekly[day] = slot ? [slot] : [];
+  }
+  return { weekly, timeZone, allDayWithoutHours: [] };
+}
+
+/**
+ * Open Now, venue-local, at `now` — same rules as Happy Hour (start
+ * inclusive, end exclusive, overnight hours carry into the next day).
+ *   - open:   `closesAt` venue-local text, `closesAtMs` the real instant.
+ *   - closed: the next opening this week (`opensDay` "Today" | "Tomorrow" |
+ *             weekday), or null when nothing is scheduled.
+ */
+export type BusinessHoursStatus =
+  | { type: "open"; closesAt: string; closesAtMs: number }
+  | { type: "closed"; next: { day: string; opensAt: string; opensAtMs: number } | null };
+
+export function computeBusinessHoursStatus(
+  hoursWeekly: Record<string, string>,
+  timeZone: string,
+  now: Date = new Date()
+): BusinessHoursStatus {
+  const status = computeHhStatus(buildBusinessHoursSchedule(hoursWeekly, timeZone), now);
+  if (status.type === "active") {
+    return { type: "open", closesAt: status.until, closesAtMs: status.untilMs };
+  }
+  if (status.type === "upcoming") {
+    return { type: "closed", next: { day: status.day, opensAt: status.startsAt, opensAtMs: status.startsAtMs } };
+  }
+  return { type: "closed", next: null };
 }

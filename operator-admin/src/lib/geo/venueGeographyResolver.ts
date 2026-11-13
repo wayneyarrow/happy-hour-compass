@@ -55,6 +55,10 @@ const PROVINCE_CODES: Record<string, string> = {
   bc: "bc",
   alberta: "ab",
   ab: "ab",
+  // Greater San Diego (Nov 2026). Google returns "CA"; a typed full name
+  // must normalize to the same code or the veto would reject a valid match.
+  california: "ca",
+  ca: "ca",
 };
 
 function normalizeProvinceCode(s: string | null | undefined): string | null {

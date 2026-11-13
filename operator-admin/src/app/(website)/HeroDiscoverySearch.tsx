@@ -400,7 +400,8 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
                             <>
                               <span className="text-sm font-semibold text-gray-900">{result.name}</span>
                               <span className="text-xs text-gray-500">
-                                {[result.area, result.city].filter(Boolean).join(" · ")}
+                                {/* locationLabel ("Solana Beach, CA") marks a venue outside the selected market. */}
+                                {[result.area, result.locationLabel ?? result.city].filter(Boolean).join(" · ")}
                                 {result.address ? ` — ${result.address}` : ""}
                               </span>
                             </>

@@ -19,6 +19,7 @@
  */
 
 import { getWeekdayFromIsoDate } from "@/lib/dailySpecialSchedule";
+import { intlTimeZoneFor } from "@/lib/timeZones";
 import { WEEKDAY_LABELS_LONG, type Weekday } from "@/lib/dailySpecialTypes";
 
 const DEFAULT_TIME_ZONE = "America/Vancouver";
@@ -28,6 +29,11 @@ const MARKET_TIME_ZONES: Record<string, string> = {
   "greater-vancouver": "America/Vancouver",
   "victoria": "America/Vancouver",
   "calgary": "America/Edmonton",
+  // Greater San Diego — California, Pacific Time with US daylight saving.
+  // Must never fall back to DEFAULT_TIME_ZONE: since tzdata 2026b British
+  // Columbia is permanent UTC−7, so America/Vancouver is an hour ahead of
+  // San Diego every winter.
+  "greater-san-diego": "America/Los_Angeles",
 };
 
 /** IANA timezone for a market id — falls back to DEFAULT_TIME_ZONE for an unmapped/future market rather than throwing. */
@@ -42,7 +48,9 @@ export function getMarketTimeZone(marketId: string): string {
  * same convention as isFeatureNewBadgeVisible() (newBadge.ts).
  */
 export function getMarketLocalIsoDate(marketId: string, now: Date): string {
-  const timeZone = getMarketTimeZone(marketId);
+  // intlTimeZoneFor: corrects runtimes whose bundled data predates BC's
+  // permanent UTC−7 (see src/lib/timeZones.ts).
+  const timeZone = intlTimeZoneFor(getMarketTimeZone(marketId), now);
   // Built from parts because en-CA's default layout comes from the runtime's
   // locale data and isn't guaranteed to be "YYYY-MM-DD" in every browser.
   // Callers do calendar arithmetic on this string, so a different layout

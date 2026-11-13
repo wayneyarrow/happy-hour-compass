@@ -8,6 +8,8 @@ import {
   hasAnyHappyHour,
   type HhSchedule,
 } from "@/lib/happyHourStatus";
+import { buildDisplayedWeek, displayCaption, instantFormatterFor } from "@/lib/venueTimeDisplay";
+import { useVenueTimeDisplay } from "@/app/(website)/useVenueTimeDisplay";
 
 const DAY_NAMES = [
   "Sunday",
@@ -40,11 +42,27 @@ export function WebsiteHappyHourTimesCard({ venueId, schedule, initialExpanded =
   const [expanded, setExpanded] = useState(initialExpanded && hasAnySlotsInWeekly);
   const [status, setStatus] = useState<{ text: string; isActive: boolean } | null>(null);
 
-  // Client-side after mount (no hydration mismatch); venue-local regardless
-  // of the visitor's timezone.
+  // Client-side after mount (no hydration mismatch). Which window is
+  // "today" is venue-local; for a visitor in another timezone its times read
+  // in their clock, labelled (src/lib/venueTimeDisplay.ts).
+  const display = useVenueTimeDisplay(schedule.timeZone);
   useEffect(() => {
-    setStatus(computeHhTodayText(schedule));
-  }, [schedule]);
+    if (!display) return;
+    const now = new Date();
+    setStatus(computeHhTodayText(schedule, now, instantFormatterFor(display, now)));
+  }, [schedule, display]);
+
+  const caption = display ? displayCaption(display) : null;
+  // Visitor in another timezone: each window moves onto the visitor's own
+  // weekday. Otherwise the venue's timetable exactly as entered.
+  const week =
+    display?.mode === "visitor"
+      ? buildDisplayedWeek(schedule.weekly, display, {
+          emptyText: "No happy hour",
+          formatRange: (range, w) => (w.allDay ? `All Day (${range})` : range),
+          extraByVenueDay: Object.fromEntries(schedule.allDayWithoutHours.map((d) => [d, "All Day"])),
+        }).map((row) => ({ day: row.day, text: row.ranges.join(", ") }))
+      : DAY_NAMES.map((day) => ({ day, text: formatHhDay(schedule, day) }));
 
   if (!hasAnySlotsInWeekly) {
     return (
@@ -120,12 +138,18 @@ export function WebsiteHappyHourTimesCard({ venueId, schedule, initialExpanded =
         </div>
       )}
 
+      {status && caption && (
+        <p className="text-[12px] text-amber-900/70 mb-1" data-testid="hh-time-zone-caption">
+          {caption}
+        </p>
+      )}
+
       {expanded && (
         <div className="mt-3 flex flex-col gap-2">
-          {DAY_NAMES.map((day) => (
+          {week.map(({ day, text }) => (
             <div key={day} className="flex justify-between text-[14px]">
               <span className="font-semibold text-[#374151]">{day}</span>
-              <span className="text-[#374151]">{formatHhDay(schedule, day)}</span>
+              <span className="text-[#374151]">{text}</span>
             </div>
           ))}
         </div>

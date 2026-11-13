@@ -124,7 +124,7 @@ test("website venue page: Website/Menu info rows tracked with the venue UUID, at
   assert.match(VENUE_PAGE, /<TrackedVenueLink\s+venueId=\{venue\.venueUuid\}\s+clickType="menu"\s+href=\{menuUrl\}\s+target="_blank"\s+rel="noopener noreferrer"/);
   // Expand trackers now receive the UUID, not the slug (venue.id).
   assert.match(VENUE_PAGE, /<WebsiteHappyHourTimesCard\s+venueId=\{venue\.venueUuid\}/);
-  assert.match(VENUE_PAGE, /<BusinessHoursRow hoursWeekly=\{venue\.hoursWeekly\} venueId=\{venue\.venueUuid\} \/>/);
+  assert.match(VENUE_PAGE, /<WebsiteBusinessHoursRow\s+hoursWeekly=\{venue\.hoursWeekly\}\s+timeZone=\{hhSchedule\.timeZone\}\s+venueId=\{venue\.venueUuid\}\s+\/>/);
   assert.doesNotMatch(VENUE_PAGE, /venueId=\{venue\.id\}/);
   // Both action components receive the UUID.
   assert.equal((VENUE_PAGE.match(/venueId=\{venue\.venueUuid\}/g) ?? []).length, 8);

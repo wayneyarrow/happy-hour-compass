@@ -85,7 +85,10 @@ test("getMarketLocalIsoDate returns zero-padded YYYY-MM-DD", () => {
 
 // ── Midnight in Pacific time ───────────────────────────────────────────────
 // Each pair is the last millisecond of a Pacific calendar day and the first
-// millisecond of the next one.
+// millisecond of the next one. US Pacific time (Greater San Diego) still
+// observes daylight saving. These cases used to run against Greater
+// Vancouver, but since tzdata 2026b British Columbia is permanent UTC−7
+// (from 2026-03-09), so its winter midnights moved — see BC_MIDNIGHTS.
 
 const PACIFIC_MIDNIGHTS = [
   { label: "PST (UTC-8)", before: "2026-11-09T07:59:59.999Z", beforeDate: "2026-11-08", after: "2026-11-09T08:00:00.000Z", afterDate: "2026-11-09" },
@@ -97,8 +100,29 @@ const PACIFIC_MIDNIGHTS = [
 
 for (const { label, before, beforeDate, after, afterDate } of PACIFIC_MIDNIGHTS) {
   test(`getMarketLocalIsoDate rolls over at Pacific midnight: ${label}`, () => {
-    assert.equal(getMarketLocalIsoDate("greater-vancouver", new Date(before)), beforeDate);
-    assert.equal(getMarketLocalIsoDate("greater-vancouver", new Date(after)), afterDate);
+    assert.equal(getMarketLocalIsoDate("greater-san-diego", new Date(before)), beforeDate);
+    assert.equal(getMarketLocalIsoDate("greater-san-diego", new Date(after)), afterDate);
+  });
+}
+
+// British Columbia: PST until 2026-03-09, permanent UTC−7 after — so a
+// winter midnight is 07:00 UTC from November 2026 (no fall back on Nov 1),
+// on every runtime (src/lib/timeZones.ts corrects stale timezone data).
+const BC_MIDNIGHTS = [
+  { label: "winter 2025–26, still PST", before: "2026-01-15T07:59:59.999Z", beforeDate: "2026-01-14", after: "2026-01-15T08:00:00.000Z", afterDate: "2026-01-15" },
+  { label: "the day BC stopped changing clocks", before: "2026-03-09T06:59:59.999Z", beforeDate: "2026-03-08", after: "2026-03-09T07:00:00.000Z", afterDate: "2026-03-09" },
+  { label: "summer, UTC−7", before: "2026-07-15T06:59:59.999Z", beforeDate: "2026-07-14", after: "2026-07-15T07:00:00.000Z", afterDate: "2026-07-15" },
+  { label: "no fall back on 2026-11-01", before: "2026-11-02T06:59:59.999Z", beforeDate: "2026-11-01", after: "2026-11-02T07:00:00.000Z", afterDate: "2026-11-02" },
+  { label: "winter 2026–27, permanent UTC−7", before: "2026-11-09T06:59:59.999Z", beforeDate: "2026-11-08", after: "2026-11-09T07:00:00.000Z", afterDate: "2026-11-09" },
+  { label: "the new year", before: "2027-01-01T06:59:59.999Z", beforeDate: "2026-12-31", after: "2027-01-01T07:00:00.000Z", afterDate: "2027-01-01" },
+];
+
+for (const { label, before, beforeDate, after, afterDate } of BC_MIDNIGHTS) {
+  test(`getMarketLocalIsoDate rolls over at BC midnight: ${label}`, () => {
+    for (const market of ["central-okanagan", "greater-vancouver", "victoria"]) {
+      assert.equal(getMarketLocalIsoDate(market, new Date(before)), beforeDate, market);
+      assert.equal(getMarketLocalIsoDate(market, new Date(after)), afterDate, market);
+    }
   });
 }
 
@@ -174,6 +198,6 @@ for (const { label, layout } of NON_ISO_LAYOUTS) {
 
 test("Pacific midnight still rolls over correctly under a non-ISO layout", (t) => {
   simulateDateLayout(t.mock, NON_ISO_LAYOUTS[0].layout);
-  assert.equal(getMarketLocalIsoDate("greater-vancouver", new Date("2026-11-09T07:59:59.999Z")), "2026-11-08");
-  assert.equal(getMarketLocalIsoDate("greater-vancouver", new Date("2026-11-09T08:00:00.000Z")), "2026-11-09");
+  assert.equal(getMarketLocalIsoDate("greater-san-diego", new Date("2026-11-09T07:59:59.999Z")), "2026-11-08");
+  assert.equal(getMarketLocalIsoDate("greater-san-diego", new Date("2026-11-09T08:00:00.000Z")), "2026-11-09");
 });

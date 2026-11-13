@@ -1,5 +1,10 @@
-import { cookies } from "next/headers";
-import { getMarketById, getDefaultMarket, type Market } from "./markets";
+import { cookies, headers } from "next/headers";
+import {
+  getMarketById,
+  getDefaultMarket,
+  getDefaultMarketForCountry,
+  type Market,
+} from "./markets";
 
 export const MARKET_COOKIE = "hhc_market";
 
@@ -24,4 +29,42 @@ export async function getActiveMarket(): Promise<ActiveMarketResult> {
     }
   }
   return { market: getDefaultMarket(), isPersisted: false };
+}
+
+/**
+ * Public website market resolution:
+ *   1. The visitor's explicit choice — the hhc_market cookie, which only
+ *      setMarketAction writes (header/footer selector, "Use my location").
+ *   2. First visit, no choice yet: by visitor country — US → Greater San
+ *      Diego; Canada, elsewhere, or unknown → Central Okanagan
+ *      (getDefaultMarketForCountry). Never persisted, so it never outranks
+ *      a later explicit choice and is re-evaluated on each visit until one
+ *      is made.
+ *
+ * The consumer app keeps getActiveMarket() (cookie or Central Okanagan).
+ * Server-only — imports next/headers.
+ */
+export async function getWebsiteActiveMarket(): Promise<ActiveMarketResult> {
+  const chosen = await getActiveMarket();
+  if (chosen.isPersisted) return chosen;
+  return { market: getDefaultMarketForCountry(await getVisitorCountry()), isPersisted: false };
+}
+
+/**
+ * The visitor's country (ISO alpha-2) from Vercel's edge geolocation
+ * header, or null when unknown. Trusted only on Vercel (VERCEL=1), where
+ * the edge sets it — the same rule claim auto-approval uses
+ * (src/lib/claims/claimAutoApprovalSignals.ts). Off Vercel the header is
+ * client-controlled, so it's ignored unless HHC_TRUST_GEO_HEADERS_FOR_QA=1
+ * (local QA only — never set on a deployment).
+ */
+export async function getVisitorCountry(): Promise<string | null> {
+  const trusted = process.env.VERCEL === "1" || process.env.HHC_TRUST_GEO_HEADERS_FOR_QA === "1";
+  if (!trusted) return null;
+  try {
+    const country = (await headers()).get("x-vercel-ip-country")?.trim();
+    return country && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null;
+  } catch {
+    return null;
+  }
 }

@@ -39,6 +39,20 @@ export function isWeeklyPicksPlacement(value: unknown): value is WeeklyPicksPlac
 }
 
 /**
+ * Markets whose visitors are offered the Your Happy Hour Plans newsletter.
+ * It's a Central Okanagan newsletter (copy names Kelowna, West Kelowna and
+ * Lake Country; one Brevo list), so other markets — Greater San Diego since
+ * Nov 2026 — show no signup band and no header "Newsletter" link until
+ * they get their own.
+ */
+const WEEKLY_PICKS_MARKET_IDS: readonly string[] = ["central-okanagan"];
+
+/** True when the Weekly Picks newsletter is offered in `marketId`. */
+export function isWeeklyPicksOfferedInMarket(marketId: string): boolean {
+  return WEEKLY_PICKS_MARKET_IDS.includes(marketId);
+}
+
+/**
  * Splits the homepage's displayed sections around the main signup.
  * `sections` must already be the sections actually displayed (enabled and
  * resolved to content — homepagePublic.ts filters these), so the first

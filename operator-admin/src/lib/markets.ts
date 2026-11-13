@@ -25,6 +25,10 @@
 export type Market = {
   id: string;
   name: string;
+  /** ISO 3166-1 alpha-2 country — matches markets.country in the DB. */
+  country: "CA" | "US";
+  /** Province/state code shown after a city name ("Solana Beach, CA") — matches markets.province. */
+  regionCode: string;
   status: "active" | "coming_soon";
   center: { lat: number; lng: number };
   radiusKm: number;
@@ -35,6 +39,8 @@ export type Market = {
 export const MARKETS: Market[] = [
   {
     id: "central-okanagan",
+    country: "CA",
+    regionCode: "BC",
     name: "Central Okanagan",
     status: "active",
     center: { lat: 49.888, lng: -119.496 },
@@ -43,7 +49,26 @@ export const MARKETS: Market[] = [
     mapZoom: 13,
   },
   {
+    // First US market (Nov 2026). Center sits between downtown San Diego
+    // and North County so a 60 km radius covers the coastal and inland
+    // cities from Chula Vista to Oceanside/Escondido — Solana Beach (Encore
+    // Sushi, the first venue) is ~19 km from it. Must match the DB markets
+    // row (center_lat/center_lng/radius_km) — see
+    // docs/operations/GREATER_SAN_DIEGO_ROLLOUT.md.
+    id: "greater-san-diego",
+    name: "Greater San Diego",
+    country: "US",
+    regionCode: "CA",
+    status: "active",
+    center: { lat: 32.85, lng: -117.15 },
+    radiusKm: 60,
+    mapCenter: { lat: 32.85, lng: -117.15 },
+    mapZoom: 10,
+  },
+  {
     id: "greater-vancouver",
+    country: "CA",
+    regionCode: "BC",
     name: "Greater Vancouver",
     status: "coming_soon",
     center: { lat: 49.2827, lng: -123.1207 },
@@ -53,6 +78,8 @@ export const MARKETS: Market[] = [
   },
   {
     id: "victoria",
+    country: "CA",
+    regionCode: "BC",
     name: "Victoria",
     status: "coming_soon",
     center: { lat: 48.4284, lng: -123.3656 },
@@ -62,6 +89,8 @@ export const MARKETS: Market[] = [
   },
   {
     id: "calgary",
+    country: "CA",
+    regionCode: "AB",
     name: "Calgary",
     status: "coming_soon",
     center: { lat: 51.0447, lng: -114.0719 },
@@ -72,6 +101,23 @@ export const MARKETS: Market[] = [
 ];
 
 export const DEFAULT_MARKET_ID = "central-okanagan";
+
+/**
+ * First-visit market by visitor country (ISO alpha-2, upper case) when no
+ * market has been chosen yet. Anything not listed — Canada, elsewhere, or
+ * an unknown country — gets DEFAULT_MARKET_ID. An explicit choice (the
+ * hhc_market cookie, set only by setMarketAction) always wins.
+ */
+const DEFAULT_MARKET_ID_BY_COUNTRY: Record<string, string> = {
+  US: "greater-san-diego",
+};
+
+/** The first-visit market for `country` (see DEFAULT_MARKET_ID_BY_COUNTRY). Always an active market. */
+export function getDefaultMarketForCountry(country: string | null | undefined): Market {
+  const id = country ? DEFAULT_MARKET_ID_BY_COUNTRY[country.trim().toUpperCase()] : undefined;
+  const market = id ? getMarketById(id) : undefined;
+  return market && market.status === "active" ? market : getDefaultMarket();
+}
 
 export function getMarketById(id: string): Market | undefined {
   return MARKETS.find((m) => m.id === id);

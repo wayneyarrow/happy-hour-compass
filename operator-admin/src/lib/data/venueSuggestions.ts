@@ -1,7 +1,11 @@
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
-import { isNearMarket } from "@/lib/discover/discoverEngine";
 import { rankVenuesByTextSearch } from "@/lib/data/venueSearch";
-import { toMarketConfig, type Market } from "@/lib/markets";
+import type { Market } from "@/lib/markets";
+import {
+  isVenueNameMatchTier,
+  partitionVenuesByMarket,
+  venueLocationLabel,
+} from "@/lib/discover/marketScope";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 
 /**
@@ -16,6 +20,12 @@ import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
  * text-search implementation — rather than reimplementing match logic here.
  * This module only adds what's specific to the suggestion dropdown: the
  * market geography gate and building each result's canonical href.
+ *
+ * Cross-market venue lookup: after every in-market match, venues in other
+ * active markets are included when — and only when — the query matches
+ * their *name* (partitionVenuesByMarket / isVenueNameMatchTier), labelled
+ * with `locationLabel` ("Solana Beach, CA"). Searching "Encore Sushi" from
+ * Central Okanagan finds it; a topical search stays in the selected market.
  */
 
 export type VenueSuggestion = {
@@ -27,15 +37,17 @@ export type VenueSuggestion = {
   area: string;
   address: string;
   href: string;
+  /** "Solana Beach, CA" — only for a venue outside the selected market. */
+  locationLabel?: string;
 };
 
 const DEFAULT_SUGGESTION_LIMIT = 8;
 
 /**
- * Searches published, in-market venues via the shared venue text-search
- * helper. `market` scopes results with the same isNearMarket radius gate
- * used throughout the public site — venues outside the given market are
- * never returned, regardless of how well their name matches.
+ * Searches published venues via the shared venue text-search helper.
+ * `market` scopes results with the same isNearMarket radius gate used
+ * throughout the public site; venues in other active markets are appended
+ * only for name matches (see the module comment).
  */
 export async function searchVenueSuggestions(
   market: Market,
@@ -46,9 +58,10 @@ export async function searchVenueSuggestions(
 }
 
 /**
- * Same search, plus `total`: every in-market venue the query matched (with a
- * canonical URL), before the `limit` display cap — website_search_events
- * records this full total for the hero (migration 110).
+ * Same search, plus `total`: every venue the query matched (with a
+ * canonical URL — in-market, plus other-market name matches), before the
+ * `limit` display cap — website_search_events records this full total for
+ * the hero (migration 110).
  */
 export async function searchVenueSuggestionsWithTotal(
   market: Market,
@@ -57,11 +70,8 @@ export async function searchVenueSuggestionsWithTotal(
 ): Promise<{ suggestions: VenueSuggestion[]; total: number }> {
   if (!rawQuery.trim()) return { suggestions: [], total: 0 };
 
-  const marketConfig = toMarketConfig(market);
   const allVenues = await getPublishedVenuesForConsumer();
-  const inMarket = allVenues.filter((v) =>
-    isNearMarket(v.latitude, v.longitude, marketConfig)
-  );
+  const { inMarket, otherMarket } = partitionVenuesByMarket(allVenues, market);
 
   const toSuggestion = ({ venue }: ReturnType<typeof rankVenuesByTextSearch>[number]): VenueSuggestion[] => {
     const href = buildVenuePublicPath({
@@ -78,10 +88,17 @@ export async function searchVenueSuggestionsWithTotal(
       area: venue.area,
       address: venue.address,
       href,
+      ...(otherMarketIds.has(venue.venueUuid) ? { locationLabel: venueLocationLabel(venue) } : {}),
     }];
   };
 
-  const ranked = rankVenuesByTextSearch(inMarket, rawQuery);
+  // In-market matches first (unchanged ranking), then other-market venues
+  // whose name matches.
+  const otherMarketIds = new Set(otherMarket.map((v) => v.venueUuid));
+  const ranked = [
+    ...rankVenuesByTextSearch(inMarket, rawQuery),
+    ...rankVenuesByTextSearch(otherMarket, rawQuery).filter((r) => isVenueNameMatchTier(r.tier)),
+  ];
   // Venues with no assigned market/city yet (see buildVenuePublicPath) have
   // no canonical URL and are omitted rather than linked with a fabricated href.
   // Display selection is unchanged: cap first, then drop unlinkable venues.

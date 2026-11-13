@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getPublishedEventsForWebsite } from "@/lib/data/events";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { EventSearchResults } from "./EventSearchResults";
@@ -22,7 +22,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 export default async function EventsSearchPage() {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
   const events = await getPublishedEventsForWebsite(market);
 
   return <EventSearchResults events={events} market={market} enableFilterSync />;

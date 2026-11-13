@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { SavedPageClient } from "./SavedPageClient";
 
 export const metadata: Metadata = {
@@ -10,6 +10,6 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SavedPage() {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
   return <SavedPageClient market={market} />;
 }

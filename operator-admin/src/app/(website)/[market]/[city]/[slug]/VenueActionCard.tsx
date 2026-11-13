@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { computeHhStatus, type HhSchedule } from "@/lib/happyHourStatus";
+import {
+  computeBusinessHoursStatus,
+  computeHhStatus,
+  type HhSchedule,
+} from "@/lib/happyHourStatus";
+import { displayDayAndTime, type TimeDisplay } from "@/lib/venueTimeDisplay";
+import { useVenueTimeDisplay } from "@/app/(website)/useVenueTimeDisplay";
 import { haversineKm } from "@/lib/geo";
 import { trackVenueIntentClick } from "@/app/(website)/venueIntentTracking";
 import { useBrowserLocation } from "@/app/(website)/useBrowserLocation";
@@ -19,72 +25,32 @@ type Props = {
   venueId: string;
 };
 
-// ─── Open / Closed status ─────────────────────────────────────────────────────
+// ─── Open / Closed status + HH status label ───────────────────────────────────
+//
+// Both are decided from the venue's own schedule, in the venue's timezone,
+// at this instant (src/lib/happyHourStatus.ts) — never the visitor's clock.
+// Only how the times read changes for a visitor in another timezone
+// (converted + labelled, src/lib/venueTimeDisplay.ts).
 
-const DAYS = [
-  "Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday",
-] as const;
-
-function parseAmPm(s: string): number | null {
-  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
-  if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
-  if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
-  return h * 60 + min;
+function getOpenInfo(
+  hoursWeekly: Record<string, string>,
+  timeZone: string,
+  display: TimeDisplay
+): { status: "Open Now" | "Closed"; nextOpen: string | null } {
+  const status = computeBusinessHoursStatus(hoursWeekly, timeZone);
+  if (status.type === "open") return { status: "Open Now", nextOpen: null };
+  if (!status.next) return { status: "Closed", nextOpen: null };
+  const { day, time } = displayDayAndTime(display, status.next.opensAtMs, {
+    day: status.next.day,
+    time: status.next.opensAt,
+  });
+  return {
+    status: "Closed",
+    nextOpen: day === "Today" ? `Opens at ${time}` : `Opens ${day} at ${time}`,
+  };
 }
 
-function getOpenStatus(hoursWeekly: Record<string, string>): "Open Now" | "Closed" | null {
-  const now = new Date();
-  const entry = hoursWeekly[DAYS[now.getDay()]];
-  if (!entry || entry === "CLOSED") return "Closed";
-  const parts = entry.split(" - ");
-  if (parts.length !== 2) return null;
-  const open = parseAmPm(parts[0]);
-  const close = parseAmPm(parts[1]);
-  if (open === null || close === null || close <= open) return null;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  return nowMin >= open && nowMin < close ? "Open Now" : "Closed";
-}
-
-function getNextOpenInfo(hoursWeekly: Record<string, string>): string | null {
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const todayIdx = now.getDay();
-  const today = DAYS[todayIdx];
-
-  // Is there an opening window later today?
-  const todayEntry = hoursWeekly[today];
-  if (todayEntry && todayEntry !== "CLOSED") {
-    const parts = todayEntry.split(" - ");
-    if (parts.length === 2) {
-      const open = parseAmPm(parts[0]);
-      if (open !== null && open > nowMin) return `Opens at ${parts[0].trim()}`;
-    }
-  }
-
-  // Check the next 6 days
-  for (let i = 1; i <= 6; i++) {
-    const dayName = DAYS[(todayIdx + i) % 7];
-    const entry = hoursWeekly[dayName];
-    if (entry && entry !== "CLOSED") {
-      const parts = entry.split(" - ");
-      if (parts.length === 2) {
-        const open = parseAmPm(parts[0]);
-        if (open !== null) {
-          return `Opens ${i === 1 ? "Tomorrow" : dayName} at ${parts[0].trim()}`;
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-// ─── HH status label ─────────────────────────────────────────────────────────
-
-function hhStatusLabel(schedule: HhSchedule): {
+function hhStatusLabel(schedule: HhSchedule, display: TimeDisplay): {
   line1: string;
   line2?: string;
   isActive: boolean;
@@ -95,8 +61,12 @@ function hhStatusLabel(schedule: HhSchedule): {
     return { line1: "Happy Hour On Now", line2: status.endsIn, isActive: true, isNone: false };
   }
   if (status.type === "upcoming") {
-    const prefix = status.day === "Today" ? "Happy Hour Today" : `Happy Hour ${status.day}`;
-    return { line1: prefix, line2: `Starts at ${status.startsAt}`, isActive: false, isNone: false };
+    const { day, time } = displayDayAndTime(display, status.startsAtMs, {
+      day: status.day,
+      time: status.startsAt,
+    });
+    const prefix = day === "Today" ? "Happy Hour Today" : `Happy Hour ${day}`;
+    return { line1: prefix, line2: `Starts at ${time}`, isActive: false, isNone: false };
   }
   if (status.type === "allDay") {
     const prefix = status.day === "Today" ? "Happy Hour Today" : `Happy Hour ${status.day}`;
@@ -168,16 +138,19 @@ export function VenueActionCard({
   // React hydration-mismatch error whenever the two differ. Mirrors the
   // mounted-gate pattern VenueIdentityStatus.tsx already uses.
   const [hh, setHh] = useState<ReturnType<typeof hhStatusLabel> | null>(null);
+  const display = useVenueTimeDisplay(hhSchedule.timeZone);
 
   useEffect(() => {
-    const status = getOpenStatus(hoursWeekly);
-    setOpenStatus(status);
-    setNextOpen(status === "Closed" ? getNextOpenInfo(hoursWeekly) : null);
-  }, [hoursWeekly]);
+    if (!display) return;
+    const info = getOpenInfo(hoursWeekly, hhSchedule.timeZone, display);
+    setOpenStatus(info.status);
+    setNextOpen(info.nextOpen);
+  }, [hoursWeekly, hhSchedule.timeZone, display]);
 
   useEffect(() => {
-    setHh(hhStatusLabel(hhSchedule));
-  }, [hhSchedule]);
+    if (!display) return;
+    setHh(hhStatusLabel(hhSchedule, display));
+  }, [hhSchedule, display]);
 
   const hasSecondary = Boolean(menuUrl || websiteUrl || phone);
 

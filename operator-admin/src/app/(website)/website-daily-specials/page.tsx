@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getPublishedDailySpecialsForWebsite } from "@/lib/data/dailySpecials";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { DailySpecialSearchResults } from "./DailySpecialSearchResults";
@@ -21,7 +21,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 export default async function DailySpecialsSearchPage() {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
   const dailySpecials = await getPublishedDailySpecialsForWebsite(market);
 
   return <DailySpecialSearchResults dailySpecials={dailySpecials} market={market} enableFilterSync />;

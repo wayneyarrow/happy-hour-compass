@@ -23,7 +23,7 @@ import { ShareButton } from "@/app/(website)/ShareButton";
 import { absoluteUrl } from "@/lib/siteUrl";
 import { WebsiteHappyHourTimesCard } from "./WebsiteHappyHourTimesCard";
 import { buildHhSchedule, hasAnyHappyHour } from "@/lib/happyHourStatus";
-import { BusinessHoursRow } from "@/app/(consumer)/event/[id]/BusinessHoursRow";
+import { WebsiteBusinessHoursRow } from "./WebsiteBusinessHoursRow";
 import { VenueViewTracker } from "@/app/(consumer)/venue/[id]/VenueViewTracker";
 import { VenueGallery } from "./VenueGallery";
 import { StickyNav } from "./StickyNav";
@@ -779,7 +779,11 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
               {/* Business hours — rendered outside divide-y because BusinessHoursRow
                   manages its own border-b internally (consumer component, can't modify). */}
               {hasBusinessHours && (
-                <BusinessHoursRow hoursWeekly={venue.hoursWeekly} venueId={venue.venueUuid} />
+                <WebsiteBusinessHoursRow
+                  hoursWeekly={venue.hoursWeekly}
+                  timeZone={hhSchedule.timeZone}
+                  venueId={venue.venueUuid}
+                />
               )}
 
               <div className="divide-y divide-gray-100">

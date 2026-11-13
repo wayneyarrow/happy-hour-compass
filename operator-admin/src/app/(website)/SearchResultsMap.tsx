@@ -222,6 +222,8 @@ type MapInnardsProps = {
   userLocation?: { lat: number; lng: number } | null;
   /** See SearchResultsMap's own `initialBounds` doc comment below. */
   initialBounds?: LatLngBounds | null;
+  /** See SearchResultsMap's own `fitMarkers` doc comment below. */
+  fitMarkers?: MapMarker[];
 };
 
 function MapInnards({
@@ -231,6 +233,7 @@ function MapInnards({
   onSelectId,
   userLocation = null,
   initialBounds = null,
+  fitMarkers,
 }: MapInnardsProps) {
   const map = useMap();
   const coreLib = useMapsLibrary("core");
@@ -243,10 +246,14 @@ function MapInnards({
   // Refit bounds when the coordinate set meaningfully changes. Deliberately
   // keyed only on `markers` (venue pins) — the user-location marker below
   // must never trigger a refit/recenter, including on its first appearance.
+  // `fit` is the subset the camera frames — every rendered marker unless a
+  // caller passes fitMarkers (e.g. pins from other markets that are only
+  // reached by panning there).
+  const fit = fitMarkers ?? markers;
   useEffect(() => {
-    if (!map || !coreLib || markers.length === 0) return;
+    if (!map || !coreLib || fit.length === 0) return;
 
-    const fitKey = markers
+    const fitKey = fit
       .map((m) => m.id)
       .sort()
       .join(",");
@@ -259,15 +266,15 @@ function MapInnards({
     // Later marker-set changes (a filter change, say) fit normally.
     if (initialBounds && !appliedInitialBoundsRef.current) return;
 
-    if (markers.length === 1) {
-      map.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
+    if (fit.length === 1) {
+      map.setCenter({ lat: fit[0].lat, lng: fit[0].lng });
       map.setZoom(15);
     } else {
       const bounds = new coreLib.LatLngBounds();
-      markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
+      fit.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
       map.fitBounds(bounds, 60);
     }
-  }, [map, coreLib, markers, initialBounds]);
+  }, [map, coreLib, fit, initialBounds]);
 
   // Restores a previously-seen viewport (e.g. after a browser Back
   // navigation remounts this map — see searchMapState.ts) exactly once per
@@ -482,6 +489,13 @@ type Props = {
    * `marketCenter`/`marketZoom` exactly as before.
    */
   initialBounds?: LatLngBounds | null;
+  /**
+   * Markers the camera auto-fits to when the result set changes. Defaults
+   * to `markers`. Pass a subset when some rendered pins (e.g. venues in
+   * other markets, shown only once the visitor pans to them) must never
+   * pull the initial view away from the selected market.
+   */
+  fitMarkers?: MapMarker[];
 };
 
 export function SearchResultsMap({
@@ -498,6 +512,7 @@ export function SearchResultsMap({
   userLocation = null,
   boundsBottomInsetPx,
   initialBounds = null,
+  fitMarkers,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -566,6 +581,7 @@ export function SearchResultsMap({
             onSelectId={handleSelectId}
             userLocation={userLocation}
             initialBounds={initialBounds}
+            fitMarkers={fitMarkers}
           />
           {resizeSignal !== undefined && <MapResizeHandler signal={resizeSignal} />}
         </Map>

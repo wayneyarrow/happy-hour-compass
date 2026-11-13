@@ -11,6 +11,9 @@ import {
   type HhSchedule,
   type HhStatus,
 } from "@/lib/happyHourStatus";
+import { displayDayAndTime, formatClockTime } from "@/lib/venueTimeDisplay";
+import { timeZoneLabel } from "@/lib/timeZones";
+import { useVenueTimeDisplay } from "@/app/(website)/useVenueTimeDisplay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,12 @@ export type SearchResultCardData = {
   foodSpecial?: string;
   /** First drink special, if any. */
   drinkSpecial?: string;
+  /**
+   * "Solana Beach, CA" — set only for a venue outside the visitor's selected
+   * market (a cross-market name match or a venue revealed by panning the
+   * map), so it's clear where it is. Omitted for in-market venues.
+   */
+  locationLabel?: string;
 };
 
 // ─── Star Rating ─────────────────────────────────────────────────────────────
@@ -126,6 +135,9 @@ function HhStatusDisplay({
   effectiveDayName?: string | null;
 }) {
   const [status, setStatus] = useState<HhStatus | null>(null);
+  // Times read in the visitor's clock when they're in another timezone
+  // (labelled); the status itself is always venue-local.
+  const display = useVenueTimeDisplay(hhSchedule.timeZone);
 
   useEffect(() => {
     setStatus(
@@ -135,7 +147,7 @@ function HhStatusDisplay({
     );
   }, [hhSchedule, effectiveDayName]);
 
-  if (!status || status.type === "none") return null;
+  if (!status || status.type === "none" || !display) return null;
 
   if (status.type === "active") {
     return (
@@ -154,18 +166,28 @@ function HhStatusDisplay({
     );
   }
 
+  const converted =
+    status.type === "upcoming" && display.mode === "visitor"
+      ? {
+          day: displayDayAndTime(display, status.startsAtMs, { day: status.day, time: status.startsAt }).day,
+          range: `${formatClockTime(status.startsAtMs, display.timeZone)} – ${formatClockTime(status.endsAtMs, display.timeZone)} ${timeZoneLabel(display.timeZone, status.startsAtMs)}`,
+        }
+      : null;
+  const day = converted?.day ?? status.day;
   const prefix =
-    status.day === "Today"
+    day === "Today"
       ? "Happy Hour Today"
-      : status.day === "Tomorrow"
+      : day === "Tomorrow"
       ? "Happy Hour Tomorrow"
-      : `Happy Hour ${status.day}`;
+      : `Happy Hour ${day}`;
 
   return (
     <div className="space-y-0.5">
       <p className="text-sm font-bold text-amber-700">{prefix}</p>
       <p className="text-sm text-gray-400">
-        {status.type === "allDay" ? "All Day" : `${status.startsAt} – ${status.endsAt}`}
+        {status.type === "allDay"
+          ? "All Day"
+          : converted?.range ?? `${status.startsAt} – ${status.endsAt}`}
       </p>
     </div>
   );
@@ -323,6 +345,17 @@ export function SearchResultCard({
                 <span className="text-gray-300" aria-hidden="true">•</span>
               )}
               {data.establishmentType && <span>{data.establishmentType}</span>}
+            </p>
+          )}
+
+          {/* 4b. Location — only for venues outside the selected market */}
+          {data.locationLabel && (
+            <p className="flex items-center gap-1 text-sm text-gray-500" data-testid="card-location">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" aria-hidden="true">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span>{data.locationLabel}</span>
             </p>
           )}
 

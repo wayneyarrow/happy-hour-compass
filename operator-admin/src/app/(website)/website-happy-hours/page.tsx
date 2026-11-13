@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
-import { isNearMarket } from "@/lib/discover/discoverEngine";
-import { toMarketConfig } from "@/lib/markets";
+import { partitionVenuesByMarket, venueLocationLabel } from "@/lib/discover/marketScope";
+import type { ConsumerVenue } from "@/lib/data/venues";
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { buildPageMetadata } from "@/lib/seo/metadata";
@@ -42,8 +42,7 @@ export default async function HappyHoursSearchPage({
     to?: string | string[];
   }>;
 }) {
-  const { market } = await getActiveMarket();
-  const marketConfig = toMarketConfig(market);
+  const { market } = await getWebsiteActiveMarket();
   const { q, day, now, from, to } = await searchParams;
   const initialQuery = typeof q === "string" ? q : "";
   // On Now takes precedence over a conflicting ?day= — see resolveInitialDayFilter.
@@ -55,12 +54,13 @@ export default async function HappyHoursSearchPage({
   );
 
   // Fetch all published venues then gate to the active market.
-  // isNearMarket() is the canonical geo filter used by the Discover Engine;
-  // venues without coordinates are included permissively (assumed local).
+  // isNearMarket() (inside partitionVenuesByMarket) is the canonical geo
+  // filter used by the Discover Engine; venues without coordinates are
+  // included permissively (assumed local). Published venues in the other
+  // active markets come along separately — reachable only by a name search
+  // or by panning the map there, never mixed into this market's browsing.
   const allVenues = await getPublishedVenuesForConsumer();
-  const venues = allVenues.filter((v) =>
-    isNearMarket(v.latitude, v.longitude, marketConfig)
-  );
+  const { inMarket: venues, otherMarket } = partitionVenuesByMarket(allVenues, market);
 
   // Map ConsumerVenue → WebsiteVenueCard.
   // distanceKm starts null and is computed client-side once geolocation is granted.
@@ -69,7 +69,7 @@ export default async function HappyHoursSearchPage({
   // Venues with no assigned market/city (nullable by design, see
   // ConsumerVenue.marketSlug/citySlug) have no canonical public URL yet and
   // are omitted rather than linked with a fabricated href.
-  const cards: WebsiteVenueCard[] = venues.flatMap((venue) => {
+  const toCard = (venue: ConsumerVenue, locationLabel?: string): WebsiteVenueCard[] => {
     const href = buildVenuePublicPath({
       marketSlug: venue.marketSlug,
       citySlug: venue.citySlug,
@@ -100,12 +100,16 @@ export default async function HappyHoursSearchPage({
       searchTags: venue.searchTags,
       specialsFood: venue.specialsFood,
       specialsDrinks: venue.specialsDrinks,
+      ...(locationLabel ? { locationLabel } : {}),
     }];
-  });
+  };
+  const cards = venues.flatMap((venue) => toCard(venue));
+  const otherMarketCards = otherMarket.flatMap((venue) => toCard(venue, venueLocationLabel(venue)));
 
   return (
     <HappyHoursSearchClient
       cards={cards}
+      otherMarketCards={otherMarketCards}
       market={market}
       enableSearch
       initialQuery={initialQuery}

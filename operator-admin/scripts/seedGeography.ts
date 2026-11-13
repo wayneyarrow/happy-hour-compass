@@ -16,6 +16,13 @@
  *                                   Maple Ridge
  *   • Victoria (coming_soon)      — Victoria  (stub; no full city breakdown yet)
  *   • Calgary (coming_soon)       — Calgary   (stub; 1 seeded venue exists)
+ *   • Greater San Diego (active)  — Solana Beach (first US market, Nov 2026)
+ *
+ * Greater San Diego was rolled out to the shared database with the targeted,
+ * reviewed SQL in docs/operations/GREATER_SAN_DIEGO_ROLLOUT.md — not by
+ * running this script with --apply, which re-upserts EVERY market and city
+ * listed here (it never diffs against the live rows first). It's listed so
+ * this file stays the complete seed definition for a fresh database.
  *
  * Note: White Rock, Port Coquitlam, Pitt Meadows, and Maple Ridge were added
  * beyond the task's "at minimum" list because seeded venue data already
@@ -161,6 +168,22 @@ const MARKETS: MarketSeed[] = [
     defaultCitySlug: "calgary",
     cities: [
       { slug: "calgary", name: "Calgary", status: "coming_soon", supports_neighbourhoods: false, display_order: 1, center_lat: 51.0447, center_lng: -114.0719 },
+    ],
+  },
+  {
+    // First US market. Center/radius must match MARKETS in src/lib/markets.ts.
+    slug: "greater-san-diego",
+    name: "Greater San Diego",
+    province: "CA",
+    country: "US",
+    status: "active",
+    center_lat: 32.85,
+    center_lng: -117.15,
+    radius_km: 60,
+    display_order: 5,
+    defaultCitySlug: "solana-beach",
+    cities: [
+      { slug: "solana-beach", name: "Solana Beach", status: "active", supports_neighbourhoods: false, display_order: 1, center_lat: 32.9912, center_lng: -117.2711 },
     ],
   },
 ];

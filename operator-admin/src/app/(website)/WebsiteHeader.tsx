@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { isWeeklyPicksOfferedInMarket } from "@/lib/weeklyPicks/weeklyPicks";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,6 +42,7 @@ export default function WebsiteHeader({
   featuredGuidesHref = null,
 }: Props) {
   const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
+  const showNewsletter = isWeeklyPicksOfferedInMarket(marketId);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -171,12 +173,15 @@ export default function WebsiteHeader({
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/weekly-picks"
-              className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              Newsletter
-            </Link>
+            {/* Central Okanagan newsletter — not offered in other markets. */}
+            {showNewsletter && (
+              <Link
+                href="/weekly-picks"
+                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                Newsletter
+              </Link>
+            )}
             <button
               type="button"
               onClick={() => setAddVenueOpen(true)}
@@ -369,15 +374,17 @@ export default function WebsiteHeader({
                     </Link>
                   </li>
                 ))}
-                <li className="border-b border-gray-100">
-                  <Link
-                    href="/weekly-picks"
-                    onClick={() => setMenuOpen(false)}
-                    className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
-                  >
-                    Newsletter
-                  </Link>
-                </li>
+                {showNewsletter && (
+                  <li className="border-b border-gray-100">
+                    <Link
+                      href="/weekly-picks"
+                      onClick={() => setMenuOpen(false)}
+                      className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
+                    >
+                      Newsletter
+                    </Link>
+                  </li>
+                )}
                 <li className="border-b border-gray-100">
                   <button
                     type="button"

@@ -7,7 +7,7 @@ import { ConsumerAuthProvider } from "./ConsumerAuthProvider";
 import { JsonLd } from "./JsonLd";
 import { buildOrganizationNode } from "@/lib/seo/schema/organization";
 import { buildWebSiteNode } from "@/lib/seo/schema/website";
-import { getActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { createClient } from "@/lib/supabase/server";
 import {
   getMarketBySlug,
@@ -24,7 +24,7 @@ import { getFeaturedGuidesNavHref } from "@/lib/data/featuredGuidesNav";
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default async function WebsiteLayout({ children }: { children: ReactNode }) {
-  const { market } = await getActiveMarket();
+  const { market } = await getWebsiteActiveMarket();
 
   // Resolve consumer auth state for header rendering and saved-sync provider.
   let consumerUser: ConsumerUser | null = null;
