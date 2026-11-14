@@ -14,6 +14,7 @@ import {
   type VenueInsertStore,
 } from "../../../src/lib/seeding/marketVenueImport";
 import { ESTABLISHMENT_TYPE_OPTIONS } from "../../../src/app/admin/venue/types";
+import { generateSeededTags } from "../../../src/lib/seededTags";
 
 /**
  * Market-aware seed importer: draft-only, insert-only, geography resolved
@@ -220,10 +221,10 @@ test("draft-only: is_published=true and a non-seed source are refused", () => {
 });
 
 test("Google-derived columns block the whole batch (Places storage terms)", () => {
-  for (const col of ["google_rating", "google_business_hours", "outdoor_seating", "price_level"]) {
-    assert.ok((GOOGLE_DERIVED_COLUMNS as readonly string[]).includes(col));
+  for (const col of ["google_types", "google_business_hours", "outdoor_seating", "price_level", "seeded_tags", "search_tags"]) {
+    assert.ok((GOOGLE_DERIVED_COLUMNS as readonly string[]).includes(col) || col === "search_tags");
     const p = plan([row()], baseState(), [...HEADER, col]);
-    assert.ok(p.headerIssues.some((i) => i.code === "google_derived_column"));
+    assert.ok(p.headerIssues.some((i) => i.code === "google_derived_column" || i.code === "unknown_column"), col);
     assert.equal(p.rows[0].decision, "blocked");
   }
   const unknown = plan([row()], baseState(), [...HEADER, "neighbourhood"]);
@@ -329,4 +330,51 @@ test("map pins need a source and must not be a city-centre placeholder", () => {
   // Review columns never reach the venues row.
   const ok = plan([row()]).rows[0].record! as Record<string, unknown>;
   for (const k of ["business_hours_verified", "business_hours_source", "coordinates_source"]) assert.equal(k in ok, false);
+});
+
+// ─── Stored Google rating + platform discovery tags (Kelowna seed standard) ──
+
+const RATED = { google_rating: "4.56", google_review_count: "1857", google_rating_retrieved_at: "2026-11-14T16:14:26Z" };
+
+test("a Google rating + review count is stored in the existing fields, rounded like the backfill", () => {
+  const p = plan([row(RATED)]);
+  assert.equal(p.rows[0].decision, "insert");
+  assert.equal(p.rows[0].record!.google_rating, 4.6);
+  assert.equal(p.rows[0].record!.google_review_count, 1857);
+  // Without a rating the fields stay null (badge hidden), as before.
+  const none = plan([row()]).rows[0].record!;
+  assert.equal(none.google_rating, null);
+  assert.equal(none.google_review_count, null);
+});
+
+test("a Google rating must be complete, valid, tied to a place_id and dated", () => {
+  for (const o of [
+    { google_rating: "4.5" },
+    { google_review_count: "10" },
+    { ...RATED, google_rating: "5.5" },
+    { ...RATED, google_review_count: "-1" },
+    { ...RATED, google_review_count: "1.5" },
+    { ...RATED, google_rating_retrieved_at: "" },
+    { ...RATED, place_id: "" },
+  ] as Row[]) {
+    const p = plan([row(o)]);
+    assert.equal(p.rows[0].decision, "blocked", JSON.stringify(o));
+    assert.ok(p.rows[0].issues.some((i) => i.code === "invalid_google_rating"), JSON.stringify(o));
+  }
+});
+
+test("discovery tags come from the verified specials via the existing generator; Search Tags are never written", () => {
+  const food = '[{"name":"Chicharrones","price":"9"},{"name":"Truffle Fries","price":"10"},{"name":"Buffalo Wings","price":"12"}]';
+  const drink = '[{"name":"Happy Hour Cocktails","price":"10"},{"name":"House Wine","price":"10"}]';
+  const r = plan([row({ hh_food_details: food, hh_drink_details: drink })]).rows[0].record! as Record<string, unknown>;
+  const expected = generateSeededTags({ outdoor_seating: null, live_music: null, good_for_watching_sports: null, good_for_children: null, good_for_groups: null, allows_dogs: null, serves_vegetarian_food: null, hh_food_details: food, hh_drink_details: drink });
+  assert.deepEqual(r.seeded_tags, expected);
+  assert.ok((r.seeded_tags as string[]).includes("Wings") && (r.seeded_tags as string[]).includes("Cocktails"));
+  // No Google-amenity tags without Google amenity data.
+  for (const t of ["Patio", "Live Music", "Sports Viewing", "Family Friendly", "Group Friendly", "Dog Friendly", "Vegetarian Friendly"]) {
+    assert.equal((r.seeded_tags as string[]).includes(t), false, t);
+  }
+  assert.equal("search_tags" in r, false);
+  // Plan: the importer never creates subscription/grant rows — a seed with none resolves to Free.
+  assert.equal(/venue_subscriptions|venue_plan_grants/.test(readFileSync(join(__dirname, "../../../src/lib/seeding/marketVenueImport.ts"), "utf8")), false);
 });

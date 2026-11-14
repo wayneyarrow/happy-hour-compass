@@ -606,8 +606,11 @@ function parseSpecials(raw: string | null): string[] {
  * treats that as a failed read, never as "no grants".
  *
  * `enforce: false` (operator preview) shows stored content as-is.
+ *
+ * Exported (pure, no I/O) so seed QA can run imported rows through the exact
+ * mapping the public pages use.
  */
-function rowToConsumerVenue(
+export function rowToConsumerVenue(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   row: Record<string, any>,
   options: { nowMs: number; enforce: boolean }

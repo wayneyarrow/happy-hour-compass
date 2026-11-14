@@ -16,11 +16,18 @@
  *     market, city_slug a city of that market, and the row's own city text
  *     must resolve (venueGeographyResolver, same rules as Add Your Venue) to
  *     that same city.
- *   • Places storage terms: only place_id may carry Google-sourced data.
- *     Any Google-derived column (rating, review count, types, Google hours,
- *     maps URI, amenity flags, price level, editorial summary…) in the CSV
- *     header blocks the whole batch — those fields stay omitted until the
- *     storage question is resolved.
+ *   • Places storage terms: besides place_id, only google_rating and
+ *     google_review_count may carry Google-sourced data — the same two stored
+ *     fields every Kelowna seed already displays (Wayne approved storing them
+ *     for seeds, 2026-11-14). They must come together, with a place_id and a
+ *     google_rating_retrieved_at date, and are validated/rounded exactly as
+ *     scripts/backfillGoogleRating.ts does. Every other Google-derived column
+ *     (types, Google hours, maps URI, amenity flags, price level, editorial
+ *     summary, seeded_tags…) in the CSV header still blocks the whole batch.
+ *   • Discovery tags (platform-owned seeded_tags) are generated here from the
+ *     row's verified specials with the existing generator (src/lib/seededTags),
+ *     Google amenity inputs left unknown — never read from the CSV. The
+ *     operator-owned search_tags column is never written (DB default []).
  *   • Duplicates are flagged before any write: Place ID / slug / address /
  *     name collisions within the batch or against existing venues and the
  *     slug history; missing coordinates are flagged (warning).
@@ -40,6 +47,7 @@
 
 import { buildCityGeographyLookup, resolveCityGeography, normalizeGeographyText } from "@/lib/geo/venueGeographyResolver";
 import { parseHhTimes } from "@/lib/data/venues";
+import { generateSeededTags } from "@/lib/seededTags";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Columns
@@ -51,8 +59,9 @@ export const SEED_CSV_COLUMNS = [
   "market_slug", "city_slug", "lat", "lng", "phone", "website_url", "menu_url", "business_hours",
   "hh_times", "hh_tagline", "hh_food_details", "hh_drink_details", "hh_times_needs_review",
   "place_id", "placeholder_image_path", "source", "is_published",
+  "google_rating", "google_review_count",
   // Review columns — validated, never written to venues.
-  "business_hours_verified", "business_hours_source", "coordinates_source",
+  "business_hours_verified", "business_hours_source", "coordinates_source", "google_rating_retrieved_at",
 ] as const;
 export type SeedCsvColumn = (typeof SEED_CSV_COLUMNS)[number];
 
@@ -77,7 +86,7 @@ export const GEOGRAPHY_ISSUE_CODES = new Set([
  * so their presence in a seed CSV blocks the batch.
  */
 export const GOOGLE_DERIVED_COLUMNS = [
-  "google_rating", "google_review_count", "google_types", "google_primary_type", "google_business_hours",
+  "google_types", "google_primary_type", "google_business_hours",
   "google_maps_uri", "google_identity_status", "google_identity_reason", "price_level", "editorial_summary",
   "serves_beer", "serves_wine", "serves_cocktails", "outdoor_seating", "live_music", "allows_dogs",
   "good_for_watching_sports", "good_for_groups", "good_for_children", "serves_vegetarian_food",
@@ -168,6 +177,10 @@ export type VenueInsertRecord = {
   hh_times: string | null; hh_tagline: string | null; hh_food_details: string | null; hh_drink_details: string | null;
   hh_times_needs_review: boolean; place_id: string | null; placeholder_image_path: string | null;
   google_identity_status: "matched" | "unmatched";
+  /** Stored Google rating (0–5, 1 decimal) + review count — read by the existing GoogleRatingBadge. */
+  google_rating: number | null; google_review_count: number | null;
+  /** Platform-owned discovery tags generated from the verified specials. */
+  seeded_tags: string[];
   source: "seed"; is_published: false;
 };
 
@@ -346,6 +359,21 @@ function validateHhTimes(raw: string, issues: Issue[]): string[] {
   return Object.entries(weekly).filter(([, s]) => s.length > 0).map(([d]) => d);
 }
 
+/** Same validation/rounding as scripts/backfillGoogleRating.ts parseRating/parseReviewCount. */
+function parseGoogleRating(g: (c: SeedCsvColumn) => string, placeId: string | null, issues: Issue[]): { rating: number | null; count: number | null } {
+  const rRaw = g("google_rating"), cRaw = g("google_review_count");
+  if (!rRaw && !cRaw) return { rating: null, count: null };
+  const rating = Number(rRaw), count = Number(cRaw);
+  let ok = true;
+  if (!rRaw || !cRaw) { issues.push({ level: "error", code: "invalid_google_rating", message: "google_rating and google_review_count must be set together" }); ok = false; }
+  if (rRaw && (!Number.isFinite(rating) || rating < 0 || rating > 5)) { issues.push({ level: "error", code: "invalid_google_rating", message: "google_rating must be a number from 0 to 5" }); ok = false; }
+  if (cRaw && (!Number.isInteger(count) || count < 0)) { issues.push({ level: "error", code: "invalid_google_rating", message: "google_review_count must be a non-negative whole number" }); ok = false; }
+  if (!placeId) { issues.push({ level: "error", code: "invalid_google_rating", message: "a Google rating needs the place_id it was read from" }); ok = false; }
+  if (!/^\d{4}-\d{2}-\d{2}/.test(g("google_rating_retrieved_at"))) { issues.push({ level: "error", code: "invalid_google_rating", message: "google_rating_retrieved_at (ISO date) is required with a Google rating" }); ok = false; }
+  if (!ok) return { rating: null, count: null };
+  return { rating: Math.round(rating * 10) / 10, count };
+}
+
 function parseBool(raw: string, field: string, issues: Issue[], fallback: boolean): boolean {
   if (!raw) return fallback;
   const v = raw.toLowerCase();
@@ -511,6 +539,7 @@ export function planImport(
 
     // Duplicates — against existing listings (skip, untouched) and within the batch (block).
     const placeId = g("place_id") || null;
+    const googleRating = parseGoogleRating(g, placeId, issues);
     let existingVenue: RowPlan["existingVenue"];
     if (placeId && byPlaceId.has(placeId)) {
       const v = byPlaceId.get(placeId)!;
@@ -571,6 +600,13 @@ export function planImport(
       hh_food_details: food.json, hh_drink_details: drink.json, hh_times_needs_review: needsReview,
       place_id: placeId, placeholder_image_path: placeholder || null,
       google_identity_status: placeId ? "matched" : "unmatched",
+      google_rating: googleRating.rating, google_review_count: googleRating.count,
+      // Specials-only: Google amenity flags are unknown for seeds, so no Patio/Group/… tags.
+      seeded_tags: generateSeededTags({
+        outdoor_seating: null, live_music: null, good_for_watching_sports: null, good_for_children: null,
+        good_for_groups: null, allows_dogs: null, serves_vegetarian_food: null,
+        hh_food_details: food.json, hh_drink_details: drink.json,
+      }),
       source: "seed", is_published: false,
     };
     return { rowNumber: row.rowNumber, slug, name, decision, issues, record, summary, eligibility };
