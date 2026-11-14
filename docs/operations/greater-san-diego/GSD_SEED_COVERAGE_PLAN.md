@@ -5,14 +5,14 @@ All shared-database access was read-only. Draft insertion was tested only in an
 isolated in-memory Postgres (PGlite 16.4) built from the live schema.
 
 Revision 3: every seed row now needs **complete, verified weekly business hours**
-(enforced by the importer in dry run and apply). The pilot is **3 eligible rows**;
-3 pilot candidates are held. Rollout steps: `../GREATER_SAN_DIEGO_STEP2_ROLLOUT.md`.
+(enforced by the importer in dry run and apply). The pilot is **2 eligible rows**;
+4 pilot candidates are held (Finca's Sunday happy hour is unresolved — revision 4, 2026-11-14). Rollout steps: `../GREATER_SAN_DIEGO_STEP2_ROLLOUT.md`.
 
 ## Files (tracked unless noted)
 
 | File | What it is |
 |---|---|
-| `pilot/gsd-pilot.csv` | The 3 eligible pilot rows — importer input |
+| `pilot/gsd-pilot.csv` | The 2 eligible pilot rows — importer input |
 | `pilot/gsd-pilot-held.csv` | The 3 held candidates (same schema, `business_hours_verified=false`) — used only to prove the dry run blocks them |
 | `pilot/gsd-pilot-review.csv` | All 6: eligibility, hold reason, business-hours / HH / offers sources, map-pin source and precision |
 | `research/gsd-research-candidates.csv` | All candidates by subregion/city with venue-owned evidence and status |
@@ -56,7 +56,7 @@ Venue-owned pages re-read twice on 2026-11-13. Only `place_id` comes from Google
 |---|---|---|---|---|---|
 | The Lion's Share | **ELIGIBLE** | All 7 days, bar hours — lionssharesd.com | Tue–Sun 4–6 PM | hours ELIGIBLE · city BLOCKED (cities not applied) | inserted draft; re-run skip |
 | One Door North | **ELIGIBLE** | All 7 days — onedoornorthsd.com | Mon–Fri 4–6 PM | hours ELIGIBLE · city BLOCKED | inserted draft; re-run skip |
-| Finca | **ELIGIBLE** | All 7 days incl. "Closed Monday" — fincanorthpark.com | Tue–Wed 5–6; Thu 5–9; Fri–Sat 3–6 (Sunday omitted, needs_review) | hours ELIGIBLE · city BLOCKED | inserted draft; re-run skip |
+| Finca | **HELD** (2026-11-14) | All 7 days incl. "Closed Monday" — fincanorthpark.com/contact/ (complete & verified) | Updated: Tue–Wed 5–6; Thu 5–9 (open–close); Fri–Sun 3–6; bar & patio only. **Sunday conflicts** between Finca's menu page ("every day from opening until 6 PM") and its homepage/contact list (Tue–Sat) | hours ELIGIBLE (all HH windows inside opening hours) · city BLOCKED · held for Sunday | — |
 | Herb & Sea | **HELD** | Monday not stated by the venue | paused for holiday pop-up Nov 11 – Jan 9 | hours INELIGIBLE (`hours_not_verified`) · city BLOCKED | skipped, no venue created |
 | Roppongi | **HELD** | Dinner only (from 5 PM); no bar hours | from 3 PM | hours INELIGIBLE (`hours_not_verified`, `hh_outside_business_hours` ×7) · city BLOCKED | skipped |
 | Stake Chophouse & Bar | **HELD** | Restaurant from 4:30 PM; 4 PM bar opening only implied | from 4 PM | hours INELIGIBLE (`hours_not_verified`, `hh_outside_business_hours` ×7) · city BLOCKED | skipped |
@@ -69,7 +69,7 @@ Venue-owned pages re-read twice on 2026-11-13. Only `place_id` comes from Google
 
 | City | Target | Pilot (eligible) / live | Verified HH (priced) | HH schedule only | Partial | Hold | Leads |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| San Diego | 48 | 3 | 30 | 11 | 7 | 5 | 5 |
+| San Diego | 48 | 2 | 30 | 11 | 7 | 6 | 5 |
 | Oceanside | 5 | 0 | 2 | 2 | 0 | 1 | 1 |
 | Carlsbad | 4 | 0 | 2 | 2 | 0 | 1 | 0 |
 | Encinitas | 4 | 0 | 3 | 1 | 0 | 1 | 1 |
@@ -87,13 +87,13 @@ Venue-owned pages re-read twice on 2026-11-13. Only `place_id` comes from Google
 | Santee | 2 | 0 | 0 | 1 | 0 | 0 | 1 |
 | Imperial Beach | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
 | Lemon Grove | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| **Total** | 90 | 4 | 50 | 28 | 7 | 12 | 15 |
+| **Total** | 90 | 3 | 50 | 28 | 7 | 13 | 15 |
 
 - 'Verified' here means venue-owned happy hour days/times (and priced offers). **Business hours are verified per batch** — every row also needs complete, venue-owned weekly hours before it can be imported (the rule held 3 of the 6 pilot candidates).
 - 50 verified-with-offers candidates + 4 pilot/live; 28 more have a confirmed schedule but need offers. Most of these schedule-only rows sit in Coronado, Chula Vista and the Brigantine group.
 - Gaps against the targets: Chula Vista (−2), Santee (−1), Vista (−1), Escondido (−1), Oceanside (−1), plus within San Diego: UTC, Clairemont/Bay Park, Golden Hill, Kensington, Carmel Valley.
 - Research findings to act on: Sea 180 (Imperial Beach) appears replaced by Sammy's Woodfired Pizza at the same address; Masters Kitchen (Oceanside) is closed; several domains have lapsed into spam (closure signals: Border X, Monkey King, Small Bar, Bar Pink, Sbicca's old domain).
-- Held from the pilot: Herb & Sea (Monday hours; HH paused until ~Jan 9 — recheck ~2027-01-10), Roppongi and Stake (no venue-stated bar hours).
+- Held from the pilot: Finca (Sunday happy hour conflict on its own pages; hours verified), Herb & Sea (Monday hours; HH paused until ~Jan 9 — recheck ~2027-01-10), Roppongi and Stake (no venue-stated bar hours).
 - The four round-1 rows without verified HH times (Rustic Root Solana Beach, Harney Oceanside, Cross Street Convoy, Common Theory) stay on the research list and out of the pilot.
 
 ## 5. Places terms

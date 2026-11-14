@@ -10,7 +10,7 @@ step is live in both the moment it runs.
 |---|---|
 | Code (`website` → `main`) | Roster + aliases (`src/lib/geo/rosters/greaterSanDiego.ts`); market-scoped aliases and duplicate-name guard in `venueGeographyResolver.ts`; website Happy Hours browsing and hero search scope by **assigned market** (`partitionVenuesByMarket`), so assigned venues beyond 60 km appear and coordinate-less venues never leak into another market; header names the region — **"Greater San Diego" from 640 px up, "San Diego" on phones** (same market; full name in the accessible label and dropdown); market-aware **draft-only** importer (`npm run import:market-venues`). |
 | Data — cities (shared DB) | `greater-san-diego/step2-cities-apply.sql`: 41 new `cities` rows (17 cities + 24 submission-only communities). No market, venue or other-market change; Solana Beach and Encore untouched. |
-| Data — venues (shared DB) | Pilot: `greater-san-diego/pilot/gsd-pilot.csv` — **3 eligible rows** (The Lion's Share, One Door North, Finca) → unpublished `source = 'seed'` drafts. Later: launch batches. |
+| Data — venues (shared DB) | Pilot: `greater-san-diego/pilot/gsd-pilot.csv` — **2 eligible rows** (The Lion's Share, One Door North) → unpublished `source = 'seed'` drafts. Later: launch batches. |
 
 Pilot and research inputs live in this repo (`greater-san-diego/pilot/`, `greater-san-diego/research/`). Run reports default to the gitignored `operator-admin/scripts/output/import-reports/`.
 
@@ -22,6 +22,7 @@ Currently held (in `pilot/gsd-pilot-held.csv` and the research CSV — never app
 
 | Venue | Hold reason | Recheck |
 |---|---|---|
+| Finca | Business hours complete & verified; schedule updated 2026-11-14 to opening–6 PM every open day, Thursday opening–close, bar & patio only — but Finca's own pages disagree on **Sunday** happy hour (menu page: every day; homepage/contact: Tue–Sat) | Confirm Sunday with Finca, or Wayne confirms the menu page governs → move the row back to `gsd-pilot.csv` |
 | Herb & Sea | Monday not stated by the venue; happy hour suspended for its holiday pop-up (Nov 11 – Jan 9) | ~2027-01-10: reconfirm HH resumed + get Monday |
 | Roppongi | Only dinner hours (from 5 PM) published; HH starts 3 PM | Ask venue for bar/lounge hours |
 | Stake Chophouse & Bar | Stated opening 4:30 PM; 4 PM bar opening only implied; HH starts 4 PM | Ask venue for bar hours |
@@ -37,15 +38,15 @@ Also on the research list, out of the pilot until HH times are verified: Rustic 
    - By hand: phone (≤639 px) header reads "San Diego", tablet/desktop "Greater San Diego"; Encore Sushi page `/greater-san-diego/solana-beach/solana-beach-encore-sushi` shows "Solana Beach"; a Kelowna venue never appears in Greater San Diego browsing and vice versa.
    - Importer dry run (read-only, from a laptop against the shared DB):
      `cd operator-admin && npm run import:market-venues -- --market=greater-san-diego --csv=../docs/operations/greater-san-diego/pilot/gsd-pilot.csv`
-     Expect business hours **3 eligible**, city assignment **3 blocked** (`unresolved_city` — cities not applied yet). Repeat with `pilot/gsd-pilot-held.csv`: hours **3 ineligible** with reasons.
+     Expect business hours **2 eligible**, city assignment **2 blocked** (`unresolved_city` — cities not applied yet). The held file (`pilot/gsd-pilot-held.csv`) is never applied: Finca passes the hours check (held for its Sunday happy hour); the other 3 fail it with reasons.
    - `supabase db query --linked -f docs/operations/greater-san-diego/step2-cities-preflight.sql` (read-only).
 3. **Promote to `main`** (normal promotion) and repeat step 2 against Production.
 4. **Cities — apply (approval):**
    `supabase db query --linked -f docs/operations/greater-san-diego/step2-cities-apply.sql`
    Verification row: 42 active cities, default `solana-beach`, Encore city `solana-beach`. Re-running refuses.
-5. **Pilot dry run again** (step 2 command): expect **3 × INSERT**, hours eligible, city resolved.
-6. **Pilot apply (approval):** same command with `--apply`. Re-run without `--apply`: expect 3 × SKIP.
-7. **Review the drafts** in the Control Panel (venue page, preview): content, map pin, placeholder photo, hours, happy hour. Publish deliberately (Finca: Sunday HH omitted and flagged for review).
+5. **Pilot dry run again** (step 2 command): expect **2 × INSERT**, hours eligible, city resolved.
+6. **Pilot apply (approval):** same command with `--apply`. Re-run without `--apply`: expect 2 × SKIP.
+7. **Review the drafts** in the Control Panel (venue page, preview): content, map pin, placeholder photo, hours, happy hour. Publish deliberately.
 8. **Live submission test — PENDING, separate approval.** See side effects below.
 9. **Scale to the launch batch (~90):** batches of ~15–25 by subregion from `research/gsd-research-candidates.csv`: verify complete weekly hours + offers on venue-owned sources → build CSV → dry run → fix flags → apply (approval) → review → publish. Rows without complete verified hours stay in the research CSV.
 
