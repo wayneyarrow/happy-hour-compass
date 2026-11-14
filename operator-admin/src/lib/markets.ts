@@ -34,6 +34,22 @@ export type Market = {
   radiusKm: number;
   mapCenter: { lat: number; lng: number };
   mapZoom: number;
+  /**
+   * What the website header's location chip and hero search name for this
+   * market. "defaultCity" (the default when omitted) shows the market's
+   * default city — right for a market centred on one city (Kelowna).
+   * "market" shows the market name — for a multi-city region where no single
+   * city represents it (Greater San Diego: San Diego, Oceanside, Chula
+   * Vista…). Each venue still shows its own city everywhere else.
+   */
+  locationLabel?: "defaultCity" | "market";
+  /**
+   * Shorter form of the market-name label for the phone header chip, where
+   * the full name doesn't fit beside the logo (measured: "Greater San Diego"
+   * needs ~54px more than the row has at 375px). The full name stays in the
+   * chip's accessible label, the dropdown, and from the sm breakpoint up.
+   */
+  compactLocationLabel?: string;
 };
 
 export const MARKETS: Market[] = [
@@ -64,6 +80,8 @@ export const MARKETS: Market[] = [
     radiusKm: 60,
     mapCenter: { lat: 32.85, lng: -117.15 },
     mapZoom: 10,
+    locationLabel: "market",
+    compactLocationLabel: "San Diego",
   },
   {
     id: "greater-vancouver",
@@ -128,6 +146,17 @@ export function getDefaultMarket(): Market {
 }
 
 /** Converts a Market to the minimal config shape expected by the discover engine. */
+/**
+ * The location label for the website header chip / hero search: the market
+ * name for markets that opt into it (Market.locationLabel = "market"),
+ * otherwise the default city's name, falling back to the market name when
+ * no default city is available (DB unavailable or not seeded).
+ */
+export function resolveMarketLocationLabel(market: Market, defaultCityName: string | null | undefined): string {
+  if (market.locationLabel === "market") return market.name;
+  return defaultCityName?.trim() ? defaultCityName : market.name;
+}
+
 export function toMarketConfig(market: Market): { lat: number; lng: number; radiusKm: number } {
   return { lat: market.center.lat, lng: market.center.lng, radiusKm: market.radiusKm };
 }

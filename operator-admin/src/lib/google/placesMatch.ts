@@ -109,8 +109,12 @@ function extractShort(
   return (match?.shortText as string | undefined) ?? null;
 }
 
-/** Maps a single raw Places API "place" object into a structured GoogleMatch. */
-function parsePlace(p: Record<string, unknown>): GoogleMatch {
+/**
+ * Maps a single raw Places API "place" object into a structured GoogleMatch.
+ * Exported (pure, no I/O) so geography tests can feed it real-shaped
+ * responses and prove the exact city/province the submission paths resolve.
+ */
+export function parsePlace(p: Record<string, unknown>): GoogleMatch {
   const components = (p.addressComponents as Record<string, unknown>[]) ?? [];
 
   const streetNumber = extractLong(components, "street_number");

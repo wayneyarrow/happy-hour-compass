@@ -23,6 +23,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  GREATER_SAN_DIEGO_CITY_ALIASES,
+  GREATER_SAN_DIEGO_MARKET_SLUG,
+} from "./rosters/greaterSanDiego";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalization
@@ -34,15 +38,22 @@ export function normalizeGeographyText(s: string | null | undefined): string {
 }
 
 /**
- * Known text aliases from legacy/submitted data → canonical seeded city slug.
- * Ported from scripts/backfillVenueGeography.ts (previously defined only
- * there) — this is now the one place these aliases live.
+ * Known text aliases → canonical seeded city slug, scoped per market
+ * (market slug → alias → city slug). An alias only ever points at a city of
+ * its own market, so a generic neighbourhood name ("North Park") registered
+ * for one market can never select a city in another. The BC entries were
+ * ported from scripts/backfillVenueGeography.ts; Greater San Diego's live in
+ * src/lib/geo/rosters/greaterSanDiego.ts. This is the one place aliases are
+ * assembled.
  */
-export const CITY_ALIASES: Record<string, string> = {
-  "langley township": "langley",
-  "district of west vancouver": "west-vancouver",
-  "district of north vancouver": "north-vancouver",
-  "city of north vancouver": "north-vancouver",
+export const CITY_ALIASES_BY_MARKET: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "greater-vancouver": {
+    "langley township": "langley",
+    "district of west vancouver": "west-vancouver",
+    "district of north vancouver": "north-vancouver",
+    "city of north vancouver": "north-vancouver",
+  },
+  [GREATER_SAN_DIEGO_MARKET_SLUG]: GREATER_SAN_DIEGO_CITY_ALIASES,
 };
 
 /**
@@ -71,12 +82,28 @@ function normalizeProvinceCode(s: string | null | undefined): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type CityLookupRow = { id: string; slug: string; name: string; market_id: string };
-export type MarketProvinceRow = { id: string; province: string };
+/** `slug` is optional so callers that only know provinces (tests, the backfill script) still work. */
+export type MarketProvinceRow = { id: string; province: string; slug?: string };
+
+type CityCandidate = { cityId: string; marketId: string; canonicalName: string };
 
 export type CityGeographyLookup = {
-  byNormalizedName: Map<string, { cityId: string; marketId: string; canonicalName: string }>;
+  /**
+   * Normalized name/slug/alias → every city it can mean. Usually one; more
+   * than one only when two markets share a city name (e.g. a future
+   * "Richmond, CA" next to Richmond, BC), which resolveCityGeography()
+   * disambiguates by province or refuses — never "last one wins".
+   */
+  byNormalizedName: Map<string, CityCandidate[]>;
   marketProvinceById: Map<string, string>;
 };
+
+function addCandidate(map: Map<string, CityCandidate[]>, key: string, entry: CityCandidate) {
+  if (!key) return;
+  const list = map.get(key) ?? [];
+  if (!list.some((e) => e.cityId === entry.cityId)) list.push(entry);
+  map.set(key, list);
+}
 
 /**
  * Builds the in-memory matching lookup from already-fetched `cities` and
@@ -88,27 +115,34 @@ export function buildCityGeographyLookup(
   cities: CityLookupRow[],
   markets: MarketProvinceRow[]
 ): CityGeographyLookup {
-  const byNormalizedName = new Map<
-    string,
-    { cityId: string; marketId: string; canonicalName: string }
-  >();
+  const byNormalizedName = new Map<string, CityCandidate[]>();
+  const toEntry = (c: CityLookupRow): CityCandidate => ({
+    cityId: c.id,
+    marketId: c.market_id,
+    canonicalName: c.name,
+  });
 
   for (const c of cities) {
-    const entry = { cityId: c.id, marketId: c.market_id, canonicalName: c.name };
-    byNormalizedName.set(normalizeGeographyText(c.name), entry);
+    addCandidate(byNormalizedName, normalizeGeographyText(c.name), toEntry(c));
     // Also register the slug (dashes → spaces) as an alternate key.
-    byNormalizedName.set(normalizeGeographyText(c.slug.replace(/-/g, " ")), entry);
+    addCandidate(byNormalizedName, normalizeGeographyText(c.slug.replace(/-/g, " ")), toEntry(c));
   }
 
-  // Explicit alias overrides win over name/slug keys.
-  for (const [alias, targetSlug] of Object.entries(CITY_ALIASES)) {
-    const target = cities.find((c) => c.slug === targetSlug);
-    if (target) {
-      byNormalizedName.set(normalizeGeographyText(alias), {
-        cityId: target.id,
-        marketId: target.market_id,
-        canonicalName: target.name,
-      });
+  // Market-scoped aliases. An alias whose key is already a real city name is
+  // skipped — a seeded city always wins over an alias of the same spelling.
+  // The target is the city with that slug in that market; when market slugs
+  // weren't supplied (backfill script), only a slug unique across all
+  // markets is accepted.
+  const marketIdBySlug = new Map(markets.filter((m) => m.slug).map((m) => [m.slug as string, m.id]));
+  for (const [marketSlug, aliases] of Object.entries(CITY_ALIASES_BY_MARKET)) {
+    const marketId = marketIdBySlug.get(marketSlug);
+    for (const [alias, targetSlug] of Object.entries(aliases)) {
+      const key = normalizeGeographyText(alias);
+      if (byNormalizedName.has(key)) continue;
+      const targets = cities.filter(
+        (c) => c.slug === targetSlug && (marketId === undefined || c.market_id === marketId)
+      );
+      if (targets.length === 1) addCandidate(byNormalizedName, key, toEntry(targets[0]));
     }
   }
 
@@ -136,16 +170,16 @@ export type GeographyResolution = {
  * Matches submitted city (+ optional province) text against a pre-built
  * lookup. Pure — no I/O.
  *
- * City name/slug/alias is always the sole basis for *which* city is
- * selected — province never widens or picks between candidates (today no
- * two seeded cities share a normalized name, so there is nothing to
- * disambiguate). Province is used only as a safety veto: if the caller
- * supplies province text that normalizes to a known code AND it clearly
- * disagrees with the matched city's market province, the match is rejected
- * rather than silently assigning the venue to the wrong market. Omitting
- * province (or supplying text that doesn't normalize to a known code)
- * skips the veto entirely — matching then depends on city text alone,
- * identical to the original backfill script's behaviour.
+ * City name/slug/alias is always the basis for *which* city is selected.
+ * Province is a safety veto: if the caller supplies province text that
+ * normalizes to a known code AND it clearly disagrees with a candidate
+ * city's market province, that candidate is dropped rather than silently
+ * assigning the venue to the wrong market. When two markets share a city
+ * name, the veto is what leaves a single candidate; if it can't (no
+ * province supplied), the result is null — never "last one wins". Omitting
+ * province skips the veto — for a uniquely named city, matching then
+ * depends on city text alone, identical to the original backfill
+ * script's behaviour.
  */
 export function resolveCityGeography(
   input: { city: string | null | undefined; province?: string | null | undefined },
@@ -154,14 +188,22 @@ export function resolveCityGeography(
   const cityKey = normalizeGeographyText(input.city);
   if (!cityKey) return null;
 
-  const match = lookup.byNormalizedName.get(cityKey);
-  if (!match) return null;
+  const candidates = lookup.byNormalizedName.get(cityKey);
+  if (!candidates?.length) return null;
 
+  // Province veto (unchanged for the single-candidate case): drop any
+  // candidate whose market province clearly disagrees with the submitted one.
   const submittedProvince = normalizeProvinceCode(input.province);
-  if (submittedProvince) {
-    const marketProvince = lookup.marketProvinceById.get(match.marketId);
-    if (marketProvince && marketProvince !== submittedProvince) return null;
-  }
+  const plausible = candidates.filter((c) => {
+    if (!submittedProvince) return true;
+    const marketProvince = lookup.marketProvinceById.get(c.marketId);
+    return !marketProvince || marketProvince === submittedProvince;
+  });
+
+  // Exactly one plausible city, or nothing — a name shared by two markets
+  // with no province to tell them apart is left unassigned, never guessed.
+  if (plausible.length !== 1) return null;
+  const match = plausible[0];
 
   return { cityId: match.cityId, marketId: match.marketId, matchedCityName: match.canonicalName };
 }
@@ -186,7 +228,7 @@ export async function fetchCityGeographyLookup(
   const [{ data: cityRows, error: cityErr }, { data: marketRows, error: marketErr }] =
     await Promise.all([
       supabase.from("cities").select("id, slug, name, market_id"),
-      supabase.from("markets").select("id, province"),
+      supabase.from("markets").select("id, province, slug"),
     ]);
 
   if (cityErr) throw cityErr;

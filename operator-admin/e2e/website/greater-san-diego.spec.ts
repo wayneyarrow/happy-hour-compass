@@ -60,12 +60,12 @@ test.describe("Greater San Diego — market selection", () => {
     expect(await headerLabel(page)).toMatch(/Kelowna|Central Okanagan/);
 
     await switchMarket(page, "Greater San Diego");
-    await expect.poll(() => headerLabel(page)).toMatch(/Solana Beach|Greater San Diego/);
+    await expect.poll(() => headerLabel(page)).toMatch(/Browsing near Greater San Diego\./);
     expect(await marketCookie(page)).toBe("greater-san-diego");
 
     // Market-scoped browsing follows the selection.
     await page.goto("/website-happy-hours");
-    await expect.poll(() => headerLabel(page)).toMatch(/Solana Beach|Greater San Diego/);
+    await expect.poll(() => headerLabel(page)).toMatch(/Browsing near Greater San Diego\./);
     if (!ENCORE_LIVE) {
       // Before rollout no Greater San Diego venue is published: nothing from
       // Central Okanagan leaks into its browsing.
@@ -74,7 +74,7 @@ test.describe("Greater San Diego — market selection", () => {
 
     // Refresh keeps the explicit choice.
     await page.reload();
-    await expect.poll(() => headerLabel(page)).toMatch(/Solana Beach|Greater San Diego/);
+    await expect.poll(() => headerLabel(page)).toMatch(/Browsing near Greater San Diego\./);
 
     // And back.
     await switchMarket(page, "Central Okanagan");
@@ -126,7 +126,7 @@ test.describe("Greater San Diego — newsletter is Central Okanagan only", () =>
 
 test.describe("Greater San Diego — first-visit country default", () => {
   for (const [country, expected] of [
-    ["US", /Solana Beach|Greater San Diego/],
+    ["US", /Browsing near Greater San Diego\./],
     ["CA", /Kelowna|Central Okanagan/],
     ["GB", /Kelowna|Central Okanagan/],
     [null, /Kelowna|Central Okanagan/],
@@ -217,7 +217,7 @@ test.describe("Greater San Diego — map", () => {
     }
     await expect(anyBc.first()).toBeVisible({ timeout: 10_000 });
     expect(await marketCookie(page)).toBe("greater-san-diego");
-    await expect.poll(() => headerLabel(page)).toMatch(/Solana Beach|Greater San Diego/);
+    await expect.poll(() => headerLabel(page)).toMatch(/Browsing near Greater San Diego\./);
   });
 });
 
@@ -311,5 +311,67 @@ test.describe("Greater San Diego — venue-local time", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Encore Sushi" })).toBeVisible();
     await expect(page.getByTestId("hh-time-zone-caption").first()).toContainText("Venue local time: P");
     await context.close();
+  });
+});
+
+// ─── Step 2: region label, header fit, assigned-market browsing ─────────────
+
+test.describe("Greater San Diego — Step 2 region label", () => {
+  test("the header names the region, and fits the header no worse than Central Okanagan", async ({ page }) => {
+    const WIDTHS = [320, 375, 390, 768, 1024, 1280, 1440];
+    async function measure() {
+      const out: Record<number, { label: string; truncated: boolean; rowOverflow: number; pageOverflow: number }> = {};
+      for (const width of WIDTHS) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForTimeout(100);
+        out[width] = await page.evaluate(() => {
+          const chip = [...document.querySelectorAll('header button[aria-haspopup="listbox"] span.truncate')]
+            .find((el) => getComputedStyle(el).display !== "none") as HTMLElement | undefined;
+          const row = document.querySelector("header > div") as HTMLElement;
+          const inner = row.getBoundingClientRect().right - parseFloat(getComputedStyle(row).paddingRight);
+          const last = [...row.children].filter((k) => getComputedStyle(k).display !== "none").pop()!;
+          return {
+            label: chip?.textContent ?? "",
+            truncated: chip ? chip.scrollWidth > chip.clientWidth : true,
+            // How far the right-most header control pokes past the row's content edge.
+            rowOverflow: Math.round(last.getBoundingClientRect().right - inner),
+            pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+          };
+        });
+      }
+      return out;
+    }
+
+    await page.goto("/website-happy-hours");
+    if (!/Kelowna/.test(await headerLabel(page))) await switchMarket(page, "Central Okanagan");
+    const kelowna = await measure();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await switchMarket(page, "Greater San Diego");
+    await expect.poll(() => headerLabel(page)).toMatch(/Browsing near Greater San Diego\./);
+    const sd = await measure();
+
+    for (const width of WIDTHS) {
+      const m = sd[width];
+      // Full region name from the sm breakpoint up; the compact form on phones.
+      expect(m.label, `label at ${width}px`).toBe(width >= 640 ? "Greater San Diego" : "San Diego");
+      expect(m.truncated, `label truncated at ${width}px`).toBe(false);
+      // Never worse than Central Okanagan's header (which already overflows at 320px — pre-existing).
+      expect(m.rowOverflow, `row overflow at ${width}px vs Kelowna ${kelowna[width].rowOverflow}`).toBeLessThanOrEqual(Math.max(0, kelowna[width].rowOverflow));
+      expect(m.pageOverflow, `page overflow at ${width}px vs Kelowna ${kelowna[width].pageOverflow}`).toBeLessThanOrEqual(Math.max(0, kelowna[width].pageOverflow));
+      if (width >= 375) expect(m.pageOverflow, `no sideways scroll at ${width}px`).toBeLessThanOrEqual(0);
+    }
+    // Central Okanagan keeps its city label.
+    expect(kelowna[1280].label).toBe("Kelowna");
+    // The dropdown doesn't repeat the region name as "Greater San Diego region".
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await locationTrigger(page).click();
+    await expect(page.getByRole("dialog", { name: "Location switcher" }).getByText("Greater San Diego region")).toHaveCount(0);
+  });
+
+  test("Encore Sushi keeps its Solana Beach URL and city", async ({ page }) => {
+    test.skip(!ENCORE_LIVE, "Encore Sushi not published yet (GSD_ENCORE_LIVE=1 after rollout)");
+    const res = await page.goto(ENCORE_PATH);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByText("Solana Beach").first()).toBeVisible();
   });
 });

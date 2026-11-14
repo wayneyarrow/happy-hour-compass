@@ -11,7 +11,7 @@ import { WeeklyPicksSection } from "./weekly-picks/WeeklyPicksSection";
 import { isWeeklyPicksOfferedInMarket, splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
 import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
-import type { Market } from "@/lib/markets";
+import { resolveMarketLocationLabel, type Market } from "@/lib/markets";
 import {
   getPublicHomepageRecordForLocation,
   resolvePublicHomepageSections,
@@ -31,7 +31,9 @@ async function getHeroCityContext(market: Market): Promise<{ cityName: string; c
     const marketRecord = await getMarketBySlug(market.id);
     if (marketRecord) {
       const defaultCity = await getDefaultCityForMarket(marketRecord.id);
-      if (defaultCity) return { cityName: defaultCity.name, citySlug: defaultCity.slug };
+      // The slug still drives Homepage geography resolution; only the
+      // display name follows the market's location-label setting.
+      if (defaultCity) return { cityName: resolveMarketLocationLabel(market, defaultCity.name), citySlug: defaultCity.slug };
     }
   } catch {
     // DB unavailable — fall back to market config name.

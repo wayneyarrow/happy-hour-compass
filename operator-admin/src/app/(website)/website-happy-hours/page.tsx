@@ -53,12 +53,13 @@ export default async function HappyHoursSearchPage({
     typeof to === "string" ? to : undefined
   );
 
-  // Fetch all published venues then gate to the active market.
-  // isNearMarket() (inside partitionVenuesByMarket) is the canonical geo
-  // filter used by the Discover Engine; venues without coordinates are
-  // included permissively (assumed local). Published venues in the other
-  // active markets come along separately — reachable only by a name search
-  // or by panning the map there, never mixed into this market's browsing.
+  // Fetch all published venues then gate to the active market by each
+  // venue's assigned market (partitionVenuesByMarket — not a radius, so an
+  // assigned venue far from the market centre still belongs, and one with
+  // no coordinates can't leak into another market). Published venues in the
+  // other active markets come along separately — reachable only by a name
+  // search or by panning the map there, never mixed into this market's
+  // browsing.
   const allVenues = await getPublishedVenuesForConsumer();
   const { inMarket: venues, otherMarket } = partitionVenuesByMarket(allVenues, market);
 

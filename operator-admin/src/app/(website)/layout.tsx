@@ -15,6 +15,7 @@ import {
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
+import { resolveMarketLocationLabel } from "@/lib/markets";
 import { getFeaturedGuidesNavHref } from "@/lib/data/featuredGuidesNav";
 
 // Public-website-only, additive to the existing first-party analytics
@@ -72,7 +73,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
       ]);
       cities = allCities;
       featuredGuidesHref = guidesHref;
-      if (defaultCity) currentCityName = defaultCity.name;
+      currentCityName = resolveMarketLocationLabel(market, defaultCity?.name);
     }
   } catch {
     // DB unavailable — header falls back to market name label. Cookie flow

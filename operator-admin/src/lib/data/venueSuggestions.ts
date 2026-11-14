@@ -11,9 +11,9 @@ import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 /**
  * Homepage venue-suggestion search — powers the autocomplete dropdown under
  * the Hero's search pill. Reuses the same data source and geography gate as
- * the rest of the public website (getPublishedVenuesForConsumer +
- * isNearMarket, per website-happy-hours/page.tsx and the Explore page)
- * rather than a new query shape.
+ * the Happy Hours listing (getPublishedVenuesForConsumer +
+ * partitionVenuesByMarket's assigned-market scoping, per
+ * website-happy-hours/page.tsx) rather than a new query shape.
  *
  * All text matching and ranking is delegated to rankVenuesByTextSearch()
  * (src/lib/data/venueSearch.ts) — the shared, authoritative consumer venue
@@ -45,8 +45,8 @@ const DEFAULT_SUGGESTION_LIMIT = 8;
 
 /**
  * Searches published venues via the shared venue text-search helper.
- * `market` scopes results with the same isNearMarket radius gate used
- * throughout the public site; venues in other active markets are appended
+ * `market` scopes results by assigned market, exactly as the Happy Hours
+ * listing does (partitionVenuesByMarket); venues in other active markets are appended
  * only for name matches (see the module comment).
  */
 export async function searchVenueSuggestions(

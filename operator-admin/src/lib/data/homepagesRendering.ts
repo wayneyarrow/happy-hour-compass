@@ -37,7 +37,7 @@ import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { getAllMarkets, getCitiesWithVenues, getDefaultCityForMarket } from "@/lib/geo/geography";
-import { getMarketById as getStaticMarketBySlug, type Market } from "@/lib/markets";
+import { getMarketById as getStaticMarketBySlug, resolveMarketLocationLabel, type Market } from "@/lib/markets";
 import type { CityRecord } from "@/lib/geo/types";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { buildHhSchedule } from "@/lib/happyHourStatus";
@@ -331,8 +331,6 @@ export async function resolveDiscoveryShellGeography(
     !cityId && marketRecord ? getDefaultCityForMarket(marketRecord.id) : Promise.resolve(null),
   ]);
 
-  const resolvedCityName = cityName ?? defaultCity?.name ?? marketRecord?.name ?? "";
-
   // Static Market config (src/lib/markets.ts) keyed by the same slug as the DB
   // markets table — see (website)/layout.tsx's "market.id == slug" comment.
   // Falls back to a minimal stand-in only if a market is somehow missing from
@@ -351,6 +349,11 @@ export async function resolveDiscoveryShellGeography(
       mapCenter: { lat: 0, lng: 0 },
       mapZoom: 12,
     };
+
+  // A Homepage scoped to a specific city keeps that city's name; otherwise
+  // the label follows the live header's rule (resolveMarketLocationLabel).
+  const resolvedCityName =
+    cityName ?? (defaultCity ? resolveMarketLocationLabel(staticMarket, defaultCity.name) : marketRecord?.name ?? "");
 
   return { market: staticMarket, marketSlug, cityName: resolvedCityName, cities };
 }

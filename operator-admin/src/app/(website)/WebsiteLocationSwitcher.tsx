@@ -103,6 +103,12 @@ export default function WebsiteLocationSwitcher({
     .filter((c) => c.status === "active" && c.name !== currentCityName)
     .slice(0, 6);
 
+  // Phone-width chip text for markets labelled by their own name (see
+  // Market.compactLocationLabel); null keeps the single label everywhere.
+  const currentMarket = MARKETS.find((m) => m.id === marketId);
+  const compactLabel =
+    currentMarket?.compactLocationLabel && currentCityName === marketName ? currentMarket.compactLocationLabel : null;
+
   const activeRegions = MARKETS.filter((m) => m.status === "active");
   const comingSoonRegions = MARKETS.filter((m) => m.status === "coming_soon");
 
@@ -126,8 +132,18 @@ export default function WebsiteLocationSwitcher({
           transition-colors
         "
       >
-        <span className="text-[13px] sm:text-[15px] leading-none" aria-hidden="true">📍</span>
-        <span className="max-w-[80px] sm:max-w-[110px] truncate">{currentCityName}</span>
+        {/* With the compact phone label the pin is dropped below sm, so the
+            chip is no wider than a one-word city label (measured: keeps the
+            375px header from scrolling sideways). */}
+        <span className={`${compactLabel ? "hidden sm:inline" : ""} text-[13px] sm:text-[15px] leading-none`} aria-hidden="true">📍</span>
+        {compactLabel ? (
+          <>
+            <span className="sm:hidden max-w-[80px] truncate">{compactLabel}</span>
+            <span className="hidden sm:inline sm:max-w-[150px] truncate">{currentCityName}</span>
+          </>
+        ) : (
+          <span className="max-w-[80px] sm:max-w-[110px] truncate">{currentCityName}</span>
+        )}
         <svg
           className={`w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
           fill="none"
@@ -166,7 +182,13 @@ export default function WebsiteLocationSwitcher({
                 <span className="text-amber-500 text-lg flex-shrink-0" aria-hidden="true">📍</span>
                 <span className="font-semibold text-gray-900">{currentCityName}</span>
               </div>
-              <p className="text-xs text-gray-400 ml-7 mb-4">{marketName} region</p>
+              {/* Markets labelled by their own name (Market.locationLabel = "market")
+                  would repeat it here, so the region line is only shown under a city. */}
+              {currentCityName !== marketName ? (
+                <p className="text-xs text-gray-400 ml-7 mb-4">{marketName} region</p>
+              ) : (
+                <div className="mb-4" />
+              )}
 
               {/* Other cities in this region — informational V1 */}
               {otherCities.length > 0 && (

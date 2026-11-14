@@ -16,7 +16,8 @@
  *                                   Maple Ridge
  *   • Victoria (coming_soon)      — Victoria  (stub; no full city breakdown yet)
  *   • Calgary (coming_soon)       — Calgary   (stub; 1 seeded venue exists)
- *   • Greater San Diego (active)  — Solana Beach (first US market, Nov 2026)
+ *   • Greater San Diego (active)  — Solana Beach (Step 1, Nov 2026) + the Step 2
+ *                                   roster of 41 cities/communities (rosters/greaterSanDiego.ts)
  *
  * Greater San Diego was rolled out to the shared database with the targeted,
  * reviewed SQL in docs/operations/GREATER_SAN_DIEGO_ROLLOUT.md — not by
@@ -40,6 +41,7 @@
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { GREATER_SAN_DIEGO_CITIES } from "../src/lib/geo/rosters/greaterSanDiego";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -182,8 +184,16 @@ const MARKETS: MarketSeed[] = [
     radius_km: 60,
     display_order: 5,
     defaultCitySlug: "solana-beach",
+    // Full Step 2 roster (src/lib/geo/rosters/greaterSanDiego.ts). Applied to
+    // the shared DB only via docs/operations/greater-san-diego/step2-cities-*.sql
+    // — Solana Beach keeps display_order 1; the rest follow roster order, exactly
+    // as that SQL inserts them.
     cities: [
       { slug: "solana-beach", name: "Solana Beach", status: "active", supports_neighbourhoods: false, display_order: 1, center_lat: 32.9912, center_lng: -117.2711 },
+      ...GREATER_SAN_DIEGO_CITIES.filter((c) => !c.existing).map((c, i) => ({
+        slug: c.slug, name: c.name, status: "active" as const, supports_neighbourhoods: false,
+        display_order: i + 2, center_lat: c.center_lat, center_lng: c.center_lng,
+      })),
     ],
   },
 ];

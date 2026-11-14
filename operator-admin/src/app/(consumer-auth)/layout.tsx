@@ -9,6 +9,7 @@ import {
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
+import { resolveMarketLocationLabel } from "@/lib/markets";
 
 // Consumer-facing sign-up/sign-in/forgot-password/reset-password pages — a
 // separate route group from (website), so it isn't wrapped by
@@ -36,7 +37,7 @@ export default async function ConsumerAuthLayout({ children }: { children: React
         getDefaultCityForMarket(marketRecord.id),
       ]);
       cities = allCities;
-      if (defaultCity) currentCityName = defaultCity.name;
+      currentCityName = resolveMarketLocationLabel(market, defaultCity?.name);
     }
   } catch {
     // DB unavailable — header falls back gracefully
