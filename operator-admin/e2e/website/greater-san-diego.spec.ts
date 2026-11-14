@@ -375,3 +375,67 @@ test.describe("Greater San Diego — Step 2 region label", () => {
     await expect(page.getByText("Solana Beach").first()).toBeVisible();
   });
 });
+
+// ─── Location selector fits the viewport (Pixel clipping regression) ───────
+
+test.describe("Location selector — open panel fits the viewport", () => {
+  /** Every visible element of the open panel (panel box, text, buttons), measured in one pass. */
+  async function panelOutOfBounds(page: Page) {
+    return page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"][aria-label="Location switcher"]');
+      if (!dialog) return ["no panel"];
+      const vw = document.documentElement.clientWidth;
+      const bad: string[] = [];
+      for (const el of [dialog, ...dialog.querySelectorAll("p, span, button")]) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue; // hidden (e.g. display:none)
+        if (r.left < 0 || r.right > vw) bad.push(`${(el.textContent ?? "").trim().slice(0, 30) || el.tagName} [${Math.round(r.left)}, ${Math.round(r.right)}]`);
+      }
+      return bad;
+    });
+  }
+  const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+  for (const market of ["Greater San Diego", "Central Okanagan"]) {
+    test(`${market}: the open selector and Change Region fit at 320–400 px and on desktop`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto("/website-happy-hours");
+      if (!(await headerLabel(page)).includes(market === "Central Okanagan" ? "Kelowna" : market)) await switchMarket(page, market);
+
+      for (const width of [320, 360, 375, 400, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.waitForTimeout(150);
+        // With a desktop UA the closed header already scrolls sideways at 320px
+        // (44–51px) and 360px (4–11px) — pre-existing, identical before this fix;
+        // a Pixel 7 emulation shows none. Opening the menu must never add to it,
+        // and from 375px there must be none at all.
+        const before = await overflow(page);
+        await locationTrigger(page).click();
+        const dialog = page.getByRole("dialog", { name: "Location switcher" });
+        await expect(dialog).toBeVisible();
+        expect(await panelOutOfBounds(page), `panel elements outside the viewport at ${width}px`).toEqual([]);
+        expect(await overflow(page), `opening the menu adds sideways scroll at ${width}px`).toBeLessThanOrEqual(Math.max(0, before));
+        if (width >= 375) expect(await overflow(page), `no sideways scroll at ${width}px`).toBeLessThanOrEqual(0);
+
+        // Change Region view: every region option is visible, inside the viewport and usable.
+        await dialog.getByRole("button", { name: "Change Region" }).click();
+        for (const name of ["Central Okanagan", "Greater San Diego"]) {
+          const option = dialog.getByRole("button", { name, exact: true });
+          await expect(option).toBeVisible();
+          await expect(option).toBeEnabled();
+        }
+        expect(await panelOutOfBounds(page), `region list outside the viewport at ${width}px`).toEqual([]);
+        expect(await overflow(page)).toBeLessThanOrEqual(Math.max(0, before));
+        await page.keyboard.press("Escape");
+        await expect(dialog).toBeHidden();
+      }
+
+      // Switching from the narrow panel still works and keeps the labels.
+      await page.setViewportSize({ width: 360, height: 800 });
+      const other = market === "Greater San Diego" ? "Central Okanagan" : "Greater San Diego";
+      await switchMarket(page, other);
+      await expect.poll(() => headerLabel(page)).toMatch(other === "Greater San Diego" ? /Greater San Diego/ : /Kelowna/);
+      await switchMarket(page, market);
+    });
+  }
+});

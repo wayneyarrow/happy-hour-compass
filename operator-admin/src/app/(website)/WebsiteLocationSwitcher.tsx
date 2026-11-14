@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MARKETS, findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
@@ -27,6 +27,15 @@ export default function WebsiteLocationSwitcher({
   const [locationError, setLocationError] = useState(false);
   const [comingSoonId, setComingSoonId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Phone-width panel placement (below sm). The panel used to be anchored
+  // `absolute right-0` to the chip, so on phones its 288px width ran off the
+  // left edge (−17px with "Kelowna", −24px with "San Diego"). It is now
+  // positioned from the trigger's measured rect and clamped to a 12px
+  // gutter on both sides, so it always fits the viewport whatever the chip
+  // width, logo, or a sticky banner above the header. From sm up the
+  // original absolute placement (left-aligned under the chip) is kept.
+  const [phonePanel, setPhonePanel] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -50,6 +59,34 @@ export default function WebsiteLocationSwitcher({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPhonePanel(null);
+      return;
+    }
+    const GUTTER = 12;
+    const PANEL_WIDTH = 288; // w-72
+    function place() {
+      if (window.matchMedia("(min-width: 640px)").matches) {
+        setPhonePanel(null);
+        return;
+      }
+      const t = triggerRef.current?.getBoundingClientRect();
+      if (!t) return;
+      const vw = document.documentElement.clientWidth;
+      const width = Math.min(PANEL_WIDTH, vw - GUTTER * 2);
+      const left = Math.min(Math.max(GUTTER, t.right - width), vw - width - GUTTER);
+      setPhonePanel({ top: t.bottom + 6, left, width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, { passive: true });
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place);
+    };
   }, [open]);
 
   function close() {
@@ -116,6 +153,7 @@ export default function WebsiteLocationSwitcher({
     <div className="relative" ref={ref}>
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setOpen((v) => !v);
@@ -160,9 +198,10 @@ export default function WebsiteLocationSwitcher({
         <div
           role="dialog"
           aria-label="Location switcher"
+          style={phonePanel ? { position: "fixed", top: phonePanel.top, left: phonePanel.left, width: phonePanel.width } : undefined}
           className="
             absolute z-50
-            right-0 sm:right-auto sm:left-0
+            left-0
             top-[calc(100%+6px)]
             w-72 max-w-[calc(100vw-24px)]
             bg-white rounded-2xl
