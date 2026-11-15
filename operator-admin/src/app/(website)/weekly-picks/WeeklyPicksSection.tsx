@@ -1,10 +1,12 @@
 import type { WeeklyPicksPlacement } from "@/lib/weeklyPicks/weeklyPicks";
+import type { NewsletterMarket } from "@/lib/weeklyPicks/newsletterMarkets";
 import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
 
 /**
  * Fixed Weekly Picks signup band for the homepage and guides. Deliberately
  * outside the CMS section list (no Homepage section type) — see
- * (website)/page.tsx. Every placement renders the same form/action.
+ * (website)/page.tsx. Every placement renders the same form/action, for the
+ * page's own market (`newsletter` — callers pass only an available one).
  *
  * - "page-width": full-width homepage band matching the homepage sections'
  *   own max-w-7xl gutter and border-t rhythm.
@@ -12,11 +14,12 @@ import { WeeklyPicksSignupForm } from "./WeeklyPicksSignupForm";
  */
 type Props = {
   placement: WeeklyPicksPlacement;
+  newsletter: NewsletterMarket;
   variant: "full" | "compact";
   layout: "page-width" | "inline";
 };
 
-export function WeeklyPicksSection({ placement, variant, layout }: Props) {
+export function WeeklyPicksSection({ placement, newsletter, variant, layout }: Props) {
   const card = (
     <div
       className={`rounded-2xl md:rounded-3xl bg-amber-50 border border-amber-100 ${
@@ -24,7 +27,7 @@ export function WeeklyPicksSection({ placement, variant, layout }: Props) {
       }`}
     >
       <div className={variant === "full" ? "max-w-2xl" : ""}>
-        <WeeklyPicksSignupForm placement={placement} variant={variant} />
+        <WeeklyPicksSignupForm placement={placement} newsletter={newsletter} variant={variant} />
       </div>
     </div>
   );

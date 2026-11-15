@@ -8,7 +8,8 @@ import { HomepageSectionsPlaceholder } from "./homepage/HomepageSectionsPlacehol
 import { HomepageSectionsErrorBoundary } from "./homepage/HomepageSectionsErrorBoundary";
 import { DiscoveryPageTracking } from "./tracking/DiscoveryTrackingProvider";
 import { WeeklyPicksSection } from "./weekly-picks/WeeklyPicksSection";
-import { isWeeklyPicksOfferedInMarket, splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
+import { splitSectionsAroundSignup } from "@/lib/weeklyPicks/weeklyPicks";
+import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { getMarketBySlug, getDefaultCityForMarket } from "@/lib/geo/geography";
 import { resolveMarketLocationLabel, type Market } from "@/lib/markets";
@@ -178,8 +179,9 @@ async function HomepageEditorialSections({ homepage, marketSlug }: { homepage: H
 // section ids, kinds, order and discovery placements are unchanged
 // (tracking keys by section id, never by index). The Control Panel
 // preview renders HomepageSectionsRenderer directly and is unaffected.
-// Markets without the newsletter (isWeeklyPicksOfferedInMarket — it's a
-// Central Okanagan newsletter) render the same sections with no signup.
+// Each market signs up for its own newsletter (getAvailableNewsletterMarket);
+// a market without one, or with its signup switched off in this
+// deployment, renders the same sections with no signup.
 function HomepageSectionsWithSignup({
   sections,
   marketSlug,
@@ -187,7 +189,8 @@ function HomepageSectionsWithSignup({
   sections: HomepagePreviewSection[];
   marketSlug: string;
 }) {
-  if (!isWeeklyPicksOfferedInMarket(marketSlug)) {
+  const newsletter = getAvailableNewsletterMarket(marketSlug);
+  if (!newsletter) {
     return sections.length > 0 ? <HomepageSectionsRenderer sections={sections} /> : null;
   }
   const split = splitSectionsAroundSignup(sections);
@@ -196,12 +199,12 @@ function HomepageSectionsWithSignup({
       {split.showMainSignup && (
         <>
           <HomepageSectionsRenderer sections={split.first} />
-          <WeeklyPicksSection placement="homepage_main" variant="full" layout="page-width" />
+          <WeeklyPicksSection placement="homepage_main" newsletter={newsletter} variant="full" layout="page-width" />
         </>
       )}
       {split.rest.length > 0 && <HomepageSectionsRenderer sections={split.rest} />}
       {split.showBottomSignup && (
-        <WeeklyPicksSection placement="homepage_bottom" variant="compact" layout="page-width" />
+        <WeeklyPicksSection placement="homepage_bottom" newsletter={newsletter} variant="compact" layout="page-width" />
       )}
     </>
   );

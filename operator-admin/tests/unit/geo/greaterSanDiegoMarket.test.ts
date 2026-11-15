@@ -207,18 +207,5 @@ test("every MARKETS entry has a timezone (no silent America/Vancouver fallback)"
   for (const m of MARKETS) assert.ok(src.includes(`"${m.id}":`), `missing timezone for ${m.id}`);
 });
 
-// ─── Newsletter is Central Okanagan only ─────────────────────────────────────
-
-test("the Kelowna newsletter is offered only in Central Okanagan", async () => {
-  const { isWeeklyPicksOfferedInMarket } = await import("../../../src/lib/weeklyPicks/weeklyPicks");
-  assert.equal(isWeeklyPicksOfferedInMarket("central-okanagan"), true);
-  assert.equal(isWeeklyPicksOfferedInMarket("greater-san-diego"), false);
-  const home = readFileSync(join(SRC, "(website)/page.tsx"), "utf8");
-  // Both homepage signup bands sit behind the market rule.
-  assert.match(home, /if \(!isWeeklyPicksOfferedInMarket\(marketSlug\)\)/);
-  assert.equal((home.match(/<HomepageSectionsWithSignup sections=\{[^}]+\} marketSlug=/g) ?? []).length, 2);
-  // Desktop nav and mobile menu Newsletter links both follow it.
-  const header = readFileSync(join(SRC, "(website)/WebsiteHeader.tsx"), "utf8");
-  assert.equal((header.match(/\{showNewsletter && \(/g) ?? []).length, 2);
-  assert.equal((header.match(/href="\/weekly-picks"/g) ?? []).length, 2);
-});
+// ─── Newsletter ──────────────────────────────────────────────────────────────
+// Per-market newsletter availability and routing: tests/unit/weeklyPicks/newsletterMarkets.test.ts.

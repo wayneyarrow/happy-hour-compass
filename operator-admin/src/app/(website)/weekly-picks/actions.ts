@@ -15,6 +15,7 @@ export async function subscribeToWeeklyPicks(formData: FormData): Promise<Weekly
   return processWeeklyPicksSignup({
     email: formData.get("email"),
     placement: formData.get("placement"),
+    market: formData.get("market"),
     turnstileToken: formData.get(TURNSTILE_TOKEN_FIELD),
     remoteIp: getClientIpFromHeaders(heads),
   });

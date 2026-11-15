@@ -8,8 +8,8 @@
  *
  * The newsletter's public name is "Your Happy Hour Plans" (it was "Weekly
  * Picks" — internal identifiers, the /weekly-picks route and analytics
- * events keep the old name). Confirmed signups join the existing HHC
- * Consumers list in Brevo (see getWeeklyPicksBrevoConfig()).
+ * events keep the old name). Each market's newsletter is its own Brevo
+ * audience — see newsletterMarkets.ts and getNewsletterBrevoConfig().
  * There is no permission checkbox: pressing the signup button, with
  * WEEKLY_PICKS_CONSENT_TEXT directly beside it, is the consent action, and
  * Brevo's own double opt-in confirmation is still required before anyone
@@ -36,20 +36,6 @@ export type WeeklyPicksPlacement = (typeof WEEKLY_PICKS_PLACEMENTS)[number];
 
 export function isWeeklyPicksPlacement(value: unknown): value is WeeklyPicksPlacement {
   return typeof value === "string" && (WEEKLY_PICKS_PLACEMENTS as readonly string[]).includes(value);
-}
-
-/**
- * Markets whose visitors are offered the Your Happy Hour Plans newsletter.
- * It's a Central Okanagan newsletter (copy names Kelowna, West Kelowna and
- * Lake Country; one Brevo list), so other markets — Greater San Diego since
- * Nov 2026 — show no signup band and no header "Newsletter" link until
- * they get their own.
- */
-const WEEKLY_PICKS_MARKET_IDS: readonly string[] = ["central-okanagan"];
-
-/** True when the Weekly Picks newsletter is offered in `marketId`. */
-export function isWeeklyPicksOfferedInMarket(marketId: string): boolean {
-  return WEEKLY_PICKS_MARKET_IDS.includes(marketId);
 }
 
 /**

@@ -8,9 +8,6 @@ import { trackGA4Event } from "@/lib/ga4";
 import {
   WEEKLY_PICKS_CONSENT_TEXT,
   WEEKLY_PICKS_SIGNUP_BUTTON_LABEL,
-  WEEKLY_PICKS_EYEBROW,
-  WEEKLY_PICKS_HEADLINE,
-  WEEKLY_PICKS_PROMISE,
   WEEKLY_PICKS_EMAIL_REQUIRED_MESSAGE,
   WEEKLY_PICKS_EMAIL_INVALID_MESSAGE,
   WEEKLY_PICKS_GENERIC_ERROR_MESSAGE,
@@ -19,13 +16,16 @@ import {
   type WeeklyPicksPlacement,
   type WeeklyPicksSignupState,
 } from "@/lib/weeklyPicks/weeklyPicks";
+import type { NewsletterMarket } from "@/lib/weeklyPicks/newsletterMarkets";
 import { subscribeToWeeklyPicks } from "./actions";
 
 /**
  * The one Weekly Picks signup form, used by every placement (/weekly-picks,
  * homepage main + bottom, guide end). Every instance submits through the
- * same subscribeToWeeklyPicks server action; `placement` is the only thing
- * that differs, and it is the only value sent to analytics.
+ * same subscribeToWeeklyPicks server action. `newsletter` (the page's market
+ * — NEWSLETTER_MARKETS) supplies the copy and is submitted as `market`; the
+ * server re-validates it and resolves that market's Brevo audience. Only
+ * `placement` and the market id are sent to analytics.
  *
  * Accessibility: noValidate + our own messages (FieldError role="alert",
  * aria-invalid/aria-describedby), focus moves to the first invalid field on
@@ -50,6 +50,8 @@ const SUPPORT_EMAIL = "support@happyhourcompass.com";
 
 type Props = {
   placement: WeeklyPicksPlacement;
+  /** The newsletter market this form signs people up for. */
+  newsletter: NewsletterMarket;
   variant: "full" | "compact";
   /** Heading level for the headline — "h1" only on the /weekly-picks page itself. */
   headingAs?: "h1" | "h2";
@@ -57,7 +59,7 @@ type Props = {
   hideIntro?: boolean;
 };
 
-export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hideIntro = false }: Props) {
+export function WeeklyPicksSignupForm({ placement, newsletter, variant, headingAs = "h2", hideIntro = false }: Props) {
   const id = useId();
   const emailId = `${id}-email`;
   const consentNoticeId = `${id}-consent-notice`;
@@ -117,7 +119,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
       }
 
       if (next.status === "accepted") {
-        trackGA4Event("weekly_picks_signup_requested", { placement });
+        trackGA4Event("weekly_picks_signup_requested", { placement, market: newsletter.marketId });
       } else if (next.status === "error") {
         if (next.turnstileFailed) {
           setTurnstileToken(null);
@@ -137,7 +139,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
     <div className={isFull ? "" : "md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-10 md:items-start"}>
       {!hideIntro && (
         <div className={isFull ? "mb-6" : "mb-5 md:mb-0"}>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">{WEEKLY_PICKS_EYEBROW}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-600">{newsletter.eyebrow}</p>
           <Heading
             className={
               isFull
@@ -145,10 +147,10 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
                 : "mt-1.5 text-xl md:text-2xl font-bold text-gray-900 tracking-tight leading-snug"
             }
           >
-            {WEEKLY_PICKS_HEADLINE}
+            {newsletter.headline}
           </Heading>
           <p className={`mt-2 text-gray-600 leading-relaxed ${isFull ? "text-[15px] md:text-base max-w-xl" : "text-sm"}`}>
-            {WEEKLY_PICKS_PROMISE}
+            {newsletter.promise}
           </p>
         </div>
       )}
@@ -168,8 +170,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
             Almost done
           </ResultHeading>
           <p className="mt-1.5 text-sm text-gray-600 leading-relaxed">
-            Check your inbox for a confirmation link. If you already receive Your Happy Hour Plans,
-            you&rsquo;re all set. If you need help,{" "}
+            {newsletter.acceptedText}{" "}
             <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-800">
               contact us
             </a>
@@ -179,6 +180,7 @@ export function WeeklyPicksSignupForm({ placement, variant, headingAs = "h2", hi
       ) : (
         <form noValidate onSubmit={handleSubmit} onFocus={engage} aria-label="Your Happy Hour Plans newsletter signup">
           <input type="hidden" name="placement" value={placement} />
+          <input type="hidden" name="market" value={newsletter.marketId} />
 
           {formMessage && (
             <div role="alert" className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700">

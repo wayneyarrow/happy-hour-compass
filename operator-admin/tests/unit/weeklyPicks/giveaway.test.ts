@@ -40,8 +40,12 @@ const read = (p: string) => stripComments(readFileSync(join(SRC, p), "utf8"));
 test("/weekly-picks renders per request, and the callout sits after the signup form", () => {
   const page = read("app/(website)/weekly-picks/page.tsx");
   assert.match(page, /export const dynamic = "force-dynamic";/);
-  const form = page.indexOf("<WeeklyPicksSignupForm");
-  const callout = page.indexOf("{showGiveaway && <GiveawayCallout />}");
+  assert.match(page, /const showGiveaway = isGiveawayCalloutVisible\(giveawayCalloutNowMs\(\)\);/);
+  assert.match(page, /<NewsletterSignupPageContent newsletter=\{NEWSLETTER\} showGiveaway=\{showGiveaway\} \/>/);
+  // The shared page body renders the callout after the form.
+  const content = read("app/(website)/weekly-picks/NewsletterSignupPageContent.tsx");
+  const form = content.indexOf("<WeeklyPicksSignupForm");
+  const callout = content.indexOf("{showGiveaway && newsletter.hasGiveaway && <GiveawayCallout />}");
   assert.ok(form > -1 && callout > form);
 });
 
