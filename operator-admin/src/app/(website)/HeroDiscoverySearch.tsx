@@ -24,6 +24,8 @@ type Props = {
 
 const DEBOUNCE_MS = 200;
 
+const NO_RESULTS: DiscoveryResult[] = [];
+
 const HERO_PLACEMENT: PlacementContextValue = { surface: "homepage_hero" };
 
 /**
@@ -116,16 +118,31 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
   const requestIdRef = useRef(0);
   const modeRef = useRef(mode);
 
+  const marketRef = useRef(market.id);
+
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DiscoveryResult[]>([]);
+  const [fetchedResults, setResults] = useState<DiscoveryResult[]>([]);
+  // The market `fetchedResults` were fetched for — see `staleMarket` below.
+  const [resultsMarketId, setResultsMarketId] = useState(market.id);
   // Full match total behind `results` (which is capped at 8) — search tracking only.
   const [resultsTotal, setResultsTotal] = useState(0);
-  // The trimmed query + mode `results`/`resultsTotal` belong to.
+  // The market + mode + trimmed query `results`/`resultsTotal` belong to.
   const [resultsFor, setResultsFor] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [fetchLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+
+  // Market-switch safety: switching market (header/footer selector →
+  // router.refresh()) keeps this component and the typed query, but the
+  // results on hand belong to the previous market. They are never rendered
+  // or selectable from the very first render with the new market — before
+  // any effect runs — and read as "Searching…" until the new market's
+  // request settles. The market-change effect below then clears them and
+  // invalidates any in-flight request for the old market.
+  const staleMarket = resultsMarketId !== market.id;
+  const results = staleMarket ? NO_RESULTS : fetchedResults;
+  const isLoading = fetchLoading || (staleMarket && query.trim().length > 0);
 
   const config = DISCOVERY_MODES[mode];
   const discoveryHref = config.supportsQuerySearch ? config.destination : undefined;
@@ -144,6 +161,20 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
     setActiveIndex(-1);
   }, [mode]);
 
+  // Market changed — same as a mode change: drop the old market's results
+  // and invalidate its in-flight request; the query-driven effect below
+  // (which depends on market.id) re-fetches the current query for the new
+  // market. Skipped on initial mount.
+  useEffect(() => {
+    if (marketRef.current === market.id) return;
+    marketRef.current = market.id;
+    requestIdRef.current++;
+    setResults([]);
+    setResultsMarketId(market.id);
+    setHasSearched(false);
+    setActiveIndex(-1);
+  }, [market.id]);
+
   // Debounced suggestion fetch. requestIdRef guards against an older,
   // slower request (from a stale query OR a since-abandoned mode)
   // resolving after a newer one and clobbering fresher results.
@@ -159,12 +190,14 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
 
     setIsLoading(true);
     const requestId = ++requestIdRef.current;
+    const requestMarketId = market.id;
     const timer = setTimeout(() => {
-      fetchDiscoveryResults(mode, market.id, trimmed).then(({ results: discoveryResults, total }) => {
+      fetchDiscoveryResults(mode, requestMarketId, trimmed).then(({ results: discoveryResults, total }) => {
         if (requestIdRef.current !== requestId) return;
         setResults(discoveryResults);
+        setResultsMarketId(requestMarketId);
         setResultsTotal(total);
-        setResultsFor(`${mode}|${trimmed}`);
+        setResultsFor(`${requestMarketId}|${mode}|${trimmed}`);
         setIsLoading(false);
         setHasSearched(true);
         setActiveIndex(-1);
@@ -189,7 +222,8 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
   // — 1s pause once results are known, or immediately on Enter / selection —
   // recording this mode and the FULL match total (not the 8 shown). Results
   // only count as known once the fetch for the current query has settled.
-  const resultsKnown = !isLoading && query.trim().length > 0 && resultsFor === `${mode}|${query.trim()}`;
+  const resultsKnown =
+    !isLoading && query.trim().length > 0 && resultsFor === `${market.id}|${mode}|${query.trim()}`;
   const { markTyped, captureNow } = useSearchCapture({
     surface: "homepage_hero",
     mode,
@@ -400,8 +434,7 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
                             <>
                               <span className="text-sm font-semibold text-gray-900">{result.name}</span>
                               <span className="text-xs text-gray-500">
-                                {/* locationLabel ("Solana Beach, CA") marks a venue outside the selected market. */}
-                                {[result.area, result.locationLabel ?? result.city].filter(Boolean).join(" · ")}
+                                {[result.area, result.city].filter(Boolean).join(" · ")}
                                 {result.address ? ` — ${result.address}` : ""}
                               </span>
                             </>

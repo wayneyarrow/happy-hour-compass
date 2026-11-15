@@ -10,8 +10,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { haversineKm } from "@/lib/discover/discoverEngine";
-import { toMarketConfig, type Market } from "@/lib/markets";
+import { isInWebsiteContentMarket, type WebsiteContentMarketScope } from "@/lib/discover/marketScope";
+import type { Market } from "@/lib/markets";
 import { resolvePlanCodeFromJoinedField, VENUE_SUBSCRIPTION_JOIN_FRAGMENT } from "@/lib/discover/venuePlanSource";
 import { resolveVenuePlanContext, VENUE_PLAN_CONTEXT_EMBED } from "@/lib/planGrants/publicPlanState";
 import { higherPlan } from "@/lib/planGrants/grantState";
@@ -952,14 +952,21 @@ export type WebsiteEventListItem = {
 /**
  * Fetches published events for the website Events Search Results page.
  *
- * Scoped to the active market via Haversine distance filtering on venue lat/lng.
- * Venues without coordinates are included permissively (assumed local).
+ * Market scope (`options.scope`, see WebsiteContentMarketScope):
+ *   - "assigned_market" (every website search surface): only events whose
+ *     venue is assigned to `market` (venues.market_id). events has no
+ *     market column of its own, so an event without a venue — or whose
+ *     venue has no assigned market — belongs to no market and is excluded.
+ *   - "radius" (default, the original rule): Haversine distance on venue
+ *     lat/lng; venues without coordinates are included permissively.
  * Past one-off events are excluded; recurring events are always included.
  * Uses the service-role admin client to bypass RLS.
  */
 export async function getPublishedEventsForWebsite(
-  market: Market
+  market: Market,
+  options?: { scope?: WebsiteContentMarketScope }
 ): Promise<WebsiteEventListItem[]> {
+  const scope = options?.scope ?? "radius";
   try {
     const supabase = createAdminClient();
 
@@ -980,7 +987,6 @@ export async function getPublishedEventsForWebsite(
       return [];
     }
 
-    const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
     const now = new Date();
     const nowMs = now.getTime();
 
@@ -995,14 +1001,15 @@ export async function getPublishedEventsForWebsite(
       const venue = (row.venues as Record<string, any> | null) ?? {};
       const vLat = typeof venue.lat === "number" ? venue.lat : null;
       const vLng = typeof venue.lng === "number" ? venue.lng : null;
+      const venueMarketSlug = (venue.market_geo as { slug?: string } | null)?.slug ?? null;
 
-      // Market filter — exclude venues that have real coordinates outside the market.
-      // (0, 0) is treated as "no coordinates": it lies in the Gulf of Guinea and is
-      // impossible for any HHC venue; treating it as null keeps permissive behaviour
-      // for venues whose lat/lng were never properly populated.
-      const hasRealCoordinates =
-        vLat !== null && vLng !== null && !(vLat === 0 && vLng === 0);
-      if (hasRealCoordinates && haversineKm(mLat, mLng, vLat!, vLng!) > radiusKm) {
+      // Market filter (isInWebsiteContentMarket): for search, the venue's
+      // assigned market (no venue / unassigned → excluded); otherwise exclude
+      // venues with real coordinates outside the radius. (0, 0) is treated as
+      // "no coordinates": it lies in the Gulf of Guinea and is impossible for
+      // any HHC venue; treating it as null keeps permissive behaviour for
+      // venues whose lat/lng were never properly populated.
+      if (!isInWebsiteContentMarket({ marketSlug: venueMarketSlug, lat: vLat, lng: vLng }, market, scope)) {
         return [];
       }
 
@@ -1025,7 +1032,7 @@ export async function getPublishedEventsForWebsite(
           venueEstablishmentType: (venue.establishment_type as string) ?? "",
           venueLat: vLat,
           venueLng: vLng,
-          marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+          marketSlug: venueMarketSlug,
           citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
           firstDate,
           recurrence,

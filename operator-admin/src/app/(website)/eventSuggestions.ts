@@ -61,8 +61,10 @@ export function toEventSuggestion(event: WebsiteEventListItem): EventSuggestion 
  * Searches published, in-market, upcoming Events by title/description/
  * event type label (e.g. "trivia" matches a Trivia-type event even when
  * the word never appears in its title/description).
- * getPublishedEventsForWebsite() already applies market scoping and
- * excludes past one-off events before returning.
+ * getPublishedEventsForWebsite(market, { scope: "assigned_market" })
+ * already keeps only events whose venue is assigned to `market` (the same
+ * scope /website-events, the "See all" destination, uses) and excludes
+ * past one-off events before returning.
  */
 export async function searchEventSuggestions(
   market: Market,
@@ -80,7 +82,7 @@ export async function searchEventSuggestionsWithTotal(
 ): Promise<{ suggestions: EventSuggestion[]; total: number }> {
   if (!rawQuery.trim()) return { suggestions: [], total: 0 };
 
-  const events = await getPublishedEventsForWebsite(market);
+  const events = await getPublishedEventsForWebsite(market, { scope: "assigned_market" });
   const matched = events.filter((e) =>
     eventMatchesSearch(
       { title: e.title, description: e.description, eventTypeLabel: getEventTypeLabel(e.eventType) },

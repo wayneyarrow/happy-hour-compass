@@ -283,7 +283,7 @@ test("Greater San Diego browsing includes every assigned venue, including those 
 test("Central Okanagan browsing never includes San Diego venues — even without coordinates", () => {
   const { inMarket, otherMarket } = partitionVenuesByMarket(VENUES, getMarketById("central-okanagan")!);
   assert.deepEqual(inMarket.map((x) => x.name), ["Kelowna Taphouse", "Kelowna No Coords"]);
-  // San Diego venues are only reachable cross-market (name search / map panning).
+  // San Diego venues are only reachable cross-market by map panning (never search).
   assert.deepEqual(otherMarket.map((x) => x.name), ["Encore Sushi", "Borrego Bar", "Jacumba Saloon", "San Diego No Coords"]);
   // Unassigned venues (no public URL) and coming-soon markets are in neither list.
   for (const name of ["Gastown Bar", "Unassigned No Coords", "Unassigned Near Kelowna"]) {

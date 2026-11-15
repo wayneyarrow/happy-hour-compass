@@ -27,8 +27,8 @@ import {
   type DailySpecial,
   type DailySpecialDbRow,
 } from "@/lib/dailySpecialTypes";
-import { haversineKm } from "@/lib/discover/discoverEngine";
-import { toMarketConfig, type Market } from "@/lib/markets";
+import { isInWebsiteContentMarket, type WebsiteContentMarketScope } from "@/lib/discover/marketScope";
+import type { Market } from "@/lib/markets";
 import { hasCurrentOrUpcomingOccurrence } from "@/lib/dailySpecialSchedule";
 import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
 import { resolveVenuePlanContext, VENUE_PLAN_CONTEXT_EMBED } from "@/lib/planGrants/publicPlanState";
@@ -256,11 +256,19 @@ export type WebsiteDailySpecialListItem = {
  *     client-side results page and Today's Specials ranking compose
  *     against this list.
  *
+ * Market scope (`options.scope`, see WebsiteContentMarketScope):
+ * "assigned_market" keeps only Specials whose venue is assigned to `market`
+ * (venues.market_id) — what every website search surface passes. The
+ * default "radius" keeps the original distance rule for the homepage
+ * rails and Collections.
+ *
  * Returns an empty array on any error.
  */
 export async function getPublishedDailySpecialsForWebsite(
-  market: Market
+  market: Market,
+  options?: { scope?: WebsiteContentMarketScope }
 ): Promise<WebsiteDailySpecialListItem[]> {
+  const scope = options?.scope ?? "radius";
   try {
     const supabase = createAdminClient();
 
@@ -283,7 +291,6 @@ export async function getPublishedDailySpecialsForWebsite(
       return [];
     }
 
-    const { lat: mLat, lng: mLng, radiusKm } = toMarketConfig(market);
     const marketToday = getMarketLocalIsoDate(market.id, new Date());
     const nowMs = Date.now();
 
@@ -317,11 +324,11 @@ export async function getPublishedDailySpecialsForWebsite(
       const vLat = typeof venue.lat === "number" ? venue.lat : null;
       const vLng = typeof venue.lng === "number" ? venue.lng : null;
 
-      // Market filter — same permissive-for-missing-coordinates convention
+      // Market filter (isInWebsiteContentMarket): assigned market for search;
+      // otherwise distance, permissive for missing coordinates — same rule
       // as getPublishedEventsForWebsite().
-      const hasRealCoordinates =
-        vLat !== null && vLng !== null && !(vLat === 0 && vLng === 0);
-      if (hasRealCoordinates && haversineKm(mLat, mLng, vLat!, vLng!) > radiusKm) {
+      const venueMarketSlug = (venue.market_geo as { slug?: string } | null)?.slug ?? null;
+      if (!isInWebsiteContentMarket({ marketSlug: venueMarketSlug, lat: vLat, lng: vLng }, market, scope)) {
         return [];
       }
 
@@ -343,7 +350,7 @@ export async function getPublishedDailySpecialsForWebsite(
         venueLat: vLat,
         venueLng: vLng,
         venueIsVerified: venue.is_verified === true,
-        marketSlug: (venue.market_geo as { slug?: string } | null)?.slug ?? null,
+        marketSlug: venueMarketSlug,
         citySlug: (venue.city_geo as { slug?: string } | null)?.slug ?? null,
       }];
     });

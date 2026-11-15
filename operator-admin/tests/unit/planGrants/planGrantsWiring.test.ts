@@ -140,7 +140,9 @@ test("paused events are excluded before sorting/counting/occurrence expansion (f
   const body = events.slice(start, events.indexOf("\nexport ", start + 10));
   assert.ok(body.indexOf("isRowPubliclyActive(") < body.indexOf("rows.sort("));
   const web = events.slice(events.indexOf("function getPublishedEventsForWebsite("));
-  assert.ok(web.indexOf("isRowPubliclyActive(") < web.indexOf("haversineKm("));
+  // The market filter (isInWebsiteContentMarket — assigned market or radius) runs after the paused filter.
+  assert.ok(web.indexOf("isRowPubliclyActive(") >= 0);
+  assert.ok(web.indexOf("isRowPubliclyActive(") < web.indexOf("isInWebsiteContentMarket("));
 });
 
 test("founder grant actions are admin-gated and write only through the migration-109 RPCs", () => {

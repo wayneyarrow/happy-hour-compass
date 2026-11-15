@@ -23,7 +23,7 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default async function EventsSearchPage() {
   const { market } = await getWebsiteActiveMarket();
-  const events = await getPublishedEventsForWebsite(market);
+  const events = await getPublishedEventsForWebsite(market, { scope: "assigned_market" });
 
   return <EventSearchResults events={events} market={market} enableFilterSync />;
 }

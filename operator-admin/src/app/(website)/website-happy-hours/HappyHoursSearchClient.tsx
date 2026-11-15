@@ -12,7 +12,6 @@ import {
   matchesOnNow,
 } from "@/lib/happyHourStatus";
 import { matchVenueSearchTier } from "@/lib/data/venueSearch";
-import { isVenueNameMatchTier } from "@/lib/discover/marketScope";
 import { displayDayAndTime, resolveTimeDisplay } from "@/lib/venueTimeDisplay";
 import { getVisitorTimeZone } from "@/lib/timeZones";
 import { SearchResultCard, type SearchResultCardData } from "./SearchResultCard";
@@ -67,11 +66,6 @@ export type WebsiteVenueCard = SearchResultCardData & {
 /** True when `card` matches `query` via the shared venue search helper. */
 function matchesSearchQuery(card: WebsiteVenueCard, query: string): boolean {
   return searchTier(card, query) !== null;
-}
-
-/** True when `query` matches `card`'s name (tiers 0–1) — the only match that reaches other markets. */
-function matchesVenueName(card: WebsiteVenueCard, query: string): boolean {
-  return isVenueNameMatchTier(searchTier(card, query));
 }
 
 function searchTier(card: WebsiteVenueCard, query: string) {
@@ -552,35 +546,6 @@ function cardsToMapMarkers(
         });
 }
 
-// ─── Other-market name matches ────────────────────────────────────────────────
-
-/**
- * Venues in another market that the search matched by name — listed after
- * the selected market's results, each card carrying its "City, ST"
- * location, so a venue searched for by name is found from any market.
- */
-function OtherMarketMatches({
-  cards,
-  effectiveDayName,
-  columns,
-}: {
-  cards: WebsiteVenueCard[];
-  effectiveDayName: string | null;
-  columns: 1 | 2;
-}) {
-  if (cards.length === 0) return null;
-  return (
-    <section className="mt-8" data-testid="other-market-matches" aria-label="Matching venues in other areas">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Also matching in other areas</h2>
-      <div className={columns === 2 ? "grid grid-cols-2 gap-4" : "space-y-4"}>
-        {cards.map((card) => (
-          <SearchResultCard key={card.id} data={card} effectiveDayName={effectiveDayName} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type Props = {
@@ -588,9 +553,11 @@ type Props = {
   /**
    * Published venues in the visitor's *other* active markets (each with a
    * `locationLabel`), from partitionVenuesByMarket(). Never part of the
-   * selected market's browsing: they appear only as a name match for the
-   * search query, or once the visitor pans/zooms the map to them. Only the
-   * Happy Hours page passes this; other callers are unaffected.
+   * selected market's browsing or search: they appear only once the visitor
+   * pans/zooms the map to them, and only while no search query is active —
+   * a search (typed, ?q=, or the homepage "See all" handoff) is scoped to
+   * the selected market, pins included. Only the Happy Hours page passes
+   * this; other callers are unaffected.
    */
   otherMarketCards?: WebsiteVenueCard[];
   market: Market;
@@ -1097,7 +1064,13 @@ export function HappyHoursSearchClient({
       if (selectedType && card.establishmentType !== selectedType) return false;
       return true;
     };
-    return { filteredCards: cards.filter(passes), filteredOtherCards: otherMarketCards.filter(passes) };
+    // Search is scoped to the selected market: while a query is active,
+    // other markets' venues are neither results nor map pins. With no query
+    // they stay available for ordinary map panning (other filters apply).
+    return {
+      filteredCards: cards.filter(passes),
+      filteredOtherCards: trimmedQuery ? NO_CARDS : otherMarketCards.filter(passes),
+    };
   }, [
     cards,
     otherMarketCards,
@@ -1119,12 +1092,7 @@ export function HappyHoursSearchClient({
   // filters (flagged by otherFiltersActive), before the map viewport further
   // narrows what's visibly rendered: map bounds are a pan/zoom interaction,
   // not part of what the visitor searched for.
-  // Other-market venues found by name (see otherMarketCards) count as results
-  // of the search; ones merely on the map off-screen don't.
-  const trimmedSearch = searchQuery.trim();
-  const otherMarketNameMatchCount = trimmedSearch
-    ? filteredOtherCards.filter((c) => matchesVenueName(c, trimmedSearch)).length
-    : 0;
+  // Search is selected-market only, so other markets' venues never count.
   const otherFiltersActive =
     nearMeActive || onNowActive || topRatedActive || !!selectedType || selectedDay !== "all" || !!(filterTimeFrom && filterTimeTo);
   const { markTyped: markSearchTyped, captureNow: captureSearchNow } = useSearchCapture({
@@ -1132,7 +1100,7 @@ export function HappyHoursSearchClient({
     mode: "happy_hours",
     marketId: market.id,
     query: searchQuery,
-    results: { count: filteredCards.length + otherMarketNameMatchCount, capped: false, otherFiltersActive },
+    results: { count: filteredCards.length, capped: false, otherFiltersActive },
     detectInitialOrigin: true,
     enabled: enableSearch,
   });
@@ -1178,13 +1146,6 @@ export function HappyHoursSearchClient({
   }, [userLocation, sortBy]);
   const sortedCards = useMemo(() => sortCards(filteredCards), [sortCards, filteredCards]);
   const sortedOtherCards = useMemo(() => sortCards(filteredOtherCards), [sortCards, filteredOtherCards]);
-  // Other-market venues the query matched by name — shown in the list even
-  // when they're off-screen, and the map's fit target when nothing in the
-  // selected market matched.
-  const otherMarketNameMatches = useMemo(
-    () => (trimmedSearch ? sortedOtherCards.filter((c) => matchesVenueName(c, trimmedSearch)) : []),
-    [sortedOtherCards, trimmedSearch]
-  );
 
   // ── handlers ──
 
@@ -1258,11 +1219,11 @@ export function HappyHoursSearchClient({
   }
 
   // ── map markers — only venues with valid coordinates ──
-  // Pins: the selected market's results plus other markets' venues (so
-  // panning to Solana Beach from Kelowna shows Encore Sushi). The camera
-  // only ever frames the selected market's results — or, when none matched
-  // a search, the other-market name matches — so other markets' pins never
-  // pull the initial view away (see SearchResultsMap fitMarkers).
+  // Pins: the selected market's results plus — only while no search query
+  // is active — other markets' venues (so panning to Solana Beach from
+  // Kelowna shows Encore Sushi). The camera only ever frames the selected
+  // market's results, so other markets' pins never pull the initial view
+  // away (see SearchResultsMap fitMarkers).
   const [visitorTimeZone, setVisitorTimeZone] = useState<string | null>(null);
   useEffect(() => setVisitorTimeZone(getVisitorTimeZone()), []);
   const inMarketMarkers = useMemo(
@@ -1277,11 +1238,7 @@ export function HappyHoursSearchClient({
     () => [...inMarketMarkers, ...otherMarketMarkers],
     [inMarketMarkers, otherMarketMarkers]
   );
-  const fitMarkers = useMemo<MapMarker[]>(() => {
-    if (inMarketMarkers.length > 0) return inMarketMarkers;
-    const ids = new Set(otherMarketNameMatches.map((c) => c.id));
-    return otherMarketMarkers.filter((m) => ids.has(m.id));
-  }, [inMarketMarkers, otherMarketMarkers, otherMarketNameMatches]);
+  const fitMarkers = inMarketMarkers;
 
   // Mobile-only: once the map has reported a viewport (from expanding and
   // panning/zooming it), narrow the venue list to only cards within that
@@ -1313,25 +1270,11 @@ export function HappyHoursSearchClient({
         : sortedCards,
     [sortedCards, sortedOtherCards, desktopMapBounds]
   );
-  // Other-market name matches not already in the visible list — always
-  // listed (in their own group) so a venue searched for by name is found
-  // from any market, wherever the map is.
-  const desktopNameMatchesElsewhere = useMemo(() => {
-    const visible = new Set(desktopVisibleCards.map((c) => c.id));
-    return otherMarketNameMatches.filter((c) => !visible.has(c.id));
-  }, [desktopVisibleCards, otherMarketNameMatches]);
-  const mobileNameMatchesElsewhere = useMemo(() => {
-    const visible = new Set(mobileVisibleCards.map((c) => c.id));
-    return otherMarketNameMatches.filter((c) => !visible.has(c.id));
-  }, [mobileVisibleCards, otherMarketNameMatches]);
   const otherMarketIds = useMemo(() => new Set(otherMarketCards.map((c) => c.id)), [otherMarketCards]);
   const desktopVisibleInMarketCount = desktopVisibleCards.filter((c) => !otherMarketIds.has(c.id)).length;
-  // Nothing at all to show: no selected-market result, nothing in view, and
-  // no other-market name match.
-  const desktopNoResults =
-    sortedCards.length === 0 && desktopVisibleCards.length === 0 && desktopNameMatchesElsewhere.length === 0;
-  const mobileNoResults =
-    sortedCards.length === 0 && mobileVisibleCards.length === 0 && mobileNameMatchesElsewhere.length === 0;
+  // Nothing at all to show: no selected-market result and nothing in view.
+  const desktopNoResults = sortedCards.length === 0 && desktopVisibleCards.length === 0;
+  const mobileNoResults = sortedCards.length === 0 && mobileVisibleCards.length === 0;
 
   // Label shown in the results sheet's header — visible in both the peek and
   // open states, so it doubles as the live viewport count while collapsed.
@@ -1682,7 +1625,6 @@ export function HappyHoursSearchClient({
           {desktopNoResults ? (
             <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
           ) : desktopVisibleCards.length === 0 ? (
-            desktopNameMatchesElsewhere.length > 0 ? null : (
             <div className="text-center py-16">
               <p className="text-sm font-semibold text-gray-500">No venues in this area</p>
               <p className="text-xs text-gray-400 mt-1">
@@ -1696,7 +1638,6 @@ export function HappyHoursSearchClient({
                 Show all results
               </button>
             </div>
-            )
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {desktopVisibleCards.map((card, i) => (
@@ -1718,7 +1659,6 @@ export function HappyHoursSearchClient({
             </div>
           )}
 
-          <OtherMarketMatches cards={desktopNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={2} />
         </div>
 
         {/* Map column — sticky within viewport */}
@@ -1829,11 +1769,9 @@ export function HappyHoursSearchClient({
                 {mobileNoResults ? (
                   <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
                 ) : mobileVisibleCards.length === 0 ? (
-                  mobileNameMatchesElsewhere.length > 0 ? null : (
-                    <p className="text-sm text-gray-400 text-center py-8">
-                      Pan or zoom out to see venues in this area.
-                    </p>
-                  )
+                  <p className="text-sm text-gray-400 text-center py-8">
+                    Pan or zoom out to see venues in this area.
+                  </p>
                 ) : (
                   <div className="space-y-4">
                     {mobileVisibleCards.map((card) => (
@@ -1841,7 +1779,6 @@ export function HappyHoursSearchClient({
                     ))}
                   </div>
                 )}
-                <OtherMarketMatches cards={mobileNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={1} />
               </MobileMapResultsSheet>
             </>
           )}
@@ -1860,13 +1797,11 @@ export function HappyHoursSearchClient({
               <EmptyState anyFilter={anyFilter} onClear={clearAllFilters} />
             </div>
           ) : mobileVisibleCards.length === 0 ? (
-            mobileNameMatchesElsewhere.length > 0 ? null : (
             <div className="px-4 pb-8">
               <p className="text-sm text-gray-400 text-center py-8">
                 Expand the map and pan or zoom out to see venues in this area.
               </p>
             </div>
-            )
           ) : (
             <div className="px-4 pb-8 space-y-4">
               {mobileVisibleCards.map((card, i) => (
@@ -1874,11 +1809,6 @@ export function HappyHoursSearchClient({
               ))}
             </div>
           ))}
-        {!mapExpanded && mobileNameMatchesElsewhere.length > 0 && (
-          <div className="px-4 pb-8">
-            <OtherMarketMatches cards={mobileNameMatchesElsewhere} effectiveDayName={effectiveDayName} columns={1} />
-          </div>
-        )}
       </div>
 
       {footerCta}

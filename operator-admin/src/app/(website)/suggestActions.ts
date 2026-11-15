@@ -1,6 +1,6 @@
 "use server";
 
-import { getMarketById } from "@/lib/markets";
+import { resolveSearchMarket } from "@/lib/discover/marketScope";
 import { searchVenueSuggestionsWithTotal, type VenueSuggestion } from "@/lib/data/venueSuggestions";
 import { searchDailySpecialSuggestionsWithTotal, type DailySpecialSuggestion } from "./dailySpecialSuggestions";
 import { searchEventSuggestionsWithTotal, type EventSuggestion } from "./eventSuggestions";
@@ -15,7 +15,13 @@ import { searchEventSuggestionsWithTotal, type EventSuggestion } from "./eventSu
  * in as a prop from the page — but each action re-resolves marketId
  * against the known MARKETS config server-side rather than trusting a
  * client-passed lat/lng/radius directly, the same defensive pattern
- * setMarketAction uses for the market cookie.
+ * setMarketAction uses for the market cookie. Only an active market
+ * searches (resolveSearchMarket) — a coming-soon id returns nothing.
+ *
+ * Market scope: every action searches ONLY records assigned to that market
+ * (venues.market_id; Daily Specials and Events through their venue) —
+ * applied before ranking and the 8-suggestion cap, never mixing in other
+ * markets' matches.
  *
  * All three return no suggestions for an unknown marketId or a blank query
  * instead of throwing — a suggestion dropdown should degrade to "no results"
@@ -33,7 +39,7 @@ export async function suggestHomepageVenuesAction(
   marketId: string,
   query: string
 ): Promise<SuggestionResult<VenueSuggestion>> {
-  const market = getMarketById(marketId);
+  const market = resolveSearchMarket(marketId);
   if (!market) return EMPTY;
   return searchVenueSuggestionsWithTotal(market, query);
 }
@@ -42,7 +48,7 @@ export async function suggestHomepageDailySpecialsAction(
   marketId: string,
   query: string
 ): Promise<SuggestionResult<DailySpecialSuggestion>> {
-  const market = getMarketById(marketId);
+  const market = resolveSearchMarket(marketId);
   if (!market) return EMPTY;
   return searchDailySpecialSuggestionsWithTotal(market, query);
 }
@@ -51,7 +57,7 @@ export async function suggestHomepageEventsAction(
   marketId: string,
   query: string
 ): Promise<SuggestionResult<EventSuggestion>> {
-  const market = getMarketById(marketId);
+  const market = resolveSearchMarket(marketId);
   if (!market) return EMPTY;
   return searchEventSuggestionsWithTotal(market, query);
 }
