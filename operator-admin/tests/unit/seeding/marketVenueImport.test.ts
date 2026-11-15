@@ -378,3 +378,99 @@ test("discovery tags come from the verified specials via the existing generator;
   // Plan: the importer never creates subscription/grant rows — a seed with none resolves to Free.
   assert.equal(/venue_subscriptions|venue_plan_grants/.test(readFileSync(join(__dirname, "../../../src/lib/seeding/marketVenueImport.ts"), "utf8")), false);
 });
+
+// ─── Shared-address review (same building / mall, distinct venues) ──────────
+
+const MALL = { id: "savoie-id", slug: "chula-vista-savoie-italian-eatery", name: "Savoie Italian Eatery", place_id: "ChIJ_savoie", address_line1: "2015 Birch Rd Suite #720", city: "Chula Vista", is_published: true };
+function mallState(): ExistingState {
+  const s = baseState();
+  s.cities.push(city("chula-vista", "Chula Vista", SD.id));
+  s.venues.push(MALL);
+  return s;
+}
+const mallRow = (o: Row = {}): Row => row({
+  slug: "chula-vista-pf-changs", name: "P.F. Chang's", address_line1: "2015 Birch Rd. Suite 1401", city: "Chula Vista", city_slug: "chula-vista",
+  postal_code: "91915", lat: "32.6230", lng: "-116.9670", place_id: "ChIJ_pfchangs", ...o,
+});
+const EVIDENCE = "Distinct Google Place IDs; venue site lists Suite 1401 at Otay Ranch Town Center; operating.";
+
+test("addressUnit reads the published suite/unit and nothing else", async () => {
+  const { addressUnit } = await import("../../../src/lib/seeding/marketVenueImport");
+  assert.equal(addressUnit("2015 Birch Rd Suite #720"), "720");
+  assert.equal(addressUnit("2015 Birch Rd. Suite 1401"), "1401");
+  assert.equal(addressUnit("5083 Santa Monica Ave Ste 2B"), "2b");
+  assert.equal(addressUnit("5083 Santa Monica Ave #1F"), "1f");
+  assert.equal(addressUnit("2015 Birch Road"), null);
+  assert.equal(addressUnit("1 Unity Blvd"), null);
+});
+
+test("unreviewed shared address with an existing venue stays blocked, even with distinct Place IDs and suites", () => {
+  const p = plan([mallRow()], mallState());
+  assert.equal(p.rows[0].decision, "blocked");
+  assert.ok(codes(p).includes("address_conflict"));
+});
+
+test("reviewed shared address with an existing venue inserts when Place IDs and suites differ (suite kept on the record)", () => {
+  const p = plan([mallRow({ shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })], mallState());
+  assert.equal(p.rows[0].decision, "insert");
+  assert.ok(codes(p).includes("shared_address_reviewed"));
+  assert.equal(p.rows[0].issues.filter((i) => i.level === "error").length, 0);
+  assert.equal(p.rows[0].record!.address_line1, "2015 Birch Rd. Suite 1401");
+});
+
+test("reviewed shared address needs evidence, Place IDs on both venues, and a different suite", () => {
+  assert.ok(codes(plan([mallRow({ shared_address_with: MALL.slug })], mallState())).includes("shared_address_unreviewed"));
+  const noPid = mallState(); noPid.venues[noPid.venues.length - 1] = { ...MALL, place_id: null };
+  assert.ok(codes(plan([mallRow({ shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })], noPid)).includes("shared_address_needs_place_ids"));
+  assert.ok(codes(plan([mallRow({ place_id: "", google_rating: "", shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })], mallState())).includes("shared_address_needs_place_ids"));
+  const sameUnit = plan([mallRow({ address_line1: "2015 Birch Rd Ste 720", shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })], mallState());
+  assert.equal(sameUnit.rows[0].decision, "blocked");
+  assert.ok(codes(sameUnit).includes("shared_address_same_unit"));
+});
+
+test("a matching Place ID is never inserted, even when the shared address was reviewed", () => {
+  const p = plan([mallRow({ place_id: MALL.place_id, shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })], mallState());
+  assert.equal(p.rows[0].decision, "skip_existing");
+  assert.equal(p.rows[0].record, undefined);
+});
+
+test("shared address within the same CSV: unreviewed blocks; reviewed inserts both; matching Place IDs still block", () => {
+  const a = mallRow({ slug: "chula-vista-cheesecake-factory", name: "The Cheesecake Factory", address_line1: "2015 Birch Road", place_id: "ChIJ_cheesecake", shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE });
+  const b = mallRow({ shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE });
+  const unreviewed = plan([a, b], mallState());
+  assert.deepEqual(unreviewed.rows.map((r) => r.decision), ["insert", "blocked"]);
+  assert.ok(codes(unreviewed, 1).includes("duplicate_in_batch"));
+
+  const reviewed = plan([a, { ...b, shared_address_with: `${MALL.slug}; chula-vista-cheesecake-factory` }], mallState());
+  assert.deepEqual(reviewed.rows.map((r) => r.decision), ["insert", "insert"]);
+  assert.equal(reviewed.rows[1].issues.filter((i) => i.code === "shared_address_reviewed").length, 2);
+
+  const samePlace = plan([a, { ...b, place_id: "ChIJ_cheesecake", shared_address_with: `${MALL.slug}; chula-vista-cheesecake-factory` }], mallState());
+  assert.equal(samePlace.rows[1].decision, "blocked");
+  assert.ok(codes(samePlace, 1).includes("duplicate_in_batch"));
+});
+
+test("a later row is checked against every earlier row at the same address, not just the first", () => {
+  const s = baseState();
+  const r1 = row({ slug: "san-diego-a", name: "A", address_line1: "100 Main St Suite 1", place_id: "ChIJ_a" });
+  const r2 = row({ slug: "san-diego-b", name: "B", address_line1: "100 Main St Suite 2", place_id: "ChIJ_b", shared_address_with: "san-diego-a", shared_address_evidence: EVIDENCE });
+  const r3only1 = row({ slug: "san-diego-c", name: "C", address_line1: "100 Main St Suite 3", place_id: "ChIJ_c", shared_address_with: "san-diego-a", shared_address_evidence: EVIDENCE });
+  assert.deepEqual(plan([r1, r2, r3only1], s).rows.map((r) => r.decision), ["insert", "insert", "blocked"]);
+  const r3both = { ...r3only1, shared_address_with: "san-diego-a; san-diego-b" };
+  assert.deepEqual(plan([r1, r2, r3both], s).rows.map((r) => r.decision), ["insert", "insert", "insert"]);
+});
+
+test("a shared_address_with slug that does not share the address is flagged", () => {
+  const p = plan([row({ shared_address_with: "san-diego-nowhere", shared_address_evidence: EVIDENCE })]);
+  assert.equal(p.rows[0].decision, "insert");
+  assert.ok(codes(p).includes("shared_address_unmatched"));
+});
+
+test("reviewed shared-address rows re-run as skip_existing after apply (no duplicates)", async () => {
+  const state = mallState();
+  const store = new MemoryStore(state);
+  const batch = [mallRow({ shared_address_with: MALL.slug, shared_address_evidence: EVIDENCE })];
+  assert.deepEqual((await applyImportPlan(plan(batch, state), store)).map((r) => r.outcome), ["inserted"]);
+  assert.deepEqual(plan(batch, store.snapshot()).rows.map((r) => r.decision), ["skip_existing"]);
+  assert.equal(store.rows.length, 1);
+});

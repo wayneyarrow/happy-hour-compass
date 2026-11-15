@@ -62,6 +62,9 @@ export const SEED_CSV_COLUMNS = [
   "google_rating", "google_review_count",
   // Review columns — validated, never written to venues.
   "business_hours_verified", "business_hours_source", "coordinates_source", "google_rating_retrieved_at",
+  // Shared-address review (validated, never written): slugs of the venue(s) this row was reviewed to share a
+  // street address with (same building / mall), and the evidence that they are separate operating venues.
+  "shared_address_with", "shared_address_evidence",
 ] as const;
 export type SeedCsvColumn = (typeof SEED_CSV_COLUMNS)[number];
 
@@ -227,6 +230,46 @@ export function normalizeAddressKey(address: string | null | undefined, city: st
     .replace(/\bsouth\b/g, "s").replace(/\bnorth\b/g, "n").replace(/\beast\b/g, "e").replace(/\bwest\b/g, "w")
     .replace(/\s+/g, " ").trim();
   return a ? `${a}|${normalizeGeographyText(city)}` : "";
+}
+
+/**
+ * The suite/unit part of a street address ("Suite #720" → "720", "Ste 2B" → "2b", "#1F" → "1f"), or null when
+ * none is published. normalizeAddressKey deliberately drops it (so same-building collisions are always detected);
+ * this keeps it available as evidence when a collision is reviewed.
+ */
+export function addressUnit(address: string | null | undefined): string | null {
+  const m = normalizeGeographyText(address).match(/(?:#|\b(?:suite|ste|unit)\b\.?)\s*#?\s*([a-z0-9][a-z0-9-]*)/);
+  return m ? m[1] : null;
+}
+
+type AddressParty = { slug: string; name: string; place_id: string | null; address_line1: string | null; reviewedWith: string[] };
+
+/**
+ * Decides one shared-address collision. Allowed (warning) only when it was reviewed: the other venue's slug is
+ * listed in shared_address_with (on either side), evidence is recorded, both venues carry distinct Google Place IDs,
+ * and — where both addresses publish a suite/unit — the suites differ. Everything else stays an error.
+ */
+function sharedAddressIssue(
+  row: AddressParty & { evidence: string },
+  other: AddressParty,
+  conflict: { code: string; message: string }
+): Issue {
+  const listed = row.reviewedWith.includes(other.slug) || other.reviewedWith.includes(row.slug);
+  if (!listed) {
+    return { level: "error", code: conflict.code, message: `${conflict.message} — if verified as separate venues, list ${other.slug} in shared_address_with with evidence` };
+  }
+  if (!row.evidence) return { level: "error", code: "shared_address_unreviewed", message: `shared_address_with lists ${other.slug} but shared_address_evidence is empty` };
+  if (!row.place_id || !other.place_id) {
+    return { level: "error", code: "shared_address_needs_place_ids", message: `Shared address with ${other.slug} needs a verified Google Place ID on both venues` };
+  }
+  if (row.place_id === other.place_id) {
+    return { level: "error", code: "shared_address_same_place", message: `Shares Place ID and address with ${other.slug} — same venue, not a shared building` };
+  }
+  const a = addressUnit(row.address_line1), b = addressUnit(other.address_line1);
+  if (a && b && a === b) {
+    return { level: "error", code: "shared_address_same_unit", message: `Same address and unit (${a}) as ${other.slug} — not a separate suite` };
+  }
+  return { level: "warning", code: "shared_address_reviewed", message: `Shares a street address with "${other.name}" (${other.slug}); reviewed as a separate venue (distinct Place ID${a || b ? `, unit ${a ?? "—"} vs ${b ?? "—"}` : ""})` };
 }
 
 export function normalizeNameKey(name: string | null | undefined, city: string | null | undefined): string {
@@ -420,12 +463,19 @@ export function planImport(
 
   const bySlug = new Map(existing.venues.map((v) => [v.slug, v]));
   const byPlaceId = new Map(existing.venues.filter((v) => v.place_id).map((v) => [v.place_id as string, v]));
-  const byAddress = new Map(existing.venues.map((v) => [normalizeAddressKey(v.address_line1, v.city), v]).filter(([k]) => k) as [string, ExistingVenue][]);
+  // Every existing venue per normalized address (a building or mall can already hold several listings).
+  const byAddress = new Map<string, ExistingVenue[]>();
+  for (const v of existing.venues) {
+    const k = normalizeAddressKey(v.address_line1, v.city);
+    if (k) byAddress.set(k, [...(byAddress.get(k) ?? []), v]);
+  }
   const byName = new Map(existing.venues.map((v) => [normalizeNameKey(v.name, v.city), v]).filter(([k]) => k) as [string, ExistingVenue][]);
   const history = new Set(existing.historicalSlugs);
 
   // Within-batch duplicate detection (first occurrence wins; later ones blocked).
-  const seen = { slug: new Map<string, number>(), place: new Map<string, number>(), address: new Map<string, number>(), name: new Map<string, number>() };
+  const seen = { slug: new Map<string, number>(), place: new Map<string, number>(), name: new Map<string, number>() };
+  // Every earlier row per normalized address — a later row is checked against each of them.
+  const seenAddress = new Map<string, (AddressParty & { rowNumber: number })[]>();
 
   const planned: RowPlan[] = rows.map((row) => {
     const g = (c: SeedCsvColumn) => row.values[c] ?? "";
@@ -555,11 +605,17 @@ export function planImport(
         issues.push({ level: "warning", code: "duplicate_slug", message: `slug already exists ("${v.name}") — existing listing left untouched` });
       }
     }
+    const reviewedWith = g("shared_address_with").split(/\s*;\s*/).filter(Boolean);
+    const self = { slug, name, place_id: placeId, address_line1: g("address_line1"), reviewedWith, evidence: g("shared_address_evidence") };
+    const addrKey = normalizeAddressKey(g("address_line1"), cityText);
+    const collidedWith = new Set<string>();
     if (!existingVenue) {
       if (slug && history.has(slug)) issues.push({ level: "error", code: "slug_in_history", message: `slug ${slug} is a former slug of another venue (redirects there)` });
-      const addrKey = normalizeAddressKey(g("address_line1"), cityText);
-      const addrHit = addrKey ? byAddress.get(addrKey) : undefined;
-      if (addrHit) issues.push({ level: "error", code: "address_conflict", message: `Same address as existing "${addrHit.name}" (${addrHit.slug}) with a different Place ID/slug` });
+      for (const hit of addrKey ? byAddress.get(addrKey) ?? [] : []) {
+        collidedWith.add(hit.slug);
+        issues.push(sharedAddressIssue(self, { ...hit, reviewedWith: [] },
+          { code: "address_conflict", message: `Same address as existing "${hit.name}" (${hit.slug}) with a different Place ID/slug` }));
+      }
       const nameKey = normalizeNameKey(name, cityText);
       const nameHit = nameKey ? byName.get(nameKey) : undefined;
       if (nameHit) issues.push({ level: "error", code: "name_conflict", message: `An existing venue in ${cityText} has the same name ("${nameHit.name}", ${nameHit.slug})` });
@@ -567,7 +623,6 @@ export function planImport(
     const batchChecks: [keyof typeof seen, string, string][] = [
       ["slug", slug, "slug"],
       ["place", placeId ?? "", "Place ID"],
-      ["address", normalizeAddressKey(g("address_line1"), cityText), "address"],
       ["name", normalizeNameKey(name, cityText), "name + city"],
     ];
     for (const [k, key, label] of batchChecks) {
@@ -575,6 +630,17 @@ export function planImport(
       const first = seen[k].get(key);
       if (first !== undefined) issues.push({ level: "error", code: "duplicate_in_batch", message: `Same ${label} as row ${first} in this batch` });
       else seen[k].set(key, row.rowNumber);
+    }
+    if (addrKey) {
+      const earlier = seenAddress.get(addrKey) ?? [];
+      for (const other of earlier) {
+        collidedWith.add(other.slug);
+        issues.push(sharedAddressIssue(self, other, { code: "duplicate_in_batch", message: `Same address as row ${other.rowNumber} in this batch` }));
+      }
+      seenAddress.set(addrKey, [...earlier, { ...self, rowNumber: row.rowNumber }]);
+    }
+    for (const s of reviewedWith) {
+      if (!collidedWith.has(s)) issues.push({ level: "warning", code: "shared_address_unmatched", message: `shared_address_with lists ${s}, which does not share this address` });
     }
 
     const hasError = issues.some((i) => i.level === "error");
