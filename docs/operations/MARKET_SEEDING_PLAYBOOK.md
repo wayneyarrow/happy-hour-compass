@@ -35,6 +35,21 @@ Written from the Greater San Diego (GSD) rollout, November 2026: 81 public venue
 | Importer tests | [`operator-admin/tests/unit/seeding/marketVenueImport.test.ts`](../../operator-admin/tests/unit/seeding/marketVenueImport.test.ts) |
 | Stock photo source records | [`stock-photos/unsplash-2026-11-14-sources.csv`](stock-photos/unsplash-2026-11-14-sources.csv), [`stock-photos/unsplash-2026-11-14-batch2-sources.csv`](stock-photos/unsplash-2026-11-14-batch2-sources.csv) |
 
+**Tools (all in the repo)** — the screening brief [`MARKET_SEEDING_SCREENING_BRIEF.md`](MARKET_SEEDING_SCREENING_BRIEF.md) and
+[`operator-admin/scripts/seeding/`](../../operator-admin/scripts/seeding/):
+
+| Tool | Step | Reads / writes |
+|---|---|---|
+| `renderVenuePage.cjs`, `renderMenuPdf.cjs` | 2 — screening (page text + screenshots, PDF pages) | browser GETs → work folder |
+| `exportSeedState.ts` | 2/3 — exclusions + photo usage for a market | DB **read-only** → work folder |
+| `buildSeedBatch.py` | 3 — import + review CSVs from screened records | Places + Census reads → CSVs |
+| `npm run import:market-venues` (importer) | 5.1 dry run · 5.2 draft import | dry run read-only · `--apply` inserts drafts (**approval**) |
+| `verifySeedVenues.ts` | 5.2 snapshot · 5.3 draft check · 5.4 pre-publish gate · after publish | DB **read-only** |
+| `checkDraftsHidden.ts` | 5.3 — drafts not public | logged-out browser, analytics blocked |
+| `buildGuardedPublishSql.ts` | 5.4 — exact-ID publish SQL from the apply report + CSV | no DB; writes a .sql file |
+| `checkPublishedVenues.ts` | 5.5 — new pages, browsing, pins, search, sitemap | logged-out browser (analytics blocked) + DB read-only |
+| `analyticsBlock.ts` | shared by both browser checks | — |
+
 ---
 
 ## 1. Plan coverage
@@ -86,9 +101,18 @@ Written from the Greater San Diego (GSD) rollout, November 2026: 81 public venue
 
 ### Reusable steps
 
+0. **Set up the batch work folder** outside the repo (e.g. `~/hhc-work/<batch>/` — the session scratchpad under `/tmp` is
+   wiped on restart) and export the market's current state (read-only):
+   ```bash
+   cd operator-admin
+   npx tsx scripts/seeding/exportSeedState.ts --market=<market-slug> --out=<work dir> --review-dir=../docs/operations/<market>
+   ```
+   Expected: `Wrote <work dir>/existing.json (<all venues> venues, <n> photos in <market>), used_photos.txt, exclusions.md (…)`.
+   Copy [`MARKET_SEEDING_SCREENING_BRIEF.md`](MARKET_SEEDING_SCREENING_BRIEF.md) to `<work dir>/BRIEF.md`, set the date,
+   and append `exclusions.md`. Every screener works from that brief and writes `worker-<X>.json` in the work folder.
 1. **Find leads** in directories and guides — existing research CSV, King of Happy Hour, local magazines, Infatuation,
    Eater, Atly, tourism and neighbourhood directories. These are **discovery only**.
-2. **Exclude** everything already live or already screened (all earlier review CSVs' holds), and anything parked on purpose.
+2. **Exclude** everything already live or already screened (all earlier review CSVs' holds — `exclusions.md`), and anything parked on purpose.
 3. **Screen in this order, stopping at the first failure** (hold codes in brackets):
    1. Operating: no closure notice, current site [`closed`, `not_found`].
    2. **Full weekly opening hours, all 7 days:** each day has open + close or is explicitly closed. A stated day range
@@ -105,7 +129,9 @@ Written from the Greater San Diego (GSD) rollout, November 2026: 81 public venue
    5. Every happy hour window inside that day's opening hours [`hh_outside_hours`].
 4. **Open the full menu, not just the text.** Render pages and read screenshots; click every menu tab; open every PDF
    page, image menu and embedded widget (if a widget is blank in the page, open its own URL); read both food and drink;
-   pair names and prices from the screenshot when text extraction separates them.
+   pair names and prices from the screenshot when text extraction separates them. Tools (from the repo root):
+   `node operator-admin/scripts/seeding/renderVenuePage.cjs "<url>" <dl dir>` → JSON summary + `text.txt`, `tc.txt`,
+   `slice-N.png`; `node operator-admin/scripts/seeding/renderMenuPdf.cjs "<pdf url>" <dl dir>` → `page-N.png`.
 5. **Second look before any hold** for missing offers, prices, schedules, hours or closures — then an **independent
    recheck** of those holds by a fresh pass that treats the first screener's notes as leads only.
 6. **Record evidence for every fact:** URL, page/section or PDF page, exact quote, date (menu date, PDF filename,
@@ -168,6 +194,26 @@ All columns the importer accepts are listed in `SEED_CSV_COLUMNS` in the importe
   **Operator Search Tags (`search_tags`) stay empty**; the importer never writes them.
 - **Review CSV** alongside the import CSV: one row per screened venue with batch status, hold code/reason, sources,
   quotes, Google match, pin source, photo choice and QA notes.
+
+### Build command
+
+QA corrections go in `qa-*.json` patch files in the work folder (field-level, merged onto a screened venue by name; e.g.
+`photo_override` + `photo_override_reason`, `place_id_override` + `place_id_override_reason`, `places_query_name`,
+`shared_address_with` + `shared_address_evidence`, a corrected `phone`, or a recheck's `status`). Then, from the repo root:
+
+```bash
+python3 -I operator-admin/scripts/seeding/buildSeedBatch.py \
+  --env operator-admin/.env.local --market <market-slug> --region <CA> --country <US> \
+  --roster operator-admin/src/lib/geo/rosters/<market roster>.ts \
+  --existing <work dir>/existing.json --used-photos <work dir>/used_photos.txt \
+  --out docs/operations/<market>/<batch> --batch <batch-name> \
+  <work dir>/worker-*.json <work dir>/qa-*.json
+```
+
+Expected: `{"in_batch": N, "held": H, "import_csv": "…/<batch-name>.csv"}` and one line per venue (`IN BATCH` or `HOLD
+<code>`). The builder holds rows it can't verify itself (`place_not_verified`, `not_in_roster`, `no_pin`, `existing_place`,
+`existing_slug`, `no_photo`). It needs only Python 3's standard library, the Google key in the env file, and network
+access to the Places API and the Census Geocoder.
 
 ### Duplicates, held rows and the reviewed shared-address exception
 
@@ -242,35 +288,53 @@ insert is `is_published: false`, `source: "seed"` with the expected photo. Fix o
 
 ### 5.2 Draft import (approval required)
 
-1. Confirm the CSV is byte-identical to the reviewed commit; snapshot every venue row
-   (`supabase db query --linked -o json "select id, md5(v::text) as h from public.venues v order by id"`).
+1. Confirm the CSV is byte-identical to the reviewed commit (`git diff --quiet <commit> -- <csv>`), and snapshot every
+   venue row (read-only):
+   ```bash
+   npx tsx scripts/seeding/verifySeedVenues.ts --csv=<csv> --market=<market-slug> --stage=draft \
+     --snapshot-out=<work dir>/before.json --snapshot-only
+   ```
+   Expected: `Snapshot of <n> venue rows written to <work dir>/before.json`.
 2. Re-run the dry run (gate as above), then:
    ```bash
    npm run import:market-venues -- --market=<market-slug> --csv=<same csv> --apply
    ```
-   Capture the `INSERTED row … <slug> → <id>` lines and the apply report path.
+   Expected: `Summary: insert N · skip (existing) 0 · blocked 0`, N lines `INSERTED row <n> <slug> → <id>`, and
+   `Report: scripts/output/import-reports/<csv>.<timestamp>.apply.json` — keep that path; publishing uses its exact IDs.
 
-### 5.3 Draft verification
+### 5.3 Draft verification (all read-only)
 
-- Every stored field matches the CSV: name, type, address, phone, links, city/market, coordinates, business hours,
-  `hh_times`, tagline, offers, photo path, Place ID, rating, review count.
-- All are unpublished, `source = seed`, unclaimed, unverified, not cancelled, no operator linked, no subscription or plan
-  grant (Free), empty `search_tags`.
-- `seeded_tags` equal the importer's own generator output (`generateSeededTags` from `src/lib/seededTags`) for each row.
-- Every assigned photo returns 200 on Production.
-- Every pre-existing venue row is byte-identical to the snapshot; held venues are absent.
-- Dry run again: `insert 0 · skip (existing) N · blocked 0`.
-- Logged out, analytics blocked: drafts absent from browsing, the homepage, name search (in-market and cross-market),
-  the sitemap; each draft URL returns 404; the market count is unchanged. Check name-search hits against exact card
-  titles — a short name like "Puesto" can match other live locations.
+```bash
+npx tsx scripts/seeding/verifySeedVenues.ts --csv=<csv> --market=<market-slug> --stage=draft \
+  --apply-report=<apply report> --production-base=https://happyhourcompass.com --snapshot-compare=<work dir>/before.json
+npm run import:market-venues -- --market=<market-slug> --csv=<csv>
+npx tsx scripts/seeding/checkDraftsHidden.ts --base=https://happyhourcompass.com --csv=<csv> --market=<market-slug> \
+  --expected-public-count=<public count before import>
+```
+
+Expected: `DRAFT VERIFY: ALL PASS (N venues in CSV)` with `other rows changed: 0` — every stored field matches the CSV
+(name, type, address, phone, links, market/city, coordinates, hours, `hh_times`, tagline, offers, photo, Place ID, rating,
+review count); unpublished `seed`, unclaimed, unverified, uncancelled, no operator, Free, empty `search_tags`;
+`seeded_tags` equal the importer's generator; every photo served on Production and byte-identical. The dry run shows
+`insert 0 · skip (existing) N · blocked 0`. The hidden-draft check ends `… passed` with every line PASS (browsing count
+unchanged, no draft as a card, on the homepage or in exact-title search in-market/cross-market, every draft URL 404,
+none in the sitemap) and reports `0 tracking requests … none sent` or a small intercepted count.
 
 **→ Wayne approves publication** here.
 
 ### 5.4 Guarded publish by exact IDs (approval required)
 
-Pre-publish gate per ID: still unpublished, seed, unclaimed, unverified, not cancelled, expected market and city, photo
-exists and matches the CSV, qualifying happy hour (`hasQualifyingHappyHour`), unchanged since import, rating as CSV,
-empty Search Tags, Free. Then run one transaction (`supabase db query --linked -f <file>.sql`):
+```bash
+npx tsx scripts/seeding/verifySeedVenues.ts --csv=<csv> --market=<market-slug> --stage=prepublish \
+  --apply-report=<apply report> --production-base=https://happyhourcompass.com --snapshot-out=<work dir>/pre-publish.json
+npx tsx scripts/seeding/buildGuardedPublishSql.ts --csv=<csv> --apply-report=<apply report> --market=<market-slug> \
+  --market-name="<Market Name>" --batch=<batch-label> --approver=<approver email> --out=<work dir>/publish.sql
+cd .. && supabase db query --linked -f <work dir>/publish.sql      # only after Wayne approves publication
+```
+
+Expected: `PREPUBLISH VERIFY: ALL PASS` (adds: unchanged since import, qualifying happy hour); the SQL builder prints the
+N `id city slug` lines and refuses to write anything unless the apply report and CSV describe exactly the same venues in
+the market. The generated SQL (shape below) runs as one transaction:
 
 ```sql
 BEGIN;
@@ -305,30 +369,37 @@ SELECT count(*) FILTER (WHERE is_published) AS published_now, count(*) AS target
 COMMIT;
 ```
 
-Expected: `published_now = targeted = N`. Then verify only `is_published` and the automatic `updated_at` changed on the
-N rows, every other venue is byte-identical, and the newest `venue_bulk_published` audit row lists the N IDs.
+Expected: `published_now = targeted = N`. Then (read-only):
+
+```bash
+npx tsx scripts/seeding/verifySeedVenues.ts --csv=<csv> --market=<market-slug> --stage=published \
+  --apply-report=<apply report> --snapshot-compare=<work dir>/pre-publish.json
+```
+
+Expected: `PUBLISHED VERIFY: ALL PASS` with `other rows changed: 0` (the N rows differ only by `is_published` and the
+automatic `updated_at`). Confirm the newest `venue_bulk_published` audit row lists the N IDs (read-only query).
 
 ### 5.5 Logged-out Production checks (analytics blocked, venue's local time zone)
 
-- Each new page: HTTP 200 + canonical URL, name and city, stock photo (page + `og:image`), Google rating badge and review
-  count (`4` renders as `4.0`), all 7 days of happy hour and business hours as reviewed (closed days may render
-  uppercase), every offer with its price, no Verified badge.
-- Browsing shows the new market total with every venue as a card; map pins for all; name search finds each new venue
-  in-market and cross-market (and an exact full-name search returns that exact listing); the sitemap lists every new URL;
-  no held venue appears anywhere.
+```bash
+npx tsx scripts/seeding/checkPublishedVenues.ts --base=https://happyhourcompass.com --csv=<csv> --market=<market-slug> \
+  --expected-public-count=<new public count> --review-csv=<batch review csv> [--exact-search="<a full venue name>"]
+```
+
+Expected: `<n>/<n> checks passed`. Per page: HTTP 200 + canonical URL, name and city, stock photo (page + `og:image`),
+Google rating badge and review count (`4` renders as `4.0`), all 7 days of happy hour and business hours (closed days may
+render uppercase), every offer with its price, no Verified badge. Market-wide: the browsing count, every live venue as a
+card and a map pin, name search in-market and cross-market, sitemap entries, and no held venue shown.
 
 ### Resuming after an interruption
 
-- Keep multi-hour batch work in a durable folder outside the repo — **`~/hhc-work/<batch>/`** — because the session
-  scratchpad under `/tmp` is wiped when the machine restarts. Screening workers rewrite their JSON after every venue,
-  so a resumed worker reads its file and continues.
-- The current working tools live in `~/hhc-work/gsd-batch4/` (not committed): `BRIEF4.md` (screening brief),
-  `build_batch4.py` (CSV builder), `tools/render_page.cjs`, `tools/pdf_render.cjs`, `tools/tagcheck.ts`,
-  `tools/block_script.cjs`, `tools/draft_check.cjs`, `publish/prepublish.ts`, `publish/expected.ts`,
-  `publish/publish_check.cjs`.
-- **Latest data:** committed import + review CSVs in `docs/operations/<market>/<batch>/`; run reports in
-  `operator-admin/scripts/output/import-reports/`. The DB is the source of truth for what's live — re-run the read-only
-  dry run (it shows which rows already exist) before resuming any write step.
+- Keep multi-hour batch work in a durable folder outside the repo (e.g. `~/hhc-work/<batch>/`) — the session scratchpad
+  under `/tmp` is wiped when the machine restarts. It holds the batch brief, `worker-*.json`, `qa-*.json`, downloads,
+  `existing.json`, snapshots and the publish SQL. Screeners rewrite their JSON after every venue, so a resumed screener
+  reads its file and continues.
+- **Latest data:** committed import + review CSVs in `docs/operations/<market>/<batch>/`; run reports (including the apply
+  report with the inserted IDs) in the gitignored `operator-admin/scripts/output/import-reports/`. The DB is the source of
+  truth for what's live — re-run the read-only dry run and `verifySeedVenues.ts` before resuming any write step.
 
 ---
 
