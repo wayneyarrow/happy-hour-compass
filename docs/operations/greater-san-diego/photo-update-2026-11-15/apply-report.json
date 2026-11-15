@@ -1,0 +1,408 @@
+{
+ "update": "Greater San Diego photo QA \u2014 venue covers + event photos",
+ "appliedOn": "2026-11-15",
+ "approval": "Wayne approved applying the reviewed venue and event photo updates on Production (2026-11-15).",
+ "inputs": {
+  "zips": [
+   "~/Downloads/hhc-stock-photos/gsd-event-replacements.zip (sha256 37adeea6\u2026)",
+   "~/Downloads/hhc-stock-photos/gsd-venue-replacements.zip (sha256 cc6a908b\u2026)"
+  ],
+  "csvs": [
+   "gsd-event-replacements-sources.csv",
+   "gsd-venue-replacements-sources.csv"
+  ],
+  "note": "Originals preserved in Downloads; extracted copies in ~/hhc-work/gsd-image-update/extracted/."
+ },
+ "venue_photo_release": {
+  "website_commit": "1b70040",
+  "main_commit": "e56c8e0 (cherry-pick of 1b70040; diff = 3 photos + source CSV)",
+  "staging": "3/3 byte-identical",
+  "production": "3/3 HTTP 200 image/jpeg byte-identical before any venue was changed"
+ },
+ "event_uploads": {
+  "objects": 15,
+  "verified": 15,
+  "note": "New paths under events/<eventId>/; previous objects left in place for rollback"
+ },
+ "database": {
+  "events_apply": "events-apply.sql applied 2026-11-15 17:40:16 UTC (audit seed_event_image_updated, 15 ids)",
+  "venues_apply": "venues-apply.sql applied 2026-11-15 17:44:55 UTC (audit seed_venue_cover_updated, 5 ids)",
+  "pre_checks": "plan built from a full snapshot; every target matched the audit (venue cover paths; live event file hashes), no operator attribution; re-checked for drift immediately before each apply (0 changes)",
+  "diff": "full-table before/after: venues 5 changed (placeholder_image_path, updated_at), events 15 changed (image_url, updated_at); only the planned IDs and values"
+ },
+ "logged_out": {
+  "venues": [
+   {
+    "slug": "carlsbad-vigiluccis-seafood-steakhouse",
+    "name": "Vigilucci's Seafood & Steakhouse",
+    "expect": "images/venues/fine-dining/venue-pic-fine-dining-10.jpg",
+    "old": "images/venues/fine-dining/venue-pic-fine-dining-1.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/carlsbad/carlsbad-vigiluccis-seafood-steakhouse",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/fine-dining/venue-pic-fine-dining-10.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   },
+   {
+    "slug": "chula-vista-p-f-changs-otay-ranch",
+    "name": "P.F. Chang's \u2013 Chula Vista (Otay Ranch)",
+    "expect": "images/venues/casual-dining/venue-pic-casual-dining-39.jpg",
+    "old": "images/venues/casual-dining/venue-pic-casual-dining-28.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/chula-vista-p-f-changs-otay-ranch",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/casual-dining/venue-pic-casual-dining-39.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   },
+   {
+    "slug": "chula-vista-the-cheesecake-factory-otay-ranch",
+    "name": "The Cheesecake Factory \u2013 Chula Vista (Otay Ranch)",
+    "expect": "images/venues/casual-dining/venue-pic-casual-dining-40.jpg",
+    "old": "images/venues/casual-dining/venue-pic-casual-dining-25.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/chula-vista-the-cheesecake-factory-otay-ranch",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/casual-dining/venue-pic-casual-dining-40.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   },
+   {
+    "slug": "chula-vista-casa-nori-sushi-bar-grill",
+    "name": "Casa Nori Sushi Bar & Grill",
+    "expect": "images/venues/fine-dining/venue-pic-fine-dining-7.jpg",
+    "old": "images/venues/casual-dining/venue-pic-casual-dining-2.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/chula-vista-casa-nori-sushi-bar-grill",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/fine-dining/venue-pic-fine-dining-7.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   },
+   {
+    "slug": "coronado-peohes",
+    "name": "Peohe's",
+    "expect": "images/venues/fine-dining/venue-pic-fine-dining-5.jpg",
+    "old": "images/venues/fine-dining/venue-pic-fine-dining-7.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/coronado/coronado-peohes",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/fine-dining/venue-pic-fine-dining-5.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   },
+   {
+    "slug": "san-diego-working-class",
+    "name": "Working Class",
+    "expect": "images/venues/casual-dining/venue-pic-casual-dining-10.jpg",
+    "old": null,
+    "changed": false,
+    "url": "https://happyhourcompass.com/greater-san-diego/san-diego/san-diego-working-class",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/casual-dining/venue-pic-casual-dining-10.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   }
+  ],
+  "events": {
+   "changed": [
+    {
+     "id": "2de50885-0374-461d-8676-57f923394aec",
+     "url": "https://happyhourcompass.com/greater-san-diego/encinitas/events/encinitas-union-kitchen-tap-live-music-with-maxwell-the-great",
+     "title": "Live Music with Maxwell The Great",
+     "venue": "Union Kitchen & Tap \u2013 Encinitas",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "LIVE-6"
+    },
+    {
+     "id": "7cb218cc-4faa-4eb1-b1f9-d0bbd9d15c7c",
+     "url": "https://happyhourcompass.com/greater-san-diego/lakeside/events/lakeside-eastbound-bar-grill-saturday-night-entertainment",
+     "title": "Saturday Night Entertainment",
+     "venue": "Eastbound Bar & Grill",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "LIVE-7"
+    },
+    {
+     "id": "7a788252-5433-4c36-b347-f940028e9cdc",
+     "url": "https://happyhourcompass.com/greater-san-diego/lakeside/events/lakeside-eastbound-bar-grill-sunday-trivia",
+     "title": "Sunday Trivia",
+     "venue": "Eastbound Bar & Grill",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-11"
+    },
+    {
+     "id": "7998c882-40db-4288-a939-ad43719355c6",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-harland-brewing-scripps-ranch-weekly-trivia",
+     "title": "Weekly Trivia",
+     "venue": "Harland Brewing \u2013 Scripps Ranch",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-10"
+    },
+    {
+     "id": "6e9bcca2-3d5a-49d5-b40f-51f8bc5c448a",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-cannonball-acoustic-sunsets",
+     "title": "Acoustic Sunsets",
+     "venue": "Cannonball",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "LIVE-5"
+    },
+    {
+     "id": "ef2d559e-eb7f-499a-b6d0-fd6acc82414f",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-knotty-barrel-east-village-trivia-with-sunset-trivia",
+     "title": "Trivia with Sunset Trivia",
+     "venue": "Knotty Barrel \u2013 East Village",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-8"
+    },
+    {
+     "id": "638d8a2b-7dc6-4a84-a944-64e4b072e81f",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-the-duck-dive-wednesday-trivia",
+     "title": "Wednesday Trivia",
+     "venue": "The Duck Dive",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-7"
+    },
+    {
+     "id": "af7d1ec1-5306-4857-ac4e-8bd2f69baaf2",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-the-local-pacific-beach-thursday-club-dj",
+     "title": "Thursday Club DJ",
+     "venue": "The Local Pacific Beach",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "DJ-6"
+    },
+    {
+     "id": "a75d1047-8277-4be4-8af4-2e793abb46e5",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-the-loma-club-bar-grill-trivia-night",
+     "title": "Trivia Night",
+     "venue": "The Loma Club Bar & Grill",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-5"
+    },
+    {
+     "id": "1a2c18d6-f3e7-4d4d-a120-5fbefeaf6fed",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-the-rabbit-hole-trivia-under-the-stars",
+     "title": "Trivia Under the Stars",
+     "venue": "The Rabbit Hole",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-9"
+    },
+    {
+     "id": "c41b0c79-8116-4e8f-8b73-f6c4870bab2f",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-karaoke-sunday",
+     "title": "Karaoke Sunday",
+     "venue": "Urban Mo's",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "KARAOKE-4"
+    },
+    {
+     "id": "40e12ac5-20cf-48b0-aed8-5b4bd75808e7",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-saturdays-with-dj-miss-dust",
+     "title": "Saturdays with DJ Miss Dust",
+     "venue": "Urban Mo's",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "DJ-8"
+    },
+    {
+     "id": "eff44c4e-c5ac-45cb-b682-5a3a467f1197",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-wonderland-ocean-pub-trivia-night",
+     "title": "Trivia Night",
+     "venue": "Wonderland Ocean Pub",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-6"
+    },
+    {
+     "id": "fb21583d-6597-4259-b2ee-f7c441e47b8b",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-gossip-grill-karaoke-tuesdays-with-joey-adams",
+     "title": "Karaoke Tuesdays with Joey Adams",
+     "venue": "Gossip Grill",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "KARAOKE-5"
+    },
+    {
+     "id": "3cafd97f-5ca8-4da5-b1b0-bbddd68ec43a",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-gossip-grill-smarty-pants-saturday-trivia-brunch",
+     "title": "Smarty Pants Saturday Trivia Brunch",
+     "venue": "Gossip Grill",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "slot": "TRIVIA-12"
+    }
+   ],
+   "held": [
+    {
+     "id": "05b66e23-2369-494b-ad78-7e5e68868252",
+     "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/events/chula-vista-savoie-italian-eatery-dj-night-fridays",
+     "title": "DJ Night",
+     "venue": "Savoie Italian Eatery",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "keeps": "DJ-3"
+    },
+    {
+     "id": "95e2e784-03dc-4afd-a161-3e5dcaae0563",
+     "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/events/chula-vista-savoie-italian-eatery-dj-night-saturdays",
+     "title": "DJ Night",
+     "venue": "Savoie Italian Eatery",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "keeps": "DJ-3"
+    },
+    {
+     "id": "04c3693a-a642-40c1-90b9-39dd5720bf78",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-sassy-sunday-funday",
+     "title": "Sassy Sunday Funday",
+     "venue": "Urban Mo's",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "keeps": "DRAG-2"
+    },
+    {
+     "id": "804d7bf0-3189-4a0e-8953-c4a74be184ba",
+     "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-dreamgirls-revue",
+     "title": "Dreamgirls Revue",
+     "venue": "Urban Mo's",
+     "status": 200,
+     "dbMatches": true,
+     "ogMatches": true,
+     "heroLoaded": true,
+     "keeps": "DRAG-1"
+    }
+   ],
+   "events_page": {
+    "newImagesOnEventsPage": 15,
+    "of": 15,
+    "oldImagesStillOnPage": 0
+   },
+   "distinct": {
+    "series": 33,
+    "distinctPhotos": 32,
+    "shared": [
+     [
+      "chula-vista-savoie-italian-eatery|DJ Night",
+      "san-diego-gossip-grill|TGIW with DJ Jocelyn"
+     ]
+    ]
+   }
+  }
+ },
+ "rollback": "Run venues-rollback.sql and/or events-rollback.sql (supabase db query --linked -f \u2026): each restores the previous value only where the row still holds the new value and has no operator attribution; exactly N rows or nothing. Previous Storage objects and library photos were never deleted. New Storage objects to remove after a rollback (optional): listed in before-after-manifest.csv (new_value).",
+ "held": [
+  {
+   "kind": "venue",
+   "slug": "san-diego-working-class",
+   "name": "Working Class",
+   "slot": "VENUE-2",
+   "keeps": "images/venues/casual-dining/venue-pic-casual-dining-10.jpg",
+   "reason": "VENUE-2 rejected: every glass shows another brewery's printed logo (\"CRAFTERS Brewing Co.\"); current cover stays (marked do not reuse elsewhere)."
+  },
+  {
+   "kind": "event",
+   "id": "05b66e23-2369-494b-ad78-7e5e68868252",
+   "slug": "chula-vista-savoie-italian-eatery-dj-night-fridays",
+   "title": "DJ Night",
+   "venue": "Savoie Italian Eatery",
+   "slot": "DJ-7",
+   "keeps": "DJ-3",
+   "reason": "DJ-7 rejected: daytime record-shop setting (vans and a bicycle outside the window) \u2014 weak fit for an evening restaurant-lounge DJ night."
+  },
+  {
+   "kind": "event",
+   "id": "95e2e784-03dc-4afd-a161-3e5dcaae0563",
+   "slug": "chula-vista-savoie-italian-eatery-dj-night-saturdays",
+   "title": "DJ Night",
+   "venue": "Savoie Italian Eatery",
+   "slot": "DJ-7",
+   "keeps": "DJ-3",
+   "reason": "DJ-7 rejected: daytime record-shop setting (vans and a bicycle outside the window) \u2014 weak fit for an evening restaurant-lounge DJ night."
+  },
+  {
+   "kind": "event",
+   "id": "04c3693a-a642-40c1-90b9-39dd5720bf78",
+   "slug": "san-diego-urban-mos-sassy-sunday-funday",
+   "title": "Sassy Sunday Funday",
+   "venue": "Urban Mo's",
+   "slot": "DRAG-4",
+   "keeps": "DRAG-2",
+   "reason": "DRAG-4 rejected: clear full-face portrait at a street event \u2014 same problem as DRAG-2."
+  },
+  {
+   "kind": "event",
+   "id": "804d7bf0-3189-4a0e-8953-c4a74be184ba",
+   "slug": "san-diego-urban-mos-dreamgirls-revue",
+   "title": "Dreamgirls Revue",
+   "venue": "Urban Mo's",
+   "slot": "DRAG-3",
+   "keeps": "DRAG-1",
+   "reason": "DRAG-3 rejected: fully lit, recognisable face (the brief excluded this); reads as a theatre/dance performer."
+  }
+ ]
+}

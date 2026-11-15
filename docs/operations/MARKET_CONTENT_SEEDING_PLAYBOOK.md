@@ -274,7 +274,8 @@ Review **every** image at full size and in the card + hero crops: readable venue
 only at full size are acceptable), identifiable people who could be mistaken for the advertised performer (flag), and
 weak fit. Fill `decision` (`accepted`, `rejected — <why>`, `accepted — approved by Wayne`) and `reason` in
 `sources-draft.csv` and save it as `docs/operations/stock-photos/<source>-<date>-<market>-events-sources.csv`
-(accepted **and** rejected rows). **Owner-approved exceptions** (e.g. Wayne keeps a flagged photo) are recorded in
+(accepted **and** rejected rows). Never assign a photo listed in
+[`stock-photos/do-not-reuse.csv`](stock-photos/do-not-reuse.csv); add retired photos there. **Owner-approved exceptions** (e.g. Wayne keeps a flagged photo) are recorded in
 `decision` + `reason` with the date — never silently.
 
 ### 3.4 Manifest
@@ -487,3 +488,11 @@ Records: [`greater-san-diego/specials-batch1/`](greater-san-diego/specials-batch
   originals for publication on 2026-11-15 pending his live-site photo QA. KARAOKE-3 kept (reads as a generic band).
 - **Gap found:** the GSD homepage has no Today's Specials or events rail, so these listings appear on venue pages and the
   specials/events search pages only.
+- **Photo QA update (2026-11-15, same day):** 5 venue covers and 15 event rows / 15 series re-photographed from a second
+  sourcing run; Working Class, Savoie DJ Night (2 rows), Dreamgirls Revue and Sassy Sunday Funday held because their
+  replacements failed review (printed brewery logo; daytime record shop; recognisable faces). TRIVIA-2, DRAG-1 and DRAG-2
+  retired (`stock-photos/do-not-reuse.csv`). Record, rollback SQL and verification:
+  [`greater-san-diego/photo-update-2026-11-15/`](greater-san-diego/photo-update-2026-11-15/). Pattern for later photo
+  updates: exact-ID plan from a full snapshot → upload event images to **new** Storage paths (old ones kept) and release
+  venue photos to Production first → guarded `UPDATE … WHERE id = … AND <field> = <old> AND updated_at = <snapshot>` with
+  an exact-count check and audit row → logged-out page + card checks → full-table before/after diff.
