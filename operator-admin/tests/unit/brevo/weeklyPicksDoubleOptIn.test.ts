@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { requestWeeklyPicksDoubleOptIn } from "../../../src/lib/brevo/client";
 import { BrevoApiError } from "../../../src/lib/brevo/errors";
-import { BrevoConfigError } from "../../../src/lib/brevo/config";
+import { BrevoConfigError, NewsletterUnavailableError } from "../../../src/lib/brevo/config";
 import { BrevoStagingGuardBlockedError } from "../../../src/lib/brevo/stagingGuard";
 import { withBrevoEnv } from "./support/testEnv";
 
@@ -22,6 +22,7 @@ function installFakeFetch(handler: (call: FetchCall) => Response | Promise<Respo
 const PARAMS = {
   email: "wayne@example.com",
   redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed",
+  marketId: "central-okanagan",
 };
 
 const STAGING_ENV = {
@@ -148,4 +149,94 @@ test("401 → auth, 429/5xx/network → transient; messages mask the email", asy
       );
     });
   }
+});
+
+// ── Per-market audiences ─────────────────────────────────────────────────────
+
+const SD_PARAMS = {
+  email: "wayne@example.com",
+  redirectionUrl: "https://staging.happyhourcompass.com/greater-san-diego/newsletter/confirmed",
+  marketId: "greater-san-diego",
+};
+
+/** Staging with San Diego switched on: list 8, template 15 (alongside Central Okanagan's 2 / 34). */
+const SD_ENV = {
+  ...STAGING_ENV,
+  NEWSLETTER_SIGNUP_ENABLED_GREATER_SAN_DIEGO: "true",
+  BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: "8",
+  BREVO_NEWSLETTER_DOI_TEMPLATE_ID_GREATER_SAN_DIEGO: "15",
+};
+
+const bodyOf = (call: FetchCall) => JSON.parse(String(call.init.body));
+
+test("Greater San Diego: one DOI request to list 8 with template 15 and its own confirmation page", async () => {
+  await withSetup(SD_ENV, () => json(201, {}), async (calls) => {
+    await requestWeeklyPicksDoubleOptIn(SD_PARAMS);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(bodyOf(calls[0]), {
+      email: "wayne@example.com",
+      includeListIds: [8],
+      templateId: 15,
+      redirectionUrl: SD_PARAMS.redirectionUrl,
+    });
+  });
+});
+
+test("Central Okanagan keeps list 2 / its template while San Diego is configured", async () => {
+  await withSetup(SD_ENV, () => json(201, {}), async (calls) => {
+    await requestWeeklyPicksDoubleOptIn(PARAMS);
+    assert.deepEqual(bodyOf(calls[0]), {
+      email: "wayne@example.com",
+      includeListIds: [2],
+      templateId: 34,
+      redirectionUrl: PARAMS.redirectionUrl,
+    });
+  });
+});
+
+test("San Diego switched off (flag unset or not exactly \"true\") → unavailable, no request — never Central Okanagan's list", async () => {
+  for (const flag of [undefined, "", "false", "1", "TRUE", " true"]) {
+    await withSetup({ ...SD_ENV, NEWSLETTER_SIGNUP_ENABLED_GREATER_SAN_DIEGO: flag }, () => json(201, {}), async (calls) => {
+      await assert.rejects(() => requestWeeklyPicksDoubleOptIn(SD_PARAMS), NewsletterUnavailableError, String(flag));
+      assert.equal(calls.length, 0, String(flag));
+    });
+  }
+});
+
+test("San Diego misconfigured → BrevoConfigError, no request — never falls back to another audience", async () => {
+  const cases: Array<Record<string, string | undefined>> = [
+    { BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: undefined },
+    { BREVO_NEWSLETTER_DOI_TEMPLATE_ID_GREATER_SAN_DIEGO: undefined },
+    { BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: "eight" },
+    { BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: "0" },
+    { BREVO_NEWSLETTER_DOI_TEMPLATE_ID_GREATER_SAN_DIEGO: "-15" },
+    { BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: "2" }, // Central Okanagan's list
+    { BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO: "3", BREVO_CONSUMER_LIST_ID: "3" }, // the account-consent list
+    { BREVO_API_KEY: undefined },
+  ];
+  for (const c of cases) {
+    await withSetup({ ...SD_ENV, ...c }, () => json(201, {}), async (calls) => {
+      await assert.rejects(() => requestWeeklyPicksDoubleOptIn(SD_PARAMS), BrevoConfigError, JSON.stringify(c));
+      assert.equal(calls.length, 0, JSON.stringify(c));
+    });
+  }
+});
+
+test("a market with no newsletter → unavailable, no request", async () => {
+  for (const marketId of ["greater-vancouver", "nowhere", "", "__proto__", "constructor"]) {
+    await withSetup(SD_ENV, () => json(201, {}), async (calls) => {
+      await assert.rejects(() => requestWeeklyPicksDoubleOptIn({ ...SD_PARAMS, marketId }), NewsletterUnavailableError, marketId);
+      assert.equal(calls.length, 0);
+    });
+  }
+});
+
+test("San Diego obeys the same staging allowlist as Central Okanagan", async () => {
+  await withSetup(SD_ENV, () => json(201, {}), async (calls) => {
+    await assert.rejects(
+      () => requestWeeklyPicksDoubleOptIn({ ...SD_PARAMS, email: "real-subscriber@example.com" }),
+      BrevoStagingGuardBlockedError
+    );
+    assert.equal(calls.length, 0);
+  });
 });

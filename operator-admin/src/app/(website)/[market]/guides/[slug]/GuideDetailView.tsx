@@ -11,6 +11,7 @@ import { ShareButton } from "@/app/(website)/ShareButton";
 import type { GuideFaqAnswer } from "@/lib/data/faqLibraryTypes";
 import { GuideFaqSection } from "./GuideFaqSection";
 import { WeeklyPicksSection } from "@/app/(website)/weekly-picks/WeeklyPicksSection";
+import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
 import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 
@@ -121,6 +122,7 @@ export function GuideDetailView({
   enableDiscoveryTracking,
 }: Props) {
   const cityOrMarket = guide.cityName || guide.marketName;
+  const newsletter = getAvailableNewsletterMarket(guide.marketSlug);
   const province = MARKET_PROVINCE[guide.marketName];
   const locationLabel = province ? `${cityOrMarket}, ${province}` : cityOrMarket;
 
@@ -279,8 +281,12 @@ export function GuideDetailView({
 
         {/* ── Weekly Picks signup — after the featured content and its
             Browse CTA (left intact as the direct next step), before the
-            FAQ and More Guides. Fixed placement, same form as everywhere. */}
-        <WeeklyPicksSection placement="guide_end" variant="compact" layout="inline" />
+            FAQ and More Guides. Fixed placement, same form as everywhere,
+            for the guide's own market — omitted when that market has no
+            newsletter or its signup is switched off here. */}
+        {newsletter && (
+          <WeeklyPicksSection placement="guide_end" newsletter={newsletter} variant="compact" layout="inline" />
+        )}
 
         {/* ── FAQ ───────────────────────────────────────────────────────────── */}
         <GuideFaqSection faqs={faqs} />

@@ -1,5 +1,5 @@
 import { requestWeeklyPicksDoubleOptIn, type RequestWeeklyPicksDoubleOptInParams } from "@/lib/brevo/client";
-import { BrevoConfigError } from "@/lib/brevo/config";
+import { BrevoConfigError, NewsletterUnavailableError } from "@/lib/brevo/config";
 import { BrevoApiError } from "@/lib/brevo/errors";
 import { BrevoStagingGuardBlockedError } from "@/lib/brevo/stagingGuard";
 import { maskEmail } from "@/lib/brevo/maskEmail";
@@ -20,6 +20,8 @@ import {
   normalizeWeeklyPicksEmail,
   type WeeklyPicksSignupState,
 } from "./weeklyPicks";
+import { getNewsletterMarket, type NewsletterMarket } from "./newsletterMarkets";
+import { getAvailableNewsletterMarket } from "./newsletterAvailability";
 
 /**
  * Weekly Picks newsletter signup — the logic behind the
@@ -27,8 +29,14 @@ import {
  * kept here with injectable dependencies so it can be tested without
  * Turnstile, Brevo or Sentry.
  *
- * Order: field validation (no network) → Turnstile → one Brevo double
- * opt-in request. Brevo sends the confirmation email and owns the
+ * Order: field validation (no network) → market check → Turnstile → one
+ * Brevo double opt-in request.
+ *
+ * Market: the form names its newsletter market; the server accepts it only
+ * when that market's signup is switched on here (getAvailableNewsletterMarket)
+ * and resolves its Brevo list/template server-side. A missing, unknown or
+ * switched-off market is refused before Turnstile or Brevo — it never falls
+ * back to another market's audience. Brevo sends the confirmation email and owns the
  * subscriber, list membership, unsubscribes and blocklist; HHC stores
  * nothing and never resubscribes anyone.
  *
@@ -50,6 +58,7 @@ export type { WeeklyPicksSignupState };
 export type WeeklyPicksSignupInput = {
   email: unknown;
   placement: unknown;
+  market: unknown;
   turnstileToken: unknown;
   remoteIp: string | null;
 };
@@ -66,6 +75,8 @@ export type WeeklyPicksSignupDeps = {
   siteUrl: () => string;
   notifySlack: (text: string) => Promise<SlackResult>;
   environment: () => string;
+  /** The market's newsletter when its signup is switched on in this deployment, else null. */
+  availableMarket: (marketId: string) => NewsletterMarket | null;
 };
 
 export const defaultWeeklyPicksSignupDeps: WeeklyPicksSignupDeps = {
@@ -77,6 +88,7 @@ export const defaultWeeklyPicksSignupDeps: WeeklyPicksSignupDeps = {
   siteUrl: getSiteUrl,
   notifySlack: (text) => sendSlackAcquisitionNotification({ channel: "consumer-signup", text }),
   environment: () => resolveAnalyticsEnvironment(),
+  availableMarket: getAvailableNewsletterMarket,
 };
 
 export async function processWeeklyPicksSignup(
@@ -99,6 +111,15 @@ export async function processWeeklyPicksSignup(
   }
   const placement = input.placement;
 
+  // Only a tampered form, or a market switched off since the page loaded,
+  // names a market that isn't available here.
+  const known = getNewsletterMarket(input.market);
+  const market = known ? deps.availableMarket(known.marketId) : null;
+  if (!market) {
+    console.warn("[weeklyPicks/signup] market not available", { market: typeof input.market === "string" ? input.market : null });
+    return { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE };
+  }
+
   // ── 2. Turnstile — before any Brevo request ──────────────────────────────
   const token = typeof input.turnstileToken === "string" && input.turnstileToken ? input.turnstileToken : null;
   const verification = await deps.verifyTurnstile(token, input.remoteIp);
@@ -111,22 +132,29 @@ export async function processWeeklyPicksSignup(
   try {
     await deps.requestDoubleOptIn({
       email,
-      redirectionUrl: `${deps.siteUrl()}/weekly-picks/confirmed`,
+      redirectionUrl: `${deps.siteUrl()}${market.confirmedPath}`,
+      marketId: market.marketId,
     });
   } catch (err) {
-    return handleBrevoFailure(err, email, placement, deps);
+    return handleBrevoFailure(err, email, placement, market.marketId, deps);
   }
 
-  console.log("[weeklyPicks/signup] double opt-in requested", { placement, email: maskEmail(email) });
+  console.log("[weeklyPicks/signup] double opt-in requested", { placement, market: market.marketId, email: maskEmail(email) });
 
-  await notifySignupRequested(email, placement, deps);
+  await notifySignupRequested(email, placement, market.marketId, deps);
   return { status: "accepted" };
 }
 
-export function buildSignupRequestedSlackText(email: string, placement: string, environment: string): string {
+export function buildSignupRequestedSlackText(
+  email: string,
+  placement: string,
+  environment: string,
+  marketId: string
+): string {
   return [
     "*Newsletter signup requested*",
     `Email: ${email}`,
+    `Market: ${marketId}`,
     `Placement: ${placement}`,
     `Environment: ${environment}`,
     "Confirmation is handled by Brevo; this alert does not mean a new subscriber was confirmed.",
@@ -134,9 +162,14 @@ export function buildSignupRequestedSlackText(email: string, placement: string, 
 }
 
 /** Fire-and-forget in effect: logs a non-delivery, never throws. */
-async function notifySignupRequested(email: string, placement: string, deps: WeeklyPicksSignupDeps): Promise<void> {
+async function notifySignupRequested(
+  email: string,
+  placement: string,
+  marketId: string,
+  deps: WeeklyPicksSignupDeps
+): Promise<void> {
   try {
-    const text = buildSignupRequestedSlackText(email, placement, deps.environment());
+    const text = buildSignupRequestedSlackText(email, placement, deps.environment(), marketId);
     const slackResult = await deps.notifySlack(text);
     if (slackResult !== "delivered" && slackResult !== "no-webhook") {
       console.error("[weeklyPicks/signup] Slack notification not delivered.", { result: slackResult });
@@ -150,6 +183,7 @@ function handleBrevoFailure(
   err: unknown,
   email: string,
   placement: string,
+  market: string,
   deps: WeeklyPicksSignupDeps
 ): WeeklyPicksSignupState {
   // Staging/local only — Production never throws this.
@@ -158,14 +192,21 @@ function handleBrevoFailure(
     return { status: "error", message: WEEKLY_PICKS_STAGING_BLOCKED_MESSAGE };
   }
 
+  // Switched off between the market check above and the request.
+  if (err instanceof NewsletterUnavailableError) {
+    console.warn("[weeklyPicks/signup] market not available at request time", { market });
+    return { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE };
+  }
+
   if (err instanceof BrevoConfigError) {
-    deps.reportError({ error: err, stage: "config", severity: "critical", context: { placement } });
+    deps.reportError({ error: err, stage: "config", severity: "critical", context: { placement, market } });
     return { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE };
   }
 
   if (err instanceof BrevoApiError) {
     const context = {
       placement,
+      market,
       errorClass: err.errorClass,
       httpStatus: err.status,
       brevoCode: err.brevoCode,
@@ -182,6 +223,6 @@ function handleBrevoFailure(
     return { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE };
   }
 
-  deps.reportError({ error: err, stage: "brevo-double-opt-in", severity: "critical", context: { placement } });
+  deps.reportError({ error: err, stage: "brevo-double-opt-in", severity: "critical", context: { placement, market } });
   return { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE };
 }

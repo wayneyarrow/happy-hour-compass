@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { isWeeklyPicksOfferedInMarket } from "@/lib/weeklyPicks/weeklyPicks";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,6 +27,12 @@ type Props = {
   consumerUser?: ConsumerUser | null;
   /** Featured Guides collection href, or null to omit "Guides" — see getFeaturedGuidesNavHref(). */
   featuredGuidesHref?: string | null;
+  /**
+   * This market's newsletter signup page, or null to omit "Newsletter" —
+   * resolved server-side by getNewsletterSignupHref() (the market's signup
+   * may be switched off in this deployment).
+   */
+  newsletterHref?: string | null;
 };
 
 const HEART_PATH =
@@ -40,9 +45,9 @@ export default function WebsiteHeader({
   cities,
   consumerUser,
   featuredGuidesHref = null,
+  newsletterHref = null,
 }: Props) {
   const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
-  const showNewsletter = isWeeklyPicksOfferedInMarket(marketId);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -173,10 +178,10 @@ export default function WebsiteHeader({
                 {link.label}
               </Link>
             ))}
-            {/* Central Okanagan newsletter — not offered in other markets. */}
-            {showNewsletter && (
+            {/* This market's newsletter — omitted where it has none / is switched off. */}
+            {newsletterHref && (
               <Link
-                href="/weekly-picks"
+                href={newsletterHref}
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-2 py-[7px] rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap"
               >
                 Newsletter
@@ -374,10 +379,10 @@ export default function WebsiteHeader({
                     </Link>
                   </li>
                 ))}
-                {showNewsletter && (
+                {newsletterHref && (
                   <li className="border-b border-gray-100">
                     <Link
-                      href="/weekly-picks"
+                      href={newsletterHref}
                       onClick={() => setMenuOpen(false)}
                       className="w-full flex items-center py-4 text-base font-medium text-gray-800 hover:text-amber-600 transition-colors"
                     >

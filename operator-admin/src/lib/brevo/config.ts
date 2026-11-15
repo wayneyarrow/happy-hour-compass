@@ -97,36 +97,94 @@ export type WeeklyPicksBrevoConfig = {
   testEmail: string | null;
 };
 
+// ─── Per-market newsletter audiences ─────────────────────────────────────────
+
 /**
- * Reads the account-free newsletter ("Your Happy Hour Plans", formerly
- * "Weekly Picks") double opt-in configuration (src/lib/weeklyPicks/). The
- * newsletter name is customer-facing copy, not a separate Brevo audience: BREVO_WEEKLY_PICKS_LIST_ID points at
- * the existing HHC Consumers list (the same list as Production's
- * BREVO_CONSUMER_LIST_ID), and confirmed signups join it alongside
- * consenting account holders.
+ * Each market's newsletter is its own Brevo audience (list + double opt-in
+ * template), read from that market's own environment variables. Must list
+ * exactly the markets in NEWSLETTER_MARKETS (src/lib/weeklyPicks/
+ * newsletterMarkets.ts — pinned by test).
  *
- * Sharing the list is safe with the consumer sync (consumerSync.ts): it only
- * removes a contact from the list on an observed true -> false change of an
- * account's marketing_consent (the /account toggle or a Brevo unsubscribe) —
- * a real withdrawal. Newsletter-only contacts have no profile and are never
- * touched, and an account still at marketing_consent=false is never removed
- * by a later login or profile save.
+ *   - enabledEnv: the market's signup is switched on only when this is
+ *     exactly "true" (fail closed). null = always on — Central Okanagan, the
+ *     original newsletter, whose signup has been public since 2026-10.
+ *   - listIdEnv / templateIdEnv: that market's Brevo IDs. Central Okanagan
+ *     keeps its original BREVO_WEEKLY_PICKS_* variables.
+ *
+ * Central Okanagan's list is the existing HHC Consumers list (the same list
+ * as Production's BREVO_CONSUMER_LIST_ID): confirmed signups join it
+ * alongside consenting account holders. Sharing it is safe with the
+ * consumer sync (consumerSync.ts): that only removes a contact on an
+ * observed true -> false change of an account's marketing_consent — a real
+ * withdrawal; newsletter-only contacts have no profile and are never
+ * touched. Every other market has its own list, which must differ from all
+ * of these (checked in getNewsletterBrevoConfig).
  *
  * Kept separate from getBrevoConfig() — matching
  * getExistingConsumerWelcomeListId()'s precedent above — so the account
- * sync never depends on the double opt-in template variable.
+ * sync never depends on a double opt-in template variable.
  */
-export function getWeeklyPicksBrevoConfig(): WeeklyPicksBrevoConfig {
+type NewsletterBrevoEnv = { enabledEnv: string | null; listIdEnv: string; templateIdEnv: string };
+
+export const NEWSLETTER_BREVO_ENV: Readonly<Record<string, NewsletterBrevoEnv>> = {
+  "central-okanagan": {
+    enabledEnv: null,
+    listIdEnv: "BREVO_WEEKLY_PICKS_LIST_ID",
+    templateIdEnv: "BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID",
+  },
+  "greater-san-diego": {
+    enabledEnv: "NEWSLETTER_SIGNUP_ENABLED_GREATER_SAN_DIEGO",
+    listIdEnv: "BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO",
+    templateIdEnv: "BREVO_NEWSLETTER_DOI_TEMPLATE_ID_GREATER_SAN_DIEGO",
+  },
+};
+
+/** Thrown when a signup names a market whose newsletter is unknown or switched off here. */
+export class NewsletterUnavailableError extends Error {
+  constructor(marketId: string) {
+    super(`Newsletter signup is not available for market "${marketId}".`);
+    this.name = "NewsletterUnavailableError";
+  }
+}
+
+/** True when `marketId` has a newsletter and its signup is switched on in this deployment. */
+export function isNewsletterSignupEnabledForMarket(marketId: string): boolean {
+  const env = Object.prototype.hasOwnProperty.call(NEWSLETTER_BREVO_ENV, marketId)
+    ? NEWSLETTER_BREVO_ENV[marketId]
+    : undefined;
+  if (!env) return false;
+  return env.enabledEnv === null || process.env[env.enabledEnv] === "true";
+}
+
+/**
+ * The Brevo double opt-in configuration for one market's newsletter. Never
+ * falls back to another market: an unknown or switched-off market throws
+ * NewsletterUnavailableError; a missing/malformed variable throws
+ * BrevoConfigError; and a market configured with another market's list ID
+ * throws BrevoConfigError rather than sending signups to that audience.
+ */
+export function getNewsletterBrevoConfig(marketId: string): WeeklyPicksBrevoConfig {
+  if (!isNewsletterSignupEnabledForMarket(marketId)) throw new NewsletterUnavailableError(marketId);
+  const env = NEWSLETTER_BREVO_ENV[marketId];
+
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
     throw new BrevoConfigError("BREVO_API_KEY is not set.");
   }
+  const listId = parsePositiveInt(process.env[env.listIdEnv], env.listIdEnv);
+  const doiTemplateId = parsePositiveInt(process.env[env.templateIdEnv], env.templateIdEnv);
 
-  const listId = parsePositiveInt(process.env.BREVO_WEEKLY_PICKS_LIST_ID, "BREVO_WEEKLY_PICKS_LIST_ID");
-  const doiTemplateId = parsePositiveInt(
-    process.env.BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID,
-    "BREVO_WEEKLY_PICKS_DOI_TEMPLATE_ID"
-  );
+  for (const [otherId, other] of Object.entries(NEWSLETTER_BREVO_ENV)) {
+    if (otherId === marketId) continue;
+    if (Number(process.env[other.listIdEnv]) === listId) {
+      throw new BrevoConfigError(`${env.listIdEnv} is the same list as ${other.listIdEnv} (${otherId}).`);
+    }
+  }
+  // The account-consent list (consumerSync.ts) is the original Central
+  // Okanagan audience in Production; a newer market must never share it.
+  if (env.enabledEnv !== null && Number(process.env.BREVO_CONSUMER_LIST_ID) === listId) {
+    throw new BrevoConfigError(`${env.listIdEnv} is the same list as BREVO_CONSUMER_LIST_ID.`);
+  }
 
   const rawTestEmail = process.env.BREVO_TEST_EMAIL;
   const testEmail = rawTestEmail ? normalizeEmail(rawTestEmail) : null;

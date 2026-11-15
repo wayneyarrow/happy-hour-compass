@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/siteUrl";
 import { MARKETS } from "@/lib/markets";
+import { NEWSLETTER_MARKETS } from "@/lib/weeklyPicks/newsletterMarkets";
+import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { getAllMarkets } from "@/lib/geo/geography";
 import { getPublishedVenuesForConsumer } from "@/lib/data/venues";
 import { getPublishedEventsForConsumer } from "@/lib/data/events";
@@ -109,6 +111,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl("/claim-your-venue") },
     { url: absoluteUrl("/careers") },
     { url: absoluteUrl("/weekly-picks") },
+    // Other markets' newsletter signup pages (/{market}/newsletter) — only
+    // where that market's signup is switched on in this deployment; the
+    // page 404s otherwise (see (website)/[market]/newsletter/page.tsx).
+    ...NEWSLETTER_MARKETS.filter(
+      (m) => m.signupPath === `/${m.marketId}/newsletter` && getAvailableNewsletterMarket(m.marketId)
+    ).map((m) => ({ url: absoluteUrl(m.signupPath) })),
     { url: absoluteUrl("/privacy") },
     { url: absoluteUrl("/terms") },
     // Market-agnostic primary discovery/search pages — see the module

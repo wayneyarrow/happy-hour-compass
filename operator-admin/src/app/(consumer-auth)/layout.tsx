@@ -10,6 +10,7 @@ import {
 } from "@/lib/geo/geography";
 import type { CityRecord } from "@/lib/geo/types";
 import { resolveMarketLocationLabel } from "@/lib/markets";
+import { getNewsletterSignupHref } from "@/lib/weeklyPicks/newsletterAvailability";
 
 // Consumer-facing sign-up/sign-in/forgot-password/reset-password pages — a
 // separate route group from (website), so it isn't wrapped by
@@ -51,6 +52,7 @@ export default async function ConsumerAuthLayout({ children }: { children: React
         currentCityName={currentCityName}
         cities={cities}
         consumerUser={null}
+        newsletterHref={getNewsletterSignupHref(market.id)}
       />
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">

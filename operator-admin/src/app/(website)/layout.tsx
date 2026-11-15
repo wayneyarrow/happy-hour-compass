@@ -17,6 +17,7 @@ import {
 import type { CityRecord } from "@/lib/geo/types";
 import { resolveMarketLocationLabel } from "@/lib/markets";
 import { getFeaturedGuidesNavHref } from "@/lib/data/featuredGuidesNav";
+import { getNewsletterSignupHref } from "@/lib/weeklyPicks/newsletterAvailability";
 
 // Public-website-only, additive to the existing first-party analytics
 // pipeline (src/lib/analytics.ts, @vercel/analytics, /api/track/*).
@@ -110,6 +111,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
           cities={cities}
           consumerUser={consumerUser}
           featuredGuidesHref={featuredGuidesHref}
+          newsletterHref={getNewsletterSignupHref(market.id)}
         />
 
         <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>

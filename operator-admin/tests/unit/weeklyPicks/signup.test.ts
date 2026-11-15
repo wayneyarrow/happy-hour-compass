@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { processWeeklyPicksSignup, type WeeklyPicksSignupDeps } from "../../../src/lib/weeklyPicks/signup";
 import type { RequestWeeklyPicksDoubleOptInParams } from "../../../src/lib/brevo/client";
 import { BrevoApiError } from "../../../src/lib/brevo/errors";
-import { BrevoConfigError } from "../../../src/lib/brevo/config";
+import { BrevoConfigError, NewsletterUnavailableError } from "../../../src/lib/brevo/config";
+import { getNewsletterMarket } from "../../../src/lib/weeklyPicks/newsletterMarkets";
 import { BrevoStagingGuardBlockedError } from "../../../src/lib/brevo/stagingGuard";
 import { TURNSTILE_FAILURE_MESSAGE } from "../../../src/lib/turnstile";
 import {
@@ -13,8 +14,15 @@ import {
 } from "../../../src/lib/weeklyPicks/weeklyPicks";
 
 function makeDeps(
-  opts: { turnstileOk?: boolean; brevo?: () => Promise<void>; slack?: () => Promise<"delivered" | "no-webhook" | "failed"> } = {}
+  opts: {
+    turnstileOk?: boolean;
+    brevo?: () => Promise<void>;
+    slack?: () => Promise<"delivered" | "no-webhook" | "failed">;
+    /** Markets whose signup is switched on (default: Central Okanagan and Greater San Diego). */
+    enabledMarkets?: string[];
+  } = {}
 ) {
+  const enabled = opts.enabledMarkets ?? ["central-okanagan", "greater-san-diego"];
   const calls = {
     turnstile: [] as Array<[string | null, string | null]>,
     brevo: [] as RequestWeeklyPicksDoubleOptInParams[],
@@ -39,6 +47,7 @@ function makeDeps(
       return opts.slack ? opts.slack() : "delivered";
     },
     environment: () => "staging",
+    availableMarket: (marketId) => (enabled.includes(marketId) ? getNewsletterMarket(marketId) : null),
   };
   return { deps, calls };
 }
@@ -46,6 +55,7 @@ function makeDeps(
 const VALID = {
   email: "  Wayne+WP@Example.com ",
   placement: "homepage_main",
+  market: "central-okanagan",
   turnstileToken: "tok",
   remoteIp: "203.0.113.5",
 };
@@ -68,7 +78,11 @@ test("every placement: no checkbox field needed (button is the consent action); 
     assert.deepEqual(result, { status: "accepted" });
     assert.equal(calls.turnstile.length, 1);
     assert.deepEqual(calls.brevo, [
-      { email: "wayne+wp@example.com", redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed" },
+      {
+        email: "wayne+wp@example.com",
+        redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed",
+        marketId: "central-okanagan",
+      },
     ]);
   }
 });
@@ -99,6 +113,7 @@ test("every placement: accepted, one Brevo request with normalized email, no att
     assert.deepEqual(calls.brevo[0], {
       email: "wayne+wp@example.com",
       redirectionUrl: "https://staging.happyhourcompass.com/weekly-picks/confirmed",
+      marketId: "central-okanagan",
     });
     assert.deepEqual(calls.turnstile[0], ["tok", "203.0.113.5"]);
   }
@@ -167,17 +182,71 @@ test("homepage split: 0 → bottom only; 1 → main only; 2+ → main after firs
   assert.deepEqual(splitSectionsAroundSignup(["a", "b", "c"]), { first: ["a"], rest: ["b", "c"], showMainSignup: true, showBottomSignup: true });
 });
 
+// ── Market routing ───────────────────────────────────────────────────────────
+
+test("Greater San Diego: one request for its own market, returning to its own confirmation page", async () => {
+  for (const placement of WEEKLY_PICKS_PLACEMENTS) {
+    const { deps, calls } = makeDeps();
+    const result = await processWeeklyPicksSignup({ ...VALID, placement, market: "greater-san-diego" }, deps);
+    assert.deepEqual(result, { status: "accepted" });
+    assert.deepEqual(calls.brevo, [
+      {
+        email: "wayne+wp@example.com",
+        redirectionUrl: "https://staging.happyhourcompass.com/greater-san-diego/newsletter/confirmed",
+        marketId: "greater-san-diego",
+      },
+    ]);
+    assert.ok(calls.slack[0].includes("Market: greater-san-diego"));
+  }
+});
+
+test("missing, unknown or switched-off market → generic error, no Turnstile, Brevo or Slack — never another market", async () => {
+  const cases: Array<{ market: unknown; enabledMarkets?: string[] }> = [
+    { market: undefined },
+    { market: null },
+    { market: "" },
+    { market: "nowhere" },
+    { market: "greater-vancouver" }, // a real market with no newsletter
+    { market: ["greater-san-diego"] },
+    { market: "greater-san-diego", enabledMarkets: ["central-okanagan"] }, // San Diego switched off
+    { market: "central-okanagan", enabledMarkets: ["greater-san-diego"] },
+  ];
+  for (const c of cases) {
+    const { deps, calls } = makeDeps({ enabledMarkets: c.enabledMarkets });
+    const result = await processWeeklyPicksSignup({ ...VALID, market: c.market }, deps);
+    assert.deepEqual(result, { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE }, JSON.stringify(c));
+    assert.equal(calls.turnstile.length + calls.brevo.length + calls.slack.length, 0, JSON.stringify(c));
+  }
+});
+
+test("market switched off between the check and the request → generic error, no incident report", async () => {
+  const { deps, calls } = makeDeps({ brevo: async () => { throw new NewsletterUnavailableError("greater-san-diego"); } });
+  const result = await processWeeklyPicksSignup({ ...VALID, market: "greater-san-diego" }, deps);
+  assert.deepEqual(result, { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE });
+  assert.equal(calls.reports.length + calls.slack.length, 0);
+});
+
+test("a misconfigured market reports critically with its market and is never accepted", async () => {
+  const { deps, calls } = makeDeps({
+    brevo: async () => { throw new BrevoConfigError("BREVO_NEWSLETTER_LIST_ID_GREATER_SAN_DIEGO is not set."); },
+  });
+  const result = await processWeeklyPicksSignup({ ...VALID, market: "greater-san-diego" }, deps);
+  assert.deepEqual(result, { status: "error", message: WEEKLY_PICKS_GENERIC_ERROR_MESSAGE });
+  assert.deepEqual(calls.reports, [{ stage: "config", severity: "critical", context: { placement: "homepage_main", market: "greater-san-diego" } }]);
+});
+
 // ── Slack: "Newsletter signup requested" ─────────────────────────────────────
 
 const EXPECTED_SLACK_TEXT = [
   "*Newsletter signup requested*",
   "Email: wayne+wp@example.com",
+  "Market: central-okanagan",
   "Placement: homepage_main",
   "Environment: staging",
   "Confirmation is handled by Brevo; this alert does not mean a new subscriber was confirmed.",
 ].join("\n");
 
-test("Slack: accepted request posts exactly one alert with email, placement and environment", async () => {
+test("Slack: accepted request posts exactly one alert with email, market, placement and environment", async () => {
   const { deps, calls } = makeDeps();
   const result = await processWeeklyPicksSignup(VALID, deps);
   assert.deepEqual(result, { status: "accepted" });
@@ -188,6 +257,7 @@ test("Slack: nothing is sent for validation, placement or Turnstile failures", a
   const cases = [
     { input: { ...VALID, email: "nope" } },
     { input: { ...VALID, placement: "x" } },
+    { input: { ...VALID, market: "nowhere" } },
     { input: VALID, turnstileOk: false },
   ];
   for (const c of cases) {

@@ -35,24 +35,31 @@ test("only the Brevo client calls the double opt-in endpoint, and only the share
 
 test("every placement renders the shared form with a fixed placement id", () => {
   const usages: Array<[string, string]> = [
-    ["app/(website)/weekly-picks/page.tsx", 'placement="weekly_picks_page"'],
+    ["app/(website)/weekly-picks/NewsletterSignupPageContent.tsx", 'placement="weekly_picks_page"'],
     ["app/(website)/page.tsx", 'placement="homepage_main"'],
     ["app/(website)/page.tsx", 'placement="homepage_bottom"'],
     ["app/(website)/[market]/guides/[slug]/GuideDetailView.tsx", 'placement="guide_end"'],
   ];
   for (const [file, needle] of usages) assert.ok(read(file).includes(needle), `${file} ${needle}`);
   const formUsers = ALL.filter((f) => /<WeeklyPicksSignupForm\b/.test(f.code)).map((f) => f.file).sort();
-  assert.deepEqual(formUsers, ["app/(website)/weekly-picks/WeeklyPicksSection.tsx", "app/(website)/weekly-picks/page.tsx"]);
+  assert.deepEqual(formUsers, [
+    "app/(website)/weekly-picks/NewsletterSignupPageContent.tsx",
+    "app/(website)/weekly-picks/WeeklyPicksSection.tsx",
+  ]);
 });
 
-test("analytics: one GA4 event with only the placement; no Vercel trackEvent; confirmed page records nothing", () => {
+test("analytics: one GA4 event with only the placement and market id; no Vercel trackEvent; confirmed page records nothing", () => {
   const form = read(FORM);
   const calls = form.match(/trackGA4Event\([^)]*\)/g) ?? [];
-  assert.deepEqual(calls, ['trackGA4Event("weekly_picks_signup_requested", { placement })']);
+  assert.deepEqual(calls, ['trackGA4Event("weekly_picks_signup_requested", { placement, market: newsletter.marketId })']);
   assert.ok(!/trackEvent\(/.test(form));
   const confirmed = read("app/(website)/weekly-picks/confirmed/page.tsx");
   assert.ok(!/track(GA4)?Event|sendGAEvent/.test(confirmed));
   assert.ok(/redirect\("\/weekly-picks\/confirmed"\)/.test(confirmed), "query string is stripped server-side");
+  const marketConfirmed = read("app/(website)/[market]/newsletter/confirmed/page.tsx");
+  assert.ok(!/track(GA4)?Event|sendGAEvent/.test(marketConfirmed));
+  assert.ok(/redirect\(newsletter\.confirmedPath\)/.test(marketConfirmed), "other markets strip the query string too");
+  assert.ok(!/track(GA4)?Event|sendGAEvent/.test(read("app/(website)/weekly-picks/NewsletterConfirmedContent.tsx")));
 });
 
 test("consent: one form, no checkbox or sender line; button + notice with Privacy Policy and contact links", () => {
@@ -83,9 +90,10 @@ test("Weekly Picks never touches account identifiers or the blocklist", () => {
   assert.ok(!/emailBlacklisted|updateEnabled|FIRSTNAME|EXT_ID|attributes/.test(body), "DOI request sends no attributes and never touches the blocklist");
 });
 
-test("header: Newsletter link to /weekly-picks on desktop and mobile; Consumer Sign In unchanged", () => {
+test("header: Newsletter link to the market's signup page on desktop and mobile; Consumer Sign In unchanged", () => {
   const header = read("app/(website)/WebsiteHeader.tsx");
-  assert.equal((header.match(/href="\/weekly-picks"/g) ?? []).length, 2);
+  assert.equal((header.match(/\{newsletterHref && \(/g) ?? []).length, 2);
+  assert.equal((header.match(/href=\{newsletterHref\}/g) ?? []).length, 2);
   assert.equal((header.match(/^\s*Newsletter$/gm) ?? []).length, 2);
   assert.equal((header.match(/Consumer Sign In/g) ?? []).length, 2);
   assert.equal((header.match(/href="\/sign-in"/g) ?? []).length, 2);

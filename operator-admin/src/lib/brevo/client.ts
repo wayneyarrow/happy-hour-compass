@@ -1,4 +1,4 @@
-import { getBrevoConfig, getWeeklyPicksBrevoConfig, normalizeEmail } from "./config";
+import { getBrevoConfig, getNewsletterBrevoConfig, normalizeEmail } from "./config";
 import {
   assertAllowedToSyncEmail,
   isEnqueueAllowedInThisEnvironment,
@@ -252,14 +252,22 @@ export type RequestWeeklyPicksDoubleOptInParams = {
   email: string;
   /** Where Brevo sends the person after they click the confirmation link. */
   redirectionUrl: string;
+  /**
+   * The newsletter market (NEWSLETTER_MARKETS). Its own Brevo list and
+   * template are resolved here, server-side (getNewsletterBrevoConfig) —
+   * an unknown, switched-off or misconfigured market throws before any
+   * request and never falls back to another market's audience.
+   */
+  marketId: string;
 };
 
 /**
  * Asks Brevo to run its own double opt-in for the account-free newsletter
  * signup: POST /v3/contacts/doubleOptinConfirmation. Brevo sends the
- * confirmation email (its DOI template) and only adds the contact to the
- * HHC Consumers list (BREVO_WEEKLY_PICKS_LIST_ID) once the link is clicked.
- * HHC stores nothing.
+ * confirmation email (the market's DOI template) and only adds the contact
+ * to that market's list once the link is clicked — Central Okanagan: the
+ * HHC Consumers list (BREVO_WEEKLY_PICKS_LIST_ID); other markets: their own
+ * list (NEWSLETTER_BREVO_ENV). HHC stores nothing.
  *
  * Sends no contact attributes at all — an existing contact's names,
  * identifiers and other attributes stay exactly as they are — and never
@@ -279,7 +287,7 @@ export type RequestWeeklyPicksDoubleOptInParams = {
  * because a DOI call sends a real email to the address.
  */
 export async function requestWeeklyPicksDoubleOptIn(params: RequestWeeklyPicksDoubleOptInParams): Promise<void> {
-  const config = getWeeklyPicksBrevoConfig();
+  const config = getNewsletterBrevoConfig(params.marketId);
 
   if (!isEnqueueAllowedInThisEnvironment(params.email, config.testEmail)) {
     throw new BrevoStagingGuardBlockedError(params.email);
