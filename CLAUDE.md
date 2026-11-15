@@ -587,6 +587,17 @@ Always include `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;` even if n
 
 ---
 
+## Market Venue Seeding — standing rule
+
+**Before starting any HHC venue seeding work** (planning a market or batch, researching candidates, building seed CSVs, sourcing stock photos, importing or publishing seeds), first:
+
+1. Read [`docs/operations/MARKET_SEEDING_PLAYBOOK.md`](docs/operations/MARKET_SEEDING_PLAYBOOK.md) — the end-to-end workflow (coverage planning, venue-owned verification, batch CSVs, stock photos, dry run → approved draft import → approved guarded publish → logged-out Production checks), with the Greater San Diego examples and the next-market checklist.
+2. Check saved HHC project memory (the `MEMORY.md` index and the seeding-related entries it links) for current state, holds, open decisions and where in-progress batch work is saved.
+
+Every seeding database write still needs Wayne's explicit approval for that specific action (draft import and publication are separate approvals).
+
+---
+
 ## Seeded Market Launch Prep — Google Places Refresh Tool
 
 When preparing any previously-seeded market for activation/launch (Central Okanagan was the pilot; this applies equally to Greater Vancouver, Seattle, Toronto, or any future market), run the **Seeded Venue Refresh** tool before the separate manual Happy Hour certification pass:
