@@ -596,6 +596,8 @@ Always include `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;` even if n
 
 Every seeding database write still needs Wayne's explicit approval for that specific action (draft import and publication are separate approvals).
 
+**Daily Specials and recurring Events** for already-seeded venues follow the companion [`docs/operations/MARKET_CONTENT_SEEDING_PLAYBOOK.md`](docs/operations/MARKET_CONTENT_SEEDING_PLAYBOOK.md) (tools: `operator-admin/scripts/seeding/contentSeedBatch.ts`, `prepEventImages.cjs`, `checkDailySpecials.ts`, `checkEvents.ts`). Read it before researching, building, importing or publishing either; event image upload, draft import, publish, rollback and Storage cleanup are each separate approvals.
+
 ---
 
 ## Seeded Market Launch Prep — Google Places Refresh Tool

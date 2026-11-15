@@ -1,0 +1,625 @@
+{
+ "mode": "apply",
+ "kind": "specials",
+ "market": "greater-san-diego",
+ "appliedAt": "2026-11-15",
+ "apply_sql_sha256": "28d913a103c6471e7672472e8229d77d62e498eaa47c34756d7b7c2aa88b04ad",
+ "via": "supabase db query --linked -f apply.sql (Wayne approved draft import 2026-11-15)",
+ "drafts_inserted": 99,
+ "table_before": 130,
+ "table_after": 229,
+ "other_rows_changed": 0,
+ "draft_verify": "ALL PASS (99 rows)",
+ "hidden_check": "4/4 passed (43 venue pages, GSD + CO specials pages, GSD homepage)",
+ "results": [
+  {
+   "id": "64cd7020-eea3-4257-b5f9-5238bd18bac2",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Mojito Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "a317c59a-b9c1-486e-9257-bb6e7fc83eba",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Tequila Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3ff54805-dd9f-466d-83e3-db274f653c63",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "d48cef3d-96b8-4e64-b1f4-398ffed7c8a8",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Vodka Thursday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "5831a1fe-465b-4708-b3c3-8a5211fe4b95",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Old Fashioned Friday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "4432516f-55ec-4774-bd0e-a7483eb12dd6",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Whiskey Saturday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "a8c33fd7-8789-4287-b1e4-243ffdea4d63",
+   "venue": "chula-vista-casa-nori-sushi-bar-grill",
+   "title": "Sake Sunday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "ea45b177-8815-425e-bfec-f0b5c66ab9e7",
+   "venue": "chula-vista-galley-at-the-marina",
+   "title": "Wings & a Drink Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "f56ee654-b865-433a-b21d-75b9ab50a655",
+   "venue": "chula-vista-galley-at-the-marina",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "10fc12d3-485f-4bf6-9f4c-3c1d96b8a438",
+   "venue": "chula-vista-galley-at-the-marina",
+   "title": "Burger & a Drink Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8c4c7ad1-033e-4ba6-a516-092e240975ce",
+   "venue": "chula-vista-galley-at-the-marina",
+   "title": "Fish & Chips Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "ae95bb4b-79c7-4800-a8de-e9f516c1cb65",
+   "venue": "chula-vista-p-f-changs-otay-ranch",
+   "title": "Wine Wednesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "2ff0e127-6a5a-43e1-806f-e440eb0a944e",
+   "venue": "chula-vista-savoie-italian-eatery",
+   "title": "Martini Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "0a100f38-29b5-42a4-abb5-08afbaf6fba9",
+   "venue": "chula-vista-savoie-italian-eatery",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "c8d030ed-5473-40a7-b3b6-4bbdd9bfaaf8",
+   "venue": "chula-vista-savoie-italian-eatery",
+   "title": "Sunday Bottomless Mimosas",
+   "outcome": "inserted"
+  },
+  {
+   "id": "5323aada-e92d-4cbf-9f03-641bbffdadc9",
+   "venue": "encinitas-union-kitchen-tap",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "e18d6335-a743-4470-91c2-fd2784ad0e5f",
+   "venue": "escondido-osullivans-irish-pub",
+   "title": "Early Bird Special",
+   "outcome": "inserted"
+  },
+  {
+   "id": "87c92b0f-ce4c-43d7-afa4-73eb16a8a0c5",
+   "venue": "escondido-osullivans-irish-pub",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "a52bca33-daa7-494e-b5c1-a07d1ec6cd7c",
+   "venue": "escondido-osullivans-irish-pub",
+   "title": "Pie & a Pint",
+   "outcome": "inserted"
+  },
+  {
+   "id": "81cd1641-dc40-403e-bfff-5d9a54cb4d5b",
+   "venue": "escondido-osullivans-irish-pub",
+   "title": "Wing Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "4cd7126b-461e-4683-a1eb-90d7003e247c",
+   "venue": "escondido-osullivans-irish-pub",
+   "title": "Brunch Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "a6d8aee8-a54b-404e-bf02-4d772692844d",
+   "venue": "la-mesa-aromi-italian",
+   "title": "Wine Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "405f73b2-02ad-4092-b51a-cb40626fdf5b",
+   "venue": "la-mesa-casa-gabriela",
+   "title": "Margarita Tuesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "314216cc-e834-4525-a113-bfae41bba647",
+   "venue": "la-mesa-hacienda-cazadores",
+   "title": "Wednesday Date Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "ea668c62-3731-4c1a-b8dc-7f106c110afe",
+   "venue": "la-mesa-mastiff-kitchen",
+   "title": "Pizza-Par-Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "b5dc74c8-0938-4939-8c0f-c71bc2e9e709",
+   "venue": "la-mesa-mastiff-kitchen",
+   "title": "Wine-Down Wednesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "f0733dc9-f980-47cb-95e6-279bb7c10d89",
+   "venue": "la-mesa-mastiff-kitchen",
+   "title": "Smash-n-Glass",
+   "outcome": "inserted"
+  },
+  {
+   "id": "d83be372-0511-483d-a5cb-7145587807c3",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Sunday Brunch Drinks",
+   "outcome": "inserted"
+  },
+  {
+   "id": "e4237c1a-9f73-4946-b41f-94b503e57246",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Monday Drink Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "b4a04df0-782a-488c-9a6a-45c1dbee9775",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Tequila Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "63f54d2e-34a0-4195-b000-c3b2b2ecda99",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "6e41f98f-7d31-4778-92e8-17630f64d767",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Thursday Drink Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "713ad09b-90ad-4986-b75d-469feab75f10",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Friday Shot Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8a3a8258-48ad-4d17-9dda-000149616d72",
+   "venue": "la-mesa-the-regal-bar",
+   "title": "Saturday Drink Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "83cd96f8-d6cd-4e1a-b6db-c7e20e73880c",
+   "venue": "lakeside-eastbound-bar-grill",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "992bc00a-ca95-46b1-8640-342d6a6dde4b",
+   "venue": "lakeside-eastbound-bar-grill",
+   "title": "$20 Pitchers",
+   "outcome": "inserted"
+  },
+  {
+   "id": "7058a468-a1e7-4434-88a8-5f28b2af9011",
+   "venue": "oceanside-bier-garden",
+   "title": "Weekend Bottomless Mimosas",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3391363c-49e6-4fc9-a3eb-ea0d02c936cd",
+   "venue": "san-diego-carnitas-snack-shack-embarcadero",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "880db762-f751-4864-b8a7-ba9ff074a904",
+   "venue": "san-diego-coin-op-game-room-north-park",
+   "title": "Late Night Hot Dog",
+   "outcome": "inserted"
+  },
+  {
+   "id": "57588fe0-d965-467f-b44b-89d0e436d6df",
+   "venue": "san-diego-common-theory",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "4b028ffe-0169-47c9-99d4-4a0042869516",
+   "venue": "san-diego-eureka-utc",
+   "title": "Half-Off Smash Burger Wednesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "e5505a9a-ad1a-4034-bc0c-26b494f7b923",
+   "venue": "san-diego-gaslamp-tavern",
+   "title": "Monday Mules",
+   "outcome": "inserted"
+  },
+  {
+   "id": "0df43a63-db8f-4902-8b51-622cb7521e62",
+   "venue": "san-diego-gaslamp-tavern",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3f4da079-ca26-46a4-bcdc-5d3625b285b5",
+   "venue": "san-diego-gaslamp-tavern",
+   "title": "Wing Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "003989de-02b4-4101-90e7-22f81a838e33",
+   "venue": "san-diego-gaslamp-tavern",
+   "title": "Thursday Specials",
+   "outcome": "inserted"
+  },
+  {
+   "id": "6941893d-83dc-42e1-8a6b-755310a24bd6",
+   "venue": "san-diego-gossip-grill",
+   "title": "Weekend Brunch Drinks",
+   "outcome": "inserted"
+  },
+  {
+   "id": "12ddfe66-532d-43ec-885e-fa07c8b07d2f",
+   "venue": "carlsbad-bluewater-grill",
+   "title": "Wine Wednesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "fca74e06-91b7-4409-9a9d-4b0aec30e719",
+   "venue": "san-diego-knotty-barrel-east-village",
+   "title": "Weekend Brunch Drinks",
+   "outcome": "inserted"
+  },
+  {
+   "id": "157bad54-1130-4d8b-a513-6028c90e32da",
+   "venue": "san-diego-knotty-barrel-east-village",
+   "title": "Knotty Wednesday Lunch",
+   "outcome": "inserted"
+  },
+  {
+   "id": "2f3ff91f-932a-4a13-9be2-7d91797c4197",
+   "venue": "san-diego-knotty-barrel-east-village",
+   "title": "Half-Off Wine Bottles",
+   "outcome": "inserted"
+  },
+  {
+   "id": "cfa6bb66-7906-46e7-8511-ee625719f5a0",
+   "venue": "san-diego-la-dona",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "168f5643-b5f9-47f9-9fc8-c2d9d61775f7",
+   "venue": "san-diego-lionfish-pendry",
+   "title": "Martini Tuesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "650c0c33-446c-4a13-9254-bf59a1478501",
+   "venue": "san-diego-lionfish-pendry",
+   "title": "Oyster Wednesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "71c8f4bb-8829-4688-ae65-8f9e6e853b6d",
+   "venue": "san-diego-lionfish-pendry",
+   "title": "$26 Girl Dinner",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8818e9a4-56a8-4778-97a9-1afa1a820a67",
+   "venue": "san-diego-nautilus-tavern",
+   "title": "Burger & a Beer Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "74448124-d10a-49d4-b014-d3a603a9cea1",
+   "venue": "san-diego-nautilus-tavern",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "893497b9-6aba-417c-8ce7-7a14c0549461",
+   "venue": "san-diego-nautilus-tavern",
+   "title": "Wine & Wings Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "347dacb3-935c-4788-9ccf-fde4500204d3",
+   "venue": "san-diego-puesto-la-jolla",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "eefbdc9c-9ebc-4472-a36c-b2b7bfeff53a",
+   "venue": "san-diego-puesto-mission-valley",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "824b7129-e778-4ff9-8171-ca18e5b28286",
+   "venue": "san-diego-puesto-the-headquarters-seaport-district",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "0154cc99-0b3b-4e68-9965-146663ede92b",
+   "venue": "san-diego-queenstown-public-house",
+   "title": "No Tariff Mondays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "fb397b9c-062c-425a-8554-f5026fb2dd4e",
+   "venue": "san-diego-queenstown-public-house",
+   "title": "Tuesday Burger and a Beer",
+   "outcome": "inserted"
+  },
+  {
+   "id": "5eb54cb6-b5b5-4384-87bc-28aaa92d751d",
+   "venue": "san-diego-queenstown-public-house",
+   "title": "Wine Thursday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "ff82bf9f-eb5d-4d11-bfbc-239005971f17",
+   "venue": "san-diego-south-beach-bar-grille",
+   "title": "Bubble Bottle Sunday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8c6f3fd5-e593-442d-b710-076a2a289068",
+   "venue": "san-diego-south-beach-bar-grille",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "870a417d-35bf-470f-a72e-787d77920806",
+   "venue": "san-diego-south-beach-bar-grille",
+   "title": "Taco Thursday & Pint Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "e4f57cce-920a-4589-8bad-add24c081f98",
+   "venue": "san-diego-south-beach-bar-grille",
+   "title": "Fresh Oyster Friday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "753ba7dc-5f62-4492-9773-f19ac64a5ecc",
+   "venue": "san-diego-south-beach-bar-grille",
+   "title": "Saturday Brunch Drinks",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8cab455e-6c34-4145-9be0-bb7cd99b1c3b",
+   "venue": "san-diego-tahona-mezcaleria",
+   "title": "$1 Oyster Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "9ecc7f43-1c2c-42ea-9120-bf914bbefdd1",
+   "venue": "san-diego-tahona-mezcaleria",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "0fd3a179-e2ff-455c-b2ea-9304b70f9422",
+   "venue": "san-diego-tahona-mezcaleria",
+   "title": "Wing Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "52327359-87b0-41d2-8211-1b307bb51e93",
+   "venue": "san-diego-tahona-mezcaleria",
+   "title": "Sunday Dinner for Two",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3177e221-6172-47da-b55b-3e77d2b2ec7a",
+   "venue": "san-diego-the-3rd-corner-ocean-beach",
+   "title": "Wine Wednesday Burger",
+   "outcome": "inserted"
+  },
+  {
+   "id": "bb69c2b4-3326-43fa-b36b-39455d4bd093",
+   "venue": "san-diego-the-3rd-corner-ocean-beach",
+   "title": "No-Corkage Thursday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "8d17abee-81f1-4fdb-9944-2be5b98ce4f3",
+   "venue": "san-diego-the-bowl-ocean-beach",
+   "title": "Sapporo Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "4b56f422-0660-4147-a564-b941a102f536",
+   "venue": "san-diego-the-duck-dive",
+   "title": "Burger & Beer Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "424f9bae-2919-4f3a-9a7e-e6e6d56ce541",
+   "venue": "san-diego-the-duck-dive",
+   "title": "Industry Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "20d143cb-e180-497d-9fac-31b964e438a2",
+   "venue": "san-diego-the-duck-dive",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "efb8b6b6-15a5-4942-a7da-ee991bd26ec8",
+   "venue": "san-diego-the-duck-dive",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "e1fe6907-7e70-466b-a992-9d0101b874eb",
+   "venue": "san-diego-the-duck-dive",
+   "title": "Old Fashioned Thursdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "f0cffa65-a529-4846-9a64-c00acb1cf4ff",
+   "venue": "san-diego-the-local-pacific-beach",
+   "title": "Sunday Funday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "7c56b5d1-5c25-462f-a4a6-c4a1f7227be4",
+   "venue": "san-diego-the-local-pacific-beach",
+   "title": "Thursday Club",
+   "outcome": "inserted"
+  },
+  {
+   "id": "f3d51f54-df02-47ad-b741-78dc1a0b8bf3",
+   "venue": "san-diego-the-loma-club-bar-grill",
+   "title": "Half-Off Wine Bottles",
+   "outcome": "inserted"
+  },
+  {
+   "id": "6f6b163a-7bf0-4260-a5b6-fed1d7143ca6",
+   "venue": "san-diego-the-rabbit-hole",
+   "title": "Taco Tuesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "50d44cb4-525e-42a7-a0db-fb6d85ebda37",
+   "venue": "san-diego-urban-mos",
+   "title": "$8 All-You-Can-Eat Spaghetti",
+   "outcome": "inserted"
+  },
+  {
+   "id": "b17cb26f-f658-4c98-9b72-c9ccd1c7f5d9",
+   "venue": "san-diego-waterbar",
+   "title": "Tacos & Tequila Tuesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "093a002f-1999-4b2f-a95c-75deba472dea",
+   "venue": "san-diego-waterbar",
+   "title": "Oyster Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "1a25c8cf-05ba-4bcb-97ad-6cc6ed62ff5b",
+   "venue": "san-diego-wheat-water",
+   "title": "Burger & Beer Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "1d4c3c47-fd2d-43f6-a6cb-72cc9a06f276",
+   "venue": "san-diego-wheat-water",
+   "title": "Wine Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "5990fb47-0457-43d5-8ae7-3482e7d47a84",
+   "venue": "san-diego-wheat-water",
+   "title": "$3 Off Apps",
+   "outcome": "inserted"
+  },
+  {
+   "id": "7586912c-e023-4e86-9bef-5956a834e200",
+   "venue": "san-diego-wheat-water",
+   "title": "Aloha Pizza & a Mai Tai",
+   "outcome": "inserted"
+  },
+  {
+   "id": "698b5b1a-948b-4fb8-9b2b-710ac2c21956",
+   "venue": "san-diego-wheat-water",
+   "title": "Tacos & Margs",
+   "outcome": "inserted"
+  },
+  {
+   "id": "bff75a31-0f81-4217-bd39-4529fcd66547",
+   "venue": "san-diego-wonderland-ocean-pub",
+   "title": "Mussel Up Monday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3f535d7c-3603-496e-b3a1-74d4f0b85127",
+   "venue": "san-diego-working-class",
+   "title": "Wing Night",
+   "outcome": "inserted"
+  },
+  {
+   "id": "b5c9ec6f-0f4b-4ca2-9c08-108ba2360c4d",
+   "venue": "san-marcos-draft-republic",
+   "title": "Tacos & Tequila Tuesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "a2d45fde-1deb-4657-b85b-9cf8f0ae0226",
+   "venue": "solana-beach-pillbox-tavern",
+   "title": "Burger Mondays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "3f3f6125-dce6-4f54-8e67-78c7777285d8",
+   "venue": "solana-beach-pillbox-tavern",
+   "title": "Taco Tuesdays",
+   "outcome": "inserted"
+  },
+  {
+   "id": "16de0ee3-1a3d-4140-9824-6bb504b85d80",
+   "venue": "solana-beach-pillbox-tavern",
+   "title": "Wing Wednesday",
+   "outcome": "inserted"
+  },
+  {
+   "id": "ccdb04dc-a872-4142-a8d1-834e9f20b3a3",
+   "venue": "solana-beach-pillbox-tavern",
+   "title": "Thirsty Thursdays",
+   "outcome": "inserted"
+  }
+ ],
+ "publish": {
+  "publishedAt": "2026-11-15T15:41:52Z",
+  "publish_sql_sha256": "d409705f900ed6809db4324d3120be168c8ff7a51c4195bf9d0bfc68106fbd09",
+  "via": "supabase db query --linked -f publish.sql (Wayne approved publication 2026-11-15)",
+  "published_now": 99,
+  "targeted": 99,
+  "audit": "daily_special_bulk_published, count 99, 99 ids",
+  "published_verify": "ALL PASS (99 rows)",
+  "snapshot_diff": "229 rows before/after; only the 99 batch rows changed, fields is_published + updated_at; Central Okanagan 130/129 unchanged",
+  "logged_out": "checkDailySpecials published 2/2: 43 venue pages show all 99; GSD /website-daily-specials links all 99 (\"99 Daily Specials\"); CO page still 120",
+  "note": "GSD homepage has no Today's Specials rail (no GSD homepage section yet) \u2014 specials not on GSD homepage; CO homepage rail unchanged (6 links).",
+  "held": [
+   "san-diego-gaslamp-tavern / Friday Specials"
+  ]
+ }
+}

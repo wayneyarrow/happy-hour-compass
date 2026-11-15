@@ -1,0 +1,16 @@
+venue_slug,title,status,reason
+la-mesa-the-riviera-supper-club,Wing Wednesday,held,Label only; no price/terms found in text.
+national-city-cafe-la-maze,Tomahawk & Tequila Tuesdays,held,No price.
+san-diego-dirty-birds-liberty-station,All-You-Can-Eat Wings,held,Brand-wide specials page — confirm it applies to Liberty Station (precedent: brand-wide offers that never name the location are held).
+san-diego-dirty-birds-liberty-station,Half-Off Boneless Wings,held,Brand-wide specials page — confirm it applies to Liberty Station (precedent: brand-wide offers that never name the location are held).
+san-diego-dirty-birds-liberty-station,Taco & Tequila Thursday,held,Brand-wide specials page — confirm it applies to Liberty Station (precedent: brand-wide offers that never name the location are held).
+san-diego-dirty-birds-liberty-station,Weekend Drink Specials,held,Brand-wide page — as above.
+san-diego-gaslamp-tavern,Friday Specials,held,Display check hold (2026-11-15): listed 10 AM–11 PM but Friday hours run to 1:30 AM — with the time dropped it would read as available all night.
+san-diego-jrdn-tower23,Pop Off,held,Day conflict on the venue's own page (Tuesday vs Wednesday) — hold under the conflict rule; ends 2026-12-30 (recurrence_end_date).
+san-diego-knotty-barrel-east-village,Football Pint Specials,held,Judgment call → hold: football-season offer with no venue-stated end date; would go stale after the season (no recurrence_end_date we can stand behind).
+san-diego-the-3rd-corner-ocean-beach,Sunday Night Prix Fixe,held,No price.
+san-diego-urban-mos,$10 Pitchers,held,Homepage shows a different weekend deal ($1 Bud Light drafts) — confirm current weekend offer.
+san-diego-urban-mos,Bubbles for Brunch,held,Listing gives only a $25 price — offer contents not captured.
+san-diego-waterbar,Sake to Me Thursdays,held,No price captured.
+san-diego-gossip-grill,All-You-Can-Eat Spaghetti Monday,excluded,Conflict: venue hours (site + stored) say closed Mondays; HH page's Monday offer can't be honoured.
+san-diego-urban-mos,Martini Happy Hour,excluded,"Duplicate of happy hour: venue HH Mon–Fri 2–7 PM already lists martinis (classified as happy hour, not a special)."

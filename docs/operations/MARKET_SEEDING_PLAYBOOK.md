@@ -9,6 +9,10 @@ Written from the Greater San Diego (GSD) rollout, November 2026: 81 public venue
 > out of date (for example, the coverage plan predates storing Google ratings for seeds, and the Step 2 runbook predates
 > Batches 2–4 and the reviewed shared-address exception). Where they differ from this playbook, follow this playbook.
 
+> **Daily Specials and recurring Events** for venues that are already seeded follow the companion
+> [`MARKET_CONTENT_SEEDING_PLAYBOOK.md`](MARKET_CONTENT_SEEDING_PLAYBOOK.md) (research and classification, batch inputs,
+> event images, approval-gated upload / draft import / publish, logged-out checks, rollback). Same ground rules as below.
+
 **Ground rules (apply to every step)**
 
 - **One shared database.** Staging and Production use the same Supabase project, so every data write is live in both the
@@ -49,6 +53,7 @@ Written from the Greater San Diego (GSD) rollout, November 2026: 81 public venue
 | `buildGuardedPublishSql.ts` | 5.4 — exact-ID publish SQL from the apply report + CSV | no DB; writes a .sql file |
 | `checkPublishedVenues.ts` | 5.5 — new pages, browsing, pins, search, sitemap | logged-out browser (analytics blocked) + DB read-only |
 | `analyticsBlock.ts` | shared by both browser checks | — |
+| `contentSeedBatch.ts`, `prepEventImages.cjs`, `checkDailySpecials.ts`, `checkEvents.ts`, `contentSqlHarness.mjs` | Daily Specials + Events — see [`MARKET_CONTENT_SEEDING_PLAYBOOK.md`](MARKET_CONTENT_SEEDING_PLAYBOOK.md) | see companion |
 
 ---
 

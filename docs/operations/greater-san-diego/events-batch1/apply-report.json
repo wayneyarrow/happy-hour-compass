@@ -1,0 +1,388 @@
+{
+ "kind": "events",
+ "market": "greater-san-diego",
+ "asOf": "2026-11-15",
+ "approval": "Wayne approved image upload, draft import and publication of this exact batch, and both original DRAG photos, 2026-11-15",
+ "images": {
+  "objects_uploaded": 39,
+  "errors": 0,
+  "verify": "IMAGES VERIFY: ALL PASS (39) \u2014 200, image/jpeg, byte-identical"
+ },
+ "draft": {
+  "apply_sql_sha256_prefix": "4cec8b8dc3245a90",
+  "drafts_inserted": 39,
+  "verify": "ALL PASS (39)",
+  "snapshot": "47\u219286 events; new == batch IDs; 0 other rows changed",
+  "hidden_check": "checkEvents draft 6/6"
+ },
+ "publish": {
+  "publish_sql_sha256_prefix": "22c354d9d0b026e4",
+  "publishedAt": "2026-11-15T16:07:37Z",
+  "published_now": 39,
+  "targeted": 39,
+  "audit": "event_bulk_published count 39",
+  "verify": "PUBLISHED VERIFY: ALL PASS (39)",
+  "snapshot": "only the 39 rows changed (is_published, updated_at); Central Okanagan 47/37 unchanged",
+  "logged_out": "checkEvents published 4/4: 39 URLs 200 + title + og:image; 18 venue pages link all; /website-events \"39 events\"; 39 in sitemap. CO /website-events still 22."
+ },
+ "held": [
+  {
+   "venue": "san-diego-common-theory",
+   "title": "Trivia Mondays",
+   "reason": "Weekly Mon 6\u20138 PM confirmed Nov 16 \u2013 Feb 8, 2027 but skips Dec 28 + Jan 4 and nothing confirmed after Feb 8; events have no end-date/exception fields, so ongoing weekly recurrence can't be represented truthfully."
+  }
+ ],
+ "results": [
+  {
+   "id": "05b66e23-2369-494b-ad78-7e5e68868252",
+   "slug": "chula-vista-savoie-italian-eatery-dj-night-fridays",
+   "title": "DJ Night",
+   "venue": "chula-vista-savoie-italian-eatery",
+   "first_date": "2026-11-20",
+   "image_slot": "DJ-3",
+   "outcome": "published"
+  },
+  {
+   "id": "95e2e784-03dc-4afd-a161-3e5dcaae0563",
+   "slug": "chula-vista-savoie-italian-eatery-dj-night-saturdays",
+   "title": "DJ Night",
+   "venue": "chula-vista-savoie-italian-eatery",
+   "first_date": "2026-11-21",
+   "image_slot": "DJ-3",
+   "outcome": "published"
+  },
+  {
+   "id": "84f72af6-8549-4797-b6fe-e65a4426314e",
+   "slug": "encinitas-union-kitchen-tap-trivia-on-tap",
+   "title": "Trivia on Tap",
+   "venue": "encinitas-union-kitchen-tap",
+   "first_date": "2026-11-17",
+   "image_slot": "TRIVIA-4",
+   "outcome": "published"
+  },
+  {
+   "id": "2de50885-0374-461d-8676-57f923394aec",
+   "slug": "encinitas-union-kitchen-tap-live-music-with-maxwell-the-great",
+   "title": "Live Music with Maxwell The Great",
+   "venue": "encinitas-union-kitchen-tap",
+   "first_date": "2026-11-18",
+   "image_slot": "LIVE-2",
+   "outcome": "published"
+  },
+  {
+   "id": "95e9c696-e656-43e9-bc23-9b012a762b21",
+   "slug": "la-mesa-the-regal-bar-karaoke-night",
+   "title": "Karaoke Night",
+   "venue": "la-mesa-the-regal-bar",
+   "first_date": "2026-11-20",
+   "image_slot": "KARAOKE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "7cb218cc-4faa-4eb1-b1f9-d0bbd9d15c7c",
+   "slug": "lakeside-eastbound-bar-grill-saturday-night-entertainment",
+   "title": "Saturday Night Entertainment",
+   "venue": "lakeside-eastbound-bar-grill",
+   "first_date": "2026-11-21",
+   "image_slot": "LIVE-4",
+   "outcome": "published"
+  },
+  {
+   "id": "7a788252-5433-4c36-b347-f940028e9cdc",
+   "slug": "lakeside-eastbound-bar-grill-sunday-trivia",
+   "title": "Sunday Trivia",
+   "venue": "lakeside-eastbound-bar-grill",
+   "first_date": "2026-11-15",
+   "image_slot": "TRIVIA-2",
+   "outcome": "published"
+  },
+  {
+   "id": "9db517db-8107-4502-95e6-cf8b03942710",
+   "slug": "national-city-cafe-la-maze-karaoke-sundays",
+   "title": "Karaoke Sundays",
+   "venue": "national-city-cafe-la-maze",
+   "first_date": "2026-11-15",
+   "image_slot": "KARAOKE-2",
+   "outcome": "published"
+  },
+  {
+   "id": "e62fe373-3412-4472-ba08-add7cc649ee8",
+   "slug": "oceanside-bier-garden-trivia-night",
+   "title": "Trivia Night",
+   "venue": "oceanside-bier-garden",
+   "first_date": "2026-11-18",
+   "image_slot": "TRIVIA-1",
+   "outcome": "published"
+  },
+  {
+   "id": "b860fccd-546a-4027-8c28-b1959ecdb330",
+   "slug": "san-diego-bali-hai-live-music-by-desi-mondays",
+   "title": "Live Music by Desi",
+   "venue": "san-diego-bali-hai",
+   "first_date": "2026-11-16",
+   "image_slot": "LIVE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "0b27dc4c-0edd-4dc7-8e50-1f0b09357568",
+   "slug": "san-diego-bali-hai-live-music-by-desi-tuesdays",
+   "title": "Live Music by Desi",
+   "venue": "san-diego-bali-hai",
+   "first_date": "2026-11-17",
+   "image_slot": "LIVE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "cdc1aa88-f222-4cfc-a863-58dd1f9b0097",
+   "slug": "san-diego-bali-hai-live-music-by-desi-wednesdays",
+   "title": "Live Music by Desi",
+   "venue": "san-diego-bali-hai",
+   "first_date": "2026-11-18",
+   "image_slot": "LIVE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "a5421e03-a130-4388-8e90-2674b6bc83fe",
+   "slug": "san-diego-bali-hai-live-music-by-desi-thursdays",
+   "title": "Live Music by Desi",
+   "venue": "san-diego-bali-hai",
+   "first_date": "2026-11-19",
+   "image_slot": "LIVE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "5e44b651-e093-4af5-afb5-2dfbbdc10b13",
+   "slug": "san-diego-bali-hai-live-music-by-desi-fridays",
+   "title": "Live Music by Desi",
+   "venue": "san-diego-bali-hai",
+   "first_date": "2026-11-20",
+   "image_slot": "LIVE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "3672d93f-c05f-4fc1-a573-3d887e4061ab",
+   "slug": "san-diego-carnitas-snack-shack-embarcadero-live-music-at-the-shack-saturdays",
+   "title": "Live Music at the Shack",
+   "venue": "san-diego-carnitas-snack-shack-embarcadero",
+   "first_date": "2026-11-21",
+   "image_slot": "DJ-5",
+   "outcome": "published"
+  },
+  {
+   "id": "5a186f45-9480-4698-b632-04cc05228120",
+   "slug": "san-diego-carnitas-snack-shack-embarcadero-live-music-at-the-shack-sundays",
+   "title": "Live Music at the Shack",
+   "venue": "san-diego-carnitas-snack-shack-embarcadero",
+   "first_date": "2026-11-15",
+   "image_slot": "DJ-5",
+   "outcome": "published"
+  },
+  {
+   "id": "7998c882-40db-4288-a939-ad43719355c6",
+   "slug": "san-diego-harland-brewing-scripps-ranch-weekly-trivia",
+   "title": "Weekly Trivia",
+   "venue": "san-diego-harland-brewing-scripps-ranch",
+   "first_date": "2026-11-18",
+   "image_slot": "TRIVIA-2",
+   "outcome": "published"
+  },
+  {
+   "id": "6e9bcca2-3d5a-49d5-b40f-51f8bc5c448a",
+   "slug": "san-diego-cannonball-acoustic-sunsets",
+   "title": "Acoustic Sunsets",
+   "venue": "san-diego-cannonball",
+   "first_date": "2026-11-19",
+   "image_slot": "LIVE-2",
+   "outcome": "published"
+  },
+  {
+   "id": "ef2d559e-eb7f-499a-b6d0-fd6acc82414f",
+   "slug": "san-diego-knotty-barrel-east-village-trivia-with-sunset-trivia",
+   "title": "Trivia with Sunset Trivia",
+   "venue": "san-diego-knotty-barrel-east-village",
+   "first_date": "2026-11-19",
+   "image_slot": "TRIVIA-4",
+   "outcome": "published"
+  },
+  {
+   "id": "638d8a2b-7dc6-4a84-a944-64e4b072e81f",
+   "slug": "san-diego-the-duck-dive-wednesday-trivia",
+   "title": "Wednesday Trivia",
+   "venue": "san-diego-the-duck-dive",
+   "first_date": "2026-11-18",
+   "image_slot": "TRIVIA-3",
+   "outcome": "published"
+  },
+  {
+   "id": "5f497682-762e-4094-8a53-6ca895774801",
+   "slug": "san-diego-the-local-pacific-beach-trivia-night",
+   "title": "Trivia Night",
+   "venue": "san-diego-the-local-pacific-beach",
+   "first_date": "2026-11-19",
+   "image_slot": "TRIVIA-3",
+   "outcome": "published"
+  },
+  {
+   "id": "af7d1ec1-5306-4857-ac4e-8bd2f69baaf2",
+   "slug": "san-diego-the-local-pacific-beach-thursday-club-dj",
+   "title": "Thursday Club DJ",
+   "venue": "san-diego-the-local-pacific-beach",
+   "first_date": "2026-11-19",
+   "image_slot": "DJ-1",
+   "outcome": "published"
+  },
+  {
+   "id": "a75d1047-8277-4be4-8af4-2e793abb46e5",
+   "slug": "san-diego-the-loma-club-bar-grill-trivia-night",
+   "title": "Trivia Night",
+   "venue": "san-diego-the-loma-club-bar-grill",
+   "first_date": "2026-11-19",
+   "image_slot": "TRIVIA-1",
+   "outcome": "published"
+  },
+  {
+   "id": "1a2c18d6-f3e7-4d4d-a120-5fbefeaf6fed",
+   "slug": "san-diego-the-rabbit-hole-trivia-under-the-stars",
+   "title": "Trivia Under the Stars",
+   "venue": "san-diego-the-rabbit-hole",
+   "first_date": "2026-11-18",
+   "image_slot": "TRIVIA-4",
+   "outcome": "published"
+  },
+  {
+   "id": "5367251d-1c23-4e3d-982a-f6f2a628f2c6",
+   "slug": "san-diego-the-rabbit-hole-live-band-karaoke",
+   "title": "Live Band Karaoke",
+   "venue": "san-diego-the-rabbit-hole",
+   "first_date": "2026-11-20",
+   "image_slot": "KARAOKE-3",
+   "outcome": "published"
+  },
+  {
+   "id": "6e3962cb-0d7c-4044-8148-f3372e4e5f32",
+   "slug": "san-diego-the-rabbit-hole-saturday-live-music",
+   "title": "Saturday Live Music",
+   "venue": "san-diego-the-rabbit-hole",
+   "first_date": "2026-11-21",
+   "image_slot": "LIVE-2",
+   "outcome": "published"
+  },
+  {
+   "id": "c41b0c79-8116-4e8f-8b73-f6c4870bab2f",
+   "slug": "san-diego-urban-mos-karaoke-sunday",
+   "title": "Karaoke Sunday",
+   "venue": "san-diego-urban-mos",
+   "first_date": "2026-11-15",
+   "image_slot": "KARAOKE-1",
+   "outcome": "published"
+  },
+  {
+   "id": "04c3693a-a642-40c1-90b9-39dd5720bf78",
+   "slug": "san-diego-urban-mos-sassy-sunday-funday",
+   "title": "Sassy Sunday Funday",
+   "venue": "san-diego-urban-mos",
+   "first_date": "2026-11-15",
+   "image_slot": "DRAG-2",
+   "outcome": "published"
+  },
+  {
+   "id": "d59eb586-6bff-4091-b432-8043e1a908a2",
+   "slug": "san-diego-urban-mos-gayme-night",
+   "title": "Gayme Night",
+   "venue": "san-diego-urban-mos",
+   "first_date": "2026-11-16",
+   "image_slot": "GAMES-1",
+   "outcome": "published"
+  },
+  {
+   "id": "804d7bf0-3189-4a0e-8953-c4a74be184ba",
+   "slug": "san-diego-urban-mos-dreamgirls-revue",
+   "title": "Dreamgirls Revue",
+   "venue": "san-diego-urban-mos",
+   "first_date": "2026-11-18",
+   "image_slot": "DRAG-1",
+   "outcome": "published"
+  },
+  {
+   "id": "40e12ac5-20cf-48b0-aed8-5b4bd75808e7",
+   "slug": "san-diego-urban-mos-saturdays-with-dj-miss-dust",
+   "title": "Saturdays with DJ Miss Dust",
+   "venue": "san-diego-urban-mos",
+   "first_date": "2026-11-21",
+   "image_slot": "DJ-4",
+   "outcome": "published"
+  },
+  {
+   "id": "eff44c4e-c5ac-45cb-b682-5a3a467f1197",
+   "slug": "san-diego-wonderland-ocean-pub-trivia-night",
+   "title": "Trivia Night",
+   "venue": "san-diego-wonderland-ocean-pub",
+   "first_date": "2026-11-17",
+   "image_slot": "TRIVIA-1",
+   "outcome": "published"
+  },
+  {
+   "id": "fb21583d-6597-4259-b2ee-f7c441e47b8b",
+   "slug": "san-diego-gossip-grill-karaoke-tuesdays-with-joey-adams",
+   "title": "Karaoke Tuesdays with Joey Adams",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-17",
+   "image_slot": "KARAOKE-2",
+   "outcome": "published"
+  },
+  {
+   "id": "59d541e3-050f-481e-a1db-b83011315e7f",
+   "slug": "san-diego-gossip-grill-bingo-gone-bonkers",
+   "title": "Bingo Gone Bonkers",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-18",
+   "image_slot": "BINGO-1",
+   "outcome": "published"
+  },
+  {
+   "id": "2a1aad63-ac3e-4ec3-b880-d1738b4cfc70",
+   "slug": "san-diego-gossip-grill-tgiw-with-dj-jocelyn",
+   "title": "TGIW with DJ Jocelyn",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-18",
+   "image_slot": "DJ-3",
+   "outcome": "published"
+  },
+  {
+   "id": "692aca92-240d-4357-8f4a-47ff29435769",
+   "slug": "san-diego-gossip-grill-finger-me-friday",
+   "title": "Finger Me Friday",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-20",
+   "image_slot": "DJ-1",
+   "outcome": "published"
+  },
+  {
+   "id": "d7a7d72c-4a1e-4be4-b2ad-0051d9e3167f",
+   "slug": "san-diego-gossip-grill-sapphic-saturdays",
+   "title": "Sapphic Saturdays",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-21",
+   "image_slot": "DJ-2",
+   "outcome": "published"
+  },
+  {
+   "id": "3cafd97f-5ca8-4da5-b1b0-bbddd68ec43a",
+   "slug": "san-diego-gossip-grill-smarty-pants-saturday-trivia-brunch",
+   "title": "Smarty Pants Saturday Trivia Brunch",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-21",
+   "image_slot": "TRIVIA-2",
+   "outcome": "published"
+  },
+  {
+   "id": "75c15860-d496-4356-a50d-c5c5f3d9457c",
+   "slug": "san-diego-gossip-grill-girls-gays-theys-sundays",
+   "title": "Girls, Gays & Theys Sundays",
+   "venue": "san-diego-gossip-grill",
+   "first_date": "2026-11-15",
+   "image_slot": "DJ-4",
+   "outcome": "published"
+  }
+ ]
+}
