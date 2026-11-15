@@ -65,11 +65,12 @@ export function toDailySpecialSuggestion(special: WebsiteDailySpecialListItem): 
 
 /**
  * Searches published, in-market Daily Specials by title/short_summary/
- * description. getPublishedDailySpecialsForWebsite() already applies the
- * market-radius gate (haversineKm against `market`) before returning, so
- * this doesn't repeat that filter — same division of responsibility as
- * DailySpecialSearchResults.tsx, which also only text-filters an
- * already-market-scoped list.
+ * description. getPublishedDailySpecialsForWebsite(market, { scope:
+ * "assigned_market" }) already keeps only Specials whose venue is assigned
+ * to `market` — before matching and the display cap — so this doesn't
+ * repeat that filter. Same division of responsibility, and the same scope,
+ * as /website-daily-specials (DailySpecialSearchResults.tsx), the "See all"
+ * destination, which also only text-filters an already-market-scoped list.
  */
 export async function searchDailySpecialSuggestions(
   market: Market,
@@ -87,7 +88,7 @@ export async function searchDailySpecialSuggestionsWithTotal(
 ): Promise<{ suggestions: DailySpecialSuggestion[]; total: number }> {
   if (!rawQuery.trim()) return { suggestions: [], total: 0 };
 
-  const specials = await getPublishedDailySpecialsForWebsite(market);
+  const specials = await getPublishedDailySpecialsForWebsite(market, { scope: "assigned_market" });
   const matched = specials.filter((s) =>
     dailySpecialMatchesSearch(
       { title: s.title, shortSummary: s.shortSummary, description: s.description },

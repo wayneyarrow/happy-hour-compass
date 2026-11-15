@@ -57,9 +57,9 @@ export default async function HappyHoursSearchPage({
   // venue's assigned market (partitionVenuesByMarket — not a radius, so an
   // assigned venue far from the market centre still belongs, and one with
   // no coordinates can't leak into another market). Published venues in the
-  // other active markets come along separately — reachable only by a name
-  // search or by panning the map there, never mixed into this market's
-  // browsing.
+  // other active markets come along separately — reachable only by panning
+  // the map there with no search query active, never mixed into this
+  // market's browsing or search results (see HappyHoursSearchClient).
   const allVenues = await getPublishedVenuesForConsumer();
   const { inMarket: venues, otherMarket } = partitionVenuesByMarket(allVenues, market);
 

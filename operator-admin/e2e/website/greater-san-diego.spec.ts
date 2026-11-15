@@ -2,8 +2,8 @@ import { test, expect, expectNoHorizontalOverflow } from "./support/fixtures";
 import type { Browser, Page } from "@playwright/test";
 
 /**
- * Greater San Diego market — selection, defaults, cross-market search, map
- * scoping, and venue-local time display.
+ * Greater San Diego market — selection, defaults, market-scoped search,
+ * cross-market map panning, and venue-local time display.
  *
  * Country defaults need the dev server to trust the `x-vercel-ip-country`
  * header locally: run with HHC_TRUST_GEO_HEADERS_FOR_QA=1 (never set on a
@@ -142,55 +142,115 @@ test.describe("Greater San Diego — first-visit country default", () => {
   }
 });
 
-test.describe("Greater San Diego — cross-market search and map", () => {
-  test("from Greater San Diego, a Central Okanagan venue is found by name and labelled, but never browsed", async ({ page }) => {
-    // Pick a real published Central Okanagan venue from its own listing.
-    await page.goto("/website-happy-hours");
-    await expect(visibleCards(page).first()).toBeVisible({ timeout: 20_000 });
-    const name = (await visibleCards(page).first().textContent())!.trim();
+const MARKET_SLUGS = { "Central Okanagan": "central-okanagan", "Greater San Diego": "greater-san-diego" } as const;
+type MarketName = keyof typeof MARKET_SLUGS;
+const otherMarket = (m: MarketName): MarketName => (m === "Central Okanagan" ? "Greater San Diego" : "Central Okanagan");
 
-    await switchMarket(page, "Greater San Diego");
-    await page.goto("/website-happy-hours");
-    const input = page.getByPlaceholder("Search by name, type, or specials…");
-    await input.fill(name);
-    const card = page.locator("article:visible").filter({ has: page.getByRole("heading", { name, exact: true }) });
-    await expect(card.first()).toBeVisible({ timeout: 20_000 });
-    await expect(card.first().getByTestId("card-location")).toHaveText(/, BC$/);
+/** Market slugs of every market-scoped link in the page content (header/footer excluded). */
+async function linkedMarkets(page: Page): Promise<string[]> {
+  const hrefs = await page.locator("main a[href]").evaluateAll((as) => as.map((a) => a.getAttribute("href") ?? ""));
+  return [...new Set(hrefs.flatMap((h) => h.match(/^\/(central-okanagan|greater-san-diego)\//)?.[1] ?? []))];
+}
 
-    // A topical search stays local: Central Okanagan's specials don't leak in.
-    await input.fill("wings");
-    await expect(page.getByTestId("other-market-matches").and(page.locator(":visible"))).toHaveCount(0);
-    // Searching never changes the saved market.
-    expect(await marketCookie(page)).toBe("greater-san-diego");
+/** The first visible venue name on `market`'s own Happy Hours listing (a real, published venue). */
+async function firstVenueName(page: Page, market: MarketName): Promise<string> {
+  await page.goto("/website-happy-hours");
+  if (!(await headerLabel(page)).includes(market === "Central Okanagan" ? "Kelowna" : market)) {
+    await switchMarket(page, market);
+    await page.goto("/website-happy-hours");
+  }
+  await expect(visibleCards(page).first()).toBeVisible({ timeout: 20_000 });
+  return (await visibleCards(page).first().textContent())!.trim();
+}
+
+test.describe("Greater San Diego — search stays in the selected market", () => {
+  for (const home of ["Greater San Diego", "Central Okanagan"] as const) {
+    const away = otherMarket(home);
+
+    test(`from ${home}, ${away}'s venue is not found by name — listing or hero`, async ({ page }) => {
+      test.setTimeout(150_000);
+      const name = await firstVenueName(page, away);
+      await switchMarket(page, home);
+
+      // Happy Hours listing (the hero's "See all" destination).
+      await page.goto(`/website-happy-hours?q=${encodeURIComponent(name)}`);
+      // Results are server-rendered with the page (no client fetch), so the
+      // loaded page already holds every result link.
+      await expect(page.locator("main")).toBeVisible();
+      await expect(page.locator("article:visible").filter({ has: page.getByRole("heading", { name, exact: true }) })).toHaveCount(0);
+      expect(await linkedMarkets(page)).not.toContain(MARKET_SLUGS[away]);
+
+      // Hero dropdown: no suggestion, just the empty state.
+      await page.goto("/");
+      await page.getByRole("combobox").first().fill(name);
+      await expect(page.getByRole("listbox").getByText("No venues found.")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("option").filter({ hasText: name })).toHaveCount(0);
+      // Searching never changes the saved market.
+      expect(await marketCookie(page)).toBe(MARKET_SLUGS[home]);
+    });
+
+    test(`from ${home}, every "See all" listing links only to ${home} records`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await page.goto("/");
+      await switchMarket(page, home);
+      for (const [path, q] of [
+        ["/website-happy-hours", "wings"],
+        ["/website-daily-specials", "Taco Tuesday"],
+        ["/website-daily-specials", "wine"],
+        ["/website-events", "Karaoke"],
+        ["/website-events", "trivia"],
+      ] as const) {
+        await page.goto(`${path}?q=${encodeURIComponent(q)}`);
+        await expect(page.locator("main")).toBeVisible();
+        expect(await linkedMarkets(page), `${path}?q=${q}`).not.toContain(MARKET_SLUGS[away]);
+      }
+    });
+  }
+
+  test("a venue is still found by name in its own market", async ({ page }) => {
+    test.setTimeout(150_000);
+    for (const market of ["Greater San Diego", "Central Okanagan"] as const) {
+      const name = await firstVenueName(page, market);
+      await page.goto("/");
+      await page.getByRole("combobox").first().fill(name);
+      await expect(page.getByRole("option").filter({ hasText: name }).first()).toBeVisible({ timeout: 15_000 });
+    }
   });
 
-  test("hero suggestions find another market's venue by name with its location", async ({ page }) => {
-    await page.goto("/website-happy-hours");
-    await expect(visibleCards(page).first()).toBeVisible({ timeout: 20_000 });
-    const name = (await visibleCards(page).first().textContent())!.trim();
-    await switchMarket(page, "Greater San Diego");
+  test("switching market with a query typed never shows the previous market's results", async ({ page }) => {
+    test.setTimeout(150_000);
+    const name = await firstVenueName(page, "Central Okanagan");
     await page.goto("/");
     const hero = page.getByRole("combobox").first();
     await hero.fill(name);
-    // The venue row (not the "See all …" action) carries "City, BC".
-    const venueOption = page.getByRole("option").filter({ hasNotText: /^See all/ }).filter({ hasText: name });
-    await expect(venueOption.first()).toContainText(/, BC/, { timeout: 15_000 });
+    await expect(page.getByRole("option").filter({ hasText: name }).first()).toBeVisible({ timeout: 15_000 });
+
+    await switchMarket(page, "Greater San Diego");
+    await expect.poll(() => headerLabel(page)).toMatch(/Greater San Diego/);
+    // The Kelowna venue is never offered under Greater San Diego, and
+    // Enter can't navigate to it.
+    await expect(page.getByRole("option").filter({ hasText: name })).toHaveCount(0);
+    if ((await hero.inputValue()).trim()) {
+      await hero.focus();
+      await hero.press("ArrowDown");
+      await hero.press("Enter");
+      await expect(page.getByRole("listbox").getByText("No venues found.")).toBeVisible({ timeout: 15_000 });
+    }
+    await expect(page).toHaveURL(/\/$/);
   });
 
-  test("Encore Sushi: in Greater San Diego browsing, found by name from Central Okanagan", async ({ page }) => {
+  test("Encore Sushi: found in Greater San Diego, not from Central Okanagan", async ({ page }) => {
+    test.setTimeout(150_000);
     test.skip(!ENCORE_LIVE, "Encore Sushi not published yet (GSD_ENCORE_LIVE=1 after rollout)");
     await page.goto("/website-happy-hours");
     await switchMarket(page, "Greater San Diego");
-    await page.goto("/website-happy-hours");
+    await page.goto("/website-happy-hours?q=Encore%20Sushi");
     await expect(page.locator("article:visible").filter({ hasText: "Encore Sushi" }).first()).toBeVisible({ timeout: 20_000 });
 
     await switchMarket(page, "Central Okanagan");
-    await page.goto("/website-happy-hours");
+    await page.goto("/website-happy-hours?q=Encore%20Sushi");
+    await expect(page.locator("main")).toBeVisible();
     await expect(page.locator("article:visible").filter({ hasText: "Encore Sushi" })).toHaveCount(0);
-    await page.getByPlaceholder("Search by name, type, or specials…").fill("Encore Sushi");
-    const encore = page.locator("article:visible").filter({ hasText: "Encore Sushi" }).first();
-    await expect(encore).toBeVisible({ timeout: 20_000 });
-    await expect(encore.getByTestId("card-location")).toHaveText("Solana Beach, CA");
     expect(await marketCookie(page)).toBe("central-okanagan");
   });
 });
@@ -261,8 +321,14 @@ test.describe("Greater San Diego — map after Encore is live", () => {
       await zoom({ x: p.x + p.width / 2, y: p.y + p.height + 6 }, -400);
     }
     expect(inMap(await pin.boundingBox())).toBe(true);
-    // Only Encore Sushi is in view now — Kelowna's venues have left the list.
-    await expect(page.locator("article:visible h3")).toHaveText(["Encore Sushi"]);
+    // Solana Beach is in view now — Encore Sushi is listed, and Kelowna's
+    // venues have left the list (every visible card is a San Diego venue;
+    // other Solana Beach venues are live too since the Nov 2026 seeding).
+    await expect(page.locator("article:visible h3").filter({ hasText: "Encore Sushi" })).toHaveCount(1);
+    await expect.poll(async () =>
+      (await page.getByTestId("card-location").and(page.locator(":visible")).allTextContents()).every((t) => /, CA$/.test(t.trim()))
+    ).toBe(true);
+    await expect(page.getByTestId("card-location").and(page.locator(":visible")).filter({ hasText: /, BC$/ })).toHaveCount(0);
     await expect(encoreCard.first().getByTestId("card-location")).toHaveText("Solana Beach, CA");
     await page.screenshot({ path: test.info().outputPath("solana-beach-view.png") });
     await pin.click();

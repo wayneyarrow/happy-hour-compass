@@ -9,17 +9,15 @@ import {
   getMarketById,
 } from "../../../src/lib/markets";
 import {
-  isVenueNameMatchTier,
   partitionVenuesByMarket,
   venueLocationLabel,
 } from "../../../src/lib/discover/marketScope";
-import { matchVenueSearchTier } from "../../../src/lib/data/venueSearch";
 import { buildCityGeographyLookup, resolveCityGeography } from "../../../src/lib/geo/venueGeographyResolver";
 import { computeVenueReadiness, computeOperatorImageCount } from "../../../src/lib/venueReadiness";
 
 /**
  * Greater San Diego market setup: country defaults, market scoping for
- * browse vs. cross-market name search, geography resolution, and Encore
+ * browse vs. map panning, geography resolution, and Encore
  * Sushi's publish readiness before/after assignment. Fixtures only — the
  * Encore row mirrors the fields of its existing draft that readiness reads
  * (public listing data; no secrets).
@@ -77,19 +75,6 @@ test("browsing Greater San Diego: Encore is in-market; Kelowna reachable only as
   const { inMarket, otherMarket } = partitionVenuesByMarket(ALL, getMarketById("greater-san-diego")!);
   assert.deepEqual(inMarket.map((v) => v.name), ["Encore Sushi"]);
   assert.deepEqual(otherMarket.map((v) => v.name), ["Kelowna Taphouse"]);
-});
-
-test("cross-market search reaches only name matches", () => {
-  const fields = {
-    name: "Encore Sushi", city: "Solana Beach", establishmentType: "Restaurant and Bar",
-    seededTags: [], searchTags: [], specialsFood: ["rolls"], specialsDrinks: ["sake"],
-  };
-  assert.equal(isVenueNameMatchTier(matchVenueSearchTier("Encore Sushi", fields)), true);
-  assert.equal(isVenueNameMatchTier(matchVenueSearchTier("sushi", fields)), true);
-  // Topical matches stay local.
-  assert.equal(isVenueNameMatchTier(matchVenueSearchTier("sake", fields)), false);
-  assert.equal(isVenueNameMatchTier(matchVenueSearchTier("solana", fields)), false);
-  assert.equal(isVenueNameMatchTier(matchVenueSearchTier("restaurant", fields)), false);
 });
 
 test("location label identifies the venue's city and state", () => {

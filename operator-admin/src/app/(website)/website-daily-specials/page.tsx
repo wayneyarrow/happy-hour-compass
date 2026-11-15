@@ -22,7 +22,7 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default async function DailySpecialsSearchPage() {
   const { market } = await getWebsiteActiveMarket();
-  const dailySpecials = await getPublishedDailySpecialsForWebsite(market);
+  const dailySpecials = await getPublishedDailySpecialsForWebsite(market, { scope: "assigned_market" });
 
   return <DailySpecialSearchResults dailySpecials={dailySpecials} market={market} enableFilterSync />;
 }
