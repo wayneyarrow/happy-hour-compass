@@ -496,3 +496,8 @@ Records: [`greater-san-diego/specials-batch1/`](greater-san-diego/specials-batch
   updates: exact-ID plan from a full snapshot → upload event images to **new** Storage paths (old ones kept) and release
   venue photos to Production first → guarded `UPDATE … WHERE id = … AND <field> = <old> AND updated_at = <snapshot>` with
   an exact-count check and audit row → logged-out page + card checks → full-table before/after diff.
+- **Photo QA round 2 (2026-11-15):** the four held listings were re-photographed (Working Class → `taproom-13`; Savoie DJ
+  Night Fri + Sat → DJ-7, one photo, two Storage objects; Dreamgirls Revue → DRAG-3; Sassy Sunday Funday → DRAG-4).
+  All 33 recurring series now have distinct source photos; nothing in `stock-photos/do-not-reuse.csv` is still live.
+  Record: [`greater-san-diego/photo-update-2026-11-15-r2/`](greater-san-diego/photo-update-2026-11-15-r2/) (its
+  `event-image-assignments-current.csv` supersedes the round-1 copy).

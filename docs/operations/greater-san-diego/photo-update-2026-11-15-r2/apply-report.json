@@ -1,0 +1,110 @@
+{
+ "update": "Greater San Diego photo QA \u2014 round 2 (finishes the 2026-11-15 update)",
+ "appliedOn": "2026-11-15",
+ "approval": "Wayne approved finishing the live photo QA update (2026-11-15).",
+ "inputs": {
+  "zip": "~/Downloads/hhc-stock-photos/gsd-replacements-round2.zip (sha256 1682ccb1\u2026)",
+  "csv": "gsd-replacements-round2-sources.csv",
+  "note": "Downloads preserved; extracted copies in ~/hhc-work/gsd-image-update-r2/extracted/."
+ },
+ "review": {
+  "VENUE_2": "pass \u2014 plain glassware, no logos at full size or in crops",
+  "DJ_7": "pass \u2014 warm evening lounge DJ set",
+  "DRAG_3": "pass \u2014 evening stage, performer from behind, no face (generic stage performer, not visibly drag)",
+  "DRAG_4": "pass \u2014 drag costume from behind, no face, no street setting (indoor party, not an obvious bar/brunch)"
+ },
+ "previous_state_check": "All 5 targets matched the previous report (event-image-assignments-current.csv, held.csv) and were unchanged since that update; no operator attribution; drift re-check before apply: 0 changes.",
+ "venue_photo_release": {
+  "website_commit": "07eb03e",
+  "main_commit": "2fe93e6 (cherry-pick of 07eb03e; diff = taproom-13 + round-2 source CSV)",
+  "staging": "byte-identical",
+  "production": "HTTP 200 image/jpeg byte-identical before the venue was changed"
+ },
+ "event_uploads": {
+  "objects": 4,
+  "verified": 4,
+  "note": "Savoie Fri + Sat: same source photo, two separate Storage objects; previous objects kept"
+ },
+ "database": {
+  "events_apply": "events-apply.sql applied 2026-11-15 18:04:41 UTC (audit seed_event_image_updated, 4 ids)",
+  "venues_apply": "venues-apply.sql applied 2026-11-15 18:04:43 UTC (audit seed_venue_cover_updated, 1 id)",
+  "diff": "full-table before/after: venues 1 changed (placeholder_image_path, updated_at), events 4 changed (image_url, updated_at); only the planned IDs and values"
+ },
+ "logged_out": {
+  "venue": [
+   {
+    "slug": "san-diego-working-class",
+    "name": "Working Class",
+    "expect": "images/venues/taproom/venue-pic-taproom-13.jpg",
+    "old": "images/venues/casual-dining/venue-pic-casual-dining-10.jpg",
+    "changed": true,
+    "url": "https://happyhourcompass.com/greater-san-diego/san-diego/san-diego-working-class",
+    "status": 200,
+    "heroLoaded": true,
+    "oldOnPage": false,
+    "ogImage": "https://happyhourcompass.com/images/venues/taproom/venue-pic-taproom-13.jpg",
+    "cardFound": true,
+    "cardShowsExpected": true,
+    "cardShowsOld": false
+   }
+  ],
+  "events": [
+   {
+    "id": "05b66e23-2369-494b-ad78-7e5e68868252",
+    "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/events/chula-vista-savoie-italian-eatery-dj-night-fridays",
+    "title": "DJ Night",
+    "venue": "Savoie Italian Eatery",
+    "status": 200,
+    "dbMatches": true,
+    "ogMatches": true,
+    "heroLoaded": true,
+    "slot": "DJ-7"
+   },
+   {
+    "id": "95e2e784-03dc-4afd-a161-3e5dcaae0563",
+    "url": "https://happyhourcompass.com/greater-san-diego/chula-vista/events/chula-vista-savoie-italian-eatery-dj-night-saturdays",
+    "title": "DJ Night",
+    "venue": "Savoie Italian Eatery",
+    "status": 200,
+    "dbMatches": true,
+    "ogMatches": true,
+    "heroLoaded": true,
+    "slot": "DJ-7"
+   },
+   {
+    "id": "04c3693a-a642-40c1-90b9-39dd5720bf78",
+    "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-sassy-sunday-funday",
+    "title": "Sassy Sunday Funday",
+    "venue": "Urban Mo's",
+    "status": 200,
+    "dbMatches": true,
+    "ogMatches": true,
+    "heroLoaded": true,
+    "slot": "DRAG-4"
+   },
+   {
+    "id": "804d7bf0-3189-4a0e-8953-c4a74be184ba",
+    "url": "https://happyhourcompass.com/greater-san-diego/san-diego/events/san-diego-urban-mos-dreamgirls-revue",
+    "title": "Dreamgirls Revue",
+    "venue": "Urban Mo's",
+    "status": 200,
+    "dbMatches": true,
+    "ogMatches": true,
+    "heroLoaded": true,
+    "slot": "DRAG-3"
+   }
+  ],
+  "events_page": {
+   "newImagesOnEventsPage": 4,
+   "of": 4,
+   "oldImagesStillOnPage": 0
+  },
+  "distinct": {
+   "series": 33,
+   "distinctPhotos": 33,
+   "shared": []
+  }
+ },
+ "rollback": "venues-rollback.sql / events-rollback.sql (supabase db query --linked -f \u2026) restore the previous value only where the row still holds the new value and has no operator attribution; exactly N rows or nothing. Previous Storage objects and library photos were never deleted.",
+ "held": []
+}
