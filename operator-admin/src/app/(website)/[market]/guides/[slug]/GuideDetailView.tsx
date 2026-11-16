@@ -14,6 +14,7 @@ import { WeeklyPicksSection } from "@/app/(website)/weekly-picks/WeeklyPicksSect
 import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
 import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 // Venue card image width in the "Hand-picked spots" grid below: 1 column
 // (px-6 gutters), 2 columns from sm, 3 columns of the max-w-5xl container
@@ -134,7 +135,7 @@ export function GuideDetailView({
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
         {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
-          <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+          <Link href={getMarketHomePath(guide.marketSlug)} className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
           </Link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">

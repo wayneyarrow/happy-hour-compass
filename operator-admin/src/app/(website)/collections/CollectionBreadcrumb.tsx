@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 /**
  * Collection Landing Page breadcrumb: Home > {Collection Name}. Ports the
@@ -38,6 +39,8 @@ function BreadcrumbChevron() {
 
 type Props = {
   collectionName: string;
+  /** The collection's market; "Home" links to its homepage (getMarketHomePath). */
+  marketSlug: string;
   /**
    * Trims the standalone-hero vertical padding for embedding inside another
    * component's own padded container (e.g. the Happy Hour search context
@@ -47,7 +50,7 @@ type Props = {
   compact?: boolean;
 };
 
-export function CollectionBreadcrumb({ collectionName, compact = false }: Props) {
+export function CollectionBreadcrumb({ collectionName, marketSlug, compact = false }: Props) {
   return (
     <nav
       aria-label="Breadcrumb"
@@ -56,7 +59,7 @@ export function CollectionBreadcrumb({ collectionName, compact = false }: Props)
       }`}
     >
       <Link
-        href="/"
+        href={getMarketHomePath(marketSlug)}
         className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
       >
         Home

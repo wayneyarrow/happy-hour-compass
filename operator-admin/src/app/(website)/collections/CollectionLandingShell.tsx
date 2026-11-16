@@ -49,7 +49,7 @@ export function CollectionLandingShell({ model, children }: Props) {
       {/* mb-14/20 lets the hero breathe before the Lead Guide feature (visual polish pass) —
           whitespace only, no added background/decoration. */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10 mb-14 md:mb-20">
-        <CollectionBreadcrumb collectionName={model.name} />
+        <CollectionBreadcrumb collectionName={model.name} marketSlug={model.marketSlug} />
 
         <h1 className="mt-1 text-4xl sm:text-5xl font-extrabold text-gray-900 tracking-tight leading-[1.08]">
           {model.name}

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/siteUrl";
 import { MARKETS } from "@/lib/markets";
+import { getMarketHomepagePaths } from "@/lib/marketHomepage";
 import { NEWSLETTER_MARKETS } from "@/lib/weeklyPicks/newsletterMarkets";
 import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { getAllMarkets } from "@/lib/geo/geography";
@@ -106,6 +107,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // ── Static marketing pages — no real updated_at source, so no lastModified ──
   const staticPages: MetadataRoute.Sitemap = [
     { url: absoluteUrl("/") },
+    // Other active markets' own homepage URLs (/greater-san-diego; "/" is
+    // always Central Okanagan) — src/lib/marketHomepage.ts.
+    ...getMarketHomepagePaths().map((path) => ({ url: absoluteUrl(path) })),
     { url: absoluteUrl("/about") },
     { url: absoluteUrl("/business") },
     { url: absoluteUrl("/claim-your-venue") },

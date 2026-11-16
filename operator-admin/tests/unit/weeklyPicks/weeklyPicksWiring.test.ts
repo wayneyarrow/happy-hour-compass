@@ -36,8 +36,8 @@ test("only the Brevo client calls the double opt-in endpoint, and only the share
 test("every placement renders the shared form with a fixed placement id", () => {
   const usages: Array<[string, string]> = [
     ["app/(website)/weekly-picks/NewsletterSignupPageContent.tsx", 'placement="weekly_picks_page"'],
-    ["app/(website)/page.tsx", 'placement="homepage_main"'],
-    ["app/(website)/page.tsx", 'placement="homepage_bottom"'],
+    ["app/(website)/homepage/MarketHomepage.tsx", 'placement="homepage_main"'],
+    ["app/(website)/homepage/MarketHomepage.tsx", 'placement="homepage_bottom"'],
     ["app/(website)/[market]/guides/[slug]/GuideDetailView.tsx", 'placement="guide_end"'],
   ];
   for (const [file, needle] of usages) assert.ok(read(file).includes(needle), `${file} ${needle}`);

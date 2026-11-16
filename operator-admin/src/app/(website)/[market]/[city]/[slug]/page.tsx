@@ -39,6 +39,7 @@ import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 import { DailySpecialsSection } from "./DailySpecialsSection";
 import { filterCurrentOrUpcoming } from "@/lib/dailySpecialSchedule";
 import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 // Always read fresh DB data — page is time-sensitive (open status, HH status).
 export const dynamic = "force-dynamic";
@@ -322,7 +323,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath,
     items: [
-      { name: "Home", path: "/" },
+      { name: "Home", path: getMarketHomePath(venue.marketSlug) },
       { name: venue.name, path: canonicalPath },
     ],
   });
@@ -464,7 +465,7 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
             destinations — restore them only when those destinations exist,
             not preemptively. */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0">
-          <Link href="/" className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+          <Link href={getMarketHomePath(venue.marketSlug)} className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
             Home
           </Link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 text-gray-300" aria-hidden="true">

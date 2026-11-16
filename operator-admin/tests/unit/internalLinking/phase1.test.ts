@@ -89,7 +89,7 @@ test("layout resolves the Guides href once and shares it with header and footer"
   const layout = read("src/app/(website)/layout.tsx");
   assert.equal((layout.match(/getFeaturedGuidesNavHref\(/g) ?? []).length, 1);
   assert.match(layout, /<WebsiteHeader[\s\S]*featuredGuidesHref=\{featuredGuidesHref\}/);
-  assert.match(layout, /<WebsiteFooter featuredGuidesHref=\{featuredGuidesHref\} \/>/);
+  assert.match(layout, /<WebsiteFooter featuredGuidesHref=\{featuredGuidesHref\} marketId=\{market\.id\} \/>/);
 });
 
 test("Suggest a Venue stays off the desktop header; Add Your Venue sits between Newsletter and Saved", () => {

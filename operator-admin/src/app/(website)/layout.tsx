@@ -7,7 +7,7 @@ import { ConsumerAuthProvider } from "./ConsumerAuthProvider";
 import { JsonLd } from "./JsonLd";
 import { buildOrganizationNode } from "@/lib/seo/schema/organization";
 import { buildWebSiteNode } from "@/lib/seo/schema/website";
-import { getWebsiteActiveMarket } from "@/lib/activeMarket";
+import { getWebsiteShellMarket } from "@/lib/activeMarket";
 import { createClient } from "@/lib/supabase/server";
 import {
   getMarketBySlug,
@@ -26,7 +26,9 @@ import { getNewsletterSignupHref } from "@/lib/weeklyPicks/newsletterAvailabilit
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default async function WebsiteLayout({ children }: { children: ReactNode }) {
-  const { market } = await getWebsiteActiveMarket();
+  // The page's market on a market homepage URL ("/" → Central Okanagan,
+  // "/greater-san-diego"), else the visitor's (saved choice, else country).
+  const { market } = await getWebsiteShellMarket();
 
   // Resolve consumer auth state for header rendering and saved-sync provider.
   let consumerUser: ConsumerUser | null = null;
@@ -116,7 +118,7 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
 
         <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
 
-        <WebsiteFooter featuredGuidesHref={featuredGuidesHref} />
+        <WebsiteFooter featuredGuidesHref={featuredGuidesHref} marketId={market.id} />
       </div>
       <JsonLd nodes={[organizationNode, websiteNode]} />
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}

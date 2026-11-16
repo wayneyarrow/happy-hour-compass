@@ -9,6 +9,7 @@ import { JsonLd } from "@/app/(website)/JsonLd";
 import { buildPageMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { getPublicCollectionModel } from "@/lib/data/collectionPublic";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 import {
   applyGuidesLibraryRobots,
   getGuidesLibraryState,
@@ -104,7 +105,7 @@ export default async function GuidesLibraryPage({ params }: PageProps) {
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath: breadcrumbCanonicalPath,
     items: [
-      { name: "Home", path: "/" },
+      { name: "Home", path: getMarketHomePath(market) },
       { name: "Guides", path: breadcrumbCanonicalPath },
     ],
   });

@@ -26,6 +26,7 @@ import { getMarketById } from "@/lib/markets";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
 import { GuideDetailView } from "./GuideDetailView";
 import { buildHhSchedule } from "@/lib/happyHourStatus";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 /**
  * Public Content Engine guide page (Card 5).
@@ -200,7 +201,7 @@ export default async function GuideDetailPage({ params }: PageProps) {
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath,
     items: [
-      { name: "Home", path: "/" },
+      { name: "Home", path: getMarketHomePath(guide.marketSlug) },
       { name: guide.title, path: canonicalPath },
     ],
   });

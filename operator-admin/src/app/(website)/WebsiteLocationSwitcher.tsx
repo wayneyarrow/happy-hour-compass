@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect, useLayoutEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MARKETS, COMING_SOON_MARKET_LISTINGS, findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
+import { getHomepageMarketIdForPath, getMarketHomePath } from "@/lib/marketHomepage";
 import type { CityRecord } from "@/lib/geo/types";
 
 type Props = {
@@ -96,6 +97,19 @@ export default function WebsiteLocationSwitcher({
     setLocationError(false);
   }
 
+  // On a market homepage URL ("/" is always Central Okanagan,
+  // "/greater-san-diego" is San Diego's — src/lib/marketHomepage.ts) the
+  // page itself is fixed to one market, so switching market means going to
+  // the chosen market's homepage. Everywhere else the page follows the
+  // saved market, so a refresh is enough (unchanged behaviour).
+  const pathname = usePathname();
+  const onMarketHomepage = getHomepageMarketIdForPath(pathname) !== null;
+
+  function showMarket(nextMarketId: string) {
+    if (onMarketHomepage) router.push(getMarketHomePath(nextMarketId));
+    router.refresh();
+  }
+
   function toggleComingSoon(id: string) {
     setComingSoonId((prev) => (prev === id ? null : id));
   }
@@ -111,7 +125,7 @@ export default function WebsiteLocationSwitcher({
     }
     startTransition(async () => {
       await setMarketAction(market.id);
-      router.refresh();
+      showMarket(market.id);
       close();
     });
   }
@@ -126,7 +140,7 @@ export default function WebsiteLocationSwitcher({
         setLocating(false);
         startTransition(async () => {
           await setMarketAction(nearest.id);
-          router.refresh();
+          showMarket(nearest.id);
           close();
         });
       },

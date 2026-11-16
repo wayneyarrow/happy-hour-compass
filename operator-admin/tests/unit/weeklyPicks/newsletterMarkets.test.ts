@@ -82,7 +82,7 @@ test("availability: Central Okanagan always; San Diego only when its switch is e
 // ─── Wiring ─────────────────────────────────────────────────────────────────
 
 test("homepage bands, guide footer and sitemap use the page's own market availability", () => {
-  const home = read("app/(website)/page.tsx");
+  const home = read("app/(website)/homepage/MarketHomepage.tsx");
   assert.match(home, /const newsletter = getAvailableNewsletterMarket\(marketSlug\);\s*if \(!newsletter\)/);
   assert.equal((home.match(/<WeeklyPicksSection placement="homepage_(main|bottom)" newsletter=\{newsletter\}/g) ?? []).length, 2);
   const guide = read("app/(website)/[market]/guides/[slug]/GuideDetailView.tsx");

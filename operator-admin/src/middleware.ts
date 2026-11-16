@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { HOMEPAGE_ROUTE_MARKET_HEADER, getHomepageMarketIdForPath } from "@/lib/marketHomepage";
 
 /**
  * Middleware runs on every request (except static assets).
@@ -16,6 +17,17 @@ import { NextResponse, type NextRequest } from "next/server";
  *   /activate-account — Public. No auth required.
  */
 export async function middleware(request: NextRequest) {
+  // Market homepage URLs ("/" → Central Okanagan, "/greater-san-diego" →
+  // Greater San Diego) show their own market whatever the visitor's saved
+  // market or country. Tag them so the shared website layout's header
+  // matches the page (getWebsiteShellMarket, src/lib/activeMarket.ts). A
+  // client-sent copy is always stripped, so the tag only ever comes from
+  // here. These are the same request headers NextResponse.next({ request })
+  // forwards below, alongside Supabase's refreshed cookies.
+  request.headers.delete(HOMEPAGE_ROUTE_MARKET_HEADER);
+  const homepageMarketId = getHomepageMarketIdForPath(request.nextUrl.pathname);
+  if (homepageMarketId) request.headers.set(HOMEPAGE_ROUTE_MARKET_HEADER, homepageMarketId);
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

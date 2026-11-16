@@ -20,7 +20,7 @@ test("the temporary title-based placement helper file no longer exists", () => {
 });
 
 test("the public homepage page no longer imports or references the title-based placement helper", () => {
-  const source = readFileSync(join(OPERATOR_ADMIN_ROOT, "src/app/(website)/page.tsx"), "utf8");
+  const source = readFileSync(join(OPERATOR_ADMIN_ROOT, "src/app/(website)/homepage/MarketHomepage.tsx"), "utf8");
   assert.ok(!source.includes("homepageSectionPlacement"));
   assert.ok(!source.includes("splitHomepageSectionsForInsertion"));
   assert.ok(!source.includes("Patio Picks"));

@@ -13,6 +13,7 @@ import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { SuggestVenueModalContent } from "./acquisition/SuggestVenueModalContent";
 import { AddVenueModalContent } from "./acquisition/AddVenueModalContent";
 import { buildSiteDiscoveryLinks } from "./siteDiscoveryLinks";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 export type ConsumerUser = {
   email: string;
@@ -138,7 +139,7 @@ export default function WebsiteHeader({
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 md:h-[72px] flex items-center gap-3">
           {/* Logo */}
           <Link
-            href="/"
+            href={getMarketHomePath(marketId)}
             aria-label="Happy Hour Compass — Home"
             className="flex-shrink-0 flex items-center mr-3 md:mr-4"
           >

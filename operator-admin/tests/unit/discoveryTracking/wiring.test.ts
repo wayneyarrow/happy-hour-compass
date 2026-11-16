@@ -35,7 +35,7 @@ test("every tracking route resolves environment server-side", () => {
 });
 
 test("only the live homepage and live guide route open a discovery page view — previews never do", () => {
-  assert.match(read("app/(website)/page.tsx"), /<DiscoveryPageTracking/);
+  assert.match(read("app/(website)/homepage/MarketHomepage.tsx"), /<DiscoveryPageTracking/);
   assert.match(read("app/(website)/[market]/guides/[slug]/GuideDetailView.tsx"), /enableDiscoveryTracking \?\s*\(\s*<DiscoveryPageTracking/);
   assert.match(read("app/(website)/[market]/guides/[slug]/page.tsx"), /enableDiscoveryTracking/);
   const homepagePreview = read("app/control-panel/homepages/[id]/preview/page.tsx");
