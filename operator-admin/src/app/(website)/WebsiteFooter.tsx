@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { MARKETS, COMING_SOON_MARKET_LISTINGS } from "@/lib/markets";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
 import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { ContactUsModalContent } from "./acquisition/ContactUsModalContent";
@@ -119,6 +120,39 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
+/**
+ * A market's homepage as a real, crawlable <a href> (its own URL — "/" or
+ * "/greater-san-diego", src/lib/marketHomepage.ts). A click also saves the
+ * visitor's market choice before navigating; without JavaScript the link
+ * still opens that market's homepage.
+ */
+function FooterMarketLink({
+  href,
+  onNavigate,
+  disabled,
+  children,
+}: {
+  href: string;
+  onNavigate: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        if (!disabled) onNavigate();
+      }}
+      aria-disabled={disabled || undefined}
+      className={`${FOOTER_LINK_CLASS} ${disabled ? "opacity-50 cursor-default" : ""}`}
+    >
+      {children}
+    </a>
+  );
+}
+
 function FooterButton({
   onClick,
   disabled,
@@ -142,9 +176,12 @@ function FooterButton({
 
 export function WebsiteFooter({
   featuredGuidesHref = null,
+  marketId = null,
 }: {
   /** Featured Guides collection href, or null to omit "Guides" — see getFeaturedGuidesNavHref(). */
   featuredGuidesHref?: string | null;
+  /** The page's market; the logo links to its homepage (getMarketHomePath). */
+  marketId?: string | null;
 } = {}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -161,14 +198,11 @@ export function WebsiteFooter({
   function goToMarketHomepage(marketId: string) {
     startTransition(async () => {
       await setMarketAction(marketId);
-      router.push("/");
-      // The homepage renders off the hhc_market cookie we just set, but a
-      // push to "/" when already on "/" (or within the client Router
-      // Cache's staleTime for a recent visit) can serve the previously
-      // cached RSC payload instead of refetching — same issue
-      // WebsiteLocationSwitcher solves with refresh(). Calling both
-      // unconditionally covers every starting route without needing to
-      // special-case "already on the homepage".
+      // Each market's homepage has its own URL ("/" is always Central
+      // Okanagan — src/lib/marketHomepage.ts). The refresh makes sure the
+      // rest of the shell picks up the market just saved, even when the
+      // client Router Cache would otherwise reuse a recent payload.
+      router.push(getMarketHomePath(marketId));
       router.refresh();
     });
   }
@@ -181,7 +215,7 @@ export function WebsiteFooter({
             {/* Brand block */}
             <div className="lg:w-72 lg:shrink-0">
               <Link
-                href="/"
+                href={getMarketHomePath(marketId)}
                 aria-label="Happy Hour Compass — Home"
                 className="inline-flex items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               >
@@ -243,12 +277,13 @@ export function WebsiteFooter({
                   {MARKETS.filter((market) => market.status === "active").map((market) => (
                     <li key={market.id}>
                       {activeMarketCount > 1 ? (
-                        <FooterButton
-                          onClick={() => goToMarketHomepage(market.id)}
+                        <FooterMarketLink
+                          href={getMarketHomePath(market.id)}
+                          onNavigate={() => goToMarketHomepage(market.id)}
                           disabled={isPending}
                         >
                           {market.name}
-                        </FooterButton>
+                        </FooterMarketLink>
                       ) : (
                         <span className="text-sm text-gray-300">{market.name}</span>
                       )}

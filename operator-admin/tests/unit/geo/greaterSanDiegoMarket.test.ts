@@ -184,13 +184,14 @@ test("public website pages resolve the market with country defaults; the consume
     .map((f) => relative(join(SRC, "(website)"), f))
     .sort();
   assert.deepEqual(usesWebsite, [
-    "layout.tsx",
-    "page.tsx",
     "saved/page.tsx",
     "website-daily-specials/page.tsx",
     "website-events/page.tsx",
     "website-happy-hours/page.tsx",
   ]);
+  // The shared layout's header/footer: the page's own market on a market
+  // homepage URL, else exactly getWebsiteActiveMarket() (src/lib/activeMarket.ts).
+  assert.match(readFileSync(join(SRC, "(website)/layout.tsx"), "utf8"), /const \{ market \} = await getWebsiteShellMarket\(\);/);
   const consumer = sourceFiles(join(SRC, "(consumer)"));
   assert.equal(consumer.some((f) => readFileSync(f, "utf8").includes("getWebsiteActiveMarket")), false);
 });

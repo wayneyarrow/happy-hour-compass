@@ -12,6 +12,7 @@ import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
 import { JsonLd } from "@/app/(website)/JsonLd";
 import { getMarketById } from "@/lib/markets";
 import { MarketComingSoon } from "@/app/(website)/MarketComingSoon";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 /**
  * Public Collection Landing Page — /{market}/collections/{collection-slug}
@@ -87,7 +88,7 @@ export default async function CollectionLandingPage({ params }: PageProps) {
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath,
     items: [
-      { name: "Home", path: "/" },
+      { name: "Home", path: getMarketHomePath(model.marketSlug) },
       { name: model.name, path: canonicalPath },
     ],
   });

@@ -96,7 +96,7 @@ function venueToWebsiteVenueCard(v: ConsumerVenue): WebsiteVenueCard | null {
 function CollectionSearchContextHeader({ model }: { model: PublicCollectionModel }) {
   return (
     <div>
-      <CollectionBreadcrumb collectionName={model.name} compact />
+      <CollectionBreadcrumb collectionName={model.name} marketSlug={model.marketSlug} compact />
       <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">{model.name}</h1>
       {model.publicIntro && (
         <p className="mt-2 text-sm text-gray-600 leading-relaxed max-w-2xl">{model.publicIntro}</p>

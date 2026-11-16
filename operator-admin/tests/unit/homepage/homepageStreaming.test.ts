@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 const SRC = join(__dirname, "../../../src");
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const page = stripComments(readFileSync(join(SRC, "app/(website)/page.tsx"), "utf8"));
+const page = stripComments(readFileSync(join(SRC, "app/(website)/homepage/MarketHomepage.tsx"), "utf8"));
 
 const between = (from: string, to: string) => {
   const start = page.indexOf(from);
@@ -21,13 +21,13 @@ const between = (from: string, to: string) => {
 };
 
 test("metadata uses the Homepage record only", () => {
-  const metadata = between("export async function generateMetadata", "export default async function WebsiteHomePage");
+  const metadata = between("export async function generateMarketHomepageMetadata", "export async function MarketHomepage");
   assert.match(metadata, /getPublicHomepageRecordForLocation\(/);
   assert.doesNotMatch(metadata, /resolvePublicHomepageSections|resolveSection/);
 });
 
 test("the page awaits only the record before rendering the hero; Sections resolve inside Suspense", () => {
-  const body = between("export default async function WebsiteHomePage", "async function HomepageEditorialSections");
+  const body = between("export async function MarketHomepage", "async function HomepageEditorialSections");
   assert.doesNotMatch(body, /resolvePublicHomepageSections|resolveSection/);
   assert.match(body, /<Suspense fallback=\{<HomepageSectionsPlaceholder \/>\}>\s*<HomepageEditorialSections/);
   assert.ok(body.indexOf("<HeroSection") < body.indexOf("<Suspense"), "hero must render outside (before) the Suspense boundary");
@@ -39,7 +39,7 @@ test("the page awaits only the record before rendering the hero; Sections resolv
 });
 
 test("recognised crawlers get the same Sections rendered in place (no Suspense); both paths sit inside the error boundary", () => {
-  const body = between("export default async function WebsiteHomePage", "async function HomepageEditorialSections");
+  const body = between("export async function MarketHomepage", "async function HomepageEditorialSections");
   assert.match(body, /const renderAllAtOnce = userAgent\(\{ headers: await headers\(\) \}\)\.isBot;/);
   assert.match(
     body,

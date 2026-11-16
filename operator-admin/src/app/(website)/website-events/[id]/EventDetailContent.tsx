@@ -20,6 +20,7 @@ import { BusinessHoursPanel } from "./BusinessHoursPanel";
 import { formatPrice, buildDetailDateLabel } from "./eventFormatters";
 import { formatDisplayUrl } from "@/lib/formatDisplayUrl";
 import { TrackedVenueLink } from "@/app/(website)/venueIntentTracking";
+import { getMarketHomePath } from "@/lib/marketHomepage";
 
 /**
  * Shared event detail page body — rendered by both the canonical route
@@ -63,7 +64,7 @@ export function EventDetailContent({
   const breadcrumbNode = buildBreadcrumbListNode({
     canonicalPath: eventCanonicalPath,
     items: [
-      { name: "Home", path: "/" },
+      { name: "Home", path: getMarketHomePath(event.venueMarketSlug) },
       { name: event.title, path: eventCanonicalPath },
     ],
   });
@@ -173,7 +174,7 @@ export function EventDetailContent({
             className="flex items-center gap-1.5 text-sm text-gray-500 pt-5 pb-4 min-w-0"
           >
             <Link
-              href="/"
+              href={getMarketHomePath(event.venueMarketSlug)}
               className="hover:text-gray-900 transition-colors shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
             >
               Home
