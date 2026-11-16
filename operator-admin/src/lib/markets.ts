@@ -118,6 +118,31 @@ export const MARKETS: Market[] = [
   },
 ];
 
+/**
+ * The upcoming markets the public website advertises as "Coming soon" —
+ * the single source for both the footer's Markets column and the header
+ * location switcher, in display order.
+ *
+ * Display-only: a listing is just a name with a "Soon" badge. It is not a
+ * Market. It has no geography, can't be selected, and has no URLs or venues.
+ * It is deliberately separate from MARKETS' own "coming_soon" entries
+ * (Greater Vancouver, Victoria, Calgary). Those stay in MARKETS because their
+ * DB markets, seeded venues and existing URLs still resolve through
+ * getMarketById() to the branded MarketComingSoon page; removing them would
+ * turn those URLs into 404s.
+ *
+ * Ids must not collide with a MARKETS id (pinned by
+ * tests/unit/geo/comingSoonListings.test.ts). When a listed market actually
+ * launches, add it to MARKETS (and seedGeography.ts) and drop it from here.
+ */
+export type ComingSoonMarketListing = { id: string; name: string };
+
+export const COMING_SOON_MARKET_LISTINGS: readonly ComingSoonMarketListing[] = [
+  { id: "palm-springs", name: "Palm Springs" },
+  { id: "los-angeles", name: "Los Angeles" },
+  { id: "san-francisco", name: "San Francisco" },
+];
+
 export const DEFAULT_MARKET_ID = "central-okanagan";
 
 /**

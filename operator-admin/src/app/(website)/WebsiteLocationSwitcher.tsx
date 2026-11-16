@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MARKETS, findNearestActiveMarket } from "@/lib/markets";
+import { MARKETS, COMING_SOON_MARKET_LISTINGS, findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
 import type { CityRecord } from "@/lib/geo/types";
 
@@ -96,9 +96,13 @@ export default function WebsiteLocationSwitcher({
     setLocationError(false);
   }
 
+  function toggleComingSoon(id: string) {
+    setComingSoonId((prev) => (prev === id ? null : id));
+  }
+
   function handleSelectRegion(market: (typeof MARKETS)[0]) {
     if (market.status === "coming_soon") {
-      setComingSoonId((prev) => (prev === market.id ? null : market.id));
+      toggleComingSoon(market.id);
       return;
     }
     if (market.id === marketId) {
@@ -147,7 +151,9 @@ export default function WebsiteLocationSwitcher({
     currentMarket?.compactLocationLabel && currentCityName === marketName ? currentMarket.compactLocationLabel : null;
 
   const activeRegions = MARKETS.filter((m) => m.status === "active");
-  const comingSoonRegions = MARKETS.filter((m) => m.status === "coming_soon");
+  // Upcoming markets come from the shared display-only listing (markets.ts),
+  // not MARKETS' own coming_soon entries, which exist only for routing.
+  const comingSoonRegions = COMING_SOON_MARKET_LISTINGS;
 
   return (
     <div className="relative" ref={ref}>
@@ -380,7 +386,7 @@ export default function WebsiteLocationSwitcher({
                       <div key={m.id}>
                         <button
                           type="button"
-                          onClick={() => handleSelectRegion(m)}
+                          onClick={() => toggleComingSoon(m.id)}
                           className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:bg-gray-50 transition-colors"
                         >
                           {m.name}
