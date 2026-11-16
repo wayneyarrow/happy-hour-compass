@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { HOMEPAGE_ROUTE_MARKET_HEADER, getHomepageMarketIdForPath } from "@/lib/marketHomepage";
+import { PAGE_MARKET_HEADER, getPageMarketIdForPath } from "@/lib/marketHomepage";
 
 /**
  * Middleware runs on every request (except static assets).
@@ -17,16 +17,18 @@ import { HOMEPAGE_ROUTE_MARKET_HEADER, getHomepageMarketIdForPath } from "@/lib/
  *   /activate-account — Public. No auth required.
  */
 export async function middleware(request: NextRequest) {
-  // Market homepage URLs ("/" → Central Okanagan, "/greater-san-diego" →
-  // Greater San Diego) show their own market whatever the visitor's saved
-  // market or country. Tag them so the shared website layout's header
-  // matches the page (getWebsiteShellMarket, src/lib/activeMarket.ts). A
-  // client-sent copy is always stripped, so the tag only ever comes from
-  // here. These are the same request headers NextResponse.next({ request })
-  // forwards below, alongside Supabase's refreshed cookies.
-  request.headers.delete(HOMEPAGE_ROUTE_MARKET_HEADER);
-  const homepageMarketId = getHomepageMarketIdForPath(request.nextUrl.pathname);
-  if (homepageMarketId) request.headers.set(HOMEPAGE_ROUTE_MARKET_HEADER, homepageMarketId);
+  // Pages that belong to one market — the two homepage URLs ("/" → Central
+  // Okanagan, "/greater-san-diego") and everything under an active market's
+  // slug (venue, event, guide, collection, newsletter pages) — show that
+  // market's header and footer whatever the visitor's saved market or
+  // country. Tag them so the shared website layout matches the page
+  // (getWebsiteShellMarket, src/lib/activeMarket.ts). A client-sent copy is
+  // always stripped, so the tag only ever comes from here. These are the
+  // same request headers NextResponse.next({ request }) forwards below,
+  // alongside Supabase's refreshed cookies.
+  request.headers.delete(PAGE_MARKET_HEADER);
+  const pageMarketId = getPageMarketIdForPath(request.nextUrl.pathname);
+  if (pageMarketId) request.headers.set(PAGE_MARKET_HEADER, pageMarketId);
 
   let supabaseResponse = NextResponse.next({ request });
 

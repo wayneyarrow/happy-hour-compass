@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  HOMEPAGE_ROUTE_MARKET_HEADER,
+  PAGE_MARKET_HEADER,
   ROOT_HOMEPAGE_MARKET_ID,
   getHomepageMarketIdForPath,
   getMarketForHomepageSlug,
   getMarketHomePath,
   getMarketHomepagePaths,
+  getPageMarketIdForPath,
 } from "../../../src/lib/marketHomepage";
 import { buildPageMetadata } from "../../../src/lib/seo/metadata";
 
@@ -42,6 +43,41 @@ test("only '/' and '/greater-san-diego' are market homepages", () => {
   }
 });
 
+test("pages belong to a market from their URL: both homepages and everything under an active market's slug", () => {
+  const cases: Array<[string | null | undefined, string | null]> = [
+    ["/", "central-okanagan"],
+    ["/greater-san-diego", "greater-san-diego"],
+    ["/greater-san-diego/la-mesa/la-mesa-aromi-italian", "greater-san-diego"],
+    ["/greater-san-diego/san-diego/events/some-event", "greater-san-diego"],
+    ["/greater-san-diego/guides/best-taco-tuesday-deals", "greater-san-diego"],
+    ["/greater-san-diego/guides", "greater-san-diego"],
+    ["/greater-san-diego/collections/featured-guides", "greater-san-diego"],
+    ["/greater-san-diego/newsletter", "greater-san-diego"],
+    ["/central-okanagan/west-kelowna/19-okanagan-grill-bar", "central-okanagan"],
+    ["/central-okanagan/kelowna/events/some-event", "central-okanagan"],
+    ["/central-okanagan/guides/downtown-kelowna-happy-hour-guide", "central-okanagan"],
+    ["/central-okanagan/collections/featured-guides", "central-okanagan"],
+    // Global pages follow the visitor's saved market, else country.
+    ["/website-happy-hours", null],
+    ["/website-daily-specials", null],
+    ["/website-events", null],
+    ["/website-events/abc", null],
+    ["/weekly-picks", null],
+    ["/saved", null],
+    ["/account", null],
+    ["/about", null],
+    // Coming Soon markets keep the visitor's shell around the Coming Soon page.
+    ["/greater-vancouver/burnaby/some-venue", null],
+    ["/calgary", null],
+    ["/palm-springs", null],
+    ["/__proto__/x", null],
+    ["", null],
+    [null, null],
+    [undefined, null],
+  ];
+  for (const [path, market] of cases) assert.equal(getPageMarketIdForPath(path), market, String(path));
+});
+
 test("/{slug} serves only Greater San Diego; the root market, Coming Soon markets and unknown slugs 404", () => {
   assert.equal(getMarketForHomepageSlug("greater-san-diego")?.id, "greater-san-diego");
   for (const slug of ["central-okanagan", "greater-vancouver", "victoria", "calgary", "palm-springs", "los-angeles", "nowhere", "__proto__"]) {
@@ -73,16 +109,18 @@ test("'/' never resolves a market from the visitor; /[market] only from its slug
   assert.match(shared, /const base = buildPageMetadata\(\{\s*path,/);
 });
 
-test("middleware strips any client-sent homepage tag and sets it only on market homepage paths", () => {
+test("middleware strips any client-sent page-market tag and sets it only on pages that belong to a market", () => {
   const mw = read("middleware.ts");
-  const strip = mw.indexOf("request.headers.delete(HOMEPAGE_ROUTE_MARKET_HEADER);");
-  const set = mw.indexOf("if (homepageMarketId) request.headers.set(HOMEPAGE_ROUTE_MARKET_HEADER, homepageMarketId);");
+  const strip = mw.indexOf("request.headers.delete(PAGE_MARKET_HEADER);");
+  const set = mw.indexOf("if (pageMarketId) request.headers.set(PAGE_MARKET_HEADER, pageMarketId);");
   const firstNext = mw.indexOf("NextResponse.next({ request })");
   assert.ok(strip > -1 && set > strip && firstNext > set, "strip, then set, before any response is built");
-  assert.match(mw, /getHomepageMarketIdForPath\(request\.nextUrl\.pathname\)/);
-  assert.equal(HOMEPAGE_ROUTE_MARKET_HEADER, "x-hhc-homepage-market");
+  assert.match(mw, /getPageMarketIdForPath\(request\.nextUrl\.pathname\)/);
+  assert.equal(PAGE_MARKET_HEADER, "x-hhc-page-market");
   // Only the layout reads it (through getWebsiteShellMarket).
-  assert.match(read("lib/activeMarket.ts"), /\(await headers\(\)\)\.get\(HOMEPAGE_ROUTE_MARKET_HEADER\)/);
+  assert.match(read("lib/activeMarket.ts"), /\(await headers\(\)\)\.get\(PAGE_MARKET_HEADER\)/);
+  // Read raw: the comment stripper above mis-parses this file's JSX comments.
+  assert.match(readFileSync(join(SRC, "app/(website)/layout.tsx"), "utf8"), /const \{ market \} = await getWebsiteShellMarket\(\);/);
 });
 
 test("home navigation goes to the page's own market homepage", () => {
@@ -95,7 +133,8 @@ test("home navigation goes to the page's own market homepage", () => {
   assert.match(footer, /<a\s*href=\{href\}/);
 
   const switcher = read("app/(website)/WebsiteLocationSwitcher.tsx");
-  assert.match(switcher, /if \(onMarketHomepage\) router\.push\(getMarketHomePath\(nextMarketId\)\);/);
+  assert.match(switcher, /const onMarketPage = getPageMarketIdForPath\(pathname\) !== null;/);
+  assert.match(switcher, /if \(onMarketPage\) router\.push\(getMarketHomePath\(nextMarketId\)\);/);
   assert.equal((switcher.match(/showMarket\(/g) ?? []).length, 3, "region choice and Use My Location both go through showMarket");
 
   for (const [file, expr] of [
