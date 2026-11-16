@@ -4,7 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { MARKETS } from "@/lib/markets";
+import { MARKETS, COMING_SOON_MARKET_LISTINGS } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
 import { AcquisitionModal } from "./acquisition/AcquisitionModal";
 import { ContactUsModalContent } from "./acquisition/ContactUsModalContent";
@@ -240,27 +240,29 @@ export function WebsiteFooter({
               <div>
                 <FooterColumnHeading>Markets</FooterColumnHeading>
                 <ul className="space-y-3">
-                  {MARKETS.map((market) => (
+                  {MARKETS.filter((market) => market.status === "active").map((market) => (
                     <li key={market.id}>
-                      {market.status === "active" ? (
-                        activeMarketCount > 1 ? (
-                          <FooterButton
-                            onClick={() => goToMarketHomepage(market.id)}
-                            disabled={isPending}
-                          >
-                            {market.name}
-                          </FooterButton>
-                        ) : (
-                          <span className="text-sm text-gray-300">{market.name}</span>
-                        )
-                      ) : (
-                        <span className="inline-flex items-center gap-2 text-sm text-gray-400">
+                      {activeMarketCount > 1 ? (
+                        <FooterButton
+                          onClick={() => goToMarketHomepage(market.id)}
+                          disabled={isPending}
+                        >
                           {market.name}
-                          <span className="text-[10px] bg-gray-800 text-gray-400 border border-gray-700 rounded-md px-1.5 py-0.5 font-semibold leading-none">
-                            Soon
-                          </span>
-                        </span>
+                        </FooterButton>
+                      ) : (
+                        <span className="text-sm text-gray-300">{market.name}</span>
                       )}
+                    </li>
+                  ))}
+                  {/* Upcoming markets: the shared display-only listing (markets.ts), not MARKETS' own coming_soon entries. */}
+                  {COMING_SOON_MARKET_LISTINGS.map((listing) => (
+                    <li key={listing.id}>
+                      <span className="inline-flex items-center gap-2 text-sm text-gray-400">
+                        {listing.name}
+                        <span className="text-[10px] bg-gray-800 text-gray-400 border border-gray-700 rounded-md px-1.5 py-0.5 font-semibold leading-none">
+                          Soon
+                        </span>
+                      </span>
                     </li>
                   ))}
                 </ul>
