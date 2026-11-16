@@ -4,7 +4,7 @@ import { useState, useTransition, useRef, useEffect, useLayoutEffect } from "rea
 import { usePathname, useRouter } from "next/navigation";
 import { MARKETS, COMING_SOON_MARKET_LISTINGS, findNearestActiveMarket } from "@/lib/markets";
 import { setMarketAction } from "@/app/(consumer)/marketActions";
-import { getHomepageMarketIdForPath, getMarketHomePath } from "@/lib/marketHomepage";
+import { getMarketHomePath, getPageMarketIdForPath } from "@/lib/marketHomepage";
 import type { CityRecord } from "@/lib/geo/types";
 
 type Props = {
@@ -97,16 +97,17 @@ export default function WebsiteLocationSwitcher({
     setLocationError(false);
   }
 
-  // On a market homepage URL ("/" is always Central Okanagan,
-  // "/greater-san-diego" is San Diego's — src/lib/marketHomepage.ts) the
-  // page itself is fixed to one market, so switching market means going to
-  // the chosen market's homepage. Everywhere else the page follows the
-  // saved market, so a refresh is enough (unchanged behaviour).
+  // A page that belongs to one market (a homepage URL — "/" is always
+  // Central Okanagan, "/greater-san-diego" is San Diego's — or any venue,
+  // event, guide, collection or newsletter page under a market's slug;
+  // src/lib/marketHomepage.ts) can't show another market, so switching
+  // market means going to the chosen market's homepage. Global pages follow
+  // the saved market, so a refresh is enough (unchanged behaviour).
   const pathname = usePathname();
-  const onMarketHomepage = getHomepageMarketIdForPath(pathname) !== null;
+  const onMarketPage = getPageMarketIdForPath(pathname) !== null;
 
   function showMarket(nextMarketId: string) {
-    if (onMarketHomepage) router.push(getMarketHomePath(nextMarketId));
+    if (onMarketPage) router.push(getMarketHomePath(nextMarketId));
     router.refresh();
   }
 

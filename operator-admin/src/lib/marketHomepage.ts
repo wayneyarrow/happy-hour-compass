@@ -14,11 +14,12 @@ import { DEFAULT_MARKET_ID, getMarketById, type Market } from "@/lib/markets";
  * /greater-san-diego is ((website)/[market]/page.tsx), the same Homepage CMS
  * record and sections that "/" used to show US visitors.
  *
- * Only these two paths are fixed to a market. Every other page still uses
- * the visitor's saved market, else their country (getWebsiteActiveMarket()).
- * Middleware tags these two paths with their market
- * (HOMEPAGE_ROUTE_MARKET_HEADER) so the shared website layout's header shows
- * the page's market, not the visitor's.
+ * These two URLs, and every page under an active market's slug
+ * (getPageMarketIdForPath), belong to one market. Middleware tags them
+ * (PAGE_MARKET_HEADER) so the shared website layout's header and footer show
+ * the page's market, not the visitor's. Every other page (global listing
+ * pages, account pages) still uses the visitor's saved market, else their
+ * country (getWebsiteActiveMarket()).
  *
  * /central-okanagan is deliberately not a homepage URL yet. It 404s as
  * before; whether it should exist, and which of it and "/" is canonical,
@@ -34,10 +35,11 @@ const MARKET_HOMEPAGE_PATHS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Request header set only by middleware, only on a market homepage path, to
- * that page's market id. Any client-sent copy is stripped for every request.
+ * Request header set only by middleware, only on a page that belongs to one
+ * market (getPageMarketIdForPath), to that page's market id. Any
+ * client-sent copy is stripped for every request.
  */
-export const HOMEPAGE_ROUTE_MARKET_HEADER = "x-hhc-homepage-market";
+export const PAGE_MARKET_HEADER = "x-hhc-page-market";
 
 /** The homepage URL for `marketId`; "/" for the root market and anything without its own homepage. */
 export function getMarketHomePath(marketId: string | null | undefined): string {
@@ -55,6 +57,29 @@ export function getHomepageMarketIdForPath(pathname: string | null | undefined):
     if (getMarketHomePath(id) === normalized) return id;
   }
   return null;
+}
+
+/**
+ * The market a page belongs to, from its URL alone, or null for pages that
+ * follow the visitor's market (global listing pages, account pages, etc.):
+ *   - a market homepage ("/" → Central Okanagan, "/greater-san-diego"), or
+ *   - any page under an active market's slug: venue, event, guide, guide
+ *     index, collection and newsletter pages (/central-okanagan/kelowna/…,
+ *     /greater-san-diego/guides/…).
+ * Coming Soon markets are excluded: their URLs render the branded Coming
+ * Soon page inside the visitor's own shell, as before.
+ *
+ * Middleware tags these requests (PAGE_MARKET_HEADER) so the shared
+ * website layout's header and footer (logos, Guides, newsletter, location
+ * chip) follow the page rather than the visitor.
+ */
+export function getPageMarketIdForPath(pathname: string | null | undefined): string | null {
+  const homepageMarketId = getHomepageMarketIdForPath(pathname);
+  if (homepageMarketId) return homepageMarketId;
+  const firstSegment = pathname?.split("/")[1];
+  if (!firstSegment) return null;
+  const market = getMarketById(firstSegment);
+  return market?.status === "active" ? market.id : null;
 }
 
 /** The active market served at /{slug} as its own homepage, or null (→ 404). */
