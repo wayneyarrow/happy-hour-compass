@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/siteUrl";
 import { MARKETS } from "@/lib/markets";
 import { getMarketHomepagePaths } from "@/lib/marketHomepage";
+import { DISCOVERY_MODE_ORDER, getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 import { NEWSLETTER_MARKETS } from "@/lib/weeklyPicks/newsletterMarkets";
 import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvailability";
 import { getAllMarkets } from "@/lib/geo/geography";
@@ -129,6 +130,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl("/website-happy-hours") },
     { url: absoluteUrl("/website-daily-specials") },
     { url: absoluteUrl("/website-events") },
+    // Each active market's own listings (/{market}/happy-hours,
+    // /{market}/daily-specials, /{market}/events), which always show that
+    // market — see src/lib/seo/marketListingMetadata.ts.
+    ...activeMarketSlugs.flatMap((marketSlug) =>
+      DISCOVERY_MODE_ORDER.map((mode) => ({ url: absoluteUrl(getDiscoveryDestination(mode, marketSlug)) }))
+    ),
   ];
 
   // ── Per-market guide library index pages ────────────────────────────────

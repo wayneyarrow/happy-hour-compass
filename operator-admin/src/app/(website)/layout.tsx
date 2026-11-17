@@ -1,21 +1,19 @@
 import type { ReactNode } from "react";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import WebsiteHeader from "./WebsiteHeader";
-import { WebsiteFooter } from "./WebsiteFooter";
+import { WebsiteShellFooter, WebsiteShellHeader, type ShellMarketData } from "./WebsiteShellChrome";
 import type { ConsumerUser } from "./WebsiteHeader";
 import { ConsumerAuthProvider } from "./ConsumerAuthProvider";
 import { JsonLd } from "./JsonLd";
 import { buildOrganizationNode } from "@/lib/seo/schema/organization";
 import { buildWebSiteNode } from "@/lib/seo/schema/website";
-import { getWebsiteShellMarket } from "@/lib/activeMarket";
+import { getWebsiteActiveMarket } from "@/lib/activeMarket";
 import { createClient } from "@/lib/supabase/server";
 import {
   getMarketBySlug,
   getCitiesWithVenues,
   getDefaultCityForMarket,
 } from "@/lib/geo/geography";
-import type { CityRecord } from "@/lib/geo/types";
-import { resolveMarketLocationLabel } from "@/lib/markets";
+import { MARKETS, resolveMarketLocationLabel, type Market } from "@/lib/markets";
 import { getFeaturedGuidesNavHref } from "@/lib/data/featuredGuidesNav";
 import { getNewsletterSignupHref } from "@/lib/weeklyPicks/newsletterAvailability";
 
@@ -26,9 +24,11 @@ import { getNewsletterSignupHref } from "@/lib/weeklyPicks/newsletterAvailabilit
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export default async function WebsiteLayout({ children }: { children: ReactNode }) {
-  // The page's market on a market homepage URL ("/" → Central Okanagan,
-  // "/greater-san-diego"), else the visitor's (saved choice, else country).
-  const { market } = await getWebsiteShellMarket();
+  // The visitor's market (saved choice, else country). Pages under a market's
+  // URL show their own market instead; WebsiteShellChrome picks between the
+  // two in the browser from the current URL, so it stays right on
+  // client-side navigation (this layout isn't re-rendered then).
+  const { market } = await getWebsiteActiveMarket();
 
   // Resolve consumer auth state for header rendering and saved-sync provider.
   let consumerUser: ConsumerUser | null = null;
@@ -57,37 +57,12 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
     // Auth unavailable — fall back to signed-out header.
   }
 
-  // Attempt DB-backed geography resolution. Falls back gracefully to the
-  // config-layer market name when the DB is unavailable or not yet seeded.
-  let cities: CityRecord[] = [];
-  let currentCityName = market.name;
-  // "Guides" nav target — null (link omitted) unless this market's Featured
-  // Guides collection page would actually render. See featuredGuidesNav.ts.
-  let featuredGuidesHref: string | null = null;
+  // Header/footer data for every active market (two today), so the shell can
+  // follow the page's market on any navigation without another request.
+  const shellMarkets = await Promise.all(
+    MARKETS.filter((m) => m.status === "active").map((m) => getShellMarketData(m))
+  );
 
-  try {
-    // market.id == slug in both markets.ts config and the DB markets table.
-    const marketRecord = await getMarketBySlug(market.id);
-    if (marketRecord) {
-      const [allCities, defaultCity, guidesHref] = await Promise.all([
-        getCitiesWithVenues(marketRecord.id),
-        getDefaultCityForMarket(marketRecord.id),
-        getFeaturedGuidesNavHref(marketRecord.id, market.id),
-      ]);
-      cities = allCities;
-      featuredGuidesHref = guidesHref;
-      currentCityName = resolveMarketLocationLabel(market, defaultCity?.name);
-    }
-  } catch {
-    // DB unavailable — header falls back to market name label. Cookie flow
-    // (hhc_market) continues to function unchanged.
-  }
-
-  // Sitewide Organization + WebSite JSON-LD — rendered once here, in one
-  // shared graph, so both appear on every public website page without each
-  // page emitting its own copy. Organization stays first: WebSite's
-  // `publisher` references it by @id, so defining it first in the graph
-  // reads in the same order the reference resolves.
   const organizationNode = buildOrganizationNode();
   const websiteNode = buildWebSiteNode();
 
@@ -106,22 +81,49 @@ export default async function WebsiteLayout({ children }: { children: ReactNode 
         Skip to main content
       </a>
       <div className="min-h-screen bg-white flex flex-col">
-        <WebsiteHeader
-          marketId={market.id}
-          marketName={market.name}
-          currentCityName={currentCityName}
-          cities={cities}
-          consumerUser={consumerUser}
-          featuredGuidesHref={featuredGuidesHref}
-          newsletterHref={getNewsletterSignupHref(market.id)}
-        />
+        <WebsiteShellHeader markets={shellMarkets} visitorMarketId={market.id} consumerUser={consumerUser} />
 
         <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
 
-        <WebsiteFooter featuredGuidesHref={featuredGuidesHref} marketId={market.id} />
+        <WebsiteShellFooter markets={shellMarkets} visitorMarketId={market.id} />
       </div>
       <JsonLd nodes={[organizationNode, websiteNode]} />
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </ConsumerAuthProvider>
   );
+}
+
+/**
+ * One market's header/footer data: its cities, location label, Guides link
+ * and newsletter link. Falls back to the market's config name with no cities
+ * or Guides link when the DB geography lookup is unavailable or not seeded.
+ */
+async function getShellMarketData(market: Market): Promise<ShellMarketData> {
+  const data: ShellMarketData = {
+    marketId: market.id,
+    marketName: market.name,
+    currentCityName: market.name,
+    cities: [],
+    // "Guides" nav target — null (link omitted) unless this market's Featured
+    // Guides collection page would actually render. See featuredGuidesNav.ts.
+    featuredGuidesHref: null,
+    newsletterHref: getNewsletterSignupHref(market.id),
+  };
+  try {
+    // market.id == slug in both markets.ts config and the DB markets table.
+    const marketRecord = await getMarketBySlug(market.id);
+    if (marketRecord) {
+      const [allCities, defaultCity, guidesHref] = await Promise.all([
+        getCitiesWithVenues(marketRecord.id),
+        getDefaultCityForMarket(marketRecord.id),
+        getFeaturedGuidesNavHref(marketRecord.id, market.id),
+      ]);
+      data.cities = allCities;
+      data.featuredGuidesHref = guidesHref;
+      data.currentCityName = resolveMarketLocationLabel(market, defaultCity?.name);
+    }
+  } catch {
+    // DB unavailable — keep the config-layer fallback.
+  }
+  return data;
 }

@@ -9,6 +9,7 @@ import { useDiscoveryTracker, type PlacementContextValue } from "./tracking/Disc
 import {
   DISCOVERY_MODE_ORDER,
   DISCOVERY_MODES,
+  getDiscoveryDestination,
   DEFAULT_DISCOVERY_MODE,
   type DiscoveryMode,
 } from "@/lib/homepageDiscoveryModes";
@@ -31,6 +32,9 @@ export default function HeroSection({ market, dailySpecialsNewBadgeVisible }: Pr
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>(DEFAULT_DISCOVERY_MODE);
 
   const activeConfig = DISCOVERY_MODES[discoveryMode];
+  // This market's own listing (/{market}/happy-hours, …), so Browse from the
+  // Kelowna homepage always opens Kelowna results, whatever the saved market.
+  const browseHref = getDiscoveryDestination(discoveryMode, market.id);
 
   // No automatic location request here: first-time visitors browse the
   // default market without a permission prompt. Choosing a market by
@@ -64,7 +68,7 @@ export default function HeroSection({ market, dailySpecialsNewBadgeVisible }: Pr
     });
     if (discoveryTracker && discoveryTracker.allowClick(`browse|${discoveryMode}`)) {
       discoveryTracker.send(
-        { eventType: "browse_click", mode: discoveryMode, targetPath: activeConfig.destination },
+        { eventType: "browse_click", mode: discoveryMode, targetPath: browseHref },
         { immediate: true }
       );
     }
@@ -137,7 +141,7 @@ export default function HeroSection({ market, dailySpecialsNewBadgeVisible }: Pr
       {/* Primary CTA — Browse */}
       <div className="mt-6 w-full max-w-xl">
         <Link
-          href={activeConfig.destination}
+          href={browseHref}
           onClick={trackBrowseClick}
           className="
             w-full flex items-center justify-center gap-2

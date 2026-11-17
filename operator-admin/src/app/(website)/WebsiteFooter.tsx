@@ -188,7 +188,7 @@ export function WebsiteFooter({
   const [contactOpen, setContactOpen] = useState(false);
   const [addVenueOpen, setAddVenueOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
+  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref, marketId);
 
   // Launch config: with only one active market, switching to it from itself
   // is a no-op — render it as the current live market label instead of a

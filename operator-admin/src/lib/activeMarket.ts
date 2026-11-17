@@ -5,7 +5,6 @@ import {
   getDefaultMarketForCountry,
   type Market,
 } from "./markets";
-import { PAGE_MARKET_HEADER } from "./marketHomepage";
 
 export const MARKET_COOKIE = "hhc_market";
 
@@ -49,28 +48,6 @@ export async function getWebsiteActiveMarket(): Promise<ActiveMarketResult> {
   const chosen = await getActiveMarket();
   if (chosen.isPersisted) return chosen;
   return { market: getDefaultMarketForCountry(await getVisitorCountry()), isPersisted: false };
-}
-
-/**
- * The market the website shell (header, footer) should show for this
- * request. On a page that belongs to one market — a market homepage ("/" →
- * Central Okanagan, "/greater-san-diego") or any page under an active
- * market's slug (venue, event, guide, collection, newsletter;
- * getPageMarketIdForPath, src/lib/marketHomepage.ts) — it is that page's
- * own market, which middleware tags on the request (PAGE_MARKET_HEADER),
- * whatever the visitor's saved market or country. Everywhere else (global
- * listing pages, account pages) it is exactly getWebsiteActiveMarket().
- * Never persisted. Server-only — imports next/headers.
- */
-export async function getWebsiteShellMarket(): Promise<ActiveMarketResult> {
-  try {
-    const routeMarketId = (await headers()).get(PAGE_MARKET_HEADER);
-    const routeMarket = routeMarketId ? getMarketById(routeMarketId) : undefined;
-    if (routeMarket?.status === "active") return { market: routeMarket, isPersisted: false };
-  } catch {
-    // No request headers (e.g. build-time) — fall through.
-  }
-  return getWebsiteActiveMarket();
 }
 
 /**

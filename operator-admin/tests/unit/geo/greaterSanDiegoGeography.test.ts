@@ -311,7 +311,7 @@ test("the live lookup fetches market slugs, so aliases are market-scoped in prod
 test("website listings and hero search scope by assigned market, not by radius", () => {
   const scope = readFileSync(join(__dirname, "../../../src/lib/discover/marketScope.ts"), "utf8");
   assert.equal(/import[^;]*isNearMarket/.test(scope), false);
-  for (const f of ["(website)/website-happy-hours/page.tsx"]) {
+  for (const f of ["(website)/website-happy-hours/HappyHoursListing.tsx"]) {
     assert.match(readFileSync(join(APP, f), "utf8"), /partitionVenuesByMarket\(allVenues, market\)/);
   }
   assert.match(readFileSync(join(__dirname, "../../../src/lib/data/venueSuggestions.ts"), "utf8"), /partitionVenuesByMarket\(allVenues, market\)/);

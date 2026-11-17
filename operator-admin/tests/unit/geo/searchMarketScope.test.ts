@@ -135,8 +135,8 @@ test("Happy Hours listing: a search drops other markets' venues (cards and pins)
   assert.match(src, /cardsToMapMarkers\(sortedOtherCards, visitorTimeZone\)/);
   assert.match(src, /const fitMarkers = inMarketMarkers;/);
   assert.doesNotMatch(src, /OtherMarketMatches|NameMatchesElsewhere|isVenueNameMatchTier/);
-  // The page still passes other markets' venues for panning.
-  assert.match(read("app/(website)/website-happy-hours/page.tsx"), /otherMarketCards=\{otherMarketCards\}/);
+  // The listing (legacy and /{market}/happy-hours) still passes other markets' venues for panning.
+  assert.match(read("app/(website)/website-happy-hours/HappyHoursListing.tsx"), /otherMarketCards=\{otherMarketCards\}/);
 });
 
 test("hero search never shows or selects a previous market's results", () => {

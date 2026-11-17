@@ -11,7 +11,7 @@ import {
   suggestHomepageDailySpecialsAction,
   suggestHomepageEventsAction,
 } from "./suggestActions";
-import { DISCOVERY_MODES, type DiscoveryMode } from "@/lib/homepageDiscoveryModes";
+import { DISCOVERY_MODES, getDiscoveryDestination, type DiscoveryMode } from "@/lib/homepageDiscoveryModes";
 import { useSearchCapture } from "./tracking/useSearchCapture";
 import { useDiscoveryTracker, type PlacementContextValue } from "./tracking/DiscoveryTrackingProvider";
 import { writeSearchHandoff } from "@/lib/discoveryTracking/searchOrigin";
@@ -145,7 +145,8 @@ export function HeroDiscoverySearch({ market, mode }: Props) {
   const isLoading = fetchLoading || (staleMarket && query.trim().length > 0);
 
   const config = DISCOVERY_MODES[mode];
-  const discoveryHref = config.supportsQuerySearch ? config.destination : undefined;
+  // "See all" opens this market's own listing (/{market}/…?q=), matching the market the suggestions came from.
+  const discoveryHref = config.supportsQuerySearch ? getDiscoveryDestination(mode, market.id) : undefined;
 
   // Mode changed — clear the previous mode's results/loading state
   // synchronously (no stale-entity flash) and invalidate any in-flight
