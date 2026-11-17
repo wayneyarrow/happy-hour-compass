@@ -88,8 +88,13 @@ test("discovery links use the Hero's canonical destinations and add Guides only 
 test("layout resolves the Guides href once and shares it with header and footer", () => {
   const layout = read("src/app/(website)/layout.tsx");
   assert.equal((layout.match(/getFeaturedGuidesNavHref\(/g) ?? []).length, 1);
-  assert.match(layout, /<WebsiteHeader[\s\S]*featuredGuidesHref=\{featuredGuidesHref\}/);
-  assert.match(layout, /<WebsiteFooter featuredGuidesHref=\{featuredGuidesHref\} marketId=\{market\.id\} \/>/);
+  // Resolved per active market (getShellMarketData), then shared by header and footer through WebsiteShellChrome.
+  assert.match(layout, /data\.featuredGuidesHref = guidesHref;/);
+  assert.match(layout, /<WebsiteShellHeader markets=\{shellMarkets\}/);
+  assert.match(layout, /<WebsiteShellFooter markets=\{shellMarkets\}/);
+  const chrome = read("src/app/(website)/WebsiteShellChrome.tsx");
+  assert.match(chrome, /featuredGuidesHref=\{market\.featuredGuidesHref\}\s*newsletterHref/);
+  assert.match(chrome, /<WebsiteFooter featuredGuidesHref=\{market\.featuredGuidesHref\} marketId=\{market\.marketId\} \/>/);
 });
 
 test("Suggest a Venue stays off the desktop header; Add Your Venue sits between Newsletter and Saved", () => {

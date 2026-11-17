@@ -12,6 +12,7 @@ import {
 import { EventSearchResults } from "@/app/(website)/website-events/EventSearchResults";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { buildHhSchedule } from "@/lib/happyHourStatus";
+import { getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 
 /**
  * Type-specific Collection Landing Page content — the clean boundary
@@ -141,7 +142,7 @@ function VenueCollectionContent({ model }: { model: Extract<PublicCollectionMode
       market={market}
       collectionOrder
       contextHeader={<CollectionSearchContextHeader model={model} />}
-      footerCta={<ExploreAllCta href="/website-happy-hours" label="Explore all Happy Hours" />}
+      footerCta={<ExploreAllCta href={getDiscoveryDestination("happy_hours", market.id)} label="Explore all Happy Hours" />}
     />
   );
 }
@@ -157,7 +158,7 @@ function EventCollectionContent({ model }: { model: Extract<PublicCollectionMode
       events={model.items}
       market={market}
       contextHeader={<CollectionSearchContextHeader model={model} />}
-      footerCta={<ExploreAllCta href="/website-events" label="Explore all Events" />}
+      footerCta={<ExploreAllCta href={getDiscoveryDestination("events", market.id)} label="Explore all Events" />}
     />
   );
 }

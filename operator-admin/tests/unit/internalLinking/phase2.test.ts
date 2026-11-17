@@ -106,5 +106,5 @@ test("venue page renders Featured in only when non-empty, plus the Browse more l
   assert.match(section, /\{guide\.heroImageUrl && \(/, "thumbnail only when an image exists");
   assert.equal((section.match(/<Link\b/g) ?? []).length, 1, "one link per card");
   assert.ok(!/<(button|a)\b/.test(section), "no nested interactive controls");
-  assert.match(page, /href=\{DISCOVERY_MODES\.happy_hours\.destination\}[\s\S]{0,400}Browse more happy hours/);
+  assert.match(page, /href=\{getDiscoveryDestination\("happy_hours", venue\.marketSlug\)\}[\s\S]{0,400}Browse more happy hours/);
 });

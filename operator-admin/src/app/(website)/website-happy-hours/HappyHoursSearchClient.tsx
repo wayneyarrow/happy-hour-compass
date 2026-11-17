@@ -784,7 +784,7 @@ export function HappyHoursSearchClient({
   // finishes loading and reports its own bounds.
   useEffect(() => {
     if (!enableSearch) return;
-    const restored = consumeRestoredMapStateIfPopState();
+    const restored = consumeRestoredMapStateIfPopState(market.id);
     if (!restored) return;
     if (restored.desktopBounds) {
       setDesktopMapBounds(restored.desktopBounds);
@@ -794,7 +794,7 @@ export function HappyHoursSearchClient({
       setMapBounds(restored.mobileBounds);
       setInitialMobileBounds(restored.mobileBounds);
     }
-  }, [enableSearch]);
+  }, [enableSearch, market.id]);
 
   // ── geo state ──
   // Deferred: never prompts on load. Coords arrive silently only when the
@@ -867,7 +867,7 @@ export function HappyHoursSearchClient({
   /** Wraps setMapBounds so every mobile pan/zoom also write-throughs to the cross-remount store (see searchMapState.ts). */
   function handleMobileBoundsChanged(bounds: LatLngBounds | null) {
     setMapBounds(bounds);
-    saveMobileMapBounds(bounds);
+    saveMobileMapBounds(market.id, bounds);
   }
 
   // ── desktop map interaction state ──
@@ -895,7 +895,7 @@ export function HappyHoursSearchClient({
   /** Wraps setDesktopMapBounds so every pan/zoom also write-throughs to the cross-remount store (see searchMapState.ts). */
   function handleDesktopBoundsChanged(bounds: LatLngBounds | null) {
     setDesktopMapBounds(bounds);
-    saveDesktopMapBounds(bounds);
+    saveDesktopMapBounds(market.id, bounds);
   }
 
   // Rendered pixel height of the map+sheet wrapper while expanded — read

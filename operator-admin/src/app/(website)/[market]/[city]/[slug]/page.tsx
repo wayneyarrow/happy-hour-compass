@@ -10,7 +10,7 @@ import {
 import { buildVenuePublicPath } from "@/lib/publicVenueUrl";
 import { buildEventPublicPath } from "@/lib/publicEventUrl";
 import { getPublicGuidesFeaturingVenue } from "@/lib/data/venueFeaturedGuides";
-import { DISCOVERY_MODES } from "@/lib/homepageDiscoveryModes";
+import { getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 import { buildVenueMetadata, buildComingSoonMetadata } from "@/lib/seo/metadata";
 import { buildVenueLocalBusinessNode } from "@/lib/seo/schema/venue";
 import { buildBreadcrumbListNode } from "@/lib/seo/schema/breadcrumb";
@@ -897,10 +897,10 @@ export default async function VenueDetailPage({ params, searchParams }: PageProp
               mapsUrl={mapsUrl}
             />
 
-            {/* Browse more — unfiltered Happy Hours discovery (not city-scoped). */}
+            {/* Browse more — this venue's market's Happy Hours (not city-scoped). */}
             <p>
               <Link
-                href={DISCOVERY_MODES.happy_hours.destination}
+                href={getDiscoveryDestination("happy_hours", venue.marketSlug)}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               >
                 Browse more happy hours

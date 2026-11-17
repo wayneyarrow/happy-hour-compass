@@ -41,6 +41,7 @@ import { getMarketById as getStaticMarketBySlug, resolveMarketLocationLabel, typ
 import type { CityRecord } from "@/lib/geo/types";
 import type { SearchResultCardData } from "@/app/(website)/website-happy-hours/SearchResultCard";
 import { buildHhSchedule } from "@/lib/happyHourStatus";
+import { getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 
 // Returns null when the venue has no assigned market/city yet (see
 // buildVenuePublicPath) — no canonical URL exists to link to.
@@ -178,7 +179,8 @@ async function resolveCollectionSection(section: HomepageSection, marketSlug: st
       id: section.id,
       kind: "daily_special_collection",
       title: section.title,
-      viewAllHref: "/website-daily-specials?when=today",
+      // This market's own Daily Specials listing, today only.
+      viewAllHref: `${getDiscoveryDestination("daily_specials", marketSlug)}?when=today`,
       items,
       subtitle,
     };

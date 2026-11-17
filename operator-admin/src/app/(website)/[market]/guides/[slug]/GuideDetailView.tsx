@@ -15,6 +15,7 @@ import { getAvailableNewsletterMarket } from "@/lib/weeklyPicks/newsletterAvaila
 import { DiscoveryPageTracking, DiscoveryPlacement } from "@/app/(website)/tracking/DiscoveryTrackingProvider";
 import { SectionExposureMarker, TrackedDiscoveryItem } from "@/app/(website)/tracking/TrackedDiscovery";
 import { getMarketHomePath } from "@/lib/marketHomepage";
+import { getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 
 // Venue card image width in the "Hand-picked spots" grid below: 1 column
 // (px-6 gutters), 2 columns from sm, 3 columns of the max-w-5xl container
@@ -273,7 +274,7 @@ export function GuideDetailView({
               : `Explore every upcoming event in ${guide.marketName}.`}
           </p>
           <Link
-            href={isVenueGuide ? "/website-happy-hours" : "/website-events"}
+            href={getDiscoveryDestination(isVenueGuide ? "happy_hours" : "events", guide.marketSlug)}
             className="shrink-0 inline-flex items-center px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
           >
             {isVenueGuide ? "Browse Venues" : "Browse Events"}

@@ -48,7 +48,7 @@ export default function WebsiteHeader({
   featuredGuidesHref = null,
   newsletterHref = null,
 }: Props) {
-  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref);
+  const discoveryLinks = buildSiteDiscoveryLinks(featuredGuidesHref, marketId);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);

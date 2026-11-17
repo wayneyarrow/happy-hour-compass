@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { NewsletterMarket } from "@/lib/weeklyPicks/newsletterMarkets";
+import { getDiscoveryDestination } from "@/lib/homepageDiscoveryModes";
 
 /**
  * The body of a market's "you're confirmed" page — where Brevo's double
@@ -28,7 +29,7 @@ export function NewsletterConfirmedContent({ newsletter }: { newsletter: Newslet
         </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <Link
-            href="/website-happy-hours"
+            href={getDiscoveryDestination("happy_hours", newsletter.marketId)}
             className="inline-flex justify-center items-center px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors"
           >
             Browse happy hours

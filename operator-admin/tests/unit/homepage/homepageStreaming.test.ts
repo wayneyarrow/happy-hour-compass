@@ -55,9 +55,11 @@ test("the old all-in-one loader is gone", () => {
 test("the placeholder gives way to the browse links: immediately without JavaScript, after a delay when Sections never arrive", () => {
   const placeholder = readFileSync(join(SRC, "app/(website)/homepage/HomepageSectionsPlaceholder.tsx"), "utf8");
   const links = readFileSync(join(SRC, "app/(website)/homepage/HomepageBrowseLinks.tsx"), "utf8");
-  for (const href of ["/website-happy-hours", "/website-daily-specials", "/website-events"]) {
-    assert.ok(links.includes(`<Link href="${href}"`), `links to ${href}`);
+  // Each goes to the homepage's own market listing (/{market}/happy-hours, …).
+  for (const mode of ["happy_hours", "daily_specials", "events"]) {
+    assert.ok(links.includes(`<Link href={getDiscoveryDestination("${mode}", marketId)}`), `links to ${mode}`);
   }
+  assert.match(links, /const marketId = getPageMarketIdForPath\(usePathname\(\)\);/);
   // Delayed reveal is pure CSS (works when no script runs): links hidden until the delay, then
   // shown while the skeleton hides and the reserved height collapses.
   assert.match(placeholder, /const FALLBACK_DELAY = "10s";/);

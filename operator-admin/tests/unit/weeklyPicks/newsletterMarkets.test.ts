@@ -92,9 +92,12 @@ test("homepage bands, guide footer and sitemap use the page's own market availab
 });
 
 test("every header is given its market's server-resolved newsletter link; the header decides nothing itself", () => {
-  for (const f of ["app/(website)/layout.tsx", "app/(consumer-auth)/layout.tsx", "app/(website)/homepage/HomepageDiscoveryShell.tsx"]) {
+  for (const f of ["app/(consumer-auth)/layout.tsx", "app/(website)/homepage/HomepageDiscoveryShell.tsx"]) {
     assert.match(read(f), /newsletterHref=\{getNewsletterSignupHref\(market\.id\)\}/, f);
   }
+  // The website layout resolves it per active market; WebsiteShellChrome passes the shell market's to the header.
+  assert.match(read("app/(website)/layout.tsx"), /newsletterHref: getNewsletterSignupHref\(market\.id\),/);
+  assert.match(read("app/(website)/WebsiteShellChrome.tsx"), /newsletterHref=\{market\.newsletterHref\}/);
   const header = read("app/(website)/WebsiteHeader.tsx");
   assert.doesNotMatch(header, /weeklyPicks|newsletterAvailability|weekly-picks/);
 });
