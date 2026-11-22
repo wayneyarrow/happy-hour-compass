@@ -14,23 +14,46 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { ALL_MARKETS_SCOPE, type DashboardMarketScope } from "@/lib/dashboardMarketScope";
 
 export type DailySpecialClickSummary =
   | {
       available: true;
       clicksLast30d: number;
       clicksAllTime: number;
-      /** clicked_at of the earliest recorded click; null when none recorded yet. */
+      /**
+       * clicked_at of the earliest recorded click on the whole platform; null
+       * when none recorded yet. Never market-scoped: it marks when tracking
+       * began, not when a market's first click happened.
+       */
       trackingSince: string | null;
     }
   | { available: false };
 
-export async function getDailySpecialClickSummary(since30d: string): Promise<DailySpecialClickSummary> {
+/**
+ * @param scope Market scope (Platform Analytics ?market=). A market or
+ *              Unassigned counts clicks by the clicked venue's CURRENT
+ *              market (inner join to venues on venue_id, still an exact
+ *              server-side count). All markets keeps the original queries.
+ */
+export async function getDailySpecialClickSummary(
+  since30d: string,
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<DailySpecialClickSummary> {
   try {
     const supabase = createAdminClient();
+    const clickCount = () => {
+      if (scope.kind === "all") {
+        return supabase.from("daily_special_click_events").select("*", { count: "exact", head: true });
+      }
+      const q = supabase
+        .from("daily_special_click_events")
+        .select("venue_id, venues!inner(market_id)", { count: "exact", head: true });
+      return scope.kind === "market" ? q.eq("venues.market_id", scope.marketId) : q.is("venues.market_id", null);
+    };
     const [r30, rAll, rFirst] = await Promise.all([
-      supabase.from("daily_special_click_events").select("*", { count: "exact", head: true }).gte("clicked_at", since30d),
-      supabase.from("daily_special_click_events").select("*", { count: "exact", head: true }),
+      clickCount().gte("clicked_at", since30d),
+      clickCount(),
       supabase
         .from("daily_special_click_events")
         .select("clicked_at")
