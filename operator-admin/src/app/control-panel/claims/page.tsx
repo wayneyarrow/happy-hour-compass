@@ -2,6 +2,8 @@ import { getClaimsForReview } from "@/lib/data/claims";
 import { formatDate } from "@/lib/controlPanelDateTime";
 import { getActivationPresentationsForClaims } from "@/lib/activation/activationPresentation";
 import ClaimsTable from "./ClaimsTable";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import { resolveMarketAssignment } from "@/lib/marketFilter";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +13,10 @@ export default async function ClaimsPage() {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const { claims, error } = await getClaimsForReview();
+  const [{ claims, error }, marketOptions] = await Promise.all([
+    getClaimsForReview(),
+    getControlPanelMarketOptions(),
+  ]);
 
   // Only approved claims can ever have a lifecycle (claimOrReuseActivationLifecycle
   // is only ever called from the approve path) — narrowing the batch lookup to
@@ -20,9 +25,6 @@ export default async function ClaimsPage() {
   const approvedClaimIds = claims.filter((c) => c.status === "approved").map((c) => c.id);
   const activationByClaimId = await getActivationPresentationsForClaims(approvedClaimIds);
 
-  const awaitingSetupCount = [...activationByClaimId.values()].filter((p) => p.state === "awaiting_setup").length;
-  const expiringSoonCount = [...activationByClaimId.values()].filter((p) => p.state === "expiring_soon").length;
-  const releaseRequiredCount = [...activationByClaimId.values()].filter((p) => p.state === "release_required").length;
 
   return (
     <div className="max-w-7xl">
@@ -36,23 +38,12 @@ export default async function ClaimsPage() {
         </div>
         {claims.length > 0 && (
           <span className="text-sm text-gray-500">
-            {claims.length} {claims.length === 1 ? "claim" : "claims"}
+            {claims.length} {claims.length === 1 ? "claim" : "claims"} total
           </span>
         )}
       </div>
 
-      {/* Attention-count strip — authoritative activation data only */}
-      {(awaitingSetupCount > 0 || expiringSoonCount > 0 || releaseRequiredCount > 0) && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
-          {releaseRequiredCount > 0 && (
-            <span className="text-red-700 font-medium">{releaseRequiredCount} Release required</span>
-          )}
-          {expiringSoonCount > 0 && (
-            <span className="text-amber-700 font-medium">{expiringSoonCount} Expiring soon</span>
-          )}
-          {awaitingSetupCount > 0 && <span>{awaitingSetupCount} Awaiting setup</span>}
-        </div>
-      )}
+      {/* Attention-count strip: rendered by ClaimsTable from the filtered rows. */}
 
       {/* Error state */}
       {error && (
@@ -89,6 +80,7 @@ export default async function ClaimsPage() {
       {/* Claims table */}
       {!error && claims.length > 0 && (
         <ClaimsTable
+          marketOptions={marketOptions}
           rows={claims.map((c) => {
             const activation = activationByClaimId.get(c.id) ?? null;
             return {
@@ -97,6 +89,7 @@ export default async function ClaimsPage() {
               updated:   formatDate(c.updated_at),
               activationState: activation?.state ?? "not_tracked",
               activationDeadline: activation?.lifecycle?.deadlineAt ?? null,
+              ...resolveMarketAssignment(c.venue_market_id, marketOptions),
             };
           })}
         />

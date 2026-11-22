@@ -35,10 +35,15 @@ export type MarketFilterOption = {
 /** "all" | "unassigned" | a market slug present in the options. */
 export type MarketFilterSelection = string;
 
-/** A row's market assignment: the raw FK plus the slug it resolves to (null when unresolved). */
+/**
+ * A row's market assignment: the raw FK plus the slug it resolves to (null
+ * when unresolved). `marketInferred` marks an assignment derived from free
+ * text (e.g. an unlinked submission's city/province) rather than a stored FK.
+ */
 export type MarketAssignment = {
   marketId: string | null;
   marketSlug: string | null;
+  marketInferred?: boolean;
 };
 
 type MarketSource = {
@@ -97,4 +102,50 @@ export function resolveMarketAssignment(
 ): MarketAssignment {
   if (!marketId) return { marketId: null, marketSlug: null };
   return { marketId, marketSlug: options.find((o) => o.id === marketId)?.slug ?? null };
+}
+
+/**
+ * For rows attributed to several markets (an operator owning venues in more
+ * than one): a market selection matches when ANY assignment is in it, and
+ * Unassigned matches only when NO assignment has a market — including a row
+ * with no assignments at all. Under All markets every row appears once.
+ */
+export function matchesAnyMarketFilter(
+  rows: readonly MarketAssignment[],
+  selection: MarketFilterSelection
+): boolean {
+  if (selection === MARKET_FILTER_ALL) return true;
+  if (selection === MARKET_FILTER_UNASSIGNED) return rows.every((r) => r.marketId === null);
+  return rows.some((r) => r.marketSlug === selection);
+}
+
+/**
+ * Display name for a market FK; null = Unassigned. An FK missing from the
+ * loaded list shows as "Unknown market" rather than being passed off as
+ * Unassigned.
+ */
+export function marketDisplayName(
+  marketId: string | null,
+  options: readonly MarketFilterOption[]
+): string | null {
+  if (marketId === null) return null;
+  return options.find((o) => o.id === marketId)?.name ?? "Unknown market";
+}
+
+/** Reads `?market=` from a query string; `rejected` = an unknown value was present. */
+export function readMarketFilterParam(
+  search: string,
+  options: readonly MarketFilterOption[]
+): { selection: MarketFilterSelection; rejected: boolean } {
+  const raw = new URLSearchParams(search).get(MARKET_FILTER_PARAM);
+  const selection = parseMarketFilter(raw, options);
+  return { selection, rejected: !!raw && marketFilterParamValue(selection) !== raw };
+}
+
+/** Writes (or, for All markets, removes) `market` on a URLSearchParams in place. */
+export function writeMarketFilterParam(params: URLSearchParams, selection: MarketFilterSelection): URLSearchParams {
+  const value = marketFilterParamValue(selection);
+  if (value) params.set(MARKET_FILTER_PARAM, value);
+  else params.delete(MARKET_FILTER_PARAM);
+  return params;
 }

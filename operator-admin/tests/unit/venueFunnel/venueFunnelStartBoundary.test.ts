@@ -45,11 +45,13 @@ test("4, 5 & 6. Claim Submitted applies an inclusive (.gte, not .gt) lower bound
 // ── 7. Terminal statuses stay excluded regardless of date ───────────────────
 
 test("7. the date boundary is chained onto the SAME query as the active-status filter — a claim/submission must satisfy both; a terminal-status row is never reachable by date alone", () => {
-  const submissionsQuery = DATA_SOURCE.match(/\.from\("operator_submissions"\)[\s\S]*?,\n/)![0];
+  // Each read is a complete fetchAllRows(supabase, "<table>", columns, filter, order)
+  // call; its filter lambda (applied to the count and every page) must carry both.
+  const submissionsQuery = DATA_SOURCE.match(/"operator_submissions",\n[\s\S]*?\["id"\]/)![0];
   assert.match(submissionsQuery, /\.in\("status", ACTIVE_SUBMISSION_STATUSES\)/);
   assert.match(submissionsQuery, /\.gte\("submitted_at", VENUE_FUNNEL_START_AT\)/);
 
-  const claimsQuery = DATA_SOURCE.match(/\.from\("venue_claims"\)[\s\S]*?,\n/)![0];
+  const claimsQuery = DATA_SOURCE.match(/"venue_claims",\n[\s\S]*?\["id"\]/)![0];
   assert.match(claimsQuery, /\.in\("status", ACTIVE_CLAIM_STATUSES\)/);
   assert.match(claimsQuery, /\.gte\("created_at", VENUE_FUNNEL_START_AT\)/);
 });
@@ -57,7 +59,7 @@ test("7. the date boundary is chained onto the SAME query as the active-status f
 // ── 8 & 9. The boundary is never applied to venue creation date ─────────────
 
 test("8 & 9. the active-venues query (downstream lanes) has no VENUE_FUNNEL_START_AT / created_at date filter at all — an old seeded venue claimed after the Funnel start can still appear in Setup Sent/Stalled/Account Created/Onboarding", () => {
-  const venuesQueryBlock = DATA_SOURCE.match(/\.from\("venues"\)\s*\n\s*\.select\(VENUE_SELECT\)\s*\n\s*\.not\("created_by_operator_id", "is", null\),/)![0];
+  const venuesQueryBlock = DATA_SOURCE.match(/"venues",\s*\n\s*`\$\{VENUE_SELECT\}, market_id`,\s*\n\s*\(q\) => q\.not\("created_by_operator_id", "is", null\),\s*\n\s*\["id"\]/)![0];
   assert.doesNotMatch(venuesQueryBlock, /VENUE_FUNNEL_START_AT/);
   assert.doesNotMatch(venuesQueryBlock, /created_at/);
 });

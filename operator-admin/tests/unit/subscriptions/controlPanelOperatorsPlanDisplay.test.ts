@@ -23,7 +23,8 @@ const TABLE_SOURCE = readFileSync(
 );
 
 test("the operators list query no longer selects operators.plan", () => {
-  const selectCall = PAGE_SOURCE.match(/\.from\("operators"\)\s*\n\s*\.select\("([^"]+)"\)/)![1];
+  // Complete read via fetchAllRows(supabase, "operators", "<columns>", …).
+  const selectCall = PAGE_SOURCE.match(/fetchAllRows<OperatorDbRow>\(supabase, "operators", "([^"]+)"/)![1];
   assert.doesNotMatch(selectCall, /\bplan\b/);
 });
 

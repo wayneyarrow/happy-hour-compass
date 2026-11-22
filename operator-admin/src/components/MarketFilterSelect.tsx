@@ -10,7 +10,8 @@ import {
 
 /**
  * Control Panel Market dropdown: All markets, every configured market (DB
- * order and names, coming-soon labelled), then Unassigned. Purely
+ * order and names, coming-soon labelled), then Unassigned (omit it with
+ * includeUnassigned={false} where every record must have a market). Purely
  * presentational — the owning table holds the selection and URL state.
  */
 export default function MarketFilterSelect({
@@ -18,11 +19,13 @@ export default function MarketFilterSelect({
   value,
   onChange,
   className,
+  includeUnassigned = true,
 }: {
   options: readonly MarketFilterOption[];
   value: MarketFilterSelection;
   onChange: (value: MarketFilterSelection) => void;
   className?: string;
+  includeUnassigned?: boolean;
 }) {
   return (
     <select
@@ -37,7 +40,7 @@ export default function MarketFilterSelect({
           {marketFilterOptionLabel(o)}
         </option>
       ))}
-      <option value={MARKET_FILTER_UNASSIGNED}>Unassigned</option>
+      {includeUnassigned && <option value={MARKET_FILTER_UNASSIGNED}>Unassigned</option>}
     </select>
   );
 }

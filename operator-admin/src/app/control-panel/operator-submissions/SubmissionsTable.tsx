@@ -8,6 +8,20 @@ import type { OperatorSubmissionRow } from "@/lib/data/operatorSubmissions";
 import type { ActivationLifecycleState } from "@/lib/activation/activationState";
 import { ACTIVATION_STATE_LABELS, formatDeadlineCountdown } from "@/lib/activation/activationState";
 import ActivationBadge from "@/components/ActivationBadge";
+import ActivationAttentionStrip from "@/components/ActivationAttentionStrip";
+import MarketFilterSelect from "@/components/MarketFilterSelect";
+import { countActivationAttention } from "@/lib/activation/activationAttention";
+import {
+  MARKET_FILTER_ALL,
+  marketDisplayName,
+  matchesMarketFilter,
+  parseMarketFilter,
+  readMarketFilterParam,
+  writeMarketFilterParam,
+  type MarketAssignment,
+  type MarketFilterOption,
+  type MarketFilterSelection,
+} from "@/lib/marketFilter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -16,7 +30,7 @@ type Row = OperatorSubmissionRow & {
   updated: string;
   activationState: ActivationLifecycleState;
   activationDeadline: string | null;
-};
+} & MarketAssignment;
 
 type SortCol = "venue_name" | "status" | "submitted_at" | "updated_at" | "attention";
 /** Client-side activation filter — a SEPARATE dimension from the existing
@@ -131,8 +145,9 @@ function readUrlParam(key: string, fallback: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fallback;
 }
 
-function syncUrl(q: string, activation: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, activation: string, market: MarketFilterSelection, sort: string, dir: string, page: number) {
   const p = new URLSearchParams(window.location.search);
+  writeMarketFilterParam(p, market);
   // Preserve existing params (e.g. tab) but overwrite ours
   if (q)                       p.set("q",          q);          else p.delete("q");
   if (activation !== "all")    p.set("activation",  activation); else p.delete("activation");
@@ -145,11 +160,18 @@ function syncUrl(q: string, activation: string, sort: string, dir: string, page:
 
 // ── SubmissionsTable ──────────────────────────────────────────────────────────
 
-export default function SubmissionsTable({ rows }: { rows: Row[] }) {
+export default function SubmissionsTable({
+  rows,
+  marketOptions,
+}: {
+  rows: Row[];
+  marketOptions: MarketFilterOption[];
+}) {
   const router = useRouter();
 
   const [q,          setQ]          = useState("");
   const [activation, setActivation] = useState<ActivationFilter>("all");
+  const [market,     setMarket]     = useState<MarketFilterSelection>(MARKET_FILTER_ALL);
   const [sortCol,    setSortCol]    = useState<SortCol>(DEFAULT_SORT);
   const [sortDir,    setSortDir]    = useState<"asc" | "desc">(DEFAULT_DIR);
   const [page,       setPage]       = useState(1);
@@ -161,6 +183,17 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir", DEFAULT_DIR) as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
+    // ?market=: unknown values fall back to All markets and are dropped from the URL.
+    const { selection, rejected } = readMarketFilterParam(window.location.search, marketOptions);
+    setMarket(selection);
+    if (rejected) {
+      const p = new URLSearchParams(window.location.search);
+      writeMarketFilterParam(p, selection);
+      const qs = p.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    }
+    // Hydrate once on mount only — marketOptions is fixed server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -175,9 +208,19 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
             !r.email.toLowerCase().includes(lq)) return false;
       }
       if (activation !== "all" && r.activationState !== activation) return false;
+      if (!matchesMarketFilter(r, market)) return false;
       return true;
     });
-  }, [rows, q, activation]);
+  }, [rows, q, activation, market]);
+
+  // Attention strip counts follow the filtered records (market + search + activation).
+  const attention = useMemo(
+    () => countActivationAttention(filtered.map((r) => r.activationState)),
+    [filtered]
+  );
+
+  const marketCell = (r: Row): string =>
+    (marketDisplayName(r.marketId, marketOptions) ?? "Unassigned") + (r.marketInferred ? " (inferred)" : "");
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -225,30 +268,38 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
     setSortCol(col);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, activation, col, newDir, 1);
+    syncUrl(q, activation, market, col, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, activation, sortCol, sortDir, 1);
+    syncUrl(val, activation, market, sortCol, sortDir, 1);
   };
 
   const applyActivation = (val: ActivationFilter) => {
     setActivation(val);
     setPage(1);
-    syncUrl(q, val, sortCol, sortDir, 1);
+    syncUrl(q, val, market, sortCol, sortDir, 1);
+  };
+
+  const applyMarket = (val: MarketFilterSelection) => {
+    const next = parseMarketFilter(val, marketOptions);
+    setMarket(next);
+    setPage(1);
+    syncUrl(q, activation, next, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, activation, sortCol, sortDir, p);
+    syncUrl(q, activation, market, sortCol, sortDir, p);
   };
 
   const handleExport = () => {
-    const headers = ["Venue", "Submitter", "Email", "Status", "Activation", "Submitted", "Updated"];
+    const headers = ["Venue", "Market", "Submitter", "Email", "Status", "Activation", "Submitted", "Updated"];
     const csvRows = sorted.map((r) => [
       r.venue_name,
+      marketCell(r),
       [r.first_name, r.last_name].filter(Boolean).join(" ") || null,
       r.email,
       STATUS_CONFIG[r.status]?.label ?? r.status,
@@ -275,6 +326,9 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
 
   return (
     <div className="space-y-4">
+      {/* Attention-count strip — authoritative activation data, filtered rows only */}
+      <ActivationAttentionStrip counts={attention} />
+
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -298,8 +352,14 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
           <option value="released">Activation: Released</option>
           <option value="not_tracked">Activation: Not tracked</option>
         </select>
+        <MarketFilterSelect
+          options={marketOptions}
+          value={market}
+          onChange={applyMarket}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        />
         <span className="ml-auto text-sm text-gray-400">
-          {filtered.length} of {rows.length}
+          {filtered.length} of {rows.length} {rows.length === 1 ? "submission" : "submissions"}
         </span>
         <button
           type="button"
@@ -331,6 +391,9 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
                     <button onClick={() => applySort("venue_name")} className={thBtnCls}>
                       Business <SortIcon active={sortCol === "venue_name"} dir={sortDir} />
                     </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
+                    <span className={thStaticCls}>Market</span>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
                     <span className={thStaticCls}>Submitter</span>
@@ -377,6 +440,19 @@ export default function SubmissionsTable({ rows }: { rows: Row[] }) {
                       {(row.city || row.province) && (
                         <p className="text-xs text-gray-400 mt-0.5">
                           {[row.city, row.province].filter(Boolean).join(", ")}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                      {marketDisplayName(row.marketId, marketOptions) ?? (
+                        <span className="text-gray-400 italic">Unassigned</span>
+                      )}
+                      {row.marketInferred && (
+                        <p
+                          className="text-[11px] text-gray-400 mt-0.5"
+                          title="No linked venue yet — matched from the submitted city/province"
+                        >
+                          Inferred from city
                         </p>
                       )}
                     </td>

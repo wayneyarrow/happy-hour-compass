@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ export type OperatorSubmissionRow = {
   status: string;
   match_status: string;
   venue_id: string | null;
+  /** The linked venue's market (venues.market_id); null when unlinked or the venue has none. */
+  venue_market_id: string | null;
   email_domain_matches_website: boolean | null;
   is_public_email_domain: boolean | null;
   role_trust_level: string | null;
@@ -119,32 +122,36 @@ export async function getOperatorSubmissions(tab: string): Promise<{
 }> {
   const supabase = createAdminClient();
 
+  // Tab filter, applied identically to the count and every page.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = supabase
-    .from("operator_submissions")
-    .select(
+  const tabFilter = (q: any) => {
+    if (tab === "needs_review") return q.in("status", NEEDS_REVIEW_STATUSES);
+    if (tab === "confirmed_auto") return q.eq("status", "confirmed_auto");
+    return q; // "all" → no additional filter
+  };
+
+  // Complete read (past PostgREST's 1,000-row cap, ordered by id — see
+  // fetchAllRows()) so the list's filters, counts and export cover every row.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: Record<string, any>[];
+  try {
+    data = await fetchAllRows(
+      supabase,
+      "operator_submissions",
       `id, submitted_at, updated_at, venue_name, city, province,
        first_name, last_name, email, position,
        status, match_status, venue_id,
-       email_domain_matches_website, is_public_email_domain, role_trust_level`
-    )
-    .order("submitted_at", { ascending: false });
-
-  if (tab === "needs_review") {
-    query = query.in("status", NEEDS_REVIEW_STATUSES);
-  } else if (tab === "confirmed_auto") {
-    query = query.eq("status", "confirmed_auto");
-  }
-  // "all" → no additional filter
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("[getOperatorSubmissions]", error.message);
+       email_domain_matches_website, is_public_email_domain, role_trust_level,
+       venues!venue_id ( market_id )`,
+      tabFilter,
+      ["id"]
+    );
+  } catch (e) {
+    console.error("[getOperatorSubmissions]", e instanceof Error ? e.message : e);
     return { submissions: [], error: "Failed to load submissions." };
   }
 
-  const submissions: OperatorSubmissionRow[] = (data ?? []).map(
+  const submissions: OperatorSubmissionRow[] = data.map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (row: Record<string, any>) => ({
       id:                          row.id as string,
@@ -160,11 +167,16 @@ export async function getOperatorSubmissions(tab: string): Promise<{
       status:                      row.status as string,
       match_status:                row.match_status as string,
       venue_id:                    row.venue_id as string | null,
+      venue_market_id:
+        ((Array.isArray(row.venues) ? row.venues[0] : row.venues) as { market_id: string | null } | null)
+          ?.market_id ?? null,
       email_domain_matches_website: row.email_domain_matches_website as boolean | null,
       is_public_email_domain:       row.is_public_email_domain as boolean | null,
       role_trust_level:             row.role_trust_level as string | null,
     })
   );
+  // Newest first, as before (fetch order is by id for page stability).
+  submissions.sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
 
   return { submissions, error: null };
 }

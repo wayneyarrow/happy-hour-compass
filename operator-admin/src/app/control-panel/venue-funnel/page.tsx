@@ -3,13 +3,14 @@ export const metadata = { title: "Venue Funnel" };
 
 import { getVenueFunnelData } from "@/lib/data/venueFunnel";
 import VenueFunnelBoard from "./VenueFunnelBoard";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export default async function VenueFunnelPage() {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const data = await getVenueFunnelData();
+  const [data, marketOptions] = await Promise.all([getVenueFunnelData(), getControlPanelMarketOptions()]);
 
   return (
     <div className="max-w-full">
@@ -29,7 +30,7 @@ export default async function VenueFunnelPage() {
         </div>
       )}
 
-      <VenueFunnelBoard lanes={data.lanes} />
+      <VenueFunnelBoard lanes={data.lanes} marketOptions={marketOptions} />
     </div>
   );
 }

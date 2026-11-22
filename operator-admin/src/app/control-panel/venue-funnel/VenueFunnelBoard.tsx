@@ -1,10 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FunnelLane, VenueFunnelCard } from "@/lib/data/venueFunnel";
 import type { SetupFollowUp } from "@/lib/data/venueFunnelSetupFollowUp";
 import { formatDate } from "@/lib/controlPanelDateTime";
+import MarketFilterSelect from "@/components/MarketFilterSelect";
+import {
+  MARKET_FILTER_ALL,
+  marketDisplayName,
+  matchesMarketFilter,
+  parseMarketFilter,
+  readMarketFilterParam,
+  resolveMarketAssignment,
+  writeMarketFilterParam,
+  type MarketFilterOption,
+  type MarketFilterSelection,
+} from "@/lib/marketFilter";
 
 /**
  * Venue Funnel board — read-only Kanban view. Lane assignment is entirely
@@ -13,9 +25,10 @@ import { formatDate } from "@/lib/controlPanelDateTime";
  * placement, so moving one would be meaningless (and immediately reverted
  * on next load).
  *
- * Filters (city / published / plan) are client-side only, over the already-
- * loaded lane data — no re-query, matching the "keep V1 filters minimal"
- * product decision.
+ * Filters (market / city / published / plan) are client-side only, over the
+ * already-loaded lane data — no re-query, matching the "keep V1 filters
+ * minimal" product decision. Lane totals are counted from the filtered
+ * cards. Market is also kept in a page-specific ?market= param.
  */
 
 const PLAN_BADGE: Record<string, string> = {
@@ -97,13 +110,16 @@ function SetupFollowUpBlock({ followUp, venueName }: { followUp: SetupFollowUp; 
   );
 }
 
-function FunnelCardView({ card }: { card: VenueFunnelCard }) {
+function FunnelCardView({ card, marketLabel }: { card: VenueFunnelCard; marketLabel: string }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-resting p-3 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate" title={card.name}>{card.name}</p>
           {card.city && <p className="text-xs text-gray-400 truncate">{card.city}</p>}
+          <p className="text-[11px] text-gray-400 truncate" title={card.marketInferred ? "No linked venue yet — matched from the submitted city/province" : undefined}>
+            {marketLabel}
+          </p>
         </div>
       </div>
 
@@ -183,7 +199,7 @@ function FunnelCardView({ card }: { card: VenueFunnelCard }) {
   );
 }
 
-function LaneColumn({ lane }: { lane: FunnelLane }) {
+function LaneColumn({ lane, marketLabelFor }: { lane: FunnelLane; marketLabelFor: (card: VenueFunnelCard) => string }) {
   const isWarning = WARNING_LANES.has(lane.key);
   return (
     <div className="w-72 shrink-0 flex flex-col">
@@ -216,25 +232,38 @@ function LaneColumn({ lane }: { lane: FunnelLane }) {
         {lane.cards.length === 0 ? (
           <p className="text-xs text-gray-400 italic text-center py-6">No venues</p>
         ) : (
-          lane.cards.map((card) => <FunnelCardView key={`${card.kind}-${card.id}`} card={card} />)
+          lane.cards.map((card) => <FunnelCardView key={`${card.kind}-${card.id}`} card={card} marketLabel={marketLabelFor(card)} />)
         )}
       </div>
     </div>
   );
 }
 
-export default function VenueFunnelBoard({ lanes }: { lanes: FunnelLane[] }) {
+export default function VenueFunnelBoard({
+  lanes,
+  marketOptions,
+}: {
+  lanes: FunnelLane[];
+  marketOptions: MarketFilterOption[];
+}) {
+  const [market, setMarket] = useState<MarketFilterSelection>(MARKET_FILTER_ALL);
   const [city, setCity] = useState<string>("all");
   const [published, setPublished] = useState<"all" | "published" | "unpublished">("all");
   const [plan, setPlan] = useState<string>("all");
 
   const allCards = useMemo(() => lanes.flatMap((l) => l.cards), [lanes]);
 
+  // City options follow the selected market (a city outside it can't match).
   const cities = useMemo(() => {
     const set = new Set<string>();
-    for (const c of allCards) if (c.city) set.add(c.city);
+    for (const c of allCards) {
+      if (!c.city) continue;
+      if (!matchesMarketFilter(resolveMarketAssignment(c.marketId, marketOptions), market)) continue;
+      set.add(c.city);
+    }
+    if (city !== "all") set.add(city); // keep the current choice selectable
     return [...set].sort();
-  }, [allCards]);
+  }, [allCards, market, marketOptions, city]);
 
   const plans = useMemo(() => {
     const set = new Set<string>();
@@ -242,10 +271,35 @@ export default function VenueFunnelBoard({ lanes }: { lanes: FunnelLane[] }) {
     return [...set];
   }, [allCards]);
 
+  // ?market=: restore on load; unknown values fall back to All markets and are dropped from the URL.
+  useEffect(() => {
+    const { selection, rejected } = readMarketFilterParam(window.location.search, marketOptions);
+    setMarket(selection);
+    if (rejected) syncMarketUrl(selection);
+    // Hydrate once on mount only — marketOptions is fixed server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncMarketUrl = (selection: MarketFilterSelection) => {
+    const p = writeMarketFilterParam(new URLSearchParams(window.location.search), selection);
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  };
+
+  const applyMarket = (val: MarketFilterSelection) => {
+    const next = parseMarketFilter(val, marketOptions);
+    setMarket(next);
+    syncMarketUrl(next);
+  };
+
+  const marketLabelFor = (card: VenueFunnelCard): string =>
+    (marketDisplayName(card.marketId, marketOptions) ?? "Unassigned") + (card.marketInferred ? " (inferred)" : "");
+
   const filteredLanes = useMemo(() => {
     return lanes.map((lane) => ({
       ...lane,
       cards: lane.cards.filter((c) => {
+        if (!matchesMarketFilter(resolveMarketAssignment(c.marketId, marketOptions), market)) return false;
         if (city !== "all" && c.city !== city) return false;
         if (published === "published" && c.isPublished !== true) return false;
         if (published === "unpublished" && c.isPublished !== false) return false;
@@ -253,7 +307,7 @@ export default function VenueFunnelBoard({ lanes }: { lanes: FunnelLane[] }) {
         return true;
       }),
     }));
-  }, [lanes, city, published, plan]);
+  }, [lanes, market, marketOptions, city, published, plan]);
 
   const totalCount = allCards.length;
   const filteredCount = filteredLanes.reduce((sum, l) => sum + l.cards.length, 0);
@@ -261,6 +315,12 @@ export default function VenueFunnelBoard({ lanes }: { lanes: FunnelLane[] }) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        <MarketFilterSelect
+          options={marketOptions}
+          value={market}
+          onChange={applyMarket}
+          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
+        />
         <select
           value={city}
           onChange={(e) => setCity(e.target.value)}
@@ -302,7 +362,7 @@ export default function VenueFunnelBoard({ lanes }: { lanes: FunnelLane[] }) {
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {filteredLanes.map((lane) => (
-          <LaneColumn key={lane.key} lane={lane} />
+          <LaneColumn key={lane.key} lane={lane} marketLabelFor={marketLabelFor} />
         ))}
       </div>
     </div>

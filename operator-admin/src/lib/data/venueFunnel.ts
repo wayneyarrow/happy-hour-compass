@@ -55,6 +55,9 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
+import { fetchCityGeographyLookup, type CityGeographyLookup } from "@/lib/geo/venueGeographyResolver";
+import { attributeSubmissionMarket } from "@/lib/marketAttribution";
 import {
   computeSetupHealth,
   buildVenuePlanMap,
@@ -240,6 +243,14 @@ export type VenueFunnelCard = {
    * follow-up data couldn't be read.
    */
   setupFollowUp: SetupFollowUp | null;
+  /**
+   * The card's market, attributed exactly like its source screen: claim →
+   * the claimed venue's market; submission → the linked venue's market,
+   * else inferred from city/province (marketInferred) — see
+   * src/lib/marketAttribution.ts; venue → venues.market_id. Null = Unassigned.
+   */
+  marketId: string | null;
+  marketInferred: boolean;
 };
 
 export type FunnelLane = {
@@ -279,13 +290,16 @@ type ClaimRow = {
   email: string;
   created_at: string;
   status: string;
-  venues: { name: string | null; city: string | null; claimed_at: string | null } | { name: string | null; city: string | null; claimed_at: string | null }[] | null;
+  venues: ClaimVenueEmbed | ClaimVenueEmbed[] | null;
 };
+
+type ClaimVenueEmbed = { name: string | null; city: string | null; claimed_at: string | null; market_id: string | null };
 
 type SubmissionRow = {
   id: string;
   venue_name: string;
   city: string | null;
+  province: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string;
@@ -381,30 +395,53 @@ export function classifyVenueLane(input: VenueLaneClassificationInput): VenueLan
 export async function getVenueFunnelData(): Promise<VenueFunnelData> {
   const supabase = createAdminClient();
 
-  const [r_claims, r_submissions, r_venues] = await Promise.all([
-    supabase
-      .from("venue_claims")
-      .select("id, venue_id, first_name, last_name, email, created_at, status, venues(name, city, claimed_at)")
-      .in("status", ACTIVE_CLAIM_STATUSES)
-      .gte("created_at", VENUE_FUNNEL_START_AT),
-    supabase
-      .from("operator_submissions")
-      .select("id, venue_name, city, first_name, last_name, email, submitted_at, venue_id")
-      .in("status", ACTIVE_SUBMISSION_STATUSES)
-      .gte("submitted_at", VENUE_FUNNEL_START_AT),
+  // Complete reads (past PostgREST's 1,000-row cap, ordered by id — see
+  // fetchAllRows()), so lane totals always cover every source record. A failed
+  // read shows as an empty source, as before (logged).
+  const completeOrEmpty = async <T,>(label: string, read: Promise<T[]>): Promise<T[]> => {
+    try {
+      return await read;
+    } catch (e) {
+      console.error(`[getVenueFunnelData] ${label} read failed:`, e instanceof Error ? e.message : e);
+      return [];
+    }
+  };
+
+  const [claims, submissions, activeVenues, geographyLookup] = await Promise.all([
+    completeOrEmpty<ClaimRow>("venue_claims", fetchAllRows<ClaimRow>(
+      supabase,
+      "venue_claims",
+      "id, venue_id, first_name, last_name, email, created_at, status, venues(name, city, claimed_at, market_id)",
+      (q) => q.in("status", ACTIVE_CLAIM_STATUSES)
+        .gte("created_at", VENUE_FUNNEL_START_AT),
+      ["id"]
+    )),
+    completeOrEmpty<SubmissionRow>("operator_submissions", fetchAllRows<SubmissionRow>(
+      supabase,
+      "operator_submissions",
+      "id, venue_name, city, province, first_name, last_name, email, submitted_at, venue_id",
+      (q) => q.in("status", ACTIVE_SUBMISSION_STATUSES)
+        .gte("submitted_at", VENUE_FUNNEL_START_AT),
+      ["id"]
+    )),
     // NOT filtered by VENUE_FUNNEL_START_AT — see that constant's doc
     // comment. Many legitimate venues were seeded before the Funnel start
     // and are legitimately claimed/onboarding today; the boundary excludes
     // pre-launch Entry-state test noise only, never downstream inventory.
-    supabase
-      .from("venues")
-      .select(VENUE_SELECT)
-      .not("created_by_operator_id", "is", null),
+    completeOrEmpty<VenueWithSetup & { market_id: string | null }>("venues", fetchAllRows<VenueWithSetup & { market_id: string | null }>(
+      supabase,
+      "venues",
+      `${VENUE_SELECT}, market_id`,
+      (q) => q.not("created_by_operator_id", "is", null),
+      ["id"]
+    )),
+    // Geography lookup for unlinked submissions' inferred market. If it can't
+    // load, those submissions are simply Unassigned (never guessed).
+    fetchCityGeographyLookup(supabase).catch((e): CityGeographyLookup | null => {
+      console.error("[getVenueFunnelData] geography lookup failed:", e instanceof Error ? e.message : e);
+      return null;
+    }),
   ]);
-
-  const claims = (r_claims.data ?? []) as unknown as ClaimRow[];
-  const submissions = (r_submissions.data ?? []) as SubmissionRow[];
-  const activeVenues = (r_venues.data ?? []) as VenueWithSetup[];
 
   const activeVenueIds = activeVenues.map((v) => v.id);
   const opIds = [...new Set(activeVenues.map((v) => v.created_by_operator_id).filter((id): id is string => !!id))];
@@ -417,11 +454,11 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
   const submissionVenueIds = submissions.map((s) => s.venue_id).filter((id): id is string => !!id);
   const { data: submissionVenuesData } =
     submissionVenueIds.length > 0
-      ? await supabase.from("venues").select("id, claimed_at").in("id", submissionVenueIds)
-      : { data: [] as { id: string; claimed_at: string | null }[] };
-  const submissionVenueClaimedAt = new Map(
-    ((submissionVenuesData ?? []) as { id: string; claimed_at: string | null }[]).map((v) => [v.id, v.claimed_at])
-  );
+      ? await supabase.from("venues").select("id, claimed_at, market_id").in("id", submissionVenueIds)
+      : { data: [] as { id: string; claimed_at: string | null; market_id: string | null }[] };
+  const submissionVenueRows = (submissionVenuesData ?? []) as { id: string; claimed_at: string | null; market_id: string | null }[];
+  const submissionVenueClaimedAt = new Map(submissionVenueRows.map((v) => [v.id, v.claimed_at]));
+  const submissionVenueMarketId = new Map(submissionVenueRows.map((v) => [v.id, v.market_id]));
 
   const [r_media, r_subs, r_ops] = await Promise.all([
     activeVenueIds.length > 0
@@ -502,8 +539,20 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         ageLabel: ageDays !== null ? "Since claim submitted" : null,
         possiblyInactive: false,
         setupFollowUp: null,
+        marketId: venue?.market_id ?? null,
+        marketInferred: false,
       };
     });
+
+  // Same attribution as the Submissions screen (src/lib/marketAttribution.ts).
+  const submissionMarket = (s: SubmissionRow): { marketId: string | null; marketInferred: boolean } => {
+    if (!s.venue_id && !geographyLookup) return { marketId: null, marketInferred: false };
+    const a = attributeSubmissionMarket(
+      { venueId: s.venue_id, venueMarketId: s.venue_id ? (submissionVenueMarketId.get(s.venue_id) ?? null) : null, city: s.city, province: s.province },
+      geographyLookup ?? { byNormalizedName: new Map(), marketProvinceById: new Map() }
+    );
+    return { marketId: a.marketId, marketInferred: a.inferred };
+  };
 
   // ── Entry: Venue Submitted ───────────────────────────────────────────────
   const submissionCards: VenueFunnelCard[] = submissions
@@ -536,6 +585,7 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
         ageLabel: ageDays !== null ? "Since submitted" : null,
         possiblyInactive: false,
         setupFollowUp: null,
+        ...submissionMarket(s),
       };
     });
 
@@ -602,6 +652,8 @@ export async function getVenueFunnelData(): Promise<VenueFunnelData> {
       ageLabel,
       possiblyInactive,
       setupFollowUp: null,
+      marketId: v.market_id ?? null,
+      marketInferred: false,
     };
   });
 

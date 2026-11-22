@@ -2,10 +2,16 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Operators" };
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import { highestPlan } from "@/lib/venueSubscriptions";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import OperatorsTable, { type OperatorRow } from "./OperatorsTable";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import { resolveMarketAssignment, type MarketFilterOption } from "@/lib/marketFilter";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+
+type OperatorDbRow = { id: string; name: string | null; email: string; is_approved: boolean; created_at: string; updated_at: string };
+type VenueDbRow = { id: string; name: string; slug: string; created_by_operator_id: string | null; market_id: string | null };
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -15,81 +21,92 @@ export default async function ControlPanelOperatorsPage() {
 
   const supabase = createAdminClient();
 
-  // Fetch all operators ordered by most recently created.
+  // Scope (unchanged): one row per `operators` account. Team members
+  // (operator_memberships) are not operator accounts and are not listed.
+  //
   // Phase 2B billing review (Part 8): operators.plan is no longer
   // authoritative once venue-level plans can diverge — it is intentionally
   // NOT selected/displayed here any more. See highestVenuePlan below.
-  const { data: opsData, error: opsError } = await supabase
-    .from("operators")
-    .select("id, name, email, is_approved, created_at, updated_at")
-    .order("created_at", { ascending: false });
+  //
+  // Complete reads (past PostgREST's 1,000-row cap, ordered by id — see
+  // fetchAllRows()) so the table's filters and counts cover every operator
+  // and every owned venue.
+  let opsData: OperatorDbRow[] = [];
+  let venuesData: VenueDbRow[] = [];
+  let marketOptions: MarketFilterOption[] = [];
+  let opsError: { message: string } | null = null;
+  try {
+    [opsData, venuesData, marketOptions] = await Promise.all([
+      fetchAllRows<OperatorDbRow>(supabase, "operators", "id, name, email, is_approved, created_at, updated_at", (q) => q, ["id"]),
+      // Owned venues only — the only ones attributed to an operator.
+      fetchAllRows<VenueDbRow>(
+        supabase,
+        "venues",
+        "id, name, slug, created_by_operator_id, market_id",
+        (q) => q.not("created_by_operator_id", "is", null),
+        ["id"]
+      ),
+      getControlPanelMarketOptions(),
+    ]);
+  } catch (e) {
+    opsError = { message: e instanceof Error ? e.message : String(e) };
+  }
+  // Most recently created first, as before.
+  opsData.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
-  // Fetch venues so we can map operator → venue(s).
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select("id, name, slug, created_by_operator_id");
-
-  // Build operator_id → venue map (one venue per operator FOR DISPLAY —
-  // pre-existing beta simplification, unchanged; a multi-venue operator's
-  // additional venues are not shown as a second row here, same as before
-  // Phase 2B). The plan computation below is separate and considers every
-  // venue the operator owns, not just this displayed one.
-  const venueMap = new Map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (venuesData ?? []).map((v: Record<string, any>) => [
-      v.created_by_operator_id as string,
-      { id: v.id as string, name: v.name as string, slug: v.slug as string },
-    ])
-  );
-
-  // Group ALL venue ids by operator, for the highest-venue-plan computation.
-  const venueIdsByOperator = new Map<string, string[]>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const v of (venuesData ?? []) as Record<string, any>[]) {
-    const opId = v.created_by_operator_id as string | null;
+  // Every venue each operator owns (for markets + plan). The table still
+  // shows one venue per operator for display — the pre-existing beta
+  // simplification — preferring one in the selected market.
+  const venuesByOperator = new Map<string, VenueDbRow[]>();
+  for (const v of venuesData) {
+    const opId = v.created_by_operator_id;
     if (!opId) continue;
-    const list = venueIdsByOperator.get(opId) ?? [];
-    list.push(v.id as string);
-    venueIdsByOperator.set(opId, list);
+    const list = venuesByOperator.get(opId) ?? [];
+    list.push(v);
+    venuesByOperator.set(opId, list);
   }
 
-  // Batched per-venue plan lookup (venue_subscriptions; no row → 'free') —
-  // one query for every venue across every operator, then reduced to a
-  // highest-plan-per-operator map client-side. Never reads operators.plan.
-  const allVenueIds = (venuesData ?? []).map((v) => v.id as string);
-  const { data: venuePlanRows } = allVenueIds.length > 0
-    ? await supabase.from("venue_subscriptions").select("venue_id, plan_code").in("venue_id", allVenueIds)
-    : { data: [] as { venue_id: string; plan_code: string | null }[] };
-  const planByVenueId = new Map(
-    ((venuePlanRows ?? []) as { venue_id: string; plan_code: string | null }[]).map(
-      (r) => [r.venue_id, parseOperatorPlan(r.plan_code)] as const
-    )
-  );
+  // Batched per-venue plan lookup (venue_subscriptions; no row → 'free') for
+  // owned venues only, in chunks so the .in() list stays a safe size. Never
+  // reads operators.plan.
+  const ownedVenueIds = venuesData.map((v) => v.id);
+  const planByVenueId = new Map<string, OperatorPlan>();
+  for (let i = 0; i < ownedVenueIds.length; i += 200) {
+    const chunk = ownedVenueIds.slice(i, i + 200);
+    const { data: planRows } = await supabase.from("venue_subscriptions").select("venue_id, plan_code").in("venue_id", chunk);
+    for (const r of (planRows ?? []) as { venue_id: string; plan_code: string | null }[]) {
+      planByVenueId.set(r.venue_id, parseOperatorPlan(r.plan_code));
+    }
+  }
 
   function highestVenuePlanForOperator(operatorId: string): OperatorPlan {
-    const venueIds = venueIdsByOperator.get(operatorId) ?? [];
-    return highestPlan(venueIds.map((id) => planByVenueId.get(id) ?? "free"));
+    const venues = venuesByOperator.get(operatorId) ?? [];
+    return highestPlan(venues.map((v) => planByVenueId.get(v.id) ?? "free"));
   }
 
-  // Merge venue + plan data into each operator row.
-  const operators: OperatorRow[] = (opsData ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (op: Record<string, any>) => {
-      const venue = venueMap.get(op.id as string) ?? null;
-      return {
-        id:                op.id as string,
-        name:              (op.name as string | null) ?? null,
-        email:             op.email as string,
-        is_approved:       op.is_approved as boolean,
-        highestVenuePlan:  highestVenuePlanForOperator(op.id as string),
-        venueId:           venue?.id ?? null,
-        venueName:         venue?.name ?? null,
-        venueSlug:         venue?.slug ?? null,
-        created_at:        op.created_at as string,
-        updated_at:        op.updated_at as string,
-      };
-    }
-  );
+  // Merge venue + plan + market data into each operator row.
+  const operators: OperatorRow[] = opsData.map((op) => {
+    const owned = venuesByOperator.get(op.id) ?? [];
+    const display = owned[owned.length - 1] ?? null;
+    return {
+      id:               op.id,
+      name:             op.name ?? null,
+      email:            op.email,
+      is_approved:      op.is_approved,
+      highestVenuePlan: highestVenuePlanForOperator(op.id),
+      venueId:          display?.id ?? null,
+      venueName:        display?.name ?? null,
+      venueSlug:        display?.slug ?? null,
+      ownedVenues: owned.map((v) => ({
+        id: v.id,
+        name: v.name,
+        slug: v.slug,
+        ...resolveMarketAssignment(v.market_id ?? null, marketOptions),
+      })),
+      created_at:       op.created_at,
+      updated_at:       op.updated_at,
+    };
+  });
 
   return (
     <div className="max-w-7xl">
@@ -103,7 +120,7 @@ export default async function ControlPanelOperatorsPage() {
         </div>
         {operators.length > 0 && (
           <span className="text-sm text-gray-500">
-            {operators.length} {operators.length === 1 ? "operator" : "operators"}
+            {operators.length} {operators.length === 1 ? "operator" : "operators"} total
           </span>
         )}
       </div>
@@ -141,7 +158,7 @@ export default async function ControlPanelOperatorsPage() {
       )}
 
       {/* Operators table */}
-      {!opsError && operators.length > 0 && <OperatorsTable rows={operators} />}
+      {!opsError && operators.length > 0 && <OperatorsTable rows={operators} marketOptions={marketOptions} />}
     </div>
   );
 }

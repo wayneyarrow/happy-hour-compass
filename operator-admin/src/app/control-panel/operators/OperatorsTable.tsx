@@ -7,6 +7,19 @@ import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import { type OperatorPlan, PLAN_LABELS } from "@/lib/plans";
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
 import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
+import MarketFilterSelect from "@/components/MarketFilterSelect";
+import {
+  MARKET_FILTER_ALL,
+  MARKET_FILTER_UNASSIGNED,
+  marketDisplayName,
+  matchesAnyMarketFilter,
+  parseMarketFilter,
+  readMarketFilterParam,
+  writeMarketFilterParam,
+  type MarketAssignment,
+  type MarketFilterOption,
+  type MarketFilterSelection,
+} from "@/lib/marketFilter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -28,6 +41,12 @@ export type OperatorRow = {
   venueId: string | null;
   venueName: string | null;
   venueSlug: string | null;
+  /**
+   * Every venue this operator owns (venues.created_by_operator_id), with its
+   * market. An operator matches a market when ANY owned venue is in it, and
+   * Unassigned when none of its venues has a market (or it owns none).
+   */
+  ownedVenues: ({ id: string; name: string; slug: string } & MarketAssignment)[];
   created_at: string;   // ISO string
   updated_at: string;   // ISO string
 };
@@ -42,9 +61,10 @@ function readUrlParam(key: string, fallback: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fallback;
 }
 
-function syncUrl(q: string, vq: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, vq: string, market: MarketFilterSelection, sort: string, dir: string, page: number) {
   const p = new URLSearchParams();
   if (q)                    p.set("q",    q);
+  writeMarketFilterParam(p, market);
   if (vq)                   p.set("vq",   vq);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir !== "desc")       p.set("dir",  dir);
@@ -64,9 +84,24 @@ const PLAN_BADGE_VARIANT: Record<OperatorPlan, StatusVariant> = {
 
 // ── OperatorsTable ─────────────────────────────────────────────────────────────
 
-export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
+/** Distinct market names across an operator's venues, in configured order; [] = Unassigned. */
+function operatorMarketNames(op: OperatorRow, options: readonly MarketFilterOption[]): string[] {
+  const ids = new Set(op.ownedVenues.map((v) => v.marketId).filter((id): id is string => !!id));
+  const known = options.filter((o) => ids.has(o.id)).map((o) => o.name);
+  const unknown = [...ids].filter((id) => !options.some((o) => o.id === id)).map((id) => marketDisplayName(id, options)!);
+  return [...known, ...unknown];
+}
+
+export default function OperatorsTable({
+  rows,
+  marketOptions,
+}: {
+  rows: OperatorRow[];
+  marketOptions: MarketFilterOption[];
+}) {
   const [q,       setQ]       = useState("");
   const [vq,      setVq]      = useState("");
+  const [market,  setMarket]  = useState<MarketFilterSelection>(MARKET_FILTER_ALL);
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page,    setPage]    = useState(1);
@@ -78,12 +113,34 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir", "desc") as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
+    // ?market=: unknown values fall back to All markets and are dropped from the URL.
+    const { selection, rejected } = readMarketFilterParam(window.location.search, marketOptions);
+    setMarket(selection);
+    if (rejected) {
+      const p = new URLSearchParams(window.location.search);
+      writeMarketFilterParam(p, selection);
+      const qs = p.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    }
+    // Hydrate once on mount only — marketOptions is fixed server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // With a specific market selected, show (search, sort and export) the
+  // operator's venue in that market rather than an arbitrary one of theirs.
+  const viewRows = useMemo(() => {
+    if (market === MARKET_FILTER_ALL || market === MARKET_FILTER_UNASSIGNED) return rows;
+    return rows.map((op) => {
+      const v = op.ownedVenues.find((ov) => ov.marketSlug === market);
+      return v ? { ...op, venueId: v.id, venueName: v.name, venueSlug: v.slug } : op;
+    });
+  }, [rows, market]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
-    return rows.filter((op) => {
+    return viewRows.filter((op) => {
+      if (!matchesAnyMarketFilter(op.ownedVenues, market)) return false;
       if (q) {
         const lq = q.toLowerCase();
         if (!op.name?.toLowerCase().includes(lq) && !op.email.toLowerCase().includes(lq))
@@ -92,7 +149,7 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
       if (vq && !op.venueName?.toLowerCase().includes(vq.toLowerCase())) return false;
       return true;
     });
-  }, [rows, q, vq]);
+  }, [viewRows, q, vq, market]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -132,31 +189,39 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
     setSortCol(col);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, vq, col, newDir, 1);
+    syncUrl(q, vq, market, col, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, vq, sortCol, sortDir, 1);
+    syncUrl(val, vq, market, sortCol, sortDir, 1);
   };
 
   const applyVenueSearch = (val: string) => {
     setVq(val);
     setPage(1);
-    syncUrl(q, val, sortCol, sortDir, 1);
+    syncUrl(q, val, market, sortCol, sortDir, 1);
+  };
+
+  const applyMarket = (val: MarketFilterSelection) => {
+    const next = parseMarketFilter(val, marketOptions);
+    setMarket(next);
+    setPage(1);
+    syncUrl(q, vq, next, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, vq, sortCol, sortDir, p);
+    syncUrl(q, vq, market, sortCol, sortDir, p);
   };
 
   const handleExport = () => {
-    const headers = ["Email", "Venue", "Highest Venue Plan", "Joined", "Updated"];
+    const headers = ["Email", "Venue", "Market", "Highest Venue Plan", "Joined", "Updated"];
     const csvRows = sorted.map((op) => [
       op.email,
       op.venueName,
+      operatorMarketNames(op, marketOptions).join("; ") || "Unassigned",
       PLAN_LABELS[op.highestVenuePlan as OperatorPlan] ?? op.highestVenuePlan,
       fmtDate(op.created_at),
       fmtDate(op.updated_at),
@@ -196,8 +261,14 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
           placeholder="Search by venue…"
           className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
+        <MarketFilterSelect
+          options={marketOptions}
+          value={market}
+          onChange={applyMarket}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        />
         <span className="ml-auto text-sm text-gray-400">
-          {filtered.length} of {rows.length}
+          {filtered.length} of {rows.length} {rows.length === 1 ? "operator" : "operators"}
         </span>
         <button
           type="button"
@@ -237,6 +308,9 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                     <button onClick={() => applySort("venueName")} className={thBtnCls}>
                       Venue <SortIcon active={sortCol === "venueName"} dir={sortDir} />
                     </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
+                    <span className={thStaticCls}>Market</span>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("created_at")} className={thBtnCls}>
@@ -290,6 +364,11 @@ export default function OperatorsTable({ rows }: { rows: OperatorRow[] }) {
                           </>
                         ) : (
                           <span className="text-gray-300">No venue</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {operatorMarketNames(op, marketOptions).join(", ") || (
+                          <span className="text-gray-400 italic">Unassigned</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
