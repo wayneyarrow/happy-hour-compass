@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getVenueWithEventsForConsumerById } from "@/lib/data/venues";
+import { getPublicLegacyVenue } from "./legacyVenueVisibility";
 import { getVenueImageSrc } from "@/lib/venuePlaceholderImage";
 import { BookmarkButton } from "../../BookmarkButton";
 import { ShareButton } from "../../event/[id]/ShareButton";
@@ -21,8 +21,10 @@ export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const venue = await getVenueWithEventsForConsumerById(id);
-  return { title: venue?.name ?? "Venue" };
+  // Same visibility gate as the page — a hidden venue's name never reaches the title.
+  const venue = await getPublicLegacyVenue(id);
+  if (!venue) notFound();
+  return { title: venue.name };
 }
 
 type PageProps = {
@@ -48,7 +50,9 @@ const DAY_ORDER = [
 export default async function VenuePage({ params }: PageProps) {
   const { id } = await params;
 
-  const venue = await getVenueWithEventsForConsumerById(id);
+  // Published AND in a live market — the public site's visibility rule (see
+  // legacyVenueVisibility.ts). Anything else is a 404 with no listing content.
+  const venue = await getPublicLegacyVenue(id);
 
   if (!venue) {
     notFound();
