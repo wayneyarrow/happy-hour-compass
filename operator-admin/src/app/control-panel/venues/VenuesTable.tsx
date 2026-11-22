@@ -6,178 +6,92 @@ import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
 import { buildCsv, downloadCsv } from "@/lib/csvExport";
 import StatusBadge from "@/components/StatusBadge";
 import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
+import MarketFilterSelect from "@/components/MarketFilterSelect";
+import { parseMarketFilter, type MarketFilterOption, type MarketFilterSelection } from "@/lib/marketFilter";
+import {
+  DEFAULT_VENUES_TABLE_STATE,
+  deriveVenuesView,
+  nextSort,
+  nextVenuesState,
+  parseVenuesUrlState,
+  venueMarketLabel,
+  venuesUrlSearch,
+  type ClaimFilter,
+  type PubFilter,
+  type SortCol,
+  type VenueRow,
+  type VenuesTableState,
+  type VerifiedFilter,
+} from "./venuesTableView";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+export type { VenueRow } from "./venuesTableView";
 
-export type VenueRow = {
-  id: string;
-  slug: string;
-  name: string;
-  city: string | null;
-  is_published: boolean;
-  is_verified: boolean;
-  claimed_at: string | null;
-  updated_at: string;      // ISO string
-  operatorEmail: string | null;
-};
-
-type SortCol     = "name" | "city" | "is_published" | "is_verified" | "claimed_at" | "updated_at";
-type PubFilter   = "all" | "published" | "draft";
-type ClaimFilter = "all" | "claimed" | "unclaimed";
-type VerifiedFilter = "all" | "verified" | "unverified";
-
-const PAGE_SIZE   = 25;
-const DEFAULT_SORT: SortCol = "updated_at";
-
-
-function readUrlParam(key: string, fallback: string): string {
-  const p = new URLSearchParams(window.location.search);
-  return p.get(key) ?? fallback;
-}
-
-function syncUrl(q: string, pub: string, claimed: string, verified: string, sort: string, dir: string, page: number) {
-  const p = new URLSearchParams();
-  if (q)              p.set("q",       q);
-  if (pub !== "all")  p.set("pub",     pub);
-  if (claimed !== "all") p.set("claimed", claimed);
-  if (verified !== "all") p.set("verified", verified);
-  if (sort !== DEFAULT_SORT) p.set("sort", sort);
-  if (dir !== "desc") p.set("dir",     dir);
-  if (page > 1)       p.set("page",    String(page));
-  const qs = p.toString();
+function syncUrl(state: VenuesTableState) {
+  const qs = venuesUrlSearch(state);
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
 
 // ── VenuesTable ────────────────────────────────────────────────────────────────
 
-export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
+export default function VenuesTable({
+  rows,
+  marketOptions,
+}: {
+  rows: VenueRow[];
+  marketOptions: MarketFilterOption[];
+}) {
   const router = useRouter();
 
-  const [q,        setQ]        = useState("");
-  const [pub,      setPub]      = useState<PubFilter>("all");
-  const [claimed,  setClaimed]  = useState<ClaimFilter>("all");
-  const [verified, setVerified] = useState<VerifiedFilter>("all");
-  const [sortCol,  setSortCol]  = useState<SortCol>(DEFAULT_SORT);
-  const [sortDir,  setSortDir]  = useState<"asc" | "desc">("desc");
-  const [page,     setPage]     = useState(1);
+  const [state, setState] = useState<VenuesTableState>(DEFAULT_VENUES_TABLE_STATE);
+  const { q, pub, claimed, verified, market, sortCol, sortDir } = state;
 
-  // Hydrate state from URL once on mount
+  // Hydrate state from URL once on mount. An unknown ?market= value falls back
+  // to All markets and is dropped from the URL so the address bar matches.
   useEffect(() => {
-    const q0        = readUrlParam("q",        "");
-    const pub0      = readUrlParam("pub",      "all") as PubFilter;
-    const claimed0  = readUrlParam("claimed",  "all") as ClaimFilter;
-    const verified0 = readUrlParam("verified", "all") as VerifiedFilter;
-    const sort0     = readUrlParam("sort",     DEFAULT_SORT) as SortCol;
-    const dir0      = readUrlParam("dir",      "desc") as "asc" | "desc";
-    const page0     = Math.max(1, parseInt(readUrlParam("page", "1"), 10));
-    setQ(q0);
-    setPub(pub0);
-    setClaimed(claimed0);
-    setVerified(verified0);
-    setSortCol(sort0);
-    setSortDir(dir0);
-    setPage(page0);
+    const { state: initial, marketRejected } = parseVenuesUrlState(window.location.search, marketOptions);
+    setState(initial);
+    if (marketRejected) syncUrl(initial);
+    // Hydrate once on mount only — marketOptions is fixed server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Derived data ──────────────────────────────────────────────────────────
+  const marketNameById = useMemo(
+    () => new Map(marketOptions.map((o) => [o.id, o.name])),
+    [marketOptions]
+  );
+  const marketLabel = (v: VenueRow) => venueMarketLabel(v, marketNameById);
 
-  const filtered = useMemo(() => {
-    const lq = q.toLowerCase();
-    return rows.filter((v) => {
-      if (lq && !v.name.toLowerCase().includes(lq) &&
-                !(v.operatorEmail?.toLowerCase().includes(lq))) return false;
-      if (pub === "published"  && !v.is_published) return false;
-      if (pub === "draft"      &&  v.is_published) return false;
-      if (claimed === "claimed"   && !v.claimed_at) return false;
-      if (claimed === "unclaimed" &&  v.claimed_at) return false;
-      if (verified === "verified"   && !v.is_verified) return false;
-      if (verified === "unverified" &&  v.is_verified) return false;
-      return true;
-    });
-  }, [rows, q, pub, claimed, verified]);
+  // ── Derived data (filter → sort → paginate) ───────────────────────────────
 
-  const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      switch (sortCol) {
-        case "name":
-          cmp = a.name.localeCompare(b.name);
-          break;
-        case "city":
-          if (!a.city && !b.city) cmp = 0;
-          else if (!a.city) cmp = 1;
-          else if (!b.city) cmp = -1;
-          else cmp = a.city.localeCompare(b.city);
-          break;
-        case "is_published":
-          cmp = a.is_published === b.is_published ? 0 : a.is_published ? -1 : 1;
-          break;
-        case "is_verified":
-          cmp = a.is_verified === b.is_verified ? 0 : a.is_verified ? -1 : 1;
-          break;
-        case "claimed_at":
-          if (!a.claimed_at && !b.claimed_at) cmp = 0;
-          else if (!a.claimed_at) cmp = 1;
-          else if (!b.claimed_at) cmp = -1;
-          else cmp = a.claimed_at.localeCompare(b.claimed_at);
-          break;
-        case "updated_at":
-          cmp = a.updated_at.localeCompare(b.updated_at);
-          break;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [filtered, sortCol, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const safePage   = Math.min(page, totalPages);
-  const pageRows   = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const { filtered, sorted, pageRows, totalPages, safePage } = useMemo(
+    () => deriveVenuesView(rows, state, marketNameById),
+    [rows, state, marketNameById]
+  );
 
   // ── State update helpers ──────────────────────────────────────────────────
+  // Every change writes the full state to the URL; any filter, search or sort
+  // change returns to page 1.
 
-  const applySort = (col: SortCol) => {
-    const newDir = col === sortCol && sortDir === "desc" ? "asc" : "desc";
-    const newCol = col;
-    setSortCol(newCol);
-    setSortDir(newDir);
-    setPage(1);
-    syncUrl(q, pub, claimed, verified, newCol, newDir, 1);
+  const update = (change: Parameters<typeof nextVenuesState>[1]) => {
+    const next = nextVenuesState(state, change);
+    setState(next);
+    syncUrl(next);
   };
 
-  const applySearch = (val: string) => {
-    setQ(val);
-    setPage(1);
-    syncUrl(val, pub, claimed, verified, sortCol, sortDir, 1);
-  };
-
-  const applyPub = (val: PubFilter) => {
-    setPub(val);
-    setPage(1);
-    syncUrl(q, val, claimed, verified, sortCol, sortDir, 1);
-  };
-
-  const applyClaimed = (val: ClaimFilter) => {
-    setClaimed(val);
-    setPage(1);
-    syncUrl(q, pub, val, verified, sortCol, sortDir, 1);
-  };
-
-  const applyVerified = (val: VerifiedFilter) => {
-    setVerified(val);
-    setPage(1);
-    syncUrl(q, pub, claimed, val, sortCol, sortDir, 1);
-  };
-
-  const applyPage = (p: number) => {
-    setPage(p);
-    syncUrl(q, pub, claimed, verified, sortCol, sortDir, p);
-  };
+  const applySort     = (col: SortCol) => update(nextSort(state, col));
+  const applySearch   = (val: string) => update({ q: val });
+  const applyPub      = (val: PubFilter) => update({ pub: val });
+  const applyClaimed  = (val: ClaimFilter) => update({ claimed: val });
+  const applyVerified = (val: VerifiedFilter) => update({ verified: val });
+  const applyMarket   = (val: MarketFilterSelection) => update({ market: parseMarketFilter(val, marketOptions) });
+  const applyPage     = (p: number) => update({ page: p });
 
   const handleExport = () => {
-    const headers = ["Venue", "City", "Published", "Verified", "Claimed", "Operator", "Updated"];
+    const headers = ["Venue", "City", "Market", "Published", "Verified", "Claimed", "Operator", "Updated"];
     const csvRows = sorted.map((v) => [
       v.name,
       v.city,
+      marketLabel(v) ?? "Unassigned",
       v.is_published ? "Yes" : "No",
       v.is_verified ? "Yes" : "No",
       v.claimed_at  ? "Yes" : "No",
@@ -243,8 +157,14 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
           <option value="verified">Verified</option>
           <option value="unverified">Unverified</option>
         </select>
+        <MarketFilterSelect
+          options={marketOptions}
+          value={market}
+          onChange={applyMarket}
+          className={selectCls}
+        />
         <span className="ml-auto text-sm text-gray-400">
-          {filtered.length} of {rows.length}
+          {filtered.length} of {rows.length} {rows.length === 1 ? "venue" : "venues"}
         </span>
         <button
           type="button"
@@ -275,6 +195,11 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
                   <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("city")} className={thBtnCls}>
                       City <SortIcon active={sortCol === "city"} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
+                    <button onClick={() => applySort("market")} className={thBtnCls}>
+                      Market <SortIcon active={sortCol === "market"} dir={sortDir} />
                     </button>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
@@ -315,6 +240,9 @@ export default function VenuesTable({ rows }: { rows: VenueRow[] }) {
                     </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {v.city ?? <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      {marketLabel(v) ?? <span className="text-gray-400 italic">Unassigned</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge
