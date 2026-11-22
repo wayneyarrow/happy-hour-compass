@@ -2,8 +2,24 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Venues" };
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import { resolveMarketAssignment, type MarketFilterOption } from "@/lib/marketFilter";
 import VenuesTable, { type VenueRow } from "./VenuesTable";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+
+type VenueDbRow = {
+  id: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  is_published: boolean;
+  is_verified: boolean;
+  claimed_at: string | null;
+  updated_at: string;
+  created_by_operator_id: string | null;
+  market_id: string | null;
+};
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -13,41 +29,51 @@ export default async function ControlPanelVenuesPage() {
 
   const supabase = createAdminClient();
 
-  // Fetch venues ordered by most-recently-updated first
-  const { data: venuesData, error: venuesError } = await supabase
-    .from("venues")
-    .select(
-      "id, slug, name, city, is_published, is_verified, claimed_at, updated_at, created_by_operator_id"
-    )
-    .order("updated_at", { ascending: false });
-
-  // Fetch operators so we can show the linked email per venue
-  const { data: opsData } = await supabase
-    .from("operators")
-    .select("id, email");
+  // Complete reads (PostgREST caps a single response at 1,000 rows — an
+  // unpaginated select would silently truncate the list, and every count and
+  // filter below runs in the browser over this dataset). Ordered by the
+  // immutable primary key so an edit mid-read can't move a row between
+  // pages; fetchAllRows() also verifies count/uniqueness. The table applies
+  // its own default sort (updated_at desc), so fetch order isn't visible.
+  let venuesData: VenueDbRow[] = [];
+  let opsData: { id: string; email: string }[] = [];
+  let marketOptions: MarketFilterOption[] = [];
+  let venuesError: { message: string } | null = null;
+  try {
+    [venuesData, opsData, marketOptions] = await Promise.all([
+      fetchAllRows<VenueDbRow>(
+        supabase,
+        "venues",
+        "id, slug, name, city, is_published, is_verified, claimed_at, updated_at, created_by_operator_id, market_id",
+        (q) => q,
+        ["id"]
+      ),
+      // Operators so we can show the linked email per venue.
+      fetchAllRows<{ id: string; email: string }>(supabase, "operators", "id, email", (q) => q, ["id"]),
+      getControlPanelMarketOptions(),
+    ]);
+  } catch (e) {
+    venuesError = { message: e instanceof Error ? e.message : String(e) };
+  }
 
   // Build a quick id → email map for the join
-  const opMap = new Map(
-    (opsData ?? []).map((op: { id: string; email: string }) => [op.id, op.email])
-  );
+  const opMap = new Map(opsData.map((op) => [op.id, op.email]));
 
-  // Merge operator email into each venue row
-  const venues: VenueRow[] = (venuesData ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (v: Record<string, any>) => ({
-      id:            v.id as string,
-      slug:          v.slug as string,
-      name:          v.name as string,
-      city:          (v.city as string | null) ?? null,
-      is_published:  v.is_published as boolean,
-      is_verified:   v.is_verified as boolean,
-      claimed_at:    (v.claimed_at as string | null) ?? null,
-      updated_at:    v.updated_at as string,
-      operatorEmail: v.created_by_operator_id
-        ? (opMap.get(v.created_by_operator_id as string) ?? null)
-        : null,
-    })
-  );
+  // Merge operator email + market assignment into each venue row
+  const venues: VenueRow[] = venuesData.map((v) => ({
+    id:            v.id,
+    slug:          v.slug,
+    name:          v.name,
+    city:          v.city ?? null,
+    is_published:  v.is_published,
+    is_verified:   v.is_verified,
+    claimed_at:    v.claimed_at ?? null,
+    updated_at:    v.updated_at,
+    operatorEmail: v.created_by_operator_id
+      ? (opMap.get(v.created_by_operator_id) ?? null)
+      : null,
+    ...resolveMarketAssignment(v.market_id ?? null, marketOptions),
+  }));
 
   return (
     <div className="max-w-7xl">
@@ -61,7 +87,7 @@ export default async function ControlPanelVenuesPage() {
         </div>
         {venues.length > 0 && (
           <span className="text-sm text-gray-500">
-            {venues.length} {venues.length === 1 ? "venue" : "venues"}
+            {venues.length} {venues.length === 1 ? "venue" : "venues"} total
           </span>
         )}
       </div>
@@ -104,7 +130,7 @@ export default async function ControlPanelVenuesPage() {
       )}
 
       {/* Venues table */}
-      {!venuesError && venues.length > 0 && <VenuesTable rows={venues} />}
+      {!venuesError && venues.length > 0 && <VenuesTable rows={venues} marketOptions={marketOptions} />}
     </div>
   );
 }
