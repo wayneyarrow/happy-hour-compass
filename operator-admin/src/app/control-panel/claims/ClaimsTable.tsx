@@ -8,6 +8,20 @@ import type { ClaimWithVenue } from "@/lib/data/claims";
 import type { ActivationLifecycleState } from "@/lib/activation/activationState";
 import { ACTIVATION_STATE_LABELS, formatDeadlineCountdown } from "@/lib/activation/activationState";
 import ActivationBadge from "@/components/ActivationBadge";
+import ActivationAttentionStrip from "@/components/ActivationAttentionStrip";
+import MarketFilterSelect from "@/components/MarketFilterSelect";
+import { countActivationAttention } from "@/lib/activation/activationAttention";
+import {
+  MARKET_FILTER_ALL,
+  marketDisplayName,
+  matchesMarketFilter,
+  parseMarketFilter,
+  readMarketFilterParam,
+  writeMarketFilterParam,
+  type MarketAssignment,
+  type MarketFilterOption,
+  type MarketFilterSelection,
+} from "@/lib/marketFilter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -16,7 +30,7 @@ type Row = ClaimWithVenue & {
   updated: string;
   activationState: ActivationLifecycleState;
   activationDeadline: string | null;
-};
+} & MarketAssignment;
 
 type SortCol = "venue_name" | "claimant" | "status" | "created_at" | "updated_at" | "attention";
 type StatusFilter =
@@ -94,9 +108,10 @@ function readUrlParam(key: string, fallback: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? fallback;
 }
 
-function syncUrl(q: string, status: string, sort: string, dir: string, page: number) {
+function syncUrl(q: string, status: string, market: MarketFilterSelection, sort: string, dir: string, page: number) {
   const p = new URLSearchParams();
   if (q)                    p.set("q",      q);
+  writeMarketFilterParam(p, market);
   if (status !== "all")     p.set("status", status);
   if (sort !== DEFAULT_SORT) p.set("sort",  sort);
   if (dir !== DEFAULT_DIR)  p.set("dir",    dir);
@@ -107,11 +122,18 @@ function syncUrl(q: string, status: string, sort: string, dir: string, page: num
 
 // ── ClaimsTable ───────────────────────────────────────────────────────────────
 
-export default function ClaimsTable({ rows }: { rows: Row[] }) {
+export default function ClaimsTable({
+  rows,
+  marketOptions,
+}: {
+  rows: Row[];
+  marketOptions: MarketFilterOption[];
+}) {
   const router = useRouter();
 
   const [q,       setQ]       = useState("");
   const [status,  setStatus]  = useState<StatusFilter>("all");
+  const [market,  setMarket]  = useState<MarketFilterSelection>(MARKET_FILTER_ALL);
   const [sortCol, setSortCol] = useState<SortCol>(DEFAULT_SORT);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(DEFAULT_DIR);
   const [page,    setPage]    = useState(1);
@@ -123,6 +145,17 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
     setSortCol(readUrlParam("sort", DEFAULT_SORT) as SortCol);
     setSortDir(readUrlParam("dir", DEFAULT_DIR) as "asc" | "desc");
     setPage(Math.max(1, parseInt(readUrlParam("page", "1"), 10)));
+    // ?market=: unknown values fall back to All markets and are dropped from the URL.
+    const { selection, rejected } = readMarketFilterParam(window.location.search, marketOptions);
+    setMarket(selection);
+    if (rejected) {
+      const p = new URLSearchParams(window.location.search);
+      writeMarketFilterParam(p, selection);
+      const qs = p.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    }
+    // Hydrate once on mount only — marketOptions is fixed server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -143,9 +176,16 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
           return false;
         }
       }
+      if (!matchesMarketFilter(r, market)) return false;
       return true;
     });
-  }, [rows, q, status]);
+  }, [rows, q, status, market]);
+
+  // Attention strip counts follow the filtered records (market + search + status).
+  const attention = useMemo(
+    () => countActivationAttention(filtered.map((r) => r.activationState)),
+    [filtered]
+  );
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -198,30 +238,38 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
     setSortCol(col);
     setSortDir(newDir);
     setPage(1);
-    syncUrl(q, status, col, newDir, 1);
+    syncUrl(q, status, market, col, newDir, 1);
   };
 
   const applySearch = (val: string) => {
     setQ(val);
     setPage(1);
-    syncUrl(val, status, sortCol, sortDir, 1);
+    syncUrl(val, status, market, sortCol, sortDir, 1);
   };
 
   const applyStatus = (val: StatusFilter) => {
     setStatus(val);
     setPage(1);
-    syncUrl(q, val, sortCol, sortDir, 1);
+    syncUrl(q, val, market, sortCol, sortDir, 1);
+  };
+
+  const applyMarket = (val: MarketFilterSelection) => {
+    const next = parseMarketFilter(val, marketOptions);
+    setMarket(next);
+    setPage(1);
+    syncUrl(q, status, next, sortCol, sortDir, 1);
   };
 
   const applyPage = (p: number) => {
     setPage(p);
-    syncUrl(q, status, sortCol, sortDir, p);
+    syncUrl(q, status, market, sortCol, sortDir, p);
   };
 
   const handleExport = () => {
-    const headers = ["Venue", "Claimant", "Email", "Status", "Activation", "Submitted", "Updated"];
+    const headers = ["Venue", "Market", "Claimant", "Email", "Status", "Activation", "Submitted", "Updated"];
     const csvRows = sorted.map((r) => [
       r.venue_name,
+      marketDisplayName(r.marketId, marketOptions) ?? "Unassigned",
       `${r.first_name} ${r.last_name}`.trim(),
       r.email,
       STATUS[r.status]?.label ?? r.status,
@@ -252,6 +300,9 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
 
   return (
     <div className="space-y-4">
+      {/* Attention-count strip — authoritative activation data, filtered rows only */}
+      <ActivationAttentionStrip counts={attention} />
+
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -280,8 +331,9 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
           <option value="released">Activation: Released</option>
           <option value="not_tracked">Activation: Not tracked</option>
         </select>
+        <MarketFilterSelect options={marketOptions} value={market} onChange={applyMarket} className={selectCls} />
         <span className="ml-auto text-sm text-gray-400">
-          {filtered.length} of {rows.length}
+          {filtered.length} of {rows.length} {rows.length === 1 ? "claim" : "claims"}
         </span>
         <button
           type="button"
@@ -308,6 +360,9 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
                     <button onClick={() => applySort("venue_name")} className={thBtnCls}>
                       Venue <SortIcon active={sortCol === "venue_name"} dir={sortDir} />
                     </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left">
+                    <span className={thStaticCls}>Market</span>
                   </th>
                   <th scope="col" className="px-4 py-3 text-left">
                     <button onClick={() => applySort("claimant")} className={thBtnCls}>
@@ -352,6 +407,11 @@ export default function ClaimsTable({ rows }: { rows: Row[] }) {
                   >
                     <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                       {row.venue_name ?? <span className="text-gray-400 italic">Unknown</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      {marketDisplayName(row.marketId, marketOptions) ?? (
+                        <span className="text-gray-400 italic">Unassigned</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                       {row.first_name} {row.last_name}

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import { getAllMarkets, getCitiesByMarket, getNeighbourhoodsByCity } from "@/lib/geo/geography";
 import type { MarketRecord, CityRecord, NeighbourhoodRecord } from "@/lib/geo/types";
 import type { HistoricalGuideTarget } from "@/lib/guideSlugHistory";
@@ -64,6 +65,8 @@ export type ContentGuideRow = {
   status: GuideStatus;
   title: string;
   slug: string;
+  /** The guide's stored market (content_guides.market_id, required). */
+  marketId: string;
   marketName: string | null;
   cityName: string | null;
   publish_at: string | null;
@@ -118,26 +121,32 @@ export type ContentGuideDetail = {
 export async function getContentGuides(): Promise<ContentGuideRow[]> {
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
-    .from("content_guides")
-    .select(
-      "id, guide_type, status, title, slug, publish_at, updated_at, " +
-        "market:markets(name), city:cities(name)"
-    )
-    .order("updated_at", { ascending: false });
-
-  if (error) {
-    console.error("[getContentGuides]", error.message);
+  // Complete read (past PostgREST's 1,000-row cap, ordered by id — see
+  // fetchAllRows()); re-sorted newest-updated first below, as before.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: Record<string, any>[];
+  try {
+    data = await fetchAllRows(
+      supabase,
+      "content_guides",
+      "id, guide_type, status, title, slug, publish_at, updated_at, market_id, " +
+        "market:markets(name), city:cities(name)",
+      (q) => q,
+      ["id"]
+    );
+  } catch (e) {
+    console.error("[getContentGuides]", e instanceof Error ? e.message : e);
     return [];
   }
+  data.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: Record<string, any>) => ({
+  return data.map((row) => ({
     id:          row.id as string,
     guide_type:  row.guide_type as GuideType,
     status:      normalizeGuideStatus(row.status as string),
     title:       row.title as string,
     slug:        row.slug as string,
+    marketId:    row.market_id as string,
     marketName:  (row.market?.name as string | undefined) ?? null,
     cityName:    (row.city?.name as string | undefined) ?? null,
     publish_at:  row.publish_at as string | null,

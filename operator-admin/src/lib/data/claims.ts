@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,8 @@ export type ClaimWithVenue = {
   created_at: string;
   updated_at: string;
   venue_name: string | null;
+  /** The claimed venue's market (venues.market_id); null = Unassigned. */
+  venue_market_id: string | null;
 };
 
 export type ClaimDetail = {
@@ -83,7 +86,10 @@ function firstOrObject<T>(val: unknown): T | null {
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 /**
- * Fetches all venue claims ordered newest-first, with the linked venue name.
+ * Fetches all venue claims ordered newest-first, with the linked venue's
+ * name and market. A complete read (past PostgREST's 1,000-row cap, ordered
+ * by id — see fetchAllRows()) so the list's browser-side filters, counts and
+ * export always cover every claim.
  * Uses the admin client (service-role) — no operator-level RLS applies here.
  */
 export async function getClaimsForReview(): Promise<{
@@ -92,32 +98,41 @@ export async function getClaimsForReview(): Promise<{
 }> {
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
-    .from("venue_claims")
-    .select(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: Record<string, any>[];
+  try {
+    data = await fetchAllRows(
+      supabase,
+      "venue_claims",
       `id, venue_id, first_name, last_name, position, phone, email, status, created_at, updated_at,
-       venues ( name )`
-    )
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[getClaimsForReview]", error.message);
+       venues ( name, market_id )`,
+      (q) => q,
+      ["id"]
+    );
+  } catch (e) {
+    console.error("[getClaimsForReview]", e instanceof Error ? e.message : e);
     return { claims: [], error: "Failed to load claims." };
   }
 
-  const claims: ClaimWithVenue[] = (data ?? []).map((row) => ({
-    id: row.id as string,
-    venue_id: row.venue_id as string,
-    first_name: row.first_name as string,
-    last_name: row.last_name as string,
-    position: row.position as string,
-    phone: row.phone as string,
-    email: row.email as string,
-    status: row.status as string,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-    venue_name: firstOrObject<{ name: string }>(row.venues)?.name ?? null,
-  }));
+  const claims: ClaimWithVenue[] = data.map((row) => {
+    const venue = firstOrObject<{ name: string; market_id: string | null }>(row.venues);
+    return {
+      id: row.id as string,
+      venue_id: row.venue_id as string,
+      first_name: row.first_name as string,
+      last_name: row.last_name as string,
+      position: row.position as string,
+      phone: row.phone as string,
+      email: row.email as string,
+      status: row.status as string,
+      created_at: row.created_at as string,
+      updated_at: row.updated_at as string,
+      venue_name: venue?.name ?? null,
+      venue_market_id: venue?.market_id ?? null,
+    };
+  });
+  // Newest first, as before (fetch order is by id for page stability).
+  claims.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return { claims, error: null };
 }

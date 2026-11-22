@@ -3,6 +3,11 @@ import { getOperatorSubmissions } from "@/lib/data/operatorSubmissions";
 import { formatDateTime } from "@/lib/controlPanelDateTime";
 import { getActivationPresentationsForSubmissions } from "@/lib/activation/activationPresentation";
 import SubmissionsTable from "./SubmissionsTable";
+import { createAdminClient } from "@/lib/supabase/server";
+import { fetchCityGeographyLookup } from "@/lib/geo/venueGeographyResolver";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import { attributeSubmissionMarket } from "@/lib/marketAttribution";
+import { parseMarketFilter, resolveMarketAssignment, writeMarketFilterParam } from "@/lib/marketFilter";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +41,22 @@ export default async function OperatorSubmissionsPage({
   const rawTab = typeof params.tab === "string" ? params.tab : undefined;
   const activeTab: TabKey = isValidTab(rawTab) ? rawTab : "needs_review";
 
-  const { submissions, error } = await getOperatorSubmissions(activeTab);
+  const [{ submissions, error }, marketOptions, geographyLookup] = await Promise.all([
+    getOperatorSubmissions(activeTab),
+    getControlPanelMarketOptions(),
+    fetchCityGeographyLookup(createAdminClient()),
+  ]);
+
+  // Tabs keep the current (valid) market selection; everything else resets.
+  const marketSelection = parseMarketFilter(
+    typeof params.market === "string" ? params.market : null,
+    marketOptions
+  );
+  const tabHref = (tab: string) => {
+    const p = new URLSearchParams({ tab });
+    writeMarketFilterParam(p, marketSelection);
+    return `/control-panel/operator-submissions?${p.toString()}`;
+  };
 
   // Batch-fetch for EVERY submission on this page, not just status==="approved"
   // — confirmed_auto submissions are provisioned (and can have a live
@@ -47,9 +67,6 @@ export default async function OperatorSubmissionsPage({
   const submissionIds = submissions.map((s) => s.id);
   const activationBySubmissionId = await getActivationPresentationsForSubmissions(submissionIds);
 
-  const awaitingSetupCount = [...activationBySubmissionId.values()].filter((p) => p.state === "awaiting_setup").length;
-  const expiringSoonCount = [...activationBySubmissionId.values()].filter((p) => p.state === "expiring_soon").length;
-  const releaseRequiredCount = [...activationBySubmissionId.values()].filter((p) => p.state === "release_required").length;
 
   return (
     <div className="max-w-7xl">
@@ -63,7 +80,7 @@ export default async function OperatorSubmissionsPage({
         </div>
         {submissions.length > 0 && (
           <span className="text-sm text-gray-500">
-            {submissions.length} {submissions.length === 1 ? "submission" : "submissions"}
+            {submissions.length} {submissions.length === 1 ? "submission" : "submissions"} in this tab
           </span>
         )}
       </div>
@@ -76,7 +93,7 @@ export default async function OperatorSubmissionsPage({
             return (
               <Link
                 key={tab.key}
-                href={`/control-panel/operator-submissions?tab=${tab.key}`}
+                href={tabHref(tab.key)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   isActive
                     ? "border-amber-500 text-amber-700"
@@ -90,18 +107,7 @@ export default async function OperatorSubmissionsPage({
         </nav>
       </div>
 
-      {/* Attention-count strip — authoritative activation data only */}
-      {(awaitingSetupCount > 0 || expiringSoonCount > 0 || releaseRequiredCount > 0) && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
-          {releaseRequiredCount > 0 && (
-            <span className="text-red-700 font-medium">{releaseRequiredCount} Release required</span>
-          )}
-          {expiringSoonCount > 0 && (
-            <span className="text-amber-700 font-medium">{expiringSoonCount} Expiring soon</span>
-          )}
-          {awaitingSetupCount > 0 && <span>{awaitingSetupCount} Awaiting setup</span>}
-        </div>
-      )}
+      {/* Attention-count strip: rendered by SubmissionsTable from the filtered rows. */}
 
       {/* ── Error state ────────────────────────────────────────────────────────── */}
       {error && (
@@ -142,14 +148,22 @@ export default async function OperatorSubmissionsPage({
       {/* ── Table ────────────────────────────────────────────────────────────────── */}
       {!error && submissions.length > 0 && (
         <SubmissionsTable
+          marketOptions={marketOptions}
           rows={submissions.map((s) => {
             const activation = activationBySubmissionId.get(s.id) ?? null;
+            // Linked venue's market, else inferred from city/province (labelled), else Unassigned.
+            const attributed = attributeSubmissionMarket(
+              { venueId: s.venue_id, venueMarketId: s.venue_market_id, city: s.city, province: s.province },
+              geographyLookup
+            );
             return {
               ...s,
               submitted: formatDateTime(s.submitted_at),
               updated:   formatDateTime(s.updated_at),
               activationState: activation?.state ?? "not_tracked",
               activationDeadline: activation?.lifecycle?.deadlineAt ?? null,
+              ...resolveMarketAssignment(attributed.marketId, marketOptions),
+              marketInferred: attributed.inferred,
             };
           })}
         />

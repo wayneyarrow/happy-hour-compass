@@ -6,6 +6,15 @@ import { getContentGuides, type GuideStatus, type GuideType } from "@/lib/data/c
 import StatusBadge, { type StatusVariant } from "@/components/StatusBadge";
 import { formatDate as fmtDate } from "@/lib/controlPanelDateTime";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import UrlMarketFilter from "@/components/UrlMarketFilter";
+import {
+  MARKET_FILTER_ALL,
+  MARKET_FILTER_UNASSIGNED,
+  matchesMarketFilter,
+  parseMarketFilter,
+  resolveMarketAssignment,
+} from "@/lib/marketFilter";
 
 // ── Display maps ─────────────────────────────────────────────────────────────
 
@@ -32,12 +41,26 @@ const STATUS_LABELS: Record<GuideStatus, string> = {
 export default async function ContentEnginePage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ success?: string; market?: string }>;
 }) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const [guides, { success }] = await Promise.all([getContentGuides(), searchParams]);
+  const [allGuides, { success, market: marketParam }, marketOptions] = await Promise.all([
+    getContentGuides(),
+    searchParams,
+    getControlPanelMarketOptions(),
+  ]);
+
+  // Market filter (server-side, page-specific ?market=): each guide's stored
+  // market. Unknown values fall back to All markets. Guides always have a
+  // market, so there is no Unassigned option here.
+  const parsedSelection = parseMarketFilter(marketParam, marketOptions);
+  const marketSelection = parsedSelection === MARKET_FILTER_UNASSIGNED ? MARKET_FILTER_ALL : parsedSelection;
+  const marketRejected = !!marketParam && marketSelection === MARKET_FILTER_ALL;
+  const guides = allGuides.filter((g) =>
+    matchesMarketFilter(resolveMarketAssignment(g.marketId, marketOptions), marketSelection)
+  );
 
   const thCls =
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap";
@@ -71,8 +94,31 @@ export default async function ContentEnginePage({
         </div>
       )}
 
+      {/* Market filter toolbar */}
+      {allGuides.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <UrlMarketFilter
+            options={marketOptions}
+            value={marketSelection}
+            rejected={marketRejected}
+            includeUnassigned={false}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <span className="ml-auto text-sm text-gray-400">
+            {guides.length} of {allGuides.length} {allGuides.length === 1 ? "guide" : "guides"}
+          </span>
+        </div>
+      )}
+
+      {/* No guides in the selected market */}
+      {allGuides.length > 0 && guides.length === 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+          <p className="text-sm text-gray-400">No guides in this market.</p>
+        </div>
+      )}
+
       {/* Empty state */}
-      {guides.length === 0 && (
+      {allGuides.length === 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
             <svg
