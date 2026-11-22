@@ -1,5 +1,6 @@
 "use client";
 
+import { carryMarketParam } from "@/lib/marketFilter";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination, CopyButton } from "@/components/TableControls";
@@ -22,7 +23,7 @@ function readUrlParam(key: string, fb: string): string {
 }
 
 function syncUrl(q: string, pub: string, live: string, sort: string, dir: string, page: number) {
-  const p = new URLSearchParams();
+  const p = carryMarketParam(new URLSearchParams(), window.location.search);
   if (q)                   p.set("q",    q);
   if (pub !== "all")       p.set("pub",  pub);
   if (live !== "all")      p.set("live", live);

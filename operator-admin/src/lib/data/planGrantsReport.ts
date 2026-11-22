@@ -7,6 +7,7 @@
  * (buildVenuePlanMap: cancelled → Free, past_due stays paid).
  */
 
+import { ALL_MARKETS_SCOPE, inDashboardScope, type DashboardMarketScope } from "@/lib/dashboardMarketScope";
 import { createAdminClient } from "@/lib/supabase/server";
 import { buildVenuePlanMap, type VenueSubRow } from "@/lib/data/actionCenter";
 import { getPlanGrantsForVenues } from "@/lib/planGrants/server";
@@ -64,7 +65,14 @@ const RELEVANT: GrantStatus[] = ["active", "scheduled", "expired", "revoked", "e
  * Comp/Trial report rows. Null = the lookup FAILED (the page and Action
  * Center card show an error / "—", never "no grants").
  */
-export async function getPlanGrantReport(nowMs: number = Date.now()): Promise<PlanGrantReportRow[] | null> {
+/**
+ * @param scope Market scope (?market=): each grant by its venue's current
+ *              market_id. The Action Center card summarizes these same rows.
+ */
+export async function getPlanGrantReport(
+  nowMs: number = Date.now(),
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<PlanGrantReportRow[] | null> {
   const supabase = createAdminClient();
   const { data: grantVenueRows, error } = await supabase.from("venue_plan_grants").select("venue_id");
   if (error) {
@@ -76,7 +84,7 @@ export async function getPlanGrantReport(nowMs: number = Date.now()): Promise<Pl
 
   const [{ ok: grantsOk, grantsByVenue, ownershipByVenue }, venuesRes, subsRes] = await Promise.all([
     getPlanGrantsForVenues(venueIds, supabase),
-    supabase.from("venues").select("id, name, city").in("id", venueIds),
+    supabase.from("venues").select("id, name, city, market_id").in("id", venueIds),
     supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
   ]);
 
@@ -86,7 +94,7 @@ export async function getPlanGrantReport(nowMs: number = Date.now()): Promise<Pl
   }
 
   const venueById = new Map(
-    ((venuesRes.data ?? []) as { id: string; name: string; city: string | null }[]).map((v) => [v.id, v])
+    ((venuesRes.data ?? []) as { id: string; name: string; city: string | null; market_id: string | null }[]).map((v) => [v.id, v])
   );
   const billingMap = buildVenuePlanMap((subsRes.data ?? []) as VenueSubRow[]);
 
@@ -96,6 +104,7 @@ export async function getPlanGrantReport(nowMs: number = Date.now()): Promise<Pl
     const billingPlan = billingMap.get(venueId) ?? "free";
     const access = resolveEffectiveAccess({ billingPlan, grants, venue: ownership, nowMs });
     const venue = venueById.get(venueId);
+    if (!inDashboardScope(venue?.market_id ?? null, scope)) continue;
 
     for (const grant of grants) {
       const status = getGrantStatus(grant, ownership, nowMs);

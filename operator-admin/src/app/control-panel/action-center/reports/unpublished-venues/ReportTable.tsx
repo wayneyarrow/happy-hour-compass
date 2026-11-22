@@ -1,5 +1,6 @@
 "use client";
 
+import { carryMarketParam } from "@/lib/marketFilter";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SortIcon, Pagination } from "@/components/TableControls";
@@ -24,7 +25,7 @@ function readUrlParam(key: string, fb: string): string {
 }
 
 function syncUrl(q: string, sort: string, dir: string, page: number) {
-  const p = new URLSearchParams();
+  const p = carryMarketParam(new URLSearchParams(), window.location.search);
   if (q) p.set("q", q);
   if (sort !== DEFAULT_SORT) p.set("sort", sort);
   if (dir !== "desc") p.set("dir", dir);

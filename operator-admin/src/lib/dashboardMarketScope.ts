@@ -113,3 +113,20 @@ export function countSubmissionsInScope(
   }
   return { total, inWindow };
 }
+
+/**
+ * Applies the scope to a Supabase query on `venues` (or any table whose
+ * `column` holds a venue market id): the identity for All markets, `= id`
+ * for a market, `IS NULL` for Unassigned. Shared by Platform Analytics and
+ * the Action Center so both scope venue queries identically.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function scopeVenueQuery<Q extends { eq: any; is: any }>(
+  q: Q,
+  scope: DashboardMarketScope,
+  column = "market_id"
+): Q {
+  if (scope.kind === "market") return q.eq(column, scope.marketId);
+  if (scope.kind === "unassigned") return q.is(column, null);
+  return q;
+}
