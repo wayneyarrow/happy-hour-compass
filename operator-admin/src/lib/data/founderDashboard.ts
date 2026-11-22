@@ -4,6 +4,17 @@ import { computeVenueSetupStatus } from "@/lib/venueSetupStatus";
 import { parseOperatorPlan, type OperatorPlan } from "@/lib/plans";
 import { getVenueViewCounts, getEventViewCounts, sumViews } from "@/lib/data/viewCounts";
 import { getDailySpecialClickSummary, type DailySpecialClickSummary } from "@/lib/data/dailySpecialClicks";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
+import { fetchCityGeographyLookup } from "@/lib/geo/venueGeographyResolver";
+import {
+  ALL_MARKETS_SCOPE,
+  countOperatorBuckets,
+  countSubmissionsInScope,
+  inDashboardScope,
+  type DashboardMarketScope,
+  type OperatorActivityBuckets,
+  type SubmissionForScope,
+} from "@/lib/dashboardMarketScope";
 
 // ── Plan rank for upgrade/downgrade classification ─────────────────────────────
 
@@ -34,10 +45,20 @@ export type ConversionRate = { numerator: number; denominator: number };
 export type FounderDashboardData = {
   fetchedAt: string;
 
+  /** True when a market or Unassigned is selected (see dashboardMarketScope.ts). */
+  marketScoped: boolean;
+  /**
+   * False only for a scoped view with nothing recorded at all — no venues,
+   * submissions, operators, views or clicks — so the page shows an empty
+   * state instead of a wall of zeros. Always true for All markets.
+   */
+  hasActivity: boolean;
+
   // "Are we acquiring venue opportunities?"
   acquisition: {
-    suggestedVenues:          number;
-    newSuggestedVenues30d:    number;
+    /** null when market-scoped: suggestions carry free-text city only and are never market-attributed. */
+    suggestedVenues:          number | null;
+    newSuggestedVenues30d:    number | null;
     submittedVenues:          number;
     newSubmittedVenues30d:    number;
     seededVenues:             number;
@@ -137,7 +158,7 @@ type ActiveVenueRow = {
 };
 
 type MediaRow = { venue_id: string; url: string };
-type PlanChangeRow = { from_plan: string; to_plan: string; operator_id: string };
+type PlanChangeRow = { from_plan: string; to_plan: string; operator_id: string; venue_id: string | null };
 type VenueSubscriptionPlanRow = { venue_id: string; plan_code: string | null };
 
 function safeDivide(numerator: number, denominator: number): ConversionRate {
@@ -146,10 +167,99 @@ function safeDivide(numerator: number, denominator: number): ConversionRate {
 
 // ── Main data fetch ────────────────────────────────────────────────────────────
 
-export async function getFounderDashboardData(): Promise<FounderDashboardData> {
+/**
+ * Market-scoped inputs that can't be expressed as a filter on the original
+ * queries. Loaded only for a market / Unassigned view; All markets never
+ * calls this, so its metric definitions and queries are unchanged.
+ *
+ * Complete reads (fetchAllRows — past PostgREST's 1,000-row cap).
+ */
+type ScopedSources = {
+  /** Every venue in scope — the ids passed to the view-count RPC. */
+  venueIds: string[];
+  /** Every event at a venue in scope — the ids passed to the event-view RPC. */
+  eventIds: string[];
+  /** venue id → current market_id, for scoping plan-change events. */
+  marketIdByVenue: Map<string, string | null>;
+  submissions: { total: number; inWindow: number };
+  operators: OperatorActivityBuckets;
+};
+
+async function loadScopedSources(
+  supabase: ReturnType<typeof createAdminClient>,
+  scope: DashboardMarketScope,
+  sinceMs: number
+): Promise<ScopedSources> {
+  type VenueRow = { id: string; market_id: string | null; created_by_operator_id: string | null };
+  type SubmissionRow = SubmissionForScope & { id: string; venues: unknown };
+  const [venues, events, submissionRows, operators, lookup] = await Promise.all([
+    fetchAllRows<VenueRow>(supabase, "venues", "id, market_id, created_by_operator_id", (q) => q, ["id"]),
+    fetchAllRows<{ id: string; venue_id: string }>(supabase, "events", "id, venue_id", (q) => q, ["id"]),
+    fetchAllRows<SubmissionRow>(
+      supabase,
+      "operator_submissions",
+      // venues!venue_id: venues.source_submission_id is a second relationship.
+      "id, submitted_at, venue_id, city, province, venues!venue_id(market_id)",
+      (q) => q,
+      ["id"]
+    ),
+    fetchAllRows<{ id: string; last_seen_at: string | null }>(supabase, "operators", "id, last_seen_at", (q) => q, ["id"]),
+    fetchCityGeographyLookup(supabase),
+  ]);
+
+  const marketIdByVenue = new Map(venues.map((v) => [v.id, v.market_id]));
+  const venueIds = venues.filter((v) => inDashboardScope(v.market_id, scope)).map((v) => v.id);
+  const venueIdSet = new Set(venueIds);
+  const eventIds = events.filter((e) => venueIdSet.has(e.venue_id)).map((e) => e.id);
+
+  const ownedMarketIdsByOperator = new Map<string, (string | null)[]>();
+  for (const v of venues) {
+    if (!v.created_by_operator_id) continue;
+    const list = ownedMarketIdsByOperator.get(v.created_by_operator_id) ?? [];
+    list.push(v.market_id);
+    ownedMarketIdsByOperator.set(v.created_by_operator_id, list);
+  }
+
+  const submissions = countSubmissionsInScope(
+    submissionRows.map((r) => {
+      const venue = (Array.isArray(r.venues) ? r.venues[0] : r.venues) as { market_id: string | null } | null;
+      return { submitted_at: r.submitted_at, venue_id: r.venue_id, venue_market_id: venue?.market_id ?? null, city: r.city, province: r.province };
+    }),
+    lookup,
+    scope,
+    sinceMs
+  );
+
+  return {
+    venueIds,
+    eventIds,
+    marketIdByVenue,
+    submissions,
+    operators: countOperatorBuckets(operators, ownedMarketIdsByOperator, scope, sinceMs),
+  };
+}
+
+/**
+ * @param scope Market scope from the page's ?market= (default All markets —
+ *              every query exactly as before). See dashboardMarketScope.ts
+ *              for each metric's attribution.
+ */
+export async function getFounderDashboardData(
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<FounderDashboardData> {
   const supabase = createAdminClient();
   const now = Date.now();
   const t30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Market scope for venue queries: the venue's current market_id.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sv = <Q extends { eq: any; is: any }>(q: Q): Q =>
+    scope.kind === "market" ? q.eq("market_id", scope.marketId)
+    : scope.kind === "unassigned" ? q.is("market_id", null)
+    : q;
+
+  const scoped = scope.kind === "all" ? null : await loadScopedSources(supabase, scope, now - 30 * 24 * 60 * 60 * 1000);
+  const countOf = (count: number) => Promise.resolve({ count });
 
   // ── Batch 1: all independent queries run in parallel ──────────────────────
   const [
@@ -175,77 +285,85 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     venueViewCountsAllTime,
     eventViewCountsAllTime,
   ] = await Promise.all([
-    // venue_suggestions / operator_submissions — Acquisition
-    supabase.from("venue_suggestions").select("*", { count: "exact", head: true }),
-    supabase.from("venue_suggestions").select("*", { count: "exact", head: true }).gte("submitted_at", t30),
-    supabase.from("operator_submissions").select("*", { count: "exact", head: true }),
-    supabase.from("operator_submissions").select("*", { count: "exact", head: true }).gte("submitted_at", t30),
+    // venue_suggestions / operator_submissions — Acquisition. Suggestions
+    // are never market-attributed (free-text city only): skipped when scoped.
+    // Submissions, when scoped, use the Phase 2 attribution (loadScopedSources).
+    scoped ? Promise.resolve({ count: null }) : supabase.from("venue_suggestions").select("*", { count: "exact", head: true }),
+    scoped ? Promise.resolve({ count: null }) : supabase.from("venue_suggestions").select("*", { count: "exact", head: true }).gte("submitted_at", t30),
+    scoped ? countOf(scoped.submissions.total) : supabase.from("operator_submissions").select("*", { count: "exact", head: true }),
+    scoped ? countOf(scoped.submissions.inWindow) : supabase.from("operator_submissions").select("*", { count: "exact", head: true }).gte("submitted_at", t30),
 
-    // venues — Acquisition + Activation
-    supabase.from("venues").select("*", { count: "exact", head: true }),
-    supabase.from("venues").select("*", { count: "exact", head: true }).eq("source", "seed"),
-    supabase.from("venues").select("*", { count: "exact", head: true }).eq("source", "seed").gte("created_at", t30),
-    supabase.from("venues").select("*", { count: "exact", head: true }).not("claimed_at", "is", null),
-    supabase.from("venues").select("*", { count: "exact", head: true }).gte("claimed_at", t30),
+    // venues — Acquisition + Activation (sv() = market scope; identity for All)
+    sv(supabase.from("venues").select("*", { count: "exact", head: true })),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true }).eq("source", "seed")),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true }).eq("source", "seed").gte("created_at", t30)),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true }).not("claimed_at", "is", null)),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true }).gte("claimed_at", t30)),
     // Seeded venues with no claim yet — used to derive "seeded AND claimed" for Seed → Claim.
-    supabase.from("venues")
+    sv(supabase.from("venues")
       .select("*", { count: "exact", head: true })
       .eq("source", "seed")
-      .is("claimed_at", null),
-    supabase.from("venues").select("*", { count: "exact", head: true }).eq("is_verified", true),
+      .is("claimed_at", null)),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true }).eq("is_verified", true)),
 
     // Active venues (created_by_operator_id IS NOT NULL). Also the source for
     // onboarding-completion checks and the operator-plan lookup below — an
     // active venue and its attached operator are 1:1 (one-venue-per-operator).
-    supabase.from("venues")
+    sv(supabase.from("venues")
       .select("id, created_by_operator_id, is_published, hh_times, business_hours, hh_food_details, hh_drink_details, onboarding_completed_override_at")
-      .not("created_by_operator_id", "is", null),
+      .not("created_by_operator_id", "is", null)),
 
     // operators — Activation usage/engagement + Operational Signals
     // (engagement, not monetization). Three mutually exclusive buckets.
-    supabase.from("operators")
+    // Scoped: operators owning a venue in scope, each counted once.
+    scoped ? countOf(scoped.operators.active) : supabase.from("operators")
       .select("*", { count: "exact", head: true })
       .gte("last_seen_at", t30),
-    supabase.from("operators")
+    scoped ? countOf(scoped.operators.inactive) : supabase.from("operators")
       .select("*", { count: "exact", head: true })
       .not("last_seen_at", "is", null)
       .lt("last_seen_at", t30),
-    supabase.from("operators")
+    scoped ? countOf(scoped.operators.neverLoggedIn) : supabase.from("operators")
       .select("*", { count: "exact", head: true })
       .is("last_seen_at", null),
 
-    // plan_change_events — Monetization
+    // plan_change_events — Monetization (venue_id selected for market scope)
     supabase.from("plan_change_events")
-      .select("from_plan, to_plan, operator_id")
+      .select("from_plan, to_plan, operator_id, venue_id")
       .gte("changed_at", t30),
     // True venue-level churn: venues where an operator cancelled management.
     // Fetch cancelled_at so we can compute both all-time and 30-day counts in JS
     // without adding a second query (keeps Promise.all under TS's tuple limit).
-    supabase.from("venues")
+    sv(supabase.from("venues")
       .select("cancelled_at")
-      .not("cancelled_at", "is", null),
+      .not("cancelled_at", "is", null)),
 
     // Per-venue / per-event view counts via GROUP BY RPC (migration 088 —
     // see src/lib/data/viewCounts.ts). Replaces a raw-row fetch + JS
     // aggregation that was subject to PostgREST's default row-return cap
     // once platform-wide 30-day view volume grew past it.
-    getVenueViewCounts(t30),
-    getEventViewCounts(t30),
+    // Scoped: only the venues/events in scope. An empty id list returns an
+    // empty map (zero), never the platform-wide totals.
+    getVenueViewCounts(t30, scoped?.venueIds),
+    getEventViewCounts(t30, scoped?.eventIds),
     // All-time — same RPC, no lower bound. Additional context alongside the
     // 30-day figures on the Consumer Demand cards; never used for the
     // leaderboards or High Demand signals below, which stay 30-day-only.
-    getVenueViewCounts(null),
-    getEventViewCounts(null),
+    getVenueViewCounts(null, scoped?.venueIds),
+    getEventViewCounts(null, scoped?.eventIds),
   ]);
 
   // Separate await: the batch above is already at TS's Promise.all tuple limit.
-  const dailySpecialClicks = await getDailySpecialClickSummary(t30);
+  const dailySpecialClicks = await getDailySpecialClickSummary(t30, scope);
 
   // ── Active venues ──────────────────────────────────────────────────────────
   const activeVenues = (r_activeVenueRows.data ?? []) as ActiveVenueRow[];
 
   // ── Process plan changes (operator-event based — unchanged) ──────────────
-  const planChanges = (r_planChanges30d.data ?? []) as PlanChangeRow[];
+  // Scoped: by the changed venue's current market (no venue_id → Unassigned).
+  const planChanges = ((r_planChanges30d.data ?? []) as PlanChangeRow[]).filter((e) =>
+    !scoped || inDashboardScope(e.venue_id ? (scoped.marketIdByVenue.get(e.venue_id) ?? null) : null, scope)
+  );
   const upgradesLast30d   = planChanges.filter(e => isUpgrade(e.from_plan, e.to_plan)).length;
   const downgradesLast30d = planChanges.filter(e => isDowngrade(e.from_plan, e.to_plan)).length;
   // True venue-level churn from cancelled_at — replaces the plan-downgrade proxy.
@@ -410,12 +528,26 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
   // are intentionally excluded — see comment on the type definition above.
   const seededSubmittedNonChurned = seededVenues + submittedVenues - churnedVenuesAllTime;
 
+  const suggestedVenues = scoped ? null : n(r_suggestedVenues.count);
+  const venueViewsAllTime = sumViews(venueViewCountsAllTime);
+  const eventViewsAllTime = sumViews(eventViewCountsAllTime);
+  const hasActivity =
+    !scoped ||
+    totalVenues > 0 ||
+    submittedVenues > 0 ||
+    scoped.operators.active + scoped.operators.inactive + scoped.operators.neverLoggedIn > 0 ||
+    venueViewsAllTime > 0 ||
+    eventViewsAllTime > 0 ||
+    (dailySpecialClicks.available && dailySpecialClicks.clicksAllTime > 0);
+
   return {
     fetchedAt: new Date().toISOString(),
+    marketScoped: !!scoped,
+    hasActivity,
 
     acquisition: {
-      suggestedVenues:       n(r_suggestedVenues.count),
-      newSuggestedVenues30d: n(r_newSuggestedVenues30d.count),
+      suggestedVenues,
+      newSuggestedVenues30d: scoped ? null : n(r_newSuggestedVenues30d.count),
       submittedVenues,
       newSubmittedVenues30d: n(r_newSubmittedVenues30d.count),
       seededVenues,
@@ -459,9 +591,9 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
 
     consumerDemand: {
       venueViewsLast30d: sumViews(venueViewCounts),
-      venueViewsAllTime: sumViews(venueViewCountsAllTime),
+      venueViewsAllTime,
       eventViewsLast30d: sumViews(eventViewCounts),
-      eventViewsAllTime: sumViews(eventViewCountsAllTime),
+      eventViewsAllTime,
       topVenues,
       topEvents,
       dailySpecialClicks,

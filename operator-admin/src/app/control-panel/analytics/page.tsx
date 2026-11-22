@@ -9,6 +9,10 @@ import {
   type ConversionRate,
 } from "@/lib/data/founderDashboard";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { getControlPanelMarketOptions } from "@/lib/data/controlPanelMarketOptions";
+import UrlMarketFilter from "@/components/UrlMarketFilter";
+import { MARKET_FILTER_ALL, MARKET_FILTER_UNASSIGNED, marketFilterOptionLabel, parseMarketFilter } from "@/lib/marketFilter";
+import { scopeFromSelection } from "@/lib/dashboardMarketScope";
 
 // ── Status level ───────────────────────────────────────────────────────────────
 
@@ -216,11 +220,29 @@ function formatTimestamp(iso: string): string {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-export default async function PlatformAnalyticsPage() {
+export default async function PlatformAnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const d = await getFounderDashboardData();
+  // Market filter: page-specific ?market=<slug> (or "unassigned"). Unknown
+  // values fall back to All markets and are cleared from the URL; every
+  // other param is preserved by UrlMarketFilter.
+  const [params, marketOptions] = await Promise.all([searchParams, getControlPanelMarketOptions()]);
+  const marketParam = typeof params.market === "string" ? params.market : null;
+  const marketSelection = parseMarketFilter(marketParam, marketOptions);
+  const marketRejected = !!marketParam && marketSelection === MARKET_FILTER_ALL;
+  const scope = scopeFromSelection(marketSelection, marketOptions);
+  const selectedOption = marketOptions.find((o) => o.slug === marketSelection) ?? null;
+  const scopeLabel =
+    marketSelection === MARKET_FILTER_UNASSIGNED ? "Unassigned (no market)"
+    : selectedOption ? marketFilterOptionLabel(selectedOption)
+    : "All markets";
+
+  const d = await getFounderDashboardData(scope);
   const { acquisition: acq, activation: act, monetization: mon, consumerDemand: cd } = d;
 
   const monetizationRatePct =
@@ -236,12 +258,43 @@ export default async function PlatformAnalyticsPage() {
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Platform Analytics</h1>
-          <p className="mt-1 text-sm text-gray-500">Platform-wide metrics — acquisition, activation, monetization, and consumer demand.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {d.marketScoped
+              ? `${scopeLabel} — acquisition, activation, monetization, and consumer demand.`
+              : "Platform-wide metrics — acquisition, activation, monetization, and consumer demand."}
+          </p>
         </div>
-        <p className="text-xs text-gray-400 pt-1 shrink-0 ml-6">
-          Fetched {formatTimestamp(d.fetchedAt)}
-        </p>
+        <div className="shrink-0 ml-6 flex flex-col items-end gap-2">
+          <UrlMarketFilter
+            options={marketOptions}
+            value={marketSelection}
+            rejected={marketRejected}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <p className="text-xs text-gray-400">
+            Fetched {formatTimestamp(d.fetchedAt)}
+          </p>
+        </div>
       </div>
+
+      {d.marketScoped && (
+        <p className="-mt-4 mb-8 text-xs text-gray-400 max-w-3xl">
+          Scoped by each venue&rsquo;s <em>current</em> market: venue counts, views, events, Daily Special clicks,
+          plan changes and churn follow the venue&rsquo;s present assignment, including history recorded before it
+          was assigned or moved. Operators count once if they own a venue here; submissions use the linked venue,
+          else the submitted city/province. Suggested Venues are shown under All markets only.
+        </p>
+      )}
+
+      {!d.hasActivity ? (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-resting flex flex-col items-center justify-center py-16 px-6 text-center">
+          <p className="text-base font-semibold text-gray-700 mb-1">No activity in {scopeLabel} yet</p>
+          <p className="text-sm text-gray-400 max-w-sm">
+            No venues, submissions, operators, views or Daily Special clicks are attributed to this market.
+          </p>
+        </div>
+      ) : (
+      <>
 
       {/* ══════════════════════════════════════════════════════════════════════
           A — ACQUISITION
@@ -253,12 +306,20 @@ export default async function PlatformAnalyticsPage() {
         />
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <KpiCard
-            label="Suggested Venues"
-            value={acq.suggestedVenues}
-            subtext="venue_suggestions, all time"
-            trend={acq.newSuggestedVenues30d}
-          />
+          {acq.suggestedVenues === null ? (
+            <KpiCard
+              label="Suggested Venues"
+              value="—"
+              subtext="All markets only — suggestions have a free-text city, not a market"
+            />
+          ) : (
+            <KpiCard
+              label="Suggested Venues"
+              value={acq.suggestedVenues}
+              subtext="venue_suggestions, all time"
+              trend={acq.newSuggestedVenues30d ?? undefined}
+            />
+          )}
           <KpiCard
             label="Submitted Venues"
             value={acq.submittedVenues}
@@ -428,7 +489,9 @@ export default async function PlatformAnalyticsPage() {
         </div>
         {mon.upgradesLast30d === 0 && mon.downgradesLast30d === 0 && mon.churnLast30d === 0 && (
           <p className="mb-6 text-xs text-gray-400">
-            All zeroes — plan_change_events has no records yet. Counts will populate once plan changes are made.
+            {d.marketScoped
+              ? `No plan changes or churn for ${scopeLabel} in the last 30 days.`
+              : "All zeroes — plan_change_events has no records yet. Counts will populate once plan changes are made."}
           </p>
         )}
 
@@ -488,7 +551,7 @@ export default async function PlatformAnalyticsPage() {
               secondary={{ label: "All Time", value: cd.dailySpecialClicks.clicksAllTime }}
               subtext={
                 cd.dailySpecialClicks.trackingSince
-                  ? `Clicks that opened a Special on its venue page. Tracking since ${new Date(cd.dailySpecialClicks.trackingSince).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })} — no earlier history.`
+                  ? `Clicks that opened a Special on its venue page. Tracking since ${new Date(cd.dailySpecialClicks.trackingSince).toLocaleDateString("en-CA", { timeZone: "America/Vancouver" })}${d.marketScoped ? " (platform-wide start)" : ""} — no earlier history.`
                   : "Clicks that opened a Special on its venue page. No clicks recorded yet — tracking starts with this release; no earlier history exists."
               }
             />
@@ -523,6 +586,8 @@ export default async function PlatformAnalyticsPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
     </div>
   );
