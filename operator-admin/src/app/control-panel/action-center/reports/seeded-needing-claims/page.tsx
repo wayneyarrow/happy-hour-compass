@@ -5,23 +5,34 @@ import Link from "next/link";
 import { getSeededNeedingClaims } from "@/lib/data/actionCenter";
 import ReportTable from "./ReportTable";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { resolvePageMarketScope } from "@/lib/data/controlPanelMarketOptions";
+import ActionCenterMarketFilter from "../../ActionCenterMarketFilter";
 
-export default async function SeededNeedingClaimsPage() {
+export default async function SeededNeedingClaimsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const rows = await getSeededNeedingClaims();
+  // Market filter (?market=): rows are scoped on the server, so search,
+  // paging, counts and CSV export all cover exactly this market.
+  const market = await resolvePageMarketScope(await searchParams);
+
+  const rows = await getSeededNeedingClaims(market.scope);
 
   return (
     <div className="max-w-7xl">
       <div className="mb-6">
         <Link
-          href="/control-panel/action-center"
+          href={`/control-panel/action-center${market.query}`}
           className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3 inline-block"
         >
           ← Action Center
         </Link>
         <h1 className="text-2xl font-bold text-slate-900">Seeded Venues Needing Claims</h1>
+        <div className="mt-3"><ActionCenterMarketFilter market={market} /></div>
         <p className="mt-1 text-sm text-gray-500">
           Seeded inventory with no operator attached. Sort by Venue Views to find high-demand
           venues that should be converted into operator accounts.

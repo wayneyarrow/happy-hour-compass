@@ -149,3 +149,15 @@ export function writeMarketFilterParam(params: URLSearchParams, selection: Marke
   else params.delete(MARKET_FILTER_PARAM);
   return params;
 }
+
+/**
+ * Copies `market` from `currentSearch` into `target` (when present). For
+ * tables that rebuild their query string from scratch on search/sort/page
+ * changes (the Action Center reports), so those changes keep the
+ * server-applied market selection and a reload restores the same view.
+ */
+export function carryMarketParam(target: URLSearchParams, currentSearch: string): URLSearchParams {
+  const value = new URLSearchParams(currentSearch).get(MARKET_FILTER_PARAM);
+  if (value) target.set(MARKET_FILTER_PARAM, value);
+  return target;
+}

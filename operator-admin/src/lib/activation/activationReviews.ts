@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { deriveActivationState, type ActivationLifecycleState } from "@/lib/activation/activationState";
 import { collectPhones } from "@/lib/activation/activationExpiryFollowUp";
+import { ALL_MARKETS_SCOPE, inDashboardScope, type DashboardMarketScope } from "@/lib/dashboardMarketScope";
 
 /**
  * N+1-safe query layer for the Founder Control Panel Action Center's
@@ -61,6 +62,12 @@ export type ActivationReviewRow = {
   originId: string;
   venueId: string | null;
   venueName: string | null;
+  /**
+   * The originating claim/submission's venue's current market_id. Null when
+   * the venue is unassigned OR no venue could be resolved from the origin —
+   * both appear under Unassigned in a market-filtered view.
+   */
+  venueMarketId: string | null;
   operatorId: string;
   operatorName: string | null;
   operatorEmail: string | null;
@@ -190,7 +197,17 @@ function computeReasons(row: RawRow, now: Date): ActivationReviewReason[] {
  */
 export async function getOperatorActivationReviews(
   client: ReturnType<typeof createAdminClient> = createAdminClient(),
-  now: Date = new Date()
+  now: Date = new Date(),
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<ActivationReviewRow[]> {
+  const rows = await loadOperatorActivationReviews(client, now);
+  // Market scope: the originating record's venue's market (no venue → Unassigned).
+  return scope.kind === "all" ? rows : rows.filter((r) => inDashboardScope(r.venueMarketId, scope));
+}
+
+async function loadOperatorActivationReviews(
+  client: ReturnType<typeof createAdminClient>,
+  now: Date
 ): Promise<ActivationReviewRow[]> {
   const { data: lifecycleRows, error: lifecycleError } = await client
     .from("operator_activation_lifecycles")
@@ -267,12 +284,12 @@ export async function getOperatorActivationReviews(
     ),
   ];
 
-  type ReviewVenue = { id: string; name: string; phone?: string | null; created_by_operator_id?: string | null };
+  type ReviewVenue = { id: string; name: string; phone?: string | null; created_by_operator_id?: string | null; market_id?: string | null };
   let venueById = new Map<string, ReviewVenue>();
   if (venueIds.length > 0) {
     const { data: venueRows, error: venueError } = await client
       .from("venues")
-      .select("id, name, phone, created_by_operator_id")
+      .select("id, name, phone, created_by_operator_id, market_id")
       .in("id", venueIds);
     if (venueError) {
       console.error("[getOperatorActivationReviews] Venue batch lookup failed:", venueError.message);
@@ -304,6 +321,7 @@ export async function getOperatorActivationReviews(
       originId,
       venueId,
       venueName: venue?.name ?? null,
+      venueMarketId: venue?.market_id ?? null,
       operatorId: row.operator_id,
       operatorName: operator ? [operator.first_name, operator.last_name].filter(Boolean).join(" ") || null : null,
       operatorEmail: operator?.email ?? null,
@@ -335,9 +353,10 @@ export async function getOperatorActivationReviews(
  */
 export async function getOperatorActivationReviewSummary(
   client: ReturnType<typeof createAdminClient> = createAdminClient(),
-  now: Date = new Date()
+  now: Date = new Date(),
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
 ): Promise<ActivationReviewSummary> {
-  const rows = await getOperatorActivationReviews(client, now);
+  const rows = await getOperatorActivationReviews(client, now, scope);
   return {
     total: rows.length,
     releaseRequired: rows.filter((r) => r.reasons.includes("release_required")).length,

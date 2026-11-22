@@ -1,5 +1,6 @@
 "use client";
 
+import { carryMarketParam } from "@/lib/marketFilter";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { SortIcon, Pagination } from "@/components/TableControls";
@@ -25,7 +26,7 @@ function readUrlParam(key: string, fb: string): string {
 /** Preserves ?view= (server-side tab) while syncing this table's own params. */
 function syncUrl(q: string, sort: string, dir: string, page: number) {
   const current = new URLSearchParams(window.location.search);
-  const p = new URLSearchParams();
+  const p = carryMarketParam(new URLSearchParams(), window.location.search);
   const view = current.get("view");
   if (view) p.set("view", view);
   if (q) p.set("q", q);

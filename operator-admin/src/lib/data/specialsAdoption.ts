@@ -47,6 +47,7 @@ import {
 import { classifyVenueLane, LANE_LABELS } from "@/lib/data/venueFunnel";
 import { getVenueViewCounts } from "@/lib/data/viewCounts";
 import { getMarketLocalIsoDate } from "@/lib/marketLocalDate";
+import { ALL_MARKETS_SCOPE, scopeVenueQuery, type DashboardMarketScope } from "@/lib/dashboardMarketScope";
 import {
   countDailySpecialsForAdoption,
   DAILY_SPECIAL_COUNT_COLUMNS,
@@ -155,11 +156,14 @@ async function fetchImpersonationWindowsByVenue(
 
 // ── Summary (Action Center card) ────────────────────────────────────────────
 
-export async function getSpecialsAdoptionSummary(): Promise<SpecialsAdoptionSummary | null> {
+/** @param scope Market scope (?market=): verified venues by their current market_id — same rule as the report. */
+export async function getSpecialsAdoptionSummary(
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<SpecialsAdoptionSummary | null> {
   const supabase = createAdminClient();
   try {
     const venues = await fetchAllPages<{ id: string }>((from, to) =>
-      supabase.from("venues").select("id").eq("is_verified", true).order("id").range(from, to)
+      scopeVenueQuery(supabase.from("venues").select("id").eq("is_verified", true), scope).order("id").range(from, to)
     );
     const venueIds = venues.map((v) => v.id);
     const [rows, windowsByVenue] = await Promise.all([
@@ -184,15 +188,21 @@ type VerifiedVenueRow = VenueWithSetup & { market_geo: { slug: string } | null }
 
 type OperatorRow = { id: string; last_seen_at: string | null; account_activated_at: string | null };
 
-export async function getSpecialsAdoptionReport(): Promise<SpecialsAdoptionRow[]> {
+export async function getSpecialsAdoptionReport(
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<SpecialsAdoptionRow[]> {
   const supabase = createAdminClient();
   const t30 = new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
+  // Market scope: the verified venue's current market_id (same rule as the summary card).
   const venues = await fetchAllPages<VerifiedVenueRow>((from, to) =>
-    supabase
-      .from("venues")
-      .select(`${VENUE_SELECT}, market_geo:markets!market_id(slug)`)
-      .eq("is_verified", true)
+    scopeVenueQuery(
+      supabase
+        .from("venues")
+        .select(`${VENUE_SELECT}, market_geo:markets!market_id(slug)`)
+        .eq("is_verified", true),
+      scope
+    )
       .order("id")
       .range(from, to)
   );

@@ -20,6 +20,14 @@ import { getMarketById } from "@/lib/markets";
 import { getVenueViewCounts, getEventViewCounts } from "@/lib/data/viewCounts";
 import { getEffectiveAccessForVenues } from "@/lib/planGrants/server";
 import { getOperatorActivationReviewSummary, type ActivationReviewSummary } from "@/lib/activation/activationReviews";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
+import {
+  ALL_MARKETS_SCOPE,
+  inDashboardScope,
+  operatorInDashboardScope,
+  scopeVenueQuery,
+  type DashboardMarketScope,
+} from "@/lib/dashboardMarketScope";
 
 // ── Thresholds (mirrors founderDashboard.ts) ──────────────────────────────────
 
@@ -204,6 +212,115 @@ function t30ago(): string {
 export const VENUE_SELECT =
   "id, slug, name, city, is_published, is_verified, source, created_at, updated_at, claimed_at, hh_times, business_hours, hh_food_details, hh_drink_details, created_by_operator_id, onboarding_completed_override_at";
 
+// ── Complete reads (no silent row limits) ─────────────────────────────────────
+//
+// Every report below used to read with plain .select()/.in() calls, which
+// have two silent failure modes, both returning `data: null` → [] here:
+//   - PostgREST caps a response at 1,000 rows; and
+//   - a long .in() list overflows the request URL: with ~400+ venue ids the
+//     request fails outright ("fetch failed", verified 2026-11-22 — Seeded
+//     Venues Needing Claims had 437), so media/events/CRM contacts silently
+//     came back empty.
+// readAll() pages a filtered query completely; readByIds() additionally
+// splits the id list into short chunks. Both keep the old error behaviour
+// (logged, treated as no rows) so a report never 500s.
+
+const IN_CHUNK = 150;
+
+type ReadResult<T> = { data: T[]; error: null | { message: string } };
+
+/** Complete, verified read of `table` (fetchAllRows, ordered by id). `columns` must include id. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function readAll<T = any>(
+  supabase: ReturnType<typeof createAdminClient>,
+  table: string,
+  columns: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filter: (q: any) => any = (q) => q
+): Promise<ReadResult<T>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { data: (await fetchAllRows<any>(supabase, table, columns, filter, ["id"])) as T[], error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`[actionCenter] ${table} read failed:`, message);
+    return { data: [], error: { message } };
+  }
+}
+
+/** Complete read of rows whose `column` is in `ids`, in URL-safe chunks. `columns` must include id. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function readByIds<T = any>(
+  supabase: ReturnType<typeof createAdminClient>,
+  table: string,
+  columns: string,
+  column: string,
+  ids: readonly string[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extra: (q: any) => any = (q) => q
+): Promise<ReadResult<T>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return { data: [], error: null };
+  const out: T[] = [];
+  for (let i = 0; i < unique.length; i += IN_CHUNK) {
+    const chunk = unique.slice(i, i + IN_CHUNK);
+    const r = await readAll<T>(supabase, table, columns, (q) => extra(q.in(column, chunk)));
+    if (r.error) return { data: [], error: r.error };
+    out.push(...r.data);
+  }
+  return { data: out, error: null };
+}
+
+/** Ids of every venue in scope — the explicit list the view-count RPCs need. undefined = All markets. */
+async function venueIdsInScope(
+  supabase: ReturnType<typeof createAdminClient>,
+  scope: DashboardMarketScope
+): Promise<string[] | undefined> {
+  if (scope.kind === "all") return undefined;
+  const r = await readAll<{ id: string }>(supabase, "venues", "id", (q) => scopeVenueQuery(q, scope));
+  return r.data.map((v) => v.id);
+}
+
+/** Ids of every event at a venue in scope. undefined = All markets. */
+async function eventIdsInScope(
+  supabase: ReturnType<typeof createAdminClient>,
+  scope: DashboardMarketScope
+): Promise<string[] | undefined> {
+  const venueIds = await venueIdsInScope(supabase, scope);
+  if (venueIds === undefined) return undefined;
+  const r = await readByIds<{ id: string }>(supabase, "events", "id, venue_id", "venue_id", venueIds);
+  return r.data.map((e) => e.id);
+}
+
+/**
+ * Inactive operators (last_seen_at older than the window) and every venue
+ * they own, with market. Under a market, an operator is in scope when it
+ * owns a venue there (Phase 2 rule), counted once; report rows are its
+ * venues in that market. Shared by the summary card and the report.
+ */
+async function loadInactiveOperators(
+  supabase: ReturnType<typeof createAdminClient>,
+  t30: string,
+  scope: DashboardMarketScope
+): Promise<{ operators: OperatorRow[]; venues: (VenueWithSetup & { market_id: string | null })[] }> {
+  const ops = await readAll<OperatorRow>(supabase, "operators", OPERATOR_SELECT, (q) =>
+    q.not("last_seen_at", "is", null).lt("last_seen_at", t30)
+  );
+  const owned = await readByIds<VenueWithSetup & { market_id: string | null }>(
+    supabase, "venues", VENUE_SELECT + ", market_id", "created_by_operator_id", ops.data.map((o) => o.id)
+  );
+  const marketsByOp = new Map<string, (string | null)[]>();
+  for (const v of owned.data) {
+    const list = marketsByOp.get(v.created_by_operator_id ?? "") ?? [];
+    list.push(v.market_id);
+    marketsByOp.set(v.created_by_operator_id ?? "", list);
+  }
+  return {
+    operators: ops.data.filter((o) => operatorInDashboardScope(marketsByOp.get(o.id) ?? [], scope)),
+    venues: owned.data.filter((v) => inDashboardScope(v.market_id, scope)),
+  };
+}
+
 const OPERATOR_SELECT = "id, email, last_seen_at";
 
 // ── Public row types ──────────────────────────────────────────────────────────
@@ -275,6 +392,8 @@ export type InactiveOperatorsRow = {
   slug: string;
   name: string;
   city: string | null;
+  /** The inactive operator who owns this venue — lets the report show its operator count (the summary card's unit). */
+  operatorId: string | null;
   plan: OperatorPlan;
   setupHealthScorePct: number;
   operatorLastSeenAt: string | null;
@@ -390,10 +509,25 @@ export type UnusedSearchTagsRow = {
 
 // ── Summary (home page) ───────────────────────────────────────────────────────
 
-export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
+/**
+ * @param scope Market scope (?market=). Every card uses the same attribution
+ * as its report, so a card's count matches the report opened with the same
+ * market: venue cards by the venue's current market_id (scopeVenueQuery),
+ * view/event cards by the in-scope venue/event ids, Inactive Operators by
+ * the Phase 2 ownership rule, report-backed cards by the scoped report.
+ * All markets keeps every original query.
+ */
+export async function getActionCenterSummary(
+  scope: DashboardMarketScope = ALL_MARKETS_SCOPE
+): Promise<ActionCenterSummary> {
   const supabase = createAdminClient();
   const t30 = t30ago();
   const today = new Date().toISOString().slice(0, 10);
+  const sv = <Q extends { eq: unknown; is: unknown }>(q: Q) => scopeVenueQuery(q as never, scope) as Q;
+  const [scopedVenueIds, scopedEventIds] = await Promise.all([
+    venueIdsInScope(supabase, scope),
+    eventIdsInScope(supabase, scope),
+  ]);
 
   const [
     r_seededNoClaim,
@@ -404,19 +538,23 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
     eventViewMap,
     r_activeVenues,
   ] = await Promise.all([
-    supabase.from("venues").select("*", { count: "exact", head: true })
-      .eq("source", "seed").is("created_by_operator_id", null),
-    supabase.from("operators").select("*", { count: "exact", head: true })
-      .not("last_seen_at", "is", null).lt("last_seen_at", t30),
-    supabase.from("venues").select("*", { count: "exact", head: true })
-      .eq("is_published", false),
-    supabase.from("venues").select("*", { count: "exact", head: true })
-      .eq("is_verified", true).is("created_by_operator_id", null),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true })
+      .eq("source", "seed").is("created_by_operator_id", null)),
+    // Operators are counted once each. Scoped: owning a venue in scope.
+    scope.kind === "all"
+      ? supabase.from("operators").select("*", { count: "exact", head: true })
+          .not("last_seen_at", "is", null).lt("last_seen_at", t30)
+      : loadInactiveOperators(supabase, t30, scope).then((r) => ({ count: r.operators.length })),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true })
+      .eq("is_published", false)),
+    sv(supabase.from("venues").select("*", { count: "exact", head: true })
+      .eq("is_verified", true).is("created_by_operator_id", null)),
     // Per-venue/per-event view counts via GROUP BY RPC (migration 088) —
-    // see src/lib/data/viewCounts.ts.
-    getVenueViewCounts(t30),
-    getEventViewCounts(t30),
-    supabase.from("venues").select(VENUE_SELECT).not("created_by_operator_id", "is", null),
+    // see src/lib/data/viewCounts.ts. Scoped: only in-scope ids (an empty
+    // list returns no rows — never the platform totals).
+    getVenueViewCounts(t30, scopedVenueIds),
+    getEventViewCounts(t30, scopedEventIds),
+    readAll<VenueWithSetup>(supabase, "venues", VENUE_SELECT, (q) => sv(q.not("created_by_operator_id", "is", null))),
   ]);
 
   // ── Active venues: compute onboarding count ───────────────────────────────
@@ -426,8 +564,7 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
   const activeVenues = (r_activeVenues.data ?? []) as VenueWithSetup[];
 
   const { data: activeVenueMedia } = activeVenues.length > 0
-    ? await supabase.from("media").select("venue_id, url")
-        .in("venue_id", activeVenues.map((v) => v.id)).eq("type", "venue_image")
+    ? await readByIds(supabase, "media", "id, venue_id, url", "venue_id", activeVenues.map((v) => v.id), (q) => q.eq("type", "venue_image"))
     : { data: [] as MediaRow[] };
 
   const mediaByVenue = buildMediaMap((activeVenueMedia ?? []) as MediaRow[]);
@@ -449,11 +586,9 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
 
   let upcomingHighDemandEvents = 0;
   if (topEventIds.length > 0) {
-    const { data: upcomingEvents } = await supabase
-      .from("events")
-      .select("id, first_date")
-      .in("id", topEventIds)
-      .gte("first_date", today);
+    const { data: upcomingEvents } = await readByIds(
+      supabase, "events", "id, first_date", "id", topEventIds, (q) => q.gte("first_date", today)
+    );
     upcomingHighDemandEvents = (upcomingEvents ?? []).length;
   }
 
@@ -464,9 +599,9 @@ export async function getActionCenterSummary(): Promise<ActionCenterSummary> {
   // drifted from the report the moment Events was added as an opportunity
   // type, exactly the class of bug this pattern exists to avoid.
   const [unusedSearchTagRows, upgradeOpportunityRows, operatorActivationReviewsBreakdown] = await Promise.all([
-    getUnusedSearchTagsOpportunities(),
-    getUpgradeOpportunities(),
-    getOperatorActivationReviewSummary(supabase),
+    getUnusedSearchTagsOpportunities(scope),
+    getUpgradeOpportunities(scope),
+    getOperatorActivationReviewSummary(supabase, new Date(), scope),
   ]);
 
   return {
@@ -523,15 +658,16 @@ function computeIsLiveOnSite(v: SeededVenueWithGeo): boolean {
   return getMarketById(marketSlug)?.status === "active";
 }
 
-export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]> {
+export async function getSeededNeedingClaims(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<SeededNeedingClaimsRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select(VENUE_SELECT + ", market_id, city_id, market_geo:markets!market_id(slug), address_line1")
-    .eq("source", "seed")
-    .is("created_by_operator_id", null);
+  const { data: venuesData } = await readAll(
+    supabase,
+    "venues",
+    VENUE_SELECT + ", market_id, city_id, market_geo:markets!market_id(slug), address_line1",
+    (q) => scopeVenueQuery(q.eq("source", "seed").is("created_by_operator_id", null), scope)
+  );
 
   const venues = (venuesData ?? []) as unknown as SeededVenueWithGeo[];
   if (venues.length === 0) return [];
@@ -539,17 +675,17 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
   const venueIds = venues.map((v) => v.id);
 
   const [r_media, venueViewMap, r_events, r_crmContacts] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image")),
     getVenueViewCounts(t30, venueIds),
-    supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", venueIds),
     // Internal CRM contacts (crm_venue_contacts) — only the primary contact
     // per venue is needed for this report. Table is service-role-only
     // (see 074_crm_venue_contacts.sql); createAdminClient() above already
     // bypasses RLS, so no additional access change is needed here.
-    supabase.from("crm_venue_contacts")
-      .select("venue_id, full_name, role, email, phone, outreach_status")
-      .in("venue_id", venueIds)
-      .eq("is_primary", true),
+    readByIds(
+      supabase, "crm_venue_contacts", "id, venue_id, full_name, role, email, phone, outreach_status",
+      "venue_id", venueIds, (q) => q.eq("is_primary", true)
+    ),
   ]);
 
   const mediaByVenue   = buildMediaMap((r_media.data ?? []) as MediaRow[]);
@@ -597,13 +733,13 @@ export async function getSeededNeedingClaims(): Promise<SeededNeedingClaimsRow[]
 
 // ── Report #2: Active Venues Still Onboarding ────────────────────────────────
 
-export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingRow[]> {
+export async function getActiveStillOnboarding(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<ActiveStillOnboardingRow[]> {
   const supabase = createAdminClient();
 
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select(VENUE_SELECT)
-    .not("created_by_operator_id", "is", null);
+  const { data: venuesData } = await readAll(
+    supabase, "venues", VENUE_SELECT,
+    (q) => scopeVenueQuery(q.not("created_by_operator_id", "is", null), scope)
+  );
 
   const venues = (venuesData ?? []) as VenueWithSetup[];
   if (venues.length === 0) return [];
@@ -612,10 +748,10 @@ export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingR
   const venueIds = venues.map((v) => v.id);
 
   const [r_media, r_subs, r_ops] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image")),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venueIds),
     opIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
+      ? readByIds(supabase, "operators", OPERATOR_SELECT, "id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
   ]);
 
@@ -656,26 +792,18 @@ export async function getActiveStillOnboarding(): Promise<ActiveStillOnboardingR
 
 // ── Report #3: Inactive Operators ────────────────────────────────────────────
 
-export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
+/**
+ * One row per venue owned by an inactive operator. Scoped: only venues in
+ * the market (an operator owning venues in two markets shows its venues in
+ * each). The summary card counts OPERATORS (loadInactiveOperators()), so it
+ * can be lower than this row count when an operator owns several venues.
+ */
+export async function getInactiveOperators(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<InactiveOperatorsRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
-  const { data: opsData } = await supabase
-    .from("operators")
-    .select(OPERATOR_SELECT)
-    .not("last_seen_at", "is", null)
-    .lt("last_seen_at", t30);
-
-  const operators = (opsData ?? []) as OperatorRow[];
-  if (operators.length === 0) return [];
-
-  const opIds = operators.map((o) => o.id);
-
-  const { data: venuesData } = await supabase
-    .from("venues").select(VENUE_SELECT).in("created_by_operator_id", opIds);
-
-  const venues = (venuesData ?? []) as VenueWithSetup[];
-  if (venues.length === 0) return [];
+  const { operators, venues } = await loadInactiveOperators(supabase, t30, scope);
+  if (operators.length === 0 || venues.length === 0) return [];
 
   const venueIds = venues.map((v) => v.id);
 
@@ -684,10 +812,10 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
   // batch alongside the other venue-keyed queries rather than the opIds-keyed
   // batch above.
   const [r_media, venueViewMap, r_events, r_subs] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image")),
     getVenueViewCounts(t30, venueIds),
-    supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", venueIds),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venueIds),
   ]);
 
   const eventRows  = (r_events.data ?? []) as { id: string; venue_id: string }[];
@@ -713,6 +841,7 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
       slug: v.slug,
       name: v.name,
       city: v.city,
+      operatorId: v.created_by_operator_id ?? null,
       plan,
       setupHealthScorePct,
       operatorLastSeenAt: op?.last_seen_at ?? null,
@@ -726,14 +855,13 @@ export async function getInactiveOperators(): Promise<InactiveOperatorsRow[]> {
 
 // ── Report #4: Unpublished Venues ────────────────────────────────────────────
 
-export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
+export async function getUnpublishedVenues(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<UnpublishedVenueRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select(VENUE_SELECT)
-    .eq("is_published", false);
+  const { data: venuesData } = await readAll(
+    supabase, "venues", VENUE_SELECT, (q) => scopeVenueQuery(q.eq("is_published", false), scope)
+  );
 
   const venues = (venuesData ?? []) as VenueWithSetup[];
   if (venues.length === 0) return [];
@@ -744,13 +872,13 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
   )];
 
   const [r_media, venueViewMap, r_events, r_ops, r_subs] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image")),
     getVenueViewCounts(t30, venueIds),
-    supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", venueIds),
     opIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
+      ? readByIds(supabase, "operators", OPERATOR_SELECT, "id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venueIds),
   ]);
 
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
@@ -790,16 +918,15 @@ export async function getUnpublishedVenues(): Promise<UnpublishedVenueRow[]> {
 
 // ── Report #5: Upgrade Opportunities ─────────────────────────────────────────
 
-export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]> {
+export async function getUpgradeOpportunities(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<UpgradeOpportunityRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
   // Active + published venues only
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select(VENUE_SELECT)
-    .not("created_by_operator_id", "is", null)
-    .eq("is_published", true);
+  const { data: venuesData } = await readAll(
+    supabase, "venues", VENUE_SELECT,
+    (q) => scopeVenueQuery(q.not("created_by_operator_id", "is", null).eq("is_published", true), scope)
+  );
 
   const allVenues = (venuesData ?? []) as VenueWithSetup[];
   if (allVenues.length === 0) return [];
@@ -810,19 +937,19 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
   )];
 
   const [r_media, r_subs, r_ops, venueViewMap, r_memberships, r_events] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", allVenueIds).eq("type", "venue_image"),
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", allVenueIds),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", allVenueIds, (q) => q.eq("type", "venue_image")),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", allVenueIds),
     allOpIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", allOpIds)
+      ? readByIds(supabase, "operators", OPERATOR_SELECT, "id", allOpIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
     getVenueViewCounts(t30, allVenueIds),
     allOpIds.length > 0
-      ? supabase.from("operator_memberships").select("operator_id").in("operator_id", allOpIds).eq("status", "active")
+      ? readByIds(supabase, "operator_memberships", "id, operator_id", "operator_id", allOpIds, (q) => q.eq("status", "active"))
       : Promise.resolve({ data: [] as { operator_id: string }[] }),
     // Events — used only to gate the "Events" opportunity below: the
     // signal is a venue NOT yet using Events at all (see that check for
     // why zero, not one-or-more, is the qualifying count).
-    supabase.from("events").select("id, venue_id").in("venue_id", allVenueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", allVenueIds),
   ]);
 
   const mediaByVenue  = buildMediaMap((r_media.data ?? []) as MediaRow[]);
@@ -927,22 +1054,22 @@ export async function getUpgradeOpportunities(): Promise<UpgradeOpportunityRow[]
 
 // ── Report #6: High Demand Venues ────────────────────────────────────────────
 
-export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
+export async function getHighDemandVenues(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<HighDemandVenueRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
   // Qualification is 30-day-only, via the GROUP BY RPC (migration 088) —
   // unchanged qualification logic, just no longer a raw-row fetch subject
   // to PostgREST's default row-return cap.
-  const venueViewMap = await getVenueViewCounts(t30);
+  // Scoped: only in-scope venue ids (empty list → no rows, never platform-wide).
+  const venueViewMap = await getVenueViewCounts(t30, await venueIdsInScope(supabase, scope));
   const topVenueIds = [...venueViewMap.entries()]
     .filter(([, count]) => count >= HIGH_DEMAND_VENUE)
     .map(([id]) => id);
 
   if (topVenueIds.length === 0) return [];
 
-  const { data: venuesData } = await supabase
-    .from("venues").select(VENUE_SELECT).in("id", topVenueIds);
+  const { data: venuesData } = await readByIds(supabase, "venues", VENUE_SELECT, "id", topVenueIds);
 
   const venues = (venuesData ?? []) as VenueWithSetup[];
   if (venues.length === 0) return [];
@@ -953,12 +1080,12 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
   )];
 
   const [r_media, r_subs, r_ops, r_events, venueViewsAllTimeMap] = await Promise.all([
-    supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image"),
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds),
+    readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image")),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venueIds),
     opIds.length > 0
-      ? supabase.from("operators").select(OPERATOR_SELECT).in("id", opIds)
+      ? readByIds(supabase, "operators", OPERATOR_SELECT, "id", opIds)
       : Promise.resolve({ data: [] as OperatorRow[] }),
-    supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", venueIds),
     // All-time total — additional context only, scoped to the venues that
     // already qualified above; never used for qualification itself.
     getVenueViewCounts(null, venueIds),
@@ -1006,7 +1133,7 @@ export async function getHighDemandVenues(): Promise<HighDemandVenueRow[]> {
 
 // ── Report #7: Upcoming High Demand Events ────────────────────────────────────
 
-export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
+export async function getHighDemandEvents(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<HighDemandEventRow[]> {
   const supabase = createAdminClient();
   const t30  = t30ago();
   const today = new Date().toISOString().slice(0, 10);
@@ -1014,7 +1141,8 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   // Qualification is 30-day-only, via the GROUP BY RPC (migration 088) —
   // unchanged qualification logic, just no longer a raw-row fetch subject
   // to PostgREST's default row-return cap.
-  const eventViewMap = await getEventViewCounts(t30);
+  // Scoped: events at in-scope venues only (empty list → no rows).
+  const eventViewMap = await getEventViewCounts(t30, await eventIdsInScope(supabase, scope));
   const topEventIds = [...eventViewMap.entries()]
     .filter(([, count]) => count >= HIGH_DEMAND_EVENT)
     .map(([id]) => id);
@@ -1022,11 +1150,10 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   if (topEventIds.length === 0) return [];
 
   // Filter to upcoming events only
-  const { data: eventsData } = await supabase
-    .from("events")
-    .select("id, title, venue_id, first_date, is_published")
-    .in("id", topEventIds)
-    .gte("first_date", today);
+  const { data: eventsData } = await readByIds(
+    supabase, "events", "id, title, venue_id, first_date, is_published", "id", topEventIds,
+    (q) => q.gte("first_date", today)
+  );
 
   const events = (eventsData ?? []) as EventRow[];
   if (events.length === 0) return [];
@@ -1035,12 +1162,12 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
   const venueIds = [...new Set(events.map((e) => e.venue_id))];
 
   const [r_venues, r_media, r_subs, eventViewAllTimeMap] = await Promise.all([
-    supabase.from("venues").select(VENUE_SELECT).in("id", venueIds),
+    readByIds(supabase, "venues", VENUE_SELECT, "id", venueIds),
     venueIds.length > 0
-      ? supabase.from("media").select("venue_id, url").in("venue_id", venueIds).eq("type", "venue_image")
+      ? readByIds(supabase, "media", "id, venue_id, url", "venue_id", venueIds, (q) => q.eq("type", "venue_image"))
       : Promise.resolve({ data: [] as MediaRow[] }),
     venueIds.length > 0
-      ? supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venueIds)
+      ? readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venueIds)
       : Promise.resolve({ data: [] as VenueSubRow[] }),
     // All-time total — additional context only, scoped to the events that
     // already qualified above; never used for qualification itself.
@@ -1077,15 +1204,14 @@ export async function getHighDemandEvents(): Promise<HighDemandEventRow[]> {
 
 // ── Report #8: Verified Venues Without Operators ──────────────────────────────
 
-export async function getVerifiedWithoutOperators(): Promise<VerifiedWithoutOperatorRow[]> {
+export async function getVerifiedWithoutOperators(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<VerifiedWithoutOperatorRow[]> {
   const supabase = createAdminClient();
   const t30 = t30ago();
 
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select(VENUE_SELECT)
-    .eq("is_verified", true)
-    .is("created_by_operator_id", null);
+  const { data: venuesData } = await readAll(
+    supabase, "venues", VENUE_SELECT,
+    (q) => scopeVenueQuery(q.eq("is_verified", true).is("created_by_operator_id", null), scope)
+  );
 
   const venues = (venuesData ?? []) as VenueWithSetup[];
   if (venues.length === 0) return [];
@@ -1094,7 +1220,7 @@ export async function getVerifiedWithoutOperators(): Promise<VerifiedWithoutOper
 
   const [venueViewMap, r_events] = await Promise.all([
     getVenueViewCounts(t30, venueIds),
-    supabase.from("events").select("id, venue_id").in("venue_id", venueIds),
+    readByIds(supabase, "events", "id, venue_id", "venue_id", venueIds),
   ]);
 
   const eventRows = (r_events.data ?? []) as { id: string; venue_id: string }[];
@@ -1128,13 +1254,13 @@ export async function getVerifiedWithoutOperators(): Promise<VerifiedWithoutOper
 // plan comparison UI) and the same used-count logic as the save-time
 // enforcement in searchTagsActions.ts (venues.search_tags array length).
 
-export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTagsRow[]> {
+export async function getUnusedSearchTagsOpportunities(scope: DashboardMarketScope = ALL_MARKETS_SCOPE): Promise<UnusedSearchTagsRow[]> {
   const supabase = createAdminClient();
 
-  const { data: venuesData } = await supabase
-    .from("venues")
-    .select("id, slug, name, city, created_by_operator_id, search_tags")
-    .not("created_by_operator_id", "is", null);
+  const { data: venuesData } = await readAll(
+    supabase, "venues", "id, slug, name, city, created_by_operator_id, search_tags",
+    (q) => scopeVenueQuery(q.not("created_by_operator_id", "is", null), scope)
+  );
 
   const venues = (venuesData ?? []) as {
     id: string;
@@ -1152,8 +1278,8 @@ export async function getUnusedSearchTagsOpportunities(): Promise<UnusedSearchTa
   if (opIds.length === 0) return [];
 
   const [r_subs, r_ops] = await Promise.all([
-    supabase.from("venue_subscriptions").select("venue_id, plan_code, status").in("venue_id", venues.map((v) => v.id)),
-    supabase.from("operators").select("id, email, last_seen_at, name, first_name, last_name").in("id", opIds),
+    readByIds(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id", venues.map((v) => v.id)),
+    readByIds(supabase, "operators", "id, email, last_seen_at, name, first_name, last_name", "id", opIds),
   ]);
 
   type OperatorWithNameRow = OperatorRow & {

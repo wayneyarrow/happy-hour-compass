@@ -14,6 +14,8 @@ import { lastAccessDateLabel } from "@/lib/planGrants/grantDates";
 import { PLAN_LABELS } from "@/lib/plans";
 import { formatDate } from "@/lib/controlPanelDateTime";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { resolvePageMarketScope } from "@/lib/data/controlPanelMarketOptions";
+import ActionCenterMarketFilter from "../../ActionCenterMarketFilter";
 
 const STATUS_PILL: Record<string, string> = {
   active:    "bg-green-100 text-green-700",
@@ -33,21 +35,30 @@ function endCell(row: PlanGrantReportRow) {
   return <span className="text-gray-500">{row.endsAt ? `Ended ${formatDate(row.endsAt)}` : "Ended"}</span>;
 }
 
-export default async function PlanGrantsReportPage() {
+export default async function PlanGrantsReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const result = await getPlanGrantReport();
+  // Market filter (?market=): rows are scoped on the server, so search,
+  // paging, counts and CSV export all cover exactly this market.
+  const market = await resolvePageMarketScope(await searchParams);
+
+  const result = await getPlanGrantReport(Date.now(), market.scope);
   const rows = result ?? [];
   const summary = summarizePlanGrantReport(rows);
 
   return (
     <div className="max-w-7xl">
       <div className="mb-6">
-        <Link href="/control-panel/action-center" className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3 inline-block">
+        <Link href={`/control-panel/action-center${market.query}`} className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3 inline-block">
           ← Action Center
         </Link>
         <h1 className="text-2xl font-bold text-slate-900">Comp &amp; Trial access</h1>
+        <div className="mt-3"><ActionCenterMarketFilter market={market} /></div>
         <p className="mt-1 text-sm text-gray-500">
           Venues with founder-granted Pro or Premium access — no card, no Stripe subscription, never counted as
           revenue. Active and scheduled grants first (soonest end first), then grants that ended in the last{" "}

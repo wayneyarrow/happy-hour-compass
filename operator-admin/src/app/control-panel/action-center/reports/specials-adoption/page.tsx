@@ -6,17 +6,23 @@ import { getSpecialsAdoptionReport } from "@/lib/data/specialsAdoption";
 import { CAMPAIGN_MIN_DAYS_SINCE_ACTIVATION } from "@/lib/customerSuccess/specialsAdoptionPolicy";
 import ReportTable from "./ReportTable";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { resolvePageMarketScope } from "@/lib/data/controlPanelMarketOptions";
+import ActionCenterMarketFilter from "../../ActionCenterMarketFilter";
 
-type PageProps = { searchParams: Promise<{ view?: string }> };
+type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export default async function SpecialsAdoptionPage({ searchParams }: PageProps) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
-  const { view } = await searchParams;
+  const params = await searchParams;
+  const view = typeof params.view === "string" ? params.view : undefined;
+  // Market filter (?market=): rows are scoped on the server, so tabs,
+  // counts and CSV export all cover exactly this market.
+  const market = await resolvePageMarketScope(params);
   const campaignView = view === "campaign";
 
-  const allRows = await getSpecialsAdoptionReport();
+  const allRows = await getSpecialsAdoptionReport(market.scope);
   const candidateRows = allRows.filter((r) => r.isCampaignCandidate);
   const adoptedVenues = allRows.filter((r) => r.counts.operatorTotal > 0).length;
   const rows = campaignView ? candidateRows : allRows;
@@ -29,11 +35,12 @@ export default async function SpecialsAdoptionPage({ searchParams }: PageProps) 
   return (
     <div className="max-w-7xl">
       <div className="mb-6">
-        <Link href="/control-panel/action-center"
+        <Link href={`/control-panel/action-center${market.query}`}
           className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3 inline-block">
           ← Action Center
         </Link>
         <h1 className="text-2xl font-bold text-slate-900">Specials Adoption</h1>
+        <div className="mt-3"><ActionCenterMarketFilter market={market} /></div>
         <p className="mt-1 text-sm text-gray-500">
           Every verified venue and its Daily Specials. Adoption counts venues with at least one
           operator-created Daily Special — seeded/platform Specials never count.
@@ -48,10 +55,10 @@ export default async function SpecialsAdoptionPage({ searchParams }: PageProps) 
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Link href="/control-panel/action-center/reports/specials-adoption" className={tabCls(!campaignView)}>
+        <Link href={`/control-panel/action-center/reports/specials-adoption${market.query}`} className={tabCls(!campaignView)}>
           All verified venues ({allRows.length})
         </Link>
-        <Link href="/control-panel/action-center/reports/specials-adoption?view=campaign" className={tabCls(campaignView)}>
+        <Link href={`/control-panel/action-center/reports/specials-adoption?view=campaign${market.query.replace("?", "&")}`} className={tabCls(campaignView)}>
           Campaign candidates ({candidateRows.length})
         </Link>
       </div>

@@ -85,7 +85,8 @@ const REPORTS: [string, string][] = [
 for (const [name, next] of REPORTS) {
   test(`${name}() queries venue_subscriptions (venue_id-keyed) and calls buildVenuePlanMap`, () => {
     const body = next === "__EOF__" ? SOURCE.slice(SOURCE.indexOf(`export async function ${name}(`)) : reportBody(name, next);
-    assert.match(body, /\.from\("venue_subscriptions"\)\.select\("venue_id, plan_code, status"\)/);
+    // Complete, URL-safe chunked read (readByIds), still keyed by venue_id.
+    assert.match(body, /readByIds\(supabase, "venue_subscriptions", "id, venue_id, plan_code, status", "venue_id",/);
     assert.match(body, /buildVenuePlanMap\(/);
     assert.doesNotMatch(body, /operator_subscriptions/);
   });

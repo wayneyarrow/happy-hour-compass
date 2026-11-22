@@ -6,6 +6,8 @@ import { getActionCenterSummary } from "@/lib/data/actionCenter";
 import { getSpecialsAdoptionSummary } from "@/lib/data/specialsAdoption";
 import { getPlanGrantReport, summarizePlanGrantReport, GRANT_ENDING_SOON_DAYS } from "@/lib/data/planGrantsReport";
 import { requireControlPanelAdmin } from "@/lib/requireControlPanelAdmin";
+import { resolvePageMarketScope } from "@/lib/data/controlPanelMarketOptions";
+import ActionCenterMarketFilter from "./ActionCenterMarketFilter";
 
 // ── Report definitions ────────────────────────────────────────────────────────
 
@@ -106,14 +108,22 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; pill: string
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function ActionCenterPage() {
+export default async function ActionCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // Authorize before any data read or render — see requireControlPanelAdmin.ts.
   await requireControlPanelAdmin();
 
+  // Market filter (?market=): every card uses its report's own attribution,
+  // and each card link carries the selection so the report shows the same rows.
+  const market = await resolvePageMarketScope(await searchParams);
+
   const [baseSummary, specialsAdoption, planGrantRows] = await Promise.all([
-    getActionCenterSummary(),
-    getSpecialsAdoptionSummary(),
-    getPlanGrantReport(),
+    getActionCenterSummary(market.scope),
+    getSpecialsAdoptionSummary(market.scope),
+    getPlanGrantReport(Date.now(), market.scope),
   ]);
   // null = lookup failed → card shows "—", never a false 0.
   const planGrants = summarizePlanGrantReport(planGrantRows ?? []);
@@ -132,6 +142,7 @@ export default async function ActionCenterPage() {
         <p className="mt-1 text-sm text-gray-500">
           Operational work queues for HHC staff. Each report answers: <em>what should we do next?</em>
         </p>
+        <div className="mt-3"><ActionCenterMarketFilter market={market} /></div>
       </div>
 
       {/* Report cards */}
@@ -208,7 +219,7 @@ export default async function ActionCenterPage() {
 
               {/* CTA */}
               <Link
-                href={report.href}
+                href={`${report.href}${market.query}`}
                 className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
               >
                 View Report →
